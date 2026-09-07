@@ -1,0 +1,11 @@
+﻿node_modules/
+dist/
+generated/
+.env
+*.log
+.agents/
+.claude/
+.cursor/
+.devin/
+.windsurf/
+skills-lock.json

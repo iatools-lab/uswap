@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  SUPERVISOR
+  STATION_CHIEF
+  SWAPPER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  UNPAID
+  OTHER
+}
+
+model User {
+  id                     String         @id @default(uuid())
+  fullName               String
+  email                  String         @unique
+  password               String
+  role                   Role
+  phoneNumber            String?
+  address                String?
+  isActive               Boolean        @default(false)
+  station                Station?       @relation(fields: [stationId], references: [id])
+  stationId              String?
+  refreshTokens          RefreshToken[]
+  leaveRequests          LeaveRequest[]
+  shifts                 Shift[]
+  resetTokenHash         String?
+  resetTokenExpires      DateTime?
+  invitationTokenHash    String?
+  invitationTokenExpires DateTime?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Station {
+  id                       String   @id @default(uuid())
+  name                     String   @unique
+  isActive                 Boolean  @default(true)
+  location                 String?
+  timezone                 String   @default("Africa/Douala")
+  contactName              String?
+  contactPhone             String?
+  latenessToleranceMinutes Int      @default(0)
+  minRestHours             Int      @default(8)
+  weeklyHoursLimit         Int      @default(48)
+  checkinQrTtl             Int      @default(300)
+  checkoutQrTtl            Int      @default(300)
+  users                    User[]
+  shifts                   Shift[]
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model LoginAttempt {
+  id        String   @id @default(uuid())
+  email     String
+  success   Boolean
+  createdAt DateTime @default(now())
+}
+
+model LeaveRequest {
+  id           String      @id @default(uuid())
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  startDate    DateTime
+  endDate      DateTime
+  type         LeaveType
+  reason       String?
+  status       LeaveStatus @default(PENDING)
+  externalId   String?
+  lastSyncedAt DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model Shift {
+  id        String   @id @default(uuid())
+  station   Station  @relation(fields: [stationId], references: [id])
+  stationId String
+  swapper   User     @relation(fields: [swapperId], references: [id])
+  swapperId String
+  startTime DateTime
+  endTime   DateTime
+  createdAt DateTime @default(now())
+}
