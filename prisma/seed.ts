@@ -5,15 +5,20 @@ import 'dotenv/config';
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = 'admin@upowa.org';
+  const email = (process.env.ADMIN_SEED_EMAIL ?? 'admin@upowa.org').trim().toLowerCase();
+  const password = process.env.ADMIN_SEED_PASSWORD;
+
+  if (!password || password.length < 12) {
+    throw new Error('ADMIN_SEED_PASSWORD doit être défini et contenir au moins 12 caractères.');
+  }
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    console.log('Le compte admin existe deja, rien a faire.');
+    console.log('Le compte admin existe déjà, rien à faire.');
     return;
   }
 
-  const hashedPassword = await bcrypt.hash('ChangeMoiRapidement123', 10);
+  const hashedPassword = await bcrypt.hash(password, 12);
 
   await prisma.user.create({
     data: {
@@ -25,7 +30,7 @@ async function main() {
     },
   });
 
-  console.log('Compte administrateur cree : ' + email);
+  console.log(`Compte administrateur créé : ${email}`);
 }
 
 main()

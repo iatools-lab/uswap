@@ -1,56 +1,72 @@
-import { Controller, Post, Body, UseGuards, Req, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Body, Controller, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
 import { AuthService } from './auth.service';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
+import { ActivateAccountDto } from './dto/activate-account.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { LoginDto } from './dto/login.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
-import { RolesGuard } from './roles.guard';
 import { Roles } from './roles.decorator';
-import { Role } from '@prisma/client';
+import { RolesGuard } from './roles.guard';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private readonly authService: AuthService) {}
 
   @Post('register')
   @Roles(Role.ADMIN)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Créer un nouvel utilisateur (Admin uniquement)' })
-  async register(@Body() dto: RegisterDto) {
+  register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
+  }
+
+  @Post('activate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Activer un compte invité et définir son mot de passe' })
+  activate(@Body() dto: ActivateAccountDto) {
+    return this.authService.activateAccount(dto);
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Connexion utilisateur (Génère Access et Refresh Tokens)' })
-  async login(@Body() dto: LoginDto) {
+  @ApiOperation({ summary: 'Connexion utilisateur (génère Access et Refresh Tokens)' })
+  login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Renouveler les Access et Refresh Tokens' })
+  refresh(@Body() dto: RefreshTokenDto) {
+    return this.authService.refreshAccessToken(dto);
   }
 
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Déconnexion (révocation des Refresh Tokens)' })
-  async logout(@Req() req: any) {
+  @ApiOperation({ summary: 'Déconnexion et révocation des tokens de la session utilisateur' })
+  logout(@Req() req: { user: { id: string } }) {
     return this.authService.logout(req.user.id);
   }
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Demande de réinitialisation de mot de passe' })
-  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto);
   }
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Réinitialisation du mot de passe avec le token' })
-  async resetPassword(@Body() dto: ResetPasswordDto) {
+  @ApiOperation({ summary: 'Réinitialisation du mot de passe avec le token reçu par e-mail' })
+  resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
   }
 }
