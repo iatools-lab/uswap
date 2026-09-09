@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { AuthService } from './auth.service';
@@ -45,6 +45,14 @@ export class AuthController {
   @ApiOperation({ summary: 'Renouveler les Access et Refresh Tokens' })
   refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshAccessToken(dto);
+  }
+
+  @Get('session')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Verifier le temps restant avant expiration de la session en cours' })
+  session(@Req() req: { user: { exp: number } }) {
+    return this.authService.getSessionStatus(req.user.exp);
   }
 
   @Post('logout')

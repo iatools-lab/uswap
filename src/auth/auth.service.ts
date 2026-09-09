@@ -17,6 +17,7 @@ export class AuthService {
   private static readonly REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   private static readonly RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
   private static readonly INVITATION_TOKEN_TTL_MS = 48 * 60 * 60 * 1000;
+  private static readonly ACCESS_TOKEN_TTL_SECONDS = Number(process.env.ACCESS_TOKEN_TTL_SECONDS) || 900;
   private static readonly GENERIC_RESET_MESSAGE =
     'Si cette adresse e-mail correspond à un compte, un lien de réinitialisation a été envoyé.';
 
@@ -155,6 +156,7 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
+      expiresIn: AuthService.ACCESS_TOKEN_TTL_SECONDS,
       user: {
         id: user.id,
         email: user.email,
@@ -181,7 +183,6 @@ export class AuthService {
       throw new UnauthorizedException('Compte introuvable ou inactif');
     }
 
-    // Rotation : un refresh token ne peut être utilisé qu'une seule fois.
     const deleted = await this.prisma.refreshToken.deleteMany({
       where: { id: storedToken.id, tokenHash },
     });
@@ -192,7 +193,7 @@ export class AuthService {
     const accessToken = this.issueAccessToken(user);
     const refreshToken = await this.createRefreshToken(user.id);
 
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, expiresIn: AuthService.ACCESS_TOKEN_TTL_SECONDS };
   }
 
   async logout(userId: string) {
@@ -207,11 +208,20 @@ export class AuthService {
     return { message: 'Déconnexion réussie' };
   }
 
+  getSessionStatus(exp: number) {
+    const expiresAt = new Date(exp * 1000);
+    const expiresInSeconds = Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 1000));
+
+    return {
+      expiresAt: expiresAt.toISOString(),
+      expiresInSeconds,
+    };
+  }
+
   async forgotPassword(dto: ForgotPasswordDto) {
     const email = this.normalizeEmail(dto.email);
     const user = await this.prisma.user.findUnique({ where: { email } });
 
-    // Toujours la même réponse afin de ne pas permettre l'énumération des comptes.
     if (!user || !user.isActive) {
       return { message: AuthService.GENERIC_RESET_MESSAGE };
     }
@@ -227,7 +237,6 @@ export class AuthService {
 
     const sent = await this.emailService.sendPasswordReset(user.email, resetToken);
     if (!sent) {
-      // Ne laisse pas un token actif si sa livraison a échoué.
       await this.prisma.user.update({
         where: { id: user.id },
         data: { resetTokenHash: null, resetTokenExpires: null },

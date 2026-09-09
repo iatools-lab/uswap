@@ -43,6 +43,7 @@ model User {
   tokenVersion           Int            @default(0)
   leaveRequests          LeaveRequest[]
   shifts                 Shift[]
+  auditLogs              UserAuditLog[] @relation("AuditedUser")
   resetTokenHash         String?
   resetTokenExpires      DateTime?
   invitationTokenHash    String?
@@ -109,5 +110,14 @@ model Shift {
   swapperId String
   startTime DateTime
   endTime   DateTime
+  createdAt DateTime @default(now())
+}
+
+model UserAuditLog {
+  id        String   @id @default(uuid())
+  user      User     @relation("AuditedUser", fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  changedBy String
+  changes   Json
   createdAt DateTime @default(now())
 }
