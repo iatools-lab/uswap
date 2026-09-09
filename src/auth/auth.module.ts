@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { EmailService } from './email.service';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
