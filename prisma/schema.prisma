@@ -28,6 +28,11 @@ enum LeaveType {
   OTHER
 }
 
+enum PlanningStatus {
+  DRAFT
+  PUBLISHED
+}
+
 model User {
   id                     String         @id @default(uuid())
   fullName               String
@@ -66,6 +71,8 @@ model Station {
   name                     String   @unique
   isActive                 Boolean  @default(true)
   location                 String?
+  latitude                 Float?
+  longitude                Float?
   timezone                 String   @default("Africa/Douala")
   contactName              String?
   contactPhone             String?
@@ -102,15 +109,28 @@ model LeaveRequest {
   updatedAt    DateTime    @updatedAt
 }
 
+model Planning {
+  id        String         @id @default(uuid())
+  startDate DateTime
+  endDate   DateTime
+  status    PlanningStatus @default(DRAFT)
+  createdBy String
+  shifts    Shift[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
 model Shift {
-  id        String   @id @default(uuid())
-  station   Station  @relation(fields: [stationId], references: [id])
-  stationId String
-  swapper   User     @relation(fields: [swapperId], references: [id])
-  swapperId String
-  startTime DateTime
-  endTime   DateTime
-  createdAt DateTime @default(now())
+  id         String    @id @default(uuid())
+  station    Station   @relation(fields: [stationId], references: [id])
+  stationId  String
+  swapper    User      @relation(fields: [swapperId], references: [id])
+  swapperId  String
+  startTime  DateTime
+  endTime    DateTime
+  planning   Planning? @relation(fields: [planningId], references: [id])
+  planningId String?
+  createdAt  DateTime  @default(now())
 }
 
 model UserAuditLog {

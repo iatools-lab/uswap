@@ -4,7 +4,6 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { EmailService } from './email.service';
 import { JwtStrategy } from './jwt.strategy';
 import { RolesGuard } from './roles.guard';
 
@@ -20,6 +19,6 @@ const ACCESS_TOKEN_TTL_SECONDS = Number(process.env.ACCESS_TOKEN_TTL_SECONDS) ||
   ],
   controllers: [AuthController],
   providers: [AuthService, EmailService, JwtStrategy, RolesGuard],
-  exports: [AuthService],
+  exports: [AuthService,EmailService],
 })
 export class AuthModule {}

@@ -4,7 +4,7 @@ import { CreateShiftDto } from './dto/create-shift.dto';
 
 @Injectable()
 export class ShiftsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateShiftDto) {
     const start = new Date(dto.startTime);
@@ -20,6 +20,7 @@ export class ShiftsService {
         swapperId: dto.swapperId,
         startTime: start,
         endTime: end,
+        planningId: dto.planningId,
       },
       include: { station: true, swapper: { select: { id: true, fullName: true } } },
     });
