@@ -1,28 +1,37 @@
-// One coherent icon family. Shapes are provided by Phosphor, never hand-drawn.
+/* ============================================================
+   Pont d'icônes Universel Phosphor (src/icons.ts)
+   ============================================================ */
+
+// Re-exporte l'intégralité des icônes Phosphor
+export * from '@phosphor-icons/react';
+
+// Re-exporte les alias de compatibilité avec la nomenclature Lucide
 export {
-  ArrowRightIcon as ArrowRight,
-  ArrowLeftIcon as ArrowLeft,
-  ArrowUpRightIcon as ArrowUpRight,
-  BuildingsIcon as Building2,
-  CaretLeftIcon as ChevronLeft,
-  CaretRightIcon as ChevronRight,
-  ClockIcon as Clock3,
-  SquaresFourIcon as LayoutDashboard,
-  SpinnerGapIcon as LoaderCircle,
-  SignOutIcon as LogOut,
-  MapPinIcon as MapPin,
-  ArrowClockwiseIcon as RefreshCw,
-  MagnifyingGlassIcon as Search,
-  ShieldCheckIcon as ShieldCheck,
-  UserIcon as UserRound,
-  UsersIcon as Users,
-  LightningIcon as Zap,
-  EyeIcon as Eye,
-  EyeSlashIcon as EyeOff,
-  XIcon as X,
-  EnvelopeSimpleIcon as Mail,
-  EnvelopeOpenIcon as MailCheck,
-  CheckIcon as Check,
-  CheckCircleIcon as CheckCheck,
-  LinkBreakIcon as Link2Off,
+  ArrowClockwise as RefreshCw,
+  Buildings as Building2,
+  CaretDown as ChevronDown,
+  CaretLeft as ChevronLeft,
+  CaretRight as ChevronRight,
+  CaretUp as ChevronUp,
+  Checks as CheckCheck,
+  CircleNotch as LoaderCircle,
+  Clock as Clock3,
+  ClockCounterClockwise as History,
+  Envelope as Mail,
+  EnvelopeSimple as MailCheck,
+  EyeSlash as EyeOff,
+  FileCsv as FileSpreadsheet,
+  Lightning as Zap,
+  LinkBreak as Link2Off,
+  MagnifyingGlass as Search,
+  PaperPlaneRight as PaperPlane,
+  Pencil as Edit,
+  SignOut as LogOut,
+  SquaresFour as LayoutDashboard,
+  Trash as Trash2,
+  UploadSimple as CloudUpload,
+  User as UserRound,
+  UserMinus as UserX,
+  Warning as AlertTriangle,
+  WarningCircle as AlertCircle,
 } from '@phosphor-icons/react';

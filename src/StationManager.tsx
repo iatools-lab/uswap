@@ -1,0 +1,1349 @@
+import { useState, useEffect, useRef } from "react";
+import { notify } from "./Notifications";
+import { ShiftTemplates } from "./ShiftTemplates";
+import { api } from "./auth-api";
+import { exportToExcel } from "./utils/excelExport";
+import { StepperModal, type StepItem } from "./StepperModal";
+import { Modal } from "./modal";
+import {
+  Building2,
+  MapPin,
+  LoaderCircle,
+  Search,
+  Clock3,
+  UserRound,
+  DownloadSimple,
+} from "./icons";
+import {
+  PlusIcon,
+  CaretDownIcon,
+  PencilSimpleIcon,
+  PhoneIcon,
+  ListIcon,
+  SquaresFourIcon,
+  CrosshairIcon,
+  XIcon,
+} from "@phosphor-icons/react";
+
+export type StationData = {
+  id: string;
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  location: string | null;
+  timezone: string;
+  contactName: string | null;
+  contactPhone: string | null;
+  isActive: boolean;
+  latenessToleranceMinutes: number;
+  minRestHours: number;
+  weeklyHoursLimit: number;
+  checkinQrTtl: number;
+  checkoutQrTtl: number;
+};
+
+const emptyForm = {
+  name: "",
+  address: "",
+  city: "Douala",
+  latitude: 4.051056 as number | string,
+  longitude: 9.708533 as number | string,
+  location: "",
+  timezone: "Africa/Douala",
+  contactName: "",
+  contactPhone: "",
+  latenessToleranceMinutes: 0,
+  minRestHours: 8,
+  weeklyHoursLimit: 48,
+  checkinQrTtl: 300,
+  checkoutQrTtl: 300,
+};
+
+const DEFAULT_LAT = 4.051056;
+const DEFAULT_LNG = 9.708533;
+const MAPTILER_API_KEY = "lATZCBmixGdEMf0wgV9O";
+const MAPTILER_TILE_URL = `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${MAPTILER_API_KEY}`;
+
+/* ============================================================
+   Sélecteur GPS Bidirectionnel & Suggestions optimisées (Cameroun)
+   ============================================================ */
+function MapLocationPicker({
+  address,
+  city,
+  latitude,
+  longitude,
+  onSelectLocation,
+  onSelectAddress,
+}: {
+  address: string;
+  city: string;
+  latitude: number | string;
+  longitude: number | string;
+  onSelectLocation: (lat: number, lng: number) => void;
+  onSelectAddress: (addr: string, lat: number, lng: number) => void;
+}) {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+
+  const [searchQuery, setSearchQuery] = useState(address);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const currentLat = Number(latitude) || DEFAULT_LAT;
+  const currentLng = Number(longitude) || DEFAULT_LNG;
+
+  useEffect(() => {
+    setSearchQuery(address);
+  }, [address]);
+
+  useEffect(() => {
+    const L = (window as any).L;
+    if (!L || !mapContainerRef.current) return;
+
+    if ((mapContainerRef.current as any)._leaflet_id) {
+      (mapContainerRef.current as any)._leaflet_id = null;
+      mapContainerRef.current.innerHTML = "";
+    }
+
+    const map = L.map(mapContainerRef.current).setView([currentLat, currentLng], 15);
+    mapInstanceRef.current = map;
+
+    L.tileLayer(MAPTILER_TILE_URL, {
+      tileSize: 512,
+      zoomOffset: -1,
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+
+    const marker = L.marker([currentLat, currentLng], { draggable: true }).addTo(map);
+    markerRef.current = marker;
+
+    const timer1 = setTimeout(() => map.invalidateSize(), 150);
+    const timer2 = setTimeout(() => map.invalidateSize(), 500);
+
+    marker.on("dragend", async (e: any) => {
+      const coords = e.target.getLatLng();
+      onSelectLocation(coords.lat, coords.lng);
+      await reverseGeocode(coords.lat, coords.lng);
+    });
+
+    map.on("click", async (e: any) => {
+      const { lat, lng } = e.latlng;
+      marker.setLatLng([lat, lng]);
+      onSelectLocation(lat, lng);
+      await reverseGeocode(lat, lng);
+    });
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      map.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (markerRef.current && mapInstanceRef.current) {
+      const currentPos = markerRef.current.getLatLng();
+      if (currentPos.lat !== currentLat || currentPos.lng !== currentLng) {
+        markerRef.current.setLatLng([currentLat, currentLng]);
+        mapInstanceRef.current.setView([currentLat, currentLng], mapInstanceRef.current.getZoom());
+        mapInstanceRef.current.invalidateSize();
+      }
+    }
+  }, [currentLat, currentLng]);
+
+  function formatDetailedAddress(feature: any) {
+    if (!feature) return "";
+    const text = feature?.text || "";
+    const placeName = feature?.place_name || "";
+    const context = feature?.context || [];
+
+    if (placeName && placeName.includes(",")) {
+      return placeName;
+    }
+
+    const parts = [text];
+    context.forEach((ctx: any) => {
+      if (ctx?.text && !parts.includes(ctx.text)) {
+        parts.push(ctx.text);
+      }
+    });
+
+    return parts.length > 1 ? parts.join(", ") : (placeName || text);
+  }
+
+  async function reverseGeocode(lat: number, lng: number) {
+    try {
+      const res = await fetch(
+        `https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${MAPTILER_API_KEY}&language=fr&types=poi,address&limit=1`
+      );
+      const data = await res.json();
+      if (data?.features?.length > 0) {
+        const detailedName = formatDetailedAddress(data.features[0]);
+        setSearchQuery(detailedName);
+        onSelectAddress(detailedName, lat, lng);
+      }
+    } catch (e) {
+      console.error("Erreur de géocodage inversé", e);
+    }
+  }
+
+  async function handleSearchInput(value: string) {
+    setSearchQuery(value);
+    onSelectAddress(value, currentLat, currentLng);
+
+    if (!value || value.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const queryText = encodeURIComponent(value);
+      const res = await fetch(
+        `https://api.maptiler.com/geocoding/${queryText}.json?key=${MAPTILER_API_KEY}&language=fr&country=cm&types=poi,address&limit=10`
+      );
+      const data = await res.json();
+      if (data?.features) {
+        setSuggestions(data.features);
+      }
+    } catch (e) {
+      console.error("Erreur de recherche de stations", e);
+    } finally {
+      setIsSearching(false);
+    }
+  }
+
+  function selectSuggestion(feature: any) {
+    if (!feature?.center) return;
+    const [lng, lat] = feature.center;
+    const detailedName = formatDetailedAddress(feature);
+    
+    setSearchQuery(detailedName);
+    setSuggestions([]);
+    
+    if (markerRef.current && mapInstanceRef.current) {
+      markerRef.current.setLatLng([lat, lng]);
+      mapInstanceRef.current.setView([lat, lng], 17);
+      mapInstanceRef.current.invalidateSize();
+    }
+    
+    onSelectAddress(detailedName, lat, lng);
+  }
+
+  return (
+    <div className="map-picker-wrapper" style={{ display: "grid", gap: "8px", position: "relative" }}>
+      <div className="stepper-field-group" style={{ margin: 0, position: "relative" }}>
+        <label>NOM DE LA STATION / EMPLACEMENT OU ADRESSE *</label>
+        <div style={{ position: "relative" }}>
+          <input
+            required
+            maxLength={250}
+            placeholder="Tapez le nom d'une station (ex: Tradex, Total, Bonamoussadi)..."
+            value={searchQuery}
+            onChange={(e) => handleSearchInput(e.target.value)}
+          />
+          {isSearching && (
+            <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)" }}>
+              <LoaderCircle className="spin" size={16} style={{ color: "#64748b" }} />
+            </span>
+          )}
+        </div>
+
+        {suggestions?.length > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              top: "calc(100% + 4px)",
+              left: 0,
+              width: "100%",
+              background: "#fff",
+              border: "1px solid #cbd5e1",
+              borderRadius: "8px",
+              boxShadow: "0 10px 25px -5px rgba(15, 23, 42, 0.12)",
+              zIndex: 1000,
+              maxHeight: "240px",
+              overflowY: "auto",
+              display: "grid",
+              padding: "4px",
+            }}
+          >
+            {suggestions.map((item, idx) => {
+              const displayName = formatDetailedAddress(item);
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => selectSuggestion(item)}
+                  style={{
+                    textAlign: "left",
+                    background: "transparent",
+                    border: 0,
+                    padding: "8px 10px",
+                    fontSize: "12.5px",
+                    color: "#0f172a",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <MapPin size={14} style={{ color: "#ff5500", flexShrink: 0 }} />
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {displayName}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "4px", gap: "8px" }}>
+        <span style={{ fontSize: "11px", fontWeight: 700, color: "#475569", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>
+          POSITIONNER OU DÉPLACER LE MARQUEUR *
+        </span>
+        <span style={{ fontSize: "11.5px", color: "#00a896", display: "flex", alignItems: "center", gap: "4px", whiteSpace: "nowrap", flexShrink: 0 }}>
+          <CrosshairIcon size={14} /> Glissez pour actualiser l'adresse
+        </span>
+      </div>
+
+      <div
+        ref={mapContainerRef}
+        style={{
+          height: "240px",
+          width: "100%",
+          borderRadius: "10px",
+          border: "1px solid #cbd5e1",
+          zIndex: 1,
+          overflow: "hidden",
+        }}
+      />
+
+      <div
+        style={{
+          background: "#f1f5f9",
+          border: "1px solid #e2e8f0",
+          borderRadius: "8px",
+          padding: "8px 12px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          fontSize: "12.5px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#334155" }}>
+          <MapPin size={16} style={{ color: "#ff5500" }} />
+          <span>Coordonnées GPS capturées :</span>
+        </div>
+        <strong style={{ fontFamily: "monospace", color: "#0f172a" }}>
+          {latitude !== "" ? Number(latitude).toFixed(6) : "—"}, {longitude !== "" ? Number(longitude).toFixed(6) : "—"}
+        </strong>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Vue Carte Globale des Stations
+   ============================================================ */
+function StationsMapView({
+  stations,
+  onEditStation,
+}: {
+  stations: StationData[];
+  onEditStation: (s: StationData) => void;
+}) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [selectedStation, setSelectedStation] = useState<StationData | null>(null);
+
+  useEffect(() => {
+    let mapInstance: any = null;
+
+    const initGlobalMap = () => {
+      const L = (window as any).L;
+      if (!L || !mapRef.current) return;
+
+      if ((mapRef.current as any)._leaflet_id) {
+        (mapRef.current as any)._leaflet_id = null;
+        mapRef.current.innerHTML = "";
+      }
+
+      mapInstance = L.map(mapRef.current).setView([DEFAULT_LAT, DEFAULT_LNG], 7);
+
+      L.tileLayer(MAPTILER_TILE_URL, {
+        tileSize: 512,
+        zoomOffset: -1,
+        maxZoom: 18,
+        attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      }).addTo(mapInstance);
+
+      const validStations = (stations || []).filter((s) => s?.latitude != null && s?.longitude != null);
+
+      if (validStations.length > 0) {
+        const bounds = L.latLngBounds([]);
+
+        validStations.forEach((s) => {
+          const lat = Number(s.latitude);
+          const lng = Number(s.longitude);
+          bounds.extend([lat, lng]);
+
+          const marker = L.marker([lat, lng]).addTo(mapInstance);
+          
+          marker.bindPopup(`
+            <div style="font-family: inherit; padding: 4px; min-width: 160px;">
+              <strong id="popup-title-${s?.id}" style="font-size: 14px; color: #0b1e36; cursor: pointer; text-decoration: underline;">${s?.name}</strong><br/>
+              <span style="font-size: 12px; color: #64748b;">${s?.city || "Ville non précisée"}</span><br/>
+              <span style="font-size: 11px; display: inline-block; margin-top: 4px; padding: 2px 6px; background: ${
+                s?.isActive ? "#eef7f1" : "#fef3c7"
+              }; color: ${s?.isActive ? "#358260" : "#d97706"}; border-radius: 4px;">
+                ${s?.isActive ? "Active" : "Inactive"}
+              </span>
+            </div>
+          `);
+
+          marker.on("popupopen", () => {
+            const titleEl = document.getElementById(`popup-title-${s?.id}`);
+            if (titleEl) {
+              titleEl.onclick = () => setSelectedStation(s);
+            }
+          });
+        });
+
+        mapInstance.fitBounds(bounds, { padding: [40, 40] });
+      }
+
+      setTimeout(() => {
+        if (mapInstance) mapInstance.invalidateSize();
+      }, 250);
+    };
+
+    if (!(window as any).L) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+
+      const script = document.createElement("script");
+      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      script.onload = () => initGlobalMap();
+      document.head.appendChild(script);
+    } else {
+      initGlobalMap();
+    }
+
+    return () => {
+      if (mapInstance) mapInstance.remove();
+    };
+  }, [stations]);
+
+  return (
+    <div className="admin-card" style={{ padding: "16px", height: "calc(100vh - 120px)", display: "flex", flexDirection: "column", position: "relative" }}>
+      <div style={{ marginBottom: "12px" }}>
+        <h3 style={{ fontSize: "15px", fontWeight: 600 }}>Cartographie des Stations</h3>
+        <p style={{ fontSize: "12.5px", color: "var(--muted)" }}>
+          Cliquez sur le nom d'une station dans son marqueur pour consulter ses informations.
+        </p>
+      </div>
+      <div
+        ref={mapRef}
+        style={{
+          flex: 1,
+          width: "100%",
+          borderRadius: "12px",
+          border: "1px solid #cbd5e1",
+          zIndex: 1,
+        }}
+      />
+
+      {selectedStation && (
+        <div className="stepper-overlay" onClick={() => setSelectedStation(null)}>
+          <div className="admin-card" style={{ width: "100%", maxWidth: "460px", background: "#fff", padding: "24px", position: "relative" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span className="admin-stat-icon orange" style={{ width: 36, height: 36, borderRadius: 8 }}>
+                  <Building2 size={18} />
+                </span>
+                <div>
+                  <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#0f172a" }}>{selectedStation?.name}</h3>
+                  <span style={{ fontSize: "12px", color: "var(--muted)" }}>{selectedStation?.timezone}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="stepper-close-btn"
+                onClick={() => setSelectedStation(null)}
+                style={{ background: "#f1f5f9", borderRadius: "50%", padding: "6px" }}
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
+
+            <div className="stepper-summary-card" style={{ marginBottom: "16px" }}>
+              <div className="summary-row">
+                <span>Ville & Adresse :</span>
+                <strong>{selectedStation?.city || "—"} ({selectedStation?.address || selectedStation?.location || "Non précisée"})</strong>
+              </div>
+              <div className="summary-row">
+                <span>Coordonnées GPS :</span>
+                <strong>
+                  {selectedStation?.latitude != null && selectedStation?.longitude != null
+                    ? `${Number(selectedStation.latitude).toFixed(4)}, ${Number(selectedStation.longitude).toFixed(4)}`
+                    : "Non géolocalisée"}
+                </strong>
+              </div>
+              <div className="summary-row">
+                <span>Responsable :</span>
+                <strong>{selectedStation?.contactName || "—"} {selectedStation?.contactPhone ? `(${selectedStation.contactPhone})` : ""}</strong>
+              </div>
+              <div className="summary-row">
+                <span>Tolérance / Repos / Max :</span>
+                <strong>{selectedStation?.latenessToleranceMinutes}m / {selectedStation?.minRestHours}h / {selectedStation?.weeklyHoursLimit}h</strong>
+              </div>
+              <div className="summary-row">
+                <span>Statut :</span>
+                <strong style={{ color: selectedStation?.isActive ? "#16a34a" : "#d97706" }}>
+                  {selectedStation?.isActive ? "Active" : "Inactive"}
+                </strong>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+              <button
+                type="button"
+                className="admin-button secondary small"
+                onClick={() => setSelectedStation(null)}
+              >
+                Fermer
+              </button>
+              <button
+                type="button"
+                className="admin-button small"
+                onClick={() => {
+                  const st = selectedStation;
+                  setSelectedStation(null);
+                  if (st) onEditStation(st);
+                }}
+              >
+                <PencilSimpleIcon size={14} />
+                <span>Modifier</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   Gestionnaire Principal : StationManager
+   ============================================================ */
+export function StationManager({
+  stations,
+  activeTab,
+  onChanged,
+}: {
+  stations: StationData[];
+  activeTab: "list" | "map";
+  onChanged: () => void;
+}) {
+  const [templateStation, setTemplateStation] = useState<StationData | null>(null);
+  const [form, setForm] = useState<typeof emptyForm | null>(null);
+  const [id, setId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [cityFilter, setCityFilter] = useState("ALL");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const [confirm, setConfirm] = useState<StationData | null>(null);
+  
+  const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setCityDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const set = (key: string, value: unknown) =>
+    setForm((old) => (old ? { ...old, [key]: value } : old));
+
+  function edit(station?: StationData) {
+    setId(station?.id || "");
+    setForm(
+      station
+        ? {
+            ...station,
+            address: station.address || "",
+            city: station.city || "Douala",
+            latitude: station.latitude ?? DEFAULT_LAT,
+            longitude: station.longitude ?? DEFAULT_LNG,
+            location: station.location || "",
+            contactName: station.contactName || "",
+            contactPhone: station.contactPhone || "",
+          }
+        : emptyForm,
+    );
+    setError("");
+  }
+
+  async function save() {
+    if (!form) return;
+    setBusy(true);
+    setError("");
+    try {
+      const payload = {
+        name: form.name.trim(),
+        address: form.address.trim() || null,
+        city: form.city.trim() || null,
+        latitude: form.latitude !== "" ? Number(form.latitude) : null,
+        longitude: form.longitude !== "" ? Number(form.longitude) : null,
+        location: form.location.trim() || null,
+        timezone: form.timezone,
+        contactName: form.contactName.trim() || null,
+        contactPhone: form.contactPhone.trim() || null,
+        latenessToleranceMinutes: Number(form.latenessToleranceMinutes),
+        minRestHours: Number(form.minRestHours),
+        weeklyHoursLimit: Number(form.weeklyHoursLimit),
+        checkinQrTtl: Number(form.checkinQrTtl),
+        checkoutQrTtl: Number(form.checkoutQrTtl),
+      };
+
+      await api(
+        "/stations" + (id ? "/" + id : ""),
+        payload,
+        id ? "PATCH" : undefined,
+      );
+      setForm(null);
+      notify("Station enregistrée avec succès.", "success");
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+      notify((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggle() {
+    if (!confirm) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api(
+        "/stations/" +
+          confirm.id +
+          "/" +
+          (confirm.isActive ? "deactivate" : "activate"),
+        {},
+        "PATCH",
+      );
+      setConfirm(null);
+      notify("Statut de la station mis à jour.", "success");
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+      notify((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const cities = Array.from(new Set((stations || []).map((s) => s?.city).filter(Boolean)));
+
+  const filteredStations = (stations || []).filter((s) => {
+    if (!s) return false;
+    const matchesQuery = (
+      (s.name || "") +
+      " " +
+      (s.city || "") +
+      " " +
+      (s.address || s.location || "") +
+      " " +
+      (s.contactName || "")
+    )
+      .toLowerCase()
+      .includes((query || "").toLowerCase());
+
+    const matchesCity = cityFilter === "ALL" || s.city === cityFilter;
+    return matchesQuery && matchesCity;
+  });
+
+  function handleExportExcel() {
+    if (!filteredStations.length) return;
+    exportToExcel<StationData>({
+      data: filteredStations,
+      filename: "stations_uswap",
+      sheetName: "Stations",
+      columns: [
+        { header: "Nom de la station", key: (s: StationData) => s?.name || "", width: 25 },
+        { header: "Ville", key: (s: StationData) => s?.city || "—", width: 15 },
+        { header: "Adresse", key: (s: StationData) => s?.address || s?.location || "—", width: 30 },
+        {
+          header: "Coordonnées GPS",
+          key: (s: StationData) => (s?.latitude != null && s?.longitude != null ? `${s.latitude}, ${s.longitude}` : "—"),
+          width: 25,
+        },
+        { header: "Contact responsable", key: (s: StationData) => s?.contactName || "—", width: 22 },
+        { header: "Téléphone", key: (s: StationData) => s?.contactPhone || "—", width: 18 },
+        { header: "Tolérance retard (min)", key: (s: StationData) => s?.latenessToleranceMinutes ?? 0, width: 20 },
+        { header: "Repos minimal (h)", key: (s: StationData) => s?.minRestHours ?? 0, width: 18 },
+        { header: "Limite hebdo (h)", key: (s: StationData) => s?.weeklyHoursLimit ?? 0, width: 18 },
+        { header: "Statut", key: (s: StationData) => (s?.isActive ? "Active" : "Inactive"), width: 12 },
+      ],
+    });
+    notify("Exportation du fichier Excel réussie.", "success");
+  }
+
+  const stationSteps: StepItem[] = form
+    ? [
+        {
+          id: "location",
+          label: "Localisation",
+          isValid: () => !!form?.name?.trim() && !!form?.timezone?.trim(),
+          content: (
+            <div className="stepper-form-layout">
+              <div className="stepper-field-group">
+                <label>NOM DE LA STATION *</label>
+                <input
+                  required
+                  maxLength={120}
+                  placeholder="ex: Station Bonamoussadi"
+                  value={String(form?.name || "")}
+                  onChange={(e) => set("name", e.target.value)}
+                />
+              </div>
+
+              <div className="user-form-grid-2">
+                <div className="stepper-field-group">
+                  <label>VILLE</label>
+                  <input
+                    maxLength={100}
+                    placeholder="ex: Douala"
+                    value={String(form?.city || "")}
+                    onChange={(e) => set("city", e.target.value)}
+                  />
+                </div>
+
+                <div className="stepper-field-group">
+                  <label>FUSEAU HORAIRE *</label>
+                  <input
+                    required
+                    value={String(form?.timezone || "")}
+                    onChange={(e) => set("timezone", e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <MapLocationPicker
+                address={String(form?.address || "")}
+                city={String(form?.city || "")}
+                latitude={form?.latitude ?? DEFAULT_LAT}
+                longitude={form?.longitude ?? DEFAULT_LNG}
+                onSelectLocation={(lat, lng) => {
+                  set("latitude", lat);
+                  set("longitude", lng);
+                }}
+                onSelectAddress={(addr, lat, lng) => {
+                  set("address", addr);
+                  set("latitude", lat);
+                  set("longitude", lng);
+                }}
+              />
+            </div>
+          ),
+        },
+        {
+          id: "contact",
+          label: "Contact & Responsable",
+          content: (
+            <div className="stepper-form-layout">
+              <div className="stepper-field-group">
+                <label>NOM DU RESPONSABLE DE STATION</label>
+                <input
+                  placeholder="ex: Jalil KETOU"
+                  value={String(form?.contactName || "")}
+                  onChange={(e) => set("contactName", e.target.value)}
+                />
+              </div>
+
+              <div className="stepper-field-group">
+                <label>NUMÉRO DE TÉLÉPHONE DU CONTACT</label>
+                <input
+                  placeholder="ex: 693542271"
+                  value={String(form?.contactPhone || "")}
+                  onChange={(e) => set("contactPhone", e.target.value)}
+                />
+              </div>
+            </div>
+          ),
+        },
+        {
+          id: "rules",
+          label: "Règles & Sécurité",
+          content: (
+            <div className="stepper-form-layout">
+              <div className="user-form-grid-2">
+                <div className="stepper-field-group">
+                  <label>TOLÉRANCE RETARD (MINUTES)</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    step={1}
+                    value={form?.latenessToleranceMinutes ?? 0}
+                    onChange={(e) => set("latenessToleranceMinutes", Number(e.target.value))}
+                  />
+                </div>
+
+                <div className="stepper-field-group">
+                  <label>REPOS MINIMAL (HEURES)</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    step={1}
+                    value={form?.minRestHours ?? 0}
+                    onChange={(e) => set("minRestHours", Number(e.target.value))}
+                  />
+                </div>
+              </div>
+
+              <div className="user-form-grid-2">
+                <div className="stepper-field-group">
+                  <label>LIMITE HEBDOMADAIRE (HEURES)</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    step={1}
+                    value={form?.weeklyHoursLimit ?? 0}
+                    onChange={(e) => set("weeklyHoursLimit", Number(e.target.value))}
+                  />
+                </div>
+
+                <div className="stepper-field-group">
+                  <label>VALIDITÉ QR DEB/FIN (MINUTES)</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    step={1}
+                    value={(form?.checkinQrTtl ?? 300) / 60}
+                    onChange={(e) => {
+                      const val = Number(e.target.value) * 60;
+                      set("checkinQrTtl", val);
+                      set("checkoutQrTtl", val);
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          ),
+        },
+        {
+          id: "summary",
+          label: "Récapitulatif",
+          content: (
+            <div className="stepper-form-layout">
+              {error && <p className="error-message" role="alert">{error}</p>}
+              <div className="stepper-summary-card">
+                <div className="summary-row">
+                  <span>Nom de la station :</span>
+                  <strong>{form?.name || "—"}</strong>
+                </div>
+                <div className="summary-row">
+                  <span>Ville & Fuseau :</span>
+                  <strong>{form?.city || "—"} ({form?.timezone || "—"})</strong>
+                </div>
+                <div className="summary-row">
+                  <span>Adresse :</span>
+                  <strong>{form?.address || "Non renseignée"}</strong>
+                </div>
+                <div className="summary-row">
+                  <span>Coordonnées GPS :</span>
+                  <strong>
+                    {form?.latitude !== "" && form?.longitude !== ""
+                      ? `${Number(form?.latitude || 0).toFixed(5)}, ${Number(form?.longitude || 0).toFixed(5)}`
+                      : "Non géolocalisée"}
+                  </strong>
+                </div>
+                <div className="summary-row">
+                  <span>Responsable :</span>
+                  <strong>
+                    {form?.contactName || "Aucun"} {form?.contactPhone ? `(${form.contactPhone})` : ""}
+                  </strong>
+                </div>
+                <div className="summary-row">
+                  <span>Tolérance retard :</span>
+                  <strong>{form?.latenessToleranceMinutes ?? 0} min</strong>
+                </div>
+                <div className="summary-row">
+                  <span>Repos min. / Limite hebdo :</span>
+                  <strong>{form?.minRestHours ?? 0}h / {form?.weeklyHoursLimit ?? 0}h max</strong>
+                </div>
+              </div>
+              <p style={{ fontSize: "12.5px", color: "var(--muted)", margin: 0 }}>
+                Vérifiez les informations ci-dessus puis cliquez sur le bouton de validation final pour créer ou mettre à jour la station.
+              </p>
+            </div>
+          ),
+        },
+      ]
+    : [];
+
+  return (
+    <div className="station-manager">
+      <StepperModal
+        open={form !== null}
+        title={id ? "Modifier la station" : "Nouvelle station"}
+        icon={<Building2 size={20} />}
+        steps={stationSteps}
+        submitLabel={id ? "Mettre à jour" : "Valider et créer"}
+        busy={busy}
+        onClose={() => setForm(null)}
+        onSubmit={save}
+      />
+
+      <Modal
+        open={!!confirm}
+        onClose={() => !busy && setConfirm(null)}
+        title={confirm?.isActive ? "Désactiver la station" : "Réactiver la station"}
+      >
+        {confirm && (
+          <div style={{ display: "grid", gap: "16px" }}>
+            <p style={{ margin: 0, color: "#475569", fontSize: "14px", lineHeight: "1.5" }}>
+              {confirm.isActive
+                ? `Voulez-vous désactiver la station « ${confirm.name} » ?`
+                : `Voulez-vous réactiver la station « ${confirm.name} » ?`}
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
+              <button
+                type="button"
+                className="admin-button secondary"
+                disabled={busy}
+                onClick={() => setConfirm(null)}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className={`admin-button ${confirm?.isActive ? "danger" : ""}`}
+                disabled={busy}
+                onClick={toggle}
+              >
+                {busy && <LoaderCircle className="spin" size={16} />}
+                Confirmer
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal dédié pour ouvrir ShiftTemplates en surimpression */}
+      <Modal
+        open={templateStation !== null}
+        onClose={() => setTemplateStation(null)}
+        title={templateStation ? `Modèles de shifts — ${templateStation.name}` : "Modèles de shifts"}
+      >
+        <div style={{ maxHeight: "75vh", overflowY: "auto", padding: "4px" }}>
+          {templateStation && (
+            <ShiftTemplates
+              station={(stations || []).find((s) => s?.id === templateStation.id) || templateStation}
+              onBack={() => setTemplateStation(null)}
+            />
+          )}
+        </div>
+      </Modal>
+
+      {activeTab === "map" ? (
+        <StationsMapView stations={stations || []} onEditStation={(s) => edit(s)} />
+      ) : (
+        <>
+          <div className="operations-actions" style={{ marginBottom: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+            <div className="admin-search" style={{ flex: 1, maxWidth: "340px", height: "36px" }}>
+              <Search size={16} />
+              <input
+                aria-label="Rechercher une station"
+                placeholder="Rechercher par nom, ville, adresse..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+
+            {cities.length > 0 && (
+              <div ref={dropdownRef} style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  onClick={() => setCityDropdownOpen(!cityDropdownOpen)}
+                  style={{
+                    height: "36px",
+                    background: "#fff",
+                    border: "1px solid #dfe5ef",
+                    borderRadius: "8px",
+                    padding: "0 12px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    fontSize: "12.5px",
+                    color: "#18243e",
+                    cursor: "pointer",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.02)"
+                  }}
+                >
+                  <span style={{ color: "var(--muted)" }}>Ville :</span>
+                  <strong style={{ fontWeight: 600 }}>
+                    {cityFilter === "ALL" ? "Toutes les villes" : cityFilter}
+                  </strong>
+                  <CaretDownIcon size={14} style={{ color: "#64748b", marginLeft: "4px", transform: cityDropdownOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                </button>
+
+                {cityDropdownOpen && (
+                  <div style={{
+                    position: "absolute",
+                    top: "calc(100% + 4px)",
+                    left: 0,
+                    minWidth: "180px",
+                    background: "#fff",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "8px",
+                    boxShadow: "0 10px 25px -5px rgba(15, 23, 42, 0.12)",
+                    padding: "4px",
+                    zIndex: 50,
+                    display: "grid",
+                    gap: "2px"
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => { setCityFilter("ALL"); setCityDropdownOpen(false); }}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "8px 10px",
+                        fontSize: "12.5px",
+                        background: cityFilter === "ALL" ? "#f1f5f9" : "transparent",
+                        color: "#0f172a",
+                        fontWeight: cityFilter === "ALL" ? 600 : 400,
+                        border: 0,
+                        borderRadius: "6px",
+                        cursor: "pointer"
+                      }}
+                    >
+                      Toutes les villes
+                    </button>
+                    {cities.map((city) => (
+                      <button
+                        key={city}
+                        type="button"
+                        onClick={() => { setCityFilter(city || "ALL"); setCityDropdownOpen(false); }}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "8px 10px",
+                          fontSize: "12.5px",
+                          background: cityFilter === city ? "#f1f5f9" : "transparent",
+                          color: "#0f172a",
+                          fontWeight: cityFilter === city ? 600 : 400,
+                          border: 0,
+                          borderRadius: "6px",
+                          cursor: "pointer"
+                        }}
+                      >
+                        {city}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "auto" }}>
+              <div className="segmented-control" style={{ display: "flex", background: "#edf2f7", padding: "3px", borderRadius: "8px", height: "36px", boxSizing: "border-box" }}>
+                <button
+                  type="button"
+                  aria-pressed={viewMode === "table"}
+                  onClick={() => setViewMode("table")}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "6px", padding: "0 10px", border: "0", background: viewMode === "table" ? "#fff" : "transparent", color: viewMode === "table" ? "#0f172a" : "#64748b", fontSize: "12.5px", fontWeight: viewMode === "table" ? 600 : 500, borderRadius: "6px", cursor: "pointer", boxShadow: viewMode === "table" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", height: "100%"
+                  }}
+                >
+                  <ListIcon size={14} />
+                  <span>Tableau</span>
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={viewMode === "grid"}
+                  onClick={() => setViewMode("grid")}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "6px", padding: "0 10px", border: "0", background: viewMode === "grid" ? "#fff" : "transparent", color: viewMode === "grid" ? "#0f172a" : "#64748b", fontSize: "12.5px", fontWeight: viewMode === "grid" ? 600 : 500, borderRadius: "6px", cursor: "pointer", boxShadow: viewMode === "grid" ? "0 1px 3px rgba(0,0,0,0.08)" : "none", height: "100%"
+                  }}
+                >
+                  <SquaresFourIcon size={14} />
+                  <span>Grille</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                className="admin-button secondary small"
+                onClick={handleExportExcel}
+                disabled={!filteredStations?.length}
+                style={{ height: "36px", minHeight: "36px", padding: "0 12px", borderRadius: "8px" }}
+              >
+                <DownloadSimple size={15} />
+                <span>Excel</span>
+              </button>
+
+              <button
+                type="button"
+                className="admin-button small primary-cta"
+                onClick={() => edit()}
+                style={{ height: "36px", minHeight: "36px", padding: "0 14px", borderRadius: "8px" }}
+              >
+                <PlusIcon size={15} weight="bold" />
+                <span>Créer une station</span>
+              </button>
+            </div>
+          </div>
+
+          {viewMode === "table" ? (
+            <div className="admin-card">
+              <div className="admin-table-wrap">
+                <table className="admin-table station-compact-table">
+                  <thead>
+                    <tr>
+                      <th>Station</th>
+                      <th>Ville & Adresse</th>
+                      <th>GPS</th>
+                      <th>Responsable</th>
+                      <th>Contraintes</th>
+                      <th>Statut</th>
+                      <th style={{ textAlign: "right" }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStations.map((s) => (
+                      <tr key={s?.id}>
+                        <td>
+                          <div className="admin-person">
+                            <span className="admin-stat-icon orange" style={{ width: 30, height: 30, borderRadius: 6 }}>
+                              <Building2 size={16} />
+                            </span>
+                            <div>
+                              <strong>{s?.name}</strong>
+                              <span>{s?.timezone}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                            <strong style={{ fontSize: "12.5px", color: "var(--ink)" }}>
+                              {s?.city || "Non spécifiée"}
+                            </strong>
+                            <span style={{ fontSize: "11.5px", color: "var(--muted)" }}>
+                              {s?.address || s?.location || "—"}
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          {s?.latitude != null && s?.longitude != null ? (
+                            <a
+                              href={`https://www.google.com/maps?q=${s.latitude},${s.longitude}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-button"
+                              style={{ fontSize: "12px" }}
+                            >
+                              <MapPin size={13} />
+                              <span>{Number(s.latitude).toFixed(2)}, {Number(s.longitude).toFixed(2)}</span>
+                            </a>
+                          ) : (
+                            <span style={{ fontSize: "12px", color: "var(--muted)" }}>—</span>
+                          )}
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                            <span style={{ fontSize: "12.5px", fontWeight: 500, color: "var(--ink)" }}>
+                              {s?.contactName || "—"}
+                            </span>
+                            {s?.contactPhone && (
+                              <span style={{ fontSize: "11.5px", color: "var(--muted)" }}>
+                                {s.contactPhone}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="code-chips" style={{ marginTop: 0, gap: "3px" }}>
+                            <code>Tol: {s?.latenessToleranceMinutes ?? 0}m</code>
+                            <code>Repos: {s?.minRestHours ?? 0}h</code>
+                            <code>Max: {s?.weeklyHoursLimit ?? 0}h</code>
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`admin-badge ${s?.isActive ? "active" : "draft"}`}>
+                            {s?.isActive ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "6px" }}>
+                            <button
+                              type="button"
+                              className="admin-button secondary small"
+                              style={{ minHeight: "28px", padding: "2px 8px", fontSize: "11.5px" }}
+                              onClick={() => setTemplateStation(s)}
+                            >
+                              <Clock3 size={13} />
+                              <span>Shifts</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-button secondary small"
+                              style={{ minHeight: "28px", padding: "2px 6px" }}
+                              onClick={() => edit(s)}
+                            >
+                              <PencilSimpleIcon size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              className={`station-toggle-btn ${s?.isActive ? "danger" : "success"}`}
+                              style={{ fontSize: "12px", padding: "4px 8px" }}
+                              onClick={() => setConfirm(s)}
+                            >
+                              {s?.isActive ? "Désactiver" : "Activer"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="admin-station-grid">
+              {filteredStations.map((s) => (
+                <section className="admin-card admin-station" key={s?.id}>
+                  <div className="admin-station-top">
+                    <span className="admin-stat-icon orange">
+                      <Building2 size={22} />
+                    </span>
+                    <span className={`admin-badge ${s?.isActive ? "active" : "draft"}`}>
+                      {s?.isActive ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+
+                  <div className="station-main-info">
+                    <h2>{s?.name}</h2>
+                    <p className="station-location">
+                      <MapPin size={15} />
+                      <span>{s?.city ? `${s.city} — ` : ""}{s?.address || s?.location || "Adresse non renseignée"}</span>
+                    </p>
+                  </div>
+
+                  <div className="station-contact-strip">
+                    <div className="contact-item">
+                      <UserRound size={14} />
+                      <span>{s?.contactName || "Contact non renseigné"}</span>
+                    </div>
+                    {s?.contactPhone && (
+                      <div className="contact-item">
+                        <PhoneIcon size={14} />
+                        <span>{s.contactPhone}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <details className="station-rules-details">
+                    <summary className="station-rules-summary">
+                      <span>Règles & coordonnées GPS</span>
+                      <CaretDownIcon size={16} className="caret-icon" />
+                    </summary>
+
+                    <div className="station-rules-grid">
+                      <div className="rule-chip full-width">
+                        <span className="rule-label">Position GPS (Maps)</span>
+                        <strong className="rule-value">
+                          {s?.latitude != null && s?.longitude != null ? (
+                            <a
+                              href={`https://www.google.com/maps?q=${s.latitude},${s.longitude}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ color: "#3b82f6", textDecoration: "underline" }}
+                            >
+                              {Number(s.latitude).toFixed(4)}, {Number(s.longitude).toFixed(4)} (Ouvrir Maps)
+                            </a>
+                          ) : (
+                            "Non configuré"
+                          )}
+                        </strong>
+                      </div>
+                      <div className="rule-chip">
+                        <span className="rule-label">Tolérance retard</span>
+                        <strong className="rule-value">{s?.latenessToleranceMinutes ?? 0} min</strong>
+                      </div>
+                      <div className="rule-chip">
+                        <span className="rule-label">Repos min.</span>
+                        <strong className="rule-value">{s?.minRestHours ?? 0} h</strong>
+                      </div>
+                    </div>
+                  </details>
+
+                  <div className="station-card-actions">
+                    <button
+                      type="button"
+                      className="admin-button secondary small"
+                      onClick={() => setTemplateStation(s)}
+                    >
+                      <Clock3 size={15} />
+                      Modèles
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-button secondary small"
+                      onClick={() => edit(s)}
+                    >
+                      <PencilSimpleIcon size={15} />
+                      Modifier
+                    </button>
+                    <button
+                      type="button"
+                      className={`station-toggle-btn ${s?.isActive ? "danger" : "success"}`}
+                      onClick={() => setConfirm(s)}
+                    >
+                      {s?.isActive ? "Désactiver" : "Réactiver"}
+                    </button>
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+
+          {!filteredStations?.length && (
+            <div className="admin-card admin-empty">
+              <Building2 size={32} />
+              <h2>{query ? "Aucune station ne correspond" : "Aucune station enregistrée"}</h2>
+              <p>
+                {query
+                  ? "Modifiez vos termes de recherche ou sélectionnez une autre ville."
+                  : "Créez votre première station pour configurer les plannings."}
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

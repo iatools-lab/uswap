@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, CheckCheck, Eye, EyeOff, Link2Off, LoaderCircle, MailCheck } from './icons';
+import { ArrowLeft, Check, CheckCheck, Eye, EyeOff, Link2Off, LoaderCircle, MailCheck } from './icons';
 import { api, ApiError } from './auth-api';
 
 const initialToken = new URLSearchParams(location.hash.slice(1)).get('token') || '';
@@ -58,14 +58,14 @@ export function AccountAccess({ mode }: { mode: 'forgot' | 'activate' | 'reset' 
         : mode === 'activate' ? 'Votre compte est activé. Connectez-vous pour continuer.'
         : 'Vous pouvez vous reconnecter avec votre nouveau mot de passe.'}</p>
       {mode === 'forgot' && <><div className="recipient-address">{email.trim()}</div><p className="field-hint">Pensez aussi à vérifier vos courriers indésirables.</p></>}
-      <a className="submit-button" href="/auth/login">Revenir à la connexion <ArrowRight size={18}/></a>
+      <a className="submit-button" href="/auth/login">Revenir à la connexion </a>
       {mode === 'forgot' && <button className="text-button account-secondary" onClick={() => { setDone(false); setSubmitted(false); }}>Utiliser une autre adresse</button>}
     </div> : invalidLink ? <>
       <p className="form-description result-description">{mode === 'activate'
         ? 'Ouvrez votre dernière invitation. Si elle a expiré, demandez-en une nouvelle à votre administrateur.'
         : 'Le lien a expiré, a déjà été utilisé ou est incomplet. Demandez-en un nouveau pour continuer.'}</p>
       <a className="submit-button" href={mode === 'activate' ? '/auth/login' : '/auth/forgot-password'}>
-        {mode === 'activate' ? 'Revenir à la connexion' : 'Recevoir un nouveau lien'} <ArrowRight size={18}/>
+        {mode === 'activate' ? 'Revenir à la connexion' : 'Recevoir un nouveau lien'} 
       </a>
     </> : <>
       <p className="form-description">{mode === 'forgot' ? 'Indiquez l’adresse e-mail de votre compte.' : 'Choisissez le mot de passe de votre compte.'}</p>
@@ -89,7 +89,7 @@ export function AccountAccess({ mode }: { mode: 'forgot' | 'activate' | 'reset' 
           </div>
         </>}
         {error && <div className="error-message" role="alert">{error}</div>}
-        <button className="submit-button" disabled={busy}>{busy ? <><LoaderCircle className="spin" size={18}/> Veuillez patienter…</> : <>{mode === 'forgot' ? 'Envoyer le lien' : mode === 'activate' ? 'Activer mon compte' : 'Enregistrer le mot de passe'}<ArrowRight size={18}/></>}</button>
+        <button className="submit-button" disabled={busy}>{busy ? <><LoaderCircle className="spin" size={18}/> Veuillez patienter…</> : <>{mode === 'forgot' ? 'Envoyer le lien' : mode === 'activate' ? 'Activer mon compte' : 'Enregistrer le mot de passe'}</>}</button>
       </form>
     </>}
   </>;
