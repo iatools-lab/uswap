@@ -1,5 +1,0 @@
-[33m3f7043e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdanielle[m[33m)[m feat(stations,planning): geolocalisation des stations et module de planning
-[33m1810f76[m[33m ([m[1;31morigin/danielle[m[33m)[m j'ai exporter emailservice pour authmodule
-[33m64d7ca8[m feat(users,auth): import CSV/Excel, invitations, edition et desactivation des comptes, avertissement de fin de session
-[33m2b74311[m fix(auth): resolve reported authentication and session security issues
-[33m757ad6b[m Ajout du backend Uswap : auth, stations, conges, shifts, utilisateurs
