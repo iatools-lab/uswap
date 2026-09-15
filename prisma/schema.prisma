@@ -78,7 +78,7 @@ model Station {
   contactPhone             String?
   latenessToleranceMinutes Int      @default(0)
   minRestHours             Int      @default(8)
-  weeklyHoursLimit         Int      @default(48)
+  weeklyHoursLimit         Int      @default(72)
   checkinQrTtl             Int      @default(300)
   checkoutQrTtl            Int      @default(300)
   users                    User[]

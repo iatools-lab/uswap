@@ -6,6 +6,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { PlanningService } from './planning.service';
 import { CreatePlanningDto } from './dto/create-planning.dto';
+import { GeneratePlanningDto } from './dto/generate-planning.dto';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -27,6 +28,12 @@ export class PlanningController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.planningService.findOne(id);
+  }
+
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @Post(':id/generate')
+  generate(@Param('id') id: string, @Body() dto: GeneratePlanningDto) {
+    return this.planningService.generateShifts(id, dto);
   }
 
   @Roles(Role.ADMIN, Role.SUPERVISOR)

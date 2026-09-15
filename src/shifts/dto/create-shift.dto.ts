@@ -1,4 +1,10 @@
-import { IsDateString, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
+
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateShiftDto {
@@ -12,15 +18,22 @@ export class CreateShiftDto {
   @IsNotEmpty()
   swapperId: string;
 
-  @ApiProperty({ example: '2026-09-08T08:00:00.000Z' })
+  @ApiProperty({
+    example: '2026-09-08T08:00:00.000Z',
+  })
   @IsDateString()
   startTime: string;
 
-  @ApiProperty({ example: '2026-09-08T14:00:00.000Z' })
+  @ApiProperty({
+    example: '2026-09-08T14:00:00.000Z',
+  })
   @IsDateString()
   endTime: string;
 
-  @ApiProperty({ required: false, example: 'uuid-du-planning' })
+  @ApiProperty({
+    required: false,
+    example: 'uuid-du-planning',
+  })
   @IsOptional()
   @IsString()
   planningId?: string;
