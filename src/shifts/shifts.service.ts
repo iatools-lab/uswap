@@ -1,274 +1,447 @@
-import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+
 import { PrismaService } from '../prisma/prisma.service';
+
+import { SchedulingEngineService } from '../scheduling/scheduling-engine.service';
+
 import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
 
-interface AssignmentCheck {
-  stationId: string;
-  swapperId: string;
-  start: Date;
-  end: Date;
-  planningId?: string | null;
-  excludeShiftId?: string;
-}
-
-type CheckResult = { ok: true } | { ok: false; reason: string };
-
 @Injectable()
 export class ShiftsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly schedulingEngine: SchedulingEngineService,
+  ) {}
+
+  // =========================================================
+  // CREATE SHIFT
+  // =========================================================
 
   async create(dto: CreateShiftDto) {
     const start = new Date(dto.startTime);
     const end = new Date(dto.endTime);
 
     if (end <= start) {
-      throw new BadRequestException("L'heure de fin doit etre apres l'heure de debut");
+      throw new BadRequestException(
+        "L'heure de fin doit etre apres l'heure de debut",
+      );
     }
 
-    const check = await this.checkAssignment({
+    if (dto.planningId) {
+      const planning =
+        await this.prisma.planning.findUnique({
+          where: {
+            id: dto.planningId,
+          },
+        });
+
+      if (!planning) {
+        throw new NotFoundException(
+          'Planning introuvable',
+        );
+      }
+    }
+
+    await this.schedulingEngine.assertValidShift({
       stationId: dto.stationId,
       swapperId: dto.swapperId,
-      start,
-      end,
+      startTime: start,
+      endTime: end,
       planningId: dto.planningId,
     });
 
-    if (!check.ok) {
-      throw new ForbiddenException(check.reason);
-    }
+    const result = await this.prisma.$transaction(
+      async (tx) => {
+        // Create the shift
+        const shift = await tx.shift.create({
+          data: {
+            stationId: dto.stationId,
+            swapperId: dto.swapperId,
+            startTime: start,
+            endTime: end,
+            planningId: dto.planningId,
+          },
 
-    return this.prisma.shift.create({
-      data: {
-        stationId: dto.stationId,
-        swapperId: dto.swapperId,
-        startTime: start,
-        endTime: end,
-        planningId: dto.planningId,
+          include: {
+            station: true,
+
+            swapper: {
+              select: {
+                id: true,
+                fullName: true,
+              },
+            },
+
+            planning: true,
+          },
+        });
+
+        // Create the expected attendance automatically
+        await tx.attendance.create({
+          data: {
+            shiftId: shift.id,
+            swapperId: dto.swapperId,
+            stationId: dto.stationId,
+            status: 'EXPECTED',
+          },
+        });
+
+        return shift;
       },
-      include: { station: true, swapper: { select: { id: true, fullName: true } } },
-    });
+    );
+
+    return result;
   }
+
+  // =========================================================
+  // FIND ALL
+  // =========================================================
 
   findAll() {
     return this.prisma.shift.findMany({
-      include: { station: true, swapper: { select: { id: true, fullName: true } } },
-      orderBy: { startTime: 'asc' },
+      include: {
+        station: true,
+
+        swapper: {
+          select: {
+            id: true,
+            fullName: true,
+          },
+        },
+
+        planning: true,
+
+        attendances: true,
+      },
+
+      orderBy: {
+        startTime: 'asc',
+      },
     });
   }
+
+  // =========================================================
+  // FIND MY SHIFTS
+  // =========================================================
 
   findMine(swapperId: string) {
     return this.prisma.shift.findMany({
-      where: { swapperId },
-      include: { station: true },
-      orderBy: { startTime: 'asc' },
+      where: {
+        swapperId,
+      },
+
+      include: {
+        station: true,
+        planning: true,
+        attendances: true,
+      },
+
+      orderBy: {
+        startTime: 'asc',
+      },
     });
   }
 
-  async update(id: string, dto: UpdateShiftDto) {
-    const existing = await this.prisma.shift.findUnique({ where: { id } });
+  // =========================================================
+  // UPDATE SHIFT
+  // =========================================================
+
+  async update(
+    id: string,
+    dto: UpdateShiftDto,
+    changedById: string,
+  ) {
+    const existing =
+      await this.prisma.shift.findUnique({
+        where: {
+          id,
+        },
+      });
+
     if (!existing) {
-      throw new NotFoundException('Creneau introuvable');
+      throw new NotFoundException(
+        'Creneau introuvable',
+      );
     }
 
-    const stationId = dto.stationId ?? existing.stationId;
-    const swapperId = dto.swapperId ?? existing.swapperId;
-    const start = dto.startTime ? new Date(dto.startTime) : existing.startTime;
-    const end = dto.endTime ? new Date(dto.endTime) : existing.endTime;
-    const planningId = dto.planningId !== undefined ? dto.planningId : existing.planningId;
+    const stationId =
+      dto.stationId ??
+      existing.stationId;
+
+    const swapperId =
+      dto.swapperId ??
+      existing.swapperId;
+
+    const start =
+      dto.startTime
+        ? new Date(dto.startTime)
+        : existing.startTime;
+
+    const end =
+      dto.endTime
+        ? new Date(dto.endTime)
+        : existing.endTime;
+
+    const planningId =
+      dto.planningId !== undefined
+        ? dto.planningId
+        : existing.planningId;
 
     if (end <= start) {
-      throw new BadRequestException("L'heure de fin doit etre apres l'heure de debut");
+      throw new BadRequestException(
+        "L'heure de fin doit etre apres l'heure de debut",
+      );
     }
 
-    const check = await this.checkAssignment({
+    if (planningId) {
+      const planning =
+        await this.prisma.planning.findUnique({
+          where: {
+            id: planningId,
+          },
+        });
+
+      if (!planning) {
+        throw new NotFoundException(
+          'Planning introuvable',
+        );
+      }
+    }
+
+    await this.schedulingEngine.assertValidShift({
+      stationId,
+      swapperId,
+      startTime: start,
+      endTime: end,
+      planningId,
+      excludeShiftId: id,
+    });
+
+    const changeType =
+      dto.changeType ??
+      'MANUAL_EDIT';
+
+    const updatedShift =
+      await this.prisma.$transaction(
+        async (tx) => {
+          // Update the shift
+          const shift =
+            await tx.shift.update({
+              where: {
+                id,
+              },
+
+              data: {
+                stationId,
+                swapperId,
+                startTime: start,
+                endTime: end,
+                planningId,
+              },
+
+              include: {
+                station: true,
+
+                swapper: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                  },
+                },
+
+                planning: true,
+              },
+            });
+
+          // Record the shift change
+          await tx.shiftChange.create({
+            data: {
+              shiftId: id,
+
+              previousSwapperId:
+                existing.swapperId,
+
+              newSwapperId:
+                swapperId,
+
+              changedById,
+
+              type: changeType,
+
+              reason: dto.reason,
+
+              oldStartTime:
+                existing.startTime,
+
+              oldEndTime:
+                existing.endTime,
+
+              newStartTime:
+                start,
+
+              newEndTime:
+                end,
+            },
+          });
+
+          // Find the existing attendance
+          const existingAttendance =
+            await tx.attendance.findUnique({
+              where: {
+                shiftId_swapperId: {
+                  shiftId: id,
+                  swapperId: existing.swapperId,
+                },
+              },
+            });
+
+          // If the swapper did not change,
+          // update the station if necessary.
+          if (
+            existing.swapperId === swapperId
+          ) {
+            if (existingAttendance) {
+              await tx.attendance.update({
+                where: {
+                  id: existingAttendance.id,
+                },
+
+                data: {
+                  stationId,
+                },
+              });
+            } else {
+              await tx.attendance.create({
+                data: {
+                  shiftId: id,
+                  swapperId,
+                  stationId,
+                  status: 'EXPECTED',
+                },
+              });
+            }
+          } else {
+            // The swapper changed.
+            // Remove the old EXPECTED attendance
+            // and create an attendance for the new swapper.
+
+            if (
+              existingAttendance &&
+              existingAttendance.status === 'EXPECTED'
+            ) {
+              await tx.attendance.delete({
+                where: {
+                  id: existingAttendance.id,
+                },
+              });
+            }
+
+            const newAttendance =
+              await tx.attendance.findUnique({
+                where: {
+                  shiftId_swapperId: {
+                    shiftId: id,
+                    swapperId,
+                  },
+                },
+              });
+
+            if (!newAttendance) {
+              await tx.attendance.create({
+                data: {
+                  shiftId: id,
+                  swapperId,
+                  stationId,
+                  status: 'EXPECTED',
+                },
+              });
+            }
+          }
+
+          return shift;
+        },
+      );
+
+    return updatedShift;
+  }
+
+  // =========================================================
+  // DELETE SHIFT
+  // =========================================================
+
+  async remove(id: string) {
+    const existing =
+      await this.prisma.shift.findUnique({
+        where: {
+          id,
+        },
+      });
+
+    if (!existing) {
+      throw new NotFoundException(
+        'Creneau introuvable',
+      );
+    }
+
+    await this.prisma.shift.delete({
+      where: {
+        id,
+      },
+    });
+
+    return {
+      message:
+        'Creneau supprime avec succes',
+    };
+  }
+
+  // =========================================================
+  // CHECK ASSIGNMENT
+  // =========================================================
+
+  async checkAssignment(params: {
+    stationId: string;
+    swapperId: string;
+    start: Date;
+    end: Date;
+    planningId?: string | null;
+    excludeShiftId?: string;
+  }) {
+    const {
       stationId,
       swapperId,
       start,
       end,
       planningId,
-      excludeShiftId: id,
-    });
-
-    if (!check.ok) {
-      throw new ForbiddenException(check.reason);
-    }
-
-    return this.prisma.shift.update({
-      where: { id },
-      data: { stationId, swapperId, startTime: start, endTime: end, planningId },
-      include: { station: true, swapper: { select: { id: true, fullName: true } } },
-    });
-  }
-
-  async remove(id: string) {
-    const existing = await this.prisma.shift.findUnique({ where: { id } });
-    if (!existing) {
-      throw new NotFoundException('Creneau introuvable');
-    }
-    await this.prisma.shift.delete({ where: { id } });
-    return { message: 'Creneau supprime avec succes' };
-  }
-
-  async checkAssignment(params: AssignmentCheck): Promise<CheckResult> {
-    const { stationId, swapperId, start, end, planningId, excludeShiftId } = params;
-
-    const station = await this.prisma.station.findUnique({ where: { id: stationId } });
-    if (!station) {
-      return { ok: false, reason: 'Station introuvable' };
-    }
-    if (!station.isActive) {
-      return { ok: false, reason: 'Cette station est desactivee' };
-    }
-
-    const swapper = await this.prisma.user.findUnique({ where: { id: swapperId } });
-    if (!swapper) {
-      return { ok: false, reason: 'Swappeur introuvable' };
-    }
-    if (swapper.role !== 'SWAPPER') {
-      return { ok: false, reason: "L'utilisateur assigne doit avoir le role Swappeur" };
-    }
-    if (!swapper.isActive) {
-      return { ok: false, reason: 'Ce swappeur est desactive' };
-    }
-
-    if (planningId) {
-      const planning = await this.prisma.planning.findUnique({ where: { id: planningId } });
-      if (!planning) {
-        return { ok: false, reason: 'Planning introuvable' };
-      }
-      if (start < planning.startDate || end > planning.endDate) {
-        return { ok: false, reason: 'Le creneau doit se situer dans la periode du planning' };
-      }
-    }
-
-    const overlapping = await this.prisma.shift.findFirst({
-      where: {
-        swapperId,
-        id: excludeShiftId ? { not: excludeShiftId } : undefined,
-        startTime: { lt: end },
-        endTime: { gt: start },
-      },
-      include: { station: true },
-    });
-    if (overlapping) {
-      return {
-        ok: false,
-        reason: `Ce swappeur a deja un creneau qui chevauche cette periode, sur la station ${overlapping.station.name}`,
-      };
-    }
-
-    const restCheck = await this.checkRest(swapperId, start, end, station.minRestHours, excludeShiftId);
-    if (!restCheck.ok) {
-      return restCheck;
-    }
-
-    const weeklyCheck = await this.checkWeeklyLimit(
-      swapperId,
-      start,
-      end,
-      station.weeklyHoursLimit,
       excludeShiftId,
-    );
-    if (!weeklyCheck.ok) {
-      return weeklyCheck;
-    }
+    } = params;
 
-    return { ok: true };
-  }
-
-  private async checkRest(
-    swapperId: string,
-    start: Date,
-    end: Date,
-    minRestHours: number,
-    excludeShiftId?: string,
-  ): Promise<CheckResult> {
-    const minRestMs = minRestHours * 60 * 60 * 1000;
-
-    const previousShift = await this.prisma.shift.findFirst({
-      where: {
+    const result =
+      await this.schedulingEngine.validateShift({
+        stationId,
         swapperId,
-        id: excludeShiftId ? { not: excludeShiftId } : undefined,
-        endTime: { lte: start },
-      },
-      orderBy: { endTime: 'desc' },
-    });
+        startTime: start,
+        endTime: end,
+        planningId,
+        excludeShiftId,
+      });
 
-    if (previousShift) {
-      const gap = start.getTime() - previousShift.endTime.getTime();
-      if (gap < minRestMs) {
-        return {
-          ok: false,
-          reason: `Repos insuffisant avant ce creneau : ${Math.round(gap / 3600000)}h de repos, minimum ${minRestHours}h requis`,
-        };
-      }
-    }
-
-    const nextShift = await this.prisma.shift.findFirst({
-      where: {
-        swapperId,
-        id: excludeShiftId ? { not: excludeShiftId } : undefined,
-        startTime: { gte: end },
-      },
-      orderBy: { startTime: 'asc' },
-    });
-
-    if (nextShift) {
-      const gap = nextShift.startTime.getTime() - end.getTime();
-      if (gap < minRestMs) {
-        return {
-          ok: false,
-          reason: `Repos insuffisant apres ce creneau : ${Math.round(gap / 3600000)}h de repos, minimum ${minRestHours}h requis`,
-        };
-      }
-    }
-
-    return { ok: true };
-  }
-
-  private async checkWeeklyLimit(
-    swapperId: string,
-    start: Date,
-    end: Date,
-    weeklyHoursLimit: number,
-    excludeShiftId?: string,
-  ): Promise<CheckResult> {
-    const weekStart = this.getWeekStart(start);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 7);
-
-    const shiftsThisWeek = await this.prisma.shift.findMany({
-      where: {
-        swapperId,
-        id: excludeShiftId ? { not: excludeShiftId } : undefined,
-        startTime: { gte: weekStart, lt: weekEnd },
-      },
-    });
-
-    const existingMs = shiftsThisWeek.reduce(
-      (total, shift) => total + (shift.endTime.getTime() - shift.startTime.getTime()),
-      0,
-    );
-    const projectedMs = existingMs + (end.getTime() - start.getTime());
-    const projectedHours = projectedMs / 3600000;
-
-    if (projectedHours > weeklyHoursLimit) {
+    if (!result.valid) {
       return {
         ok: false,
-        reason: `Limite hebdomadaire depassee : ${projectedHours.toFixed(1)}h projetees, maximum ${weeklyHoursLimit}h autorise`,
+
+        reason:
+          result.errors.join(' | '),
       };
     }
 
-    return { ok: true };
-  }
-
-  private getWeekStart(date: Date): Date {
-    const result = new Date(date);
-    const day = result.getDay();
-    const diff = day === 0 ? 6 : day - 1;
-    result.setDate(result.getDate() - diff);
-    result.setHours(0, 0, 0, 0);
-    return result;
+    return {
+      ok: true,
+    };
   }
 }
