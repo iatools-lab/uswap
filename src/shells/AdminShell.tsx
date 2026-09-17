@@ -6,7 +6,14 @@ import { PlanningInbox } from "../features/inbox/PlanningInbox";
 import { interceptNav } from "../app/spaNav";
 import { RouteFallback } from "../app/RouteFallback";
 import { useSession } from "../app/session";
-import { Building2, Clock3, LayoutDashboard, UserRound, Users, Zap } from "../ui/icons";
+import {
+  Building2,
+  Clock3,
+  LayoutDashboard,
+  UserRound,
+  Users,
+  Zap,
+} from "../ui/icons";
 import "../styles/admin.css";
 
 const sections = [
@@ -23,28 +30,40 @@ export function AdminShell() {
   const navigate = useNavigate();
   const title = useRef<HTMLHeadingElement>(null);
   const currentPathOnly = location.pathname;
-  const [stationsOpen, setStationsOpen] = useState(currentPathOnly.startsWith("/app/admin/stations"));
+  const [stationsOpen, setStationsOpen] = useState(
+    currentPathOnly.startsWith("/app/admin/stations"),
+  );
   const [currentSubTab, setCurrentSubTab] = useState<"list" | "map">(() =>
     new URLSearchParams(location.search).get("tab") === "map" ? "map" : "list",
   );
 
   const section =
     sections.find((item) => item.path === currentPathOnly) ||
-    (currentPathOnly.startsWith("/app/admin/utilisateurs") ? sections[1] : sections[0]);
+    (currentPathOnly.startsWith("/app/admin/utilisateurs")
+      ? sections[1]
+      : sections[0]);
 
   useEffect(() => {
     setStationsOpen(currentPathOnly.startsWith("/app/admin/stations"));
   }, [currentPathOnly]);
 
   useEffect(() => {
-    setCurrentSubTab(new URLSearchParams(location.search).get("tab") === "map" ? "map" : "list");
+    setCurrentSubTab(
+      new URLSearchParams(location.search).get("tab") === "map"
+        ? "map"
+        : "list",
+    );
   }, [location.pathname, location.search]);
 
   useEffect(() => {
     document.title = `${section.label} · Administration uSwap`;
   }, [section.label]);
 
-  function go(event: MouseEvent<HTMLAnchorElement>, target: string, subTab?: "list" | "map") {
+  function go(
+    event: MouseEvent<HTMLAnchorElement>,
+    target: string,
+    subTab?: "list" | "map",
+  ) {
     if (!interceptNav(event, navigate, target)) return;
     if (subTab) setCurrentSubTab(subTab);
     requestAnimationFrame(() => title.current?.focus());
@@ -52,7 +71,8 @@ export function AdminShell() {
 
   const link = (target: string, subTab?: "list" | "map") => ({
     href: target,
-    onClick: (event: MouseEvent<HTMLAnchorElement>) => go(event, target, subTab),
+    onClick: (event: MouseEvent<HTMLAnchorElement>) =>
+      go(event, target, subTab),
   });
 
   if (!session) return null;
@@ -63,7 +83,11 @@ export function AdminShell() {
         Aller au contenu
       </a>
       <aside className="admin-sidebar">
-        <a className="brand" {...link("/app/admin")} aria-label="uSwap, accueil administrateur">
+        <a
+          className="brand"
+          {...link("/app/admin")}
+          aria-label="uSwap, accueil administrateur"
+        >
           <span className="brand-symbol">
             <Zap fill="currentColor" />
           </span>
@@ -84,11 +108,19 @@ export function AdminShell() {
             .map(({ path: target, label, Icon }) => {
               const isStations = target === "/app/admin/stations";
               const isCurrent = currentPathOnly === target;
-              const stationsActive = currentPathOnly.startsWith("/app/admin/stations");
+              const stationsActive = currentPathOnly.startsWith(
+                "/app/admin/stations",
+              );
 
               return (
                 <div key={target} style={{ display: "grid", gap: "2px" }}>
-                  <div style={{ display: "flex", alignItems: "center", position: "relative" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      position: "relative",
+                    }}
+                  >
                     {isStations ? (
                       <button
                         type="button"
@@ -103,8 +135,12 @@ export function AdminShell() {
                           gap: "12px",
                           padding: "11px 14px",
                           borderRadius: "8px",
-                          color: isCurrent || stationsActive ? "#fff" : "#c6d2ed",
-                          background: isCurrent || stationsActive ? "#ffffff13" : "transparent",
+                          color:
+                            isCurrent || stationsActive ? "#fff" : "#c6d2ed",
+                          background:
+                            isCurrent || stationsActive
+                              ? "#ffffff13"
+                              : "transparent",
                           fontSize: "14px",
                           minHeight: "44px",
                           width: "100%",
@@ -118,7 +154,9 @@ export function AdminShell() {
                         <CaretDownIcon
                           size={14}
                           style={{
-                            transform: stationsOpen ? "rotate(0deg)" : "rotate(-90deg)",
+                            transform: stationsOpen
+                              ? "rotate(0deg)"
+                              : "rotate(-90deg)",
                             transition: "transform 0.2s ease",
                             color: "#c6d2ed",
                           }}
@@ -142,17 +180,33 @@ export function AdminShell() {
                   </div>
 
                   {isStations && stationsOpen && (
-                    <div style={{ display: "grid", gap: "2px", paddingLeft: "26px", margin: "2px 0 4px 0" }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: "2px",
+                        paddingLeft: "26px",
+                        margin: "2px 0 4px 0",
+                      }}
+                    >
                       <a
                         {...link("/app/admin/stations?tab=list", "list")}
-                        aria-current={currentSubTab === "list" && stationsActive ? "page" : undefined}
+                        aria-current={
+                          currentSubTab === "list" && stationsActive
+                            ? "page"
+                            : undefined
+                        }
                         style={{
                           fontSize: "13px",
                           padding: "6px 10px",
                           minHeight: "32px",
-                          color: currentSubTab === "list" && stationsActive ? "#fff" : "#9aadd3",
+                          color:
+                            currentSubTab === "list" && stationsActive
+                              ? "#fff"
+                              : "#9aadd3",
                           background:
-                            currentSubTab === "list" && stationsActive ? "rgba(255, 255, 255, 0.08)" : "transparent",
+                            currentSubTab === "list" && stationsActive
+                              ? "rgba(255, 255, 255, 0.08)"
+                              : "transparent",
                           borderRadius: "6px",
                           textDecoration: "none",
                         }}
@@ -161,14 +215,23 @@ export function AdminShell() {
                       </a>
                       <a
                         {...link("/app/admin/stations?tab=map", "map")}
-                        aria-current={currentSubTab === "map" && stationsActive ? "page" : undefined}
+                        aria-current={
+                          currentSubTab === "map" && stationsActive
+                            ? "page"
+                            : undefined
+                        }
                         style={{
                           fontSize: "13px",
                           padding: "6px 10px",
                           minHeight: "32px",
-                          color: currentSubTab === "map" && stationsActive ? "#fff" : "#9aadd3",
+                          color:
+                            currentSubTab === "map" && stationsActive
+                              ? "#fff"
+                              : "#9aadd3",
                           background:
-                            currentSubTab === "map" && stationsActive ? "rgba(255, 255, 255, 0.08)" : "transparent",
+                            currentSubTab === "map" && stationsActive
+                              ? "rgba(255, 255, 255, 0.08)"
+                              : "transparent",
                           borderRadius: "6px",
                           textDecoration: "none",
                         }}
@@ -192,7 +255,12 @@ export function AdminShell() {
             <span className="admin-breadcrumb">{section.label}</span>
           </div>
           <PlanningInbox user={session.user} />
-          <AccountMenu user={session.user} busy={busy} onLogout={disconnect} settingsPath="/app/admin/compte" />
+          <AccountMenu
+            user={session.user}
+            busy={busy}
+            onLogout={disconnect}
+            settingsPath="/app/admin/compte"
+          />
         </header>
 
         <main id="admin-main" className="admin-content">
@@ -201,7 +269,11 @@ export function AdminShell() {
               <Clock3 size={18} />
               <div>
                 Votre session va expirer.
-                <button className="text-button" onClick={() => void extend()} disabled={busy}>
+                <button
+                  className="text-button"
+                  onClick={() => void extend()}
+                  disabled={busy}
+                >
                   Prolonger ma session
                 </button>
               </div>
@@ -214,8 +286,9 @@ export function AdminShell() {
           )}
           <div className="admin-page-heading">
             <div>
-              <p className="admin-eyebrow">Bonjour, {session.user.fullName.trim().split(/\s+/)[0]}</p>
-              <h1 ref={title} tabIndex={-1}>{section.label}</h1>
+              <h1 ref={title} tabIndex={-1}>
+                {section.label}
+              </h1>
             </div>
           </div>
           <Suspense fallback={<RouteFallback label="Chargement de la page…" />}>

@@ -128,9 +128,6 @@ export function RoleShell() {
           )}
           <div className="admin-page-heading">
             <div>
-              <p className="admin-eyebrow">
-                Bonjour, {session.user.fullName.trim().split(/\s+/)[0]}
-              </p>
               <h1>
                 {account
                   ? "Paramètres du compte"

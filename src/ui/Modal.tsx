@@ -11,7 +11,7 @@ type ModalProps = {
   children: ReactNode;
   /** Footer actions, e.g. <button>Annuler</button><button>Enregistrer</button> */
   footer?: ReactNode;
-  size?: "md" | "lg";
+  size?: "md" | "lg" | "xl";
 };
 
 /**

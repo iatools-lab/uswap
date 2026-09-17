@@ -2784,18 +2784,48 @@
   font-variant-numeric: tabular-nums;
 }
 
+/**
+ * Le panneau est rendu dans un portail (document.body) et positionné en
+ * `fixed` à partir de la position réelle du bouton. Il reste ainsi toujours
+ * entièrement visible, sans jamais être rogné par la barre supérieure ni par
+ * la zone de contenu défilante.
+ */
 .notification-bell__menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 12px);
-  z-index: 50;
-  width: 360px;
-  max-width: calc(100vw - 32px);
+  position: fixed;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: #fff;
-  box-shadow: 0 8px 24px #18243e14;
+  box-shadow: 0 16px 40px #0b1e3640;
   overflow: hidden;
+  animation: notification-panel-in 0.16s ease-out;
+}
+
+@keyframes notification-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-bell__menu {
+    animation: none;
+  }
+}
+
+/*
+ * Sur petit écran, le panneau s'étend d'un bord à l'autre comme une feuille
+ * ancrée sous la barre supérieure : largeur pleine, coins adoucis.
+ */
+.notification-bell__menu.is-sheet {
+  border-radius: 14px;
 }
 
 .notification-bell__head {
@@ -2815,10 +2845,15 @@
 .notification-bell__list {
   display: flex;
   flex-direction: column;
-  max-height: 380px;
   margin: 0;
   padding: 0;
+  /* Le plafond de hauteur vient du conteneur : la liste occupe l'espace
+     restant puis défile, en douceur sur les appareils tactiles. */
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   list-style: none;
 }
 
@@ -2867,5 +2902,10 @@
   .notification-bell__trigger {
     width: 38px;
     height: 38px;
+  }
+  /* Sur mobile, on plafonne aussi la hauteur d'une ligne pour densifier
+     l'affichage et limiter le défilement. */
+  .notification-bell__item {
+    padding: 12px 14px;
   }
 }

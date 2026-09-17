@@ -7,19 +7,33 @@ import {
   notifyUser,
   occurrenceView,
   planningView,
+  planningViewFor,
+  planningScopeOf,
+  canReadPlanning,
   requireRole,
   requireUser,
   stationOf,
 } from "../shared";
-import { MockHttpError, type MockCtx, type MockOccurrence, type MockRoute } from "../types";
+import {
+  MockHttpError,
+  type MockCtx,
+  type MockOccurrence,
+  type MockPlanning,
+  type MockRoute,
+} from "../types";
 
-const asText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+const asText = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
 const pad = (value: number) => String(value).padStart(2, "0");
 const dayKeyOfIso = (iso: string) => iso.slice(0, 10);
 
 const dayList = (startIso: string, endIso: string): string[] => {
   const result: string[] = [];
-  for (let cursor = Date.parse(startIso); cursor <= Date.parse(endIso); cursor += 86400000) {
+  for (
+    let cursor = Date.parse(startIso);
+    cursor <= Date.parse(endIso);
+    cursor += 86400000
+  ) {
     const date = new Date(cursor);
     result.push(
       `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`,
@@ -49,24 +63,36 @@ type Candidate = {
 };
 
 /** Occurrences que la génération produirait pour la sélection demandée. */
-function candidateWindows(ctx: MockCtx, planningId: string, body: Record<string, unknown>) {
+function candidateWindows(
+  ctx: MockCtx,
+  planningId: string,
+  body: Record<string, unknown>,
+) {
   const planning = ctx.db.plannings.find((item) => item.id === planningId);
   if (!planning) throw new MockHttpError(404, "Planning introuvable.");
   const station = stationOf(ctx.db, asText(body.stationId));
   const templateIds = Array.isArray(body.templateIds)
     ? body.templateIds.map((value) => String(value))
     : [];
-  const weekdays = Array.isArray(body.weekdays) ? body.weekdays.map(Number) : [];
+  const weekdays = Array.isArray(body.weekdays)
+    ? body.weekdays.map(Number)
+    : [];
   if (!templateIds.length)
     throw new MockHttpError(400, "Sélectionnez au moins un modèle de shift.");
   if (!weekdays.length)
-    throw new MockHttpError(400, "Sélectionnez au moins un jour de la semaine.");
+    throw new MockHttpError(
+      400,
+      "Sélectionnez au moins un jour de la semaine.",
+    );
 
   const templates = ctx.db.templates.filter(
     (item) => item.stationId === station.id && templateIds.includes(item.id),
   );
   if (!templates.length)
-    throw new MockHttpError(400, "Aucun modèle ne correspond à cette sélection.");
+    throw new MockHttpError(
+      400,
+      "Aucun modèle ne correspond à cette sélection.",
+    );
 
   const existing = new Set(
     ctx.db.occurrences
@@ -117,10 +143,33 @@ export const planningRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/plannings$/,
     handler: (ctx) => {
-      requireUser(ctx.db, ctx.user);
+      const user = requireUser(ctx.db, ctx.user);
+      const scope = planningScopeOf(user);
+      // Tri « le plus utile d'abord » : le planning qui couvre la période en
+      // cours d'abord, puis les publiés à venir, puis les brouillons. Sans
+      // cela, une semaine future encore vide passerait devant la semaine
+      // réellement en activité, ce qui est contre-intuitif.
+      const today = new Date().toISOString().slice(0, 10);
+      const relevance = (item: MockPlanning) => {
+        const start = item.startDate.slice(0, 10);
+        const end = item.endDate.slice(0, 10);
+        if (start <= today && end >= today) return 0;
+        if (item.status === "PUBLISHED") return 1;
+        return 2;
+      };
+      // La liste ne contient que ce que l'utilisateur peut légitimement voir :
+      // un swappeur ne reçoit ni les brouillons, ni les autres stations.
       return [...ctx.db.plannings]
-        .sort((a, b) => Date.parse(b.startDate) - Date.parse(a.startDate))
-        .map((item) => planningView(ctx.db, item.id));
+        .filter((item) =>
+          scope.publishedOnly ? item.status === "PUBLISHED" : true,
+        )
+        .filter((item) => canReadPlanning(ctx.db, item.id, user))
+        .sort(
+          (a, b) =>
+            relevance(a) - relevance(b) ||
+            Date.parse(b.startDate) - Date.parse(a.startDate),
+        )
+        .map((item) => planningViewFor(ctx.db, item.id, user));
     },
   },
   {
@@ -129,12 +178,19 @@ export const planningRoutes: MockRoute[] = [
     handler: (ctx) => {
       requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
       const startDate = asText(ctx.body.startDate);
+      const name = asText(ctx.body.name);
+      if (!name || name.length > 100)
+        throw new MockHttpError(400, "Indiquez un nom de planning de 1 à 100 caractères.");
       const endDate = asText(ctx.body.endDate);
-      if (!startDate || !endDate) throw new MockHttpError(400, "Période incomplète.");
+      if (!startDate || !endDate)
+        throw new MockHttpError(400, "Période incomplète.");
       if (!(Date.parse(endDate) > Date.parse(startDate)))
         throw new MockHttpError(400, "La fin de période doit suivre le début.");
       if (dayList(startDate, endDate).length > 62)
-        throw new MockHttpError(400, "La période ne peut pas dépasser 62 jours.");
+        throw new MockHttpError(
+          400,
+          "La période ne peut pas dépasser 62 jours.",
+        );
       const duplicate = ctx.db.plannings.find(
         (item) =>
           dayKeyOfIso(item.startDate) === dayKeyOfIso(startDate) &&
@@ -144,6 +200,7 @@ export const planningRoutes: MockRoute[] = [
         throw new MockHttpError(409, "Un planning couvre déjà cette période.");
       const created = {
         id: nextId("pl"),
+        name,
         startDate,
         endDate,
         status: "DRAFT" as const,
@@ -189,7 +246,11 @@ export const planningRoutes: MockRoute[] = [
     pattern: /^\/plannings\/([^/]+)\/preview$/,
     handler: (ctx) => {
       requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
-      const { occurrences, duplicates } = candidateWindows(ctx, ctx.params[0], ctx.body);
+      const { occurrences, duplicates } = candidateWindows(
+        ctx,
+        ctx.params[0],
+        ctx.body,
+      );
       return {
         previewHash: nextId("prev"),
         occurrences,
@@ -203,19 +264,29 @@ export const planningRoutes: MockRoute[] = [
     pattern: /^\/plannings\/([^/]+)\/generate$/,
     handler: (ctx) => {
       requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
-      const { planning, occurrences } = candidateWindows(ctx, ctx.params[0], ctx.body);
-      if (typeof ctx.body.revision === "number" && ctx.body.revision !== planning.revision)
+      const { planning, occurrences } = candidateWindows(
+        ctx,
+        ctx.params[0],
+        ctx.body,
+      );
+      if (
+        typeof ctx.body.revision === "number" &&
+        ctx.body.revision !== planning.revision
+      )
         throw new MockHttpError(
           409,
           "Ce planning a été modifié entre-temps. Rechargez-le avant d'ajouter des shifts.",
         );
-      let sequence = ctx.db.occurrences.filter((item) => item.planningId === planning.id).length;
+      let sequence = ctx.db.occurrences.filter(
+        (item) => item.planningId === planning.id,
+      ).length;
       for (const candidate of occurrences) {
         ctx.db.occurrences.push({
           id: `${planning.id}-occ-${sequence++}`,
           planningId: planning.id,
-          stationId: ctx.db.templates.find((item) => item.id === candidate.templateId)!
-            .stationId,
+          stationId: ctx.db.templates.find(
+            (item) => item.id === candidate.templateId,
+          )!.stationId,
           templateId: candidate.templateId,
           label: candidate.label,
           breakStart: candidate.breakStart,
@@ -234,8 +305,15 @@ export const planningRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/plannings\/([^/]+)$/,
     handler: (ctx) => {
-      requireUser(ctx.db, ctx.user);
-      return planningView(ctx.db, ctx.params[0]);
+      const user = requireUser(ctx.db, ctx.user);
+      if (!ctx.db.plannings.some((item) => item.id === ctx.params[0]))
+        throw new MockHttpError(404, "Planning introuvable.");
+      if (!canReadPlanning(ctx.db, ctx.params[0], user))
+        throw new MockHttpError(
+          403,
+          "Ce planning ne concerne pas votre périmètre.",
+        );
+      return planningViewFor(ctx.db, ctx.params[0], user);
     },
   },
   {
@@ -243,14 +321,25 @@ export const planningRoutes: MockRoute[] = [
     pattern: /^\/plannings\/([^/]+)\/occurrences\/([^/]+)\/duplicate$/,
     handler: (ctx) => {
       requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
-      const planning = ctx.db.plannings.find((item) => item.id === ctx.params[0]);
-      const source = ctx.db.occurrences.find(
-        (item) => item.id === ctx.params[1] && item.planningId === ctx.params[0],
+      const planning = ctx.db.plannings.find(
+        (item) => item.id === ctx.params[0],
       );
-      if (!planning || !source) throw new MockHttpError(404, "Poste introuvable.");
-      if (typeof ctx.body.revision === "number" && ctx.body.revision !== planning.revision)
+      const source = ctx.db.occurrences.find(
+        (item) =>
+          item.id === ctx.params[1] && item.planningId === ctx.params[0],
+      );
+      if (!planning || !source)
+        throw new MockHttpError(404, "Poste introuvable.");
+      if (
+        typeof ctx.body.revision === "number" &&
+        ctx.body.revision !== planning.revision
+      )
         throw new MockHttpError(409, "Le planning a changé. Rechargez-le.");
-      const duplicate: MockOccurrence = { ...source, id: nextId("occ"), swapperId: null };
+      const duplicate: MockOccurrence = {
+        ...source,
+        id: nextId("occ"),
+        swapperId: null,
+      };
       ctx.db.occurrences.push(duplicate);
       planning.revision += 1;
       return { ok: true, id: duplicate.id, revision: planning.revision };
@@ -261,19 +350,28 @@ export const planningRoutes: MockRoute[] = [
     pattern: /^\/plannings\/([^/]+)\/occurrences\/([^/]+)\/remove$/,
     handler: (ctx) => {
       requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
-      const planning = ctx.db.plannings.find((item) => item.id === ctx.params[0]);
-      const target = ctx.db.occurrences.find(
-        (item) => item.id === ctx.params[1] && item.planningId === ctx.params[0],
+      const planning = ctx.db.plannings.find(
+        (item) => item.id === ctx.params[0],
       );
-      if (!planning || !target) throw new MockHttpError(404, "Poste introuvable.");
-      if (typeof ctx.body.revision === "number" && ctx.body.revision !== planning.revision)
+      const target = ctx.db.occurrences.find(
+        (item) =>
+          item.id === ctx.params[1] && item.planningId === ctx.params[0],
+      );
+      if (!planning || !target)
+        throw new MockHttpError(404, "Poste introuvable.");
+      if (
+        typeof ctx.body.revision === "number" &&
+        ctx.body.revision !== planning.revision
+      )
         throw new MockHttpError(409, "Le planning a changé. Rechargez-le.");
       if (ctx.db.attendance.some((item) => item.shiftId === target.id))
         throw new MockHttpError(
           409,
           "Ce poste porte déjà un pointage : il ne peut plus être retiré.",
         );
-      ctx.db.occurrences = ctx.db.occurrences.filter((item) => item.id !== target.id);
+      ctx.db.occurrences = ctx.db.occurrences.filter(
+        (item) => item.id !== target.id,
+      );
       planning.revision += 1;
       return { ok: true, revision: planning.revision };
     },
@@ -284,7 +382,8 @@ export const planningRoutes: MockRoute[] = [
     handler: (ctx) => {
       requireUser(ctx.db, ctx.user);
       const occurrence = ctx.db.occurrences.find(
-        (item) => item.id === ctx.params[1] && item.planningId === ctx.params[0],
+        (item) =>
+          item.id === ctx.params[1] && item.planningId === ctx.params[0],
       );
       if (!occurrence) throw new MockHttpError(404, "Poste introuvable.");
       const swapperId = asText(ctx.body.swapperId);
@@ -303,13 +402,23 @@ export const planningRoutes: MockRoute[] = [
     method: "PATCH",
     pattern: /^\/plannings\/([^/]+)\/occurrences\/([^/]+)$/,
     handler: (ctx) => {
-      const actor = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
-      const planning = ctx.db.plannings.find((item) => item.id === ctx.params[0]);
-      const occurrence = ctx.db.occurrences.find(
-        (item) => item.id === ctx.params[1] && item.planningId === ctx.params[0],
+      const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
+      const planning = ctx.db.plannings.find(
+        (item) => item.id === ctx.params[0],
       );
-      if (!planning || !occurrence) throw new MockHttpError(404, "Poste introuvable.");
-      if (typeof ctx.body.revision === "number" && ctx.body.revision !== planning.revision)
+      const occurrence = ctx.db.occurrences.find(
+        (item) =>
+          item.id === ctx.params[1] && item.planningId === ctx.params[0],
+      );
+      if (!planning || !occurrence)
+        throw new MockHttpError(404, "Poste introuvable.");
+      if (
+        typeof ctx.body.revision === "number" &&
+        ctx.body.revision !== planning.revision
+      )
         throw new MockHttpError(
           409,
           "Ce planning a été modifié entre-temps. Rechargez-le avant d'affecter.",
@@ -317,15 +426,17 @@ export const planningRoutes: MockRoute[] = [
       const swapperId = ctx.body.swapperId ? String(ctx.body.swapperId) : null;
       const swapWithId = ctx.body.swapWith ? String(ctx.body.swapWith) : null;
       const counterpart = swapWithId
-        ? ctx.db.occurrences.find(
+        ? (ctx.db.occurrences.find(
             (item) => item.id === swapWithId && item.planningId === planning.id,
-          ) ?? null
+          ) ?? null)
         : null;
       const beforeUser = occurrence.swapperId
-        ? ctx.db.users.find((item) => item.id === occurrence.swapperId) ?? null
+        ? (ctx.db.users.find((item) => item.id === occurrence.swapperId) ??
+          null)
         : null;
       const counterpartUser = counterpart?.swapperId
-        ? ctx.db.users.find((item) => item.id === counterpart.swapperId) ?? null
+        ? (ctx.db.users.find((item) => item.id === counterpart.swapperId) ??
+          null)
         : null;
       // Permutation (US 2043) : les contraintes sont évaluées sur l'état projeté,
       // l'échange étant traité comme atomique.
@@ -341,20 +452,24 @@ export const planningRoutes: MockRoute[] = [
             ignoreOccurrenceId: occurrence.id,
           });
           if (!report.valid)
-            throw new MockHttpError(409, report.errors[0]?.message ?? "Affectation impossible.");
+            throw new MockHttpError(
+              409,
+              report.errors[0]?.message ?? "Affectation impossible.",
+            );
         }
       } finally {
         if (counterpart) counterpart.swapperId = counterpartUser?.id ?? null;
       }
       const afterUser = swapperId
-        ? ctx.db.users.find((item) => item.id === swapperId) ?? null
+        ? (ctx.db.users.find((item) => item.id === swapperId) ?? null)
         : null;
       occurrence.swapperId = swapperId;
       if (counterpart) counterpart.swapperId = beforeUser?.id ?? null;
       planning.revision += 1;
       if (beforeUser?.id !== afterUser?.id || counterpart) {
         const station = stationOf(ctx.db, occurrence.stationId);
-        const permutation = Boolean(counterpart) || Boolean(beforeUser && afterUser);
+        const permutation =
+          Boolean(counterpart) || Boolean(beforeUser && afterUser);
         ctx.db.changes.unshift({
           id: nextId("chg"),
           shiftId: occurrence.id,
@@ -371,7 +486,8 @@ export const planningRoutes: MockRoute[] = [
           inSwapperId: afterUser?.id ?? null,
           reason: permutation
             ? `${asText(ctx.body.reason) || "Permutation depuis le planning"}${counterpartUser ? ` (échange avec ${counterpartUser.fullName})` : " (poste vacant échangé)"}`
-            : asText(ctx.body.reason) || "Modification directe depuis le planning",
+            : asText(ctx.body.reason) ||
+              "Modification directe depuis le planning",
           createdAt: new Date().toISOString(),
         });
         if (afterUser)
@@ -392,8 +508,37 @@ export const planningRoutes: MockRoute[] = [
             : `${afterUser?.fullName ?? "Affectation retirée"} · ${occurrence.label}.`,
           [beforeUser?.id ?? "", afterUser?.id ?? ""].filter(Boolean),
         );
+        // Un planning déjà publié reste modifiable : les personnes concernées
+        // sont averties de la mise à jour de leurs horaires.
+        if (planning.status === "PUBLISHED") {
+          const stamp = new Date().toISOString();
+          for (const user of ctx.db.users) {
+            const concerned =
+              (user.role === "SWAPPER" &&
+                [beforeUser?.id, afterUser?.id].includes(user.id)) ||
+              (user.role === "STATION_CHIEF" && user.stationId === station.id);
+            if (!concerned) continue;
+            ctx.db.notices.unshift({
+              id: nextId("ntc"),
+              userId: user.id,
+              planningId: planning.id,
+              readAt: null,
+              createdAt: stamp,
+            });
+            notifyUser(
+              ctx.db,
+              user.id,
+              "PLANNING_UPDATED",
+              "Planning mis à jour",
+              `Vos horaires ont changé sur le planning publié du ${new Date(planning.startDate).toLocaleDateString("fr-FR")} au ${new Date(planning.endDate).toLocaleDateString("fr-FR")}.`,
+            );
+          }
+        }
       }
-      return { ...occurrenceView(ctx.db, occurrence), revision: planning.revision };
+      return {
+        ...occurrenceView(ctx.db, occurrence),
+        revision: planning.revision,
+      };
     },
   },
   {
@@ -401,7 +546,9 @@ export const planningRoutes: MockRoute[] = [
     pattern: /^\/plannings\/([^/]+)\/validate$/,
     handler: (ctx) => {
       requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
-      const planning = ctx.db.plannings.find((item) => item.id === ctx.params[0]);
+      const planning = ctx.db.plannings.find(
+        (item) => item.id === ctx.params[0],
+      );
       if (!planning) throw new MockHttpError(404, "Planning introuvable.");
       const occurrences = ctx.db.occurrences.filter(
         (item) => item.planningId === planning.id,
@@ -448,7 +595,10 @@ export const planningRoutes: MockRoute[] = [
           vacant: vacant.length,
           hours:
             Math.round(
-              occurrences.reduce((sum, item) => sum + durationHours(ctx.db, item), 0) * 100,
+              occurrences.reduce(
+                (sum, item) => sum + durationHours(ctx.db, item),
+                0,
+              ) * 100,
             ) / 100,
         },
       };
@@ -458,10 +608,18 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/publish$/,
     handler: (ctx) => {
-      const actor = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
-      const planning = ctx.db.plannings.find((item) => item.id === ctx.params[0]);
+      const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
+      const planning = ctx.db.plannings.find(
+        (item) => item.id === ctx.params[0],
+      );
       if (!planning) throw new MockHttpError(404, "Planning introuvable.");
-      if (typeof ctx.body.revision === "number" && ctx.body.revision !== planning.revision)
+      if (
+        typeof ctx.body.revision === "number" &&
+        ctx.body.revision !== planning.revision
+      )
         throw new MockHttpError(
           409,
           "Ce planning a été modifié entre-temps. Rechargez-le avant de publier.",
@@ -470,16 +628,28 @@ export const planningRoutes: MockRoute[] = [
         (item) => item.planningId === planning.id,
       );
       if (!occurrences.length)
-        throw new MockHttpError(400, "Ajoutez au moins un shift avant de publier.");
+        throw new MockHttpError(
+          400,
+          "Ajoutez au moins un shift avant de publier.",
+        );
+      // Une publication peut concerner un brouillon comme un planning déjà
+      // publié que l'on vient de réviser : les personnes concernées sont
+      // notifiées dans les deux cas.
+      const republishing = planning.status === "PUBLISHED";
       planning.status = "PUBLISHED";
       planning.publishedAt = new Date().toISOString();
       planning.revision += 1;
-      const stationIds = Array.from(new Set(occurrences.map((item) => item.stationId)));
+      const stationIds = Array.from(
+        new Set(occurrences.map((item) => item.stationId)),
+      );
+      const period = `du ${new Date(planning.startDate).toLocaleDateString("fr-FR")} au ${new Date(planning.endDate).toLocaleDateString("fr-FR")}`;
       for (const user of ctx.db.users) {
         const concerned =
           user.role === "SUPERVISOR" ||
-          (user.role === "STATION_CHIEF" && stationIds.includes(user.stationId ?? "")) ||
-          (user.role === "SWAPPER" && occurrences.some((item) => item.swapperId === user.id));
+          (user.role === "STATION_CHIEF" &&
+            stationIds.includes(user.stationId ?? "")) ||
+          (user.role === "SWAPPER" &&
+            occurrences.some((item) => item.swapperId === user.id));
         if (!concerned) continue;
         ctx.db.notices.unshift({
           id: nextId("ntc"),
@@ -492,8 +662,10 @@ export const planningRoutes: MockRoute[] = [
           ctx.db,
           user.id,
           "PLANNING_PUBLISHED",
-          "Planning publié",
-          `Le planning du ${new Date(planning.startDate).toLocaleDateString("fr-FR")} au ${new Date(planning.endDate).toLocaleDateString("fr-FR")} est disponible.`,
+          republishing ? "Planning republié" : "Planning publié",
+          republishing
+            ? `Le planning ${period} a été révisé : vérifiez vos horaires à jour.`
+            : `Le planning ${period} est disponible.`,
         );
       }
       return { ...planningView(ctx.db, planning.id), author: actor.id };

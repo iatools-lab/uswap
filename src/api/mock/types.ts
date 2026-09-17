@@ -77,6 +77,7 @@ export type MockTemplate = {
 };
 
 export type MockPlanning = {
+  name?: string;
   id: string;
   startDate: string;
   endDate: string;
