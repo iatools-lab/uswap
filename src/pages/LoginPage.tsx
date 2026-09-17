@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye, EyeOff, LoaderCircle, Mail, X } from "../ui/icons";
 import { useSession } from "../app/session";
+import { mockPeople, roles } from "../api/auth-api";
 import { AuthLayout } from "./AuthLayout";
 import { RouteFallback } from "../app/RouteFallback";
 
@@ -56,6 +57,15 @@ export function LoginPage() {
         <>
           <h2 className="login-title">Connexion</h2>
           <form onSubmit={submit} noValidate>
+            <div className="field">
+              <label htmlFor="demo-profile">Profil à ouvrir</label>
+              <div className="input-wrap">
+                <select id="demo-profile" value={identifier} onChange={(e) => { setIdentifier(e.target.value); setError(""); }} disabled={locked} aria-label="Choisir un profil">
+                  <option value="">Choisir un compte</option>
+                  {mockPeople.map((person) => <option key={person.id} value={person.email}>{roles[person.role]} · {person.fullName}</option>)}
+                </select>
+              </div>
+            </div>
             <div className="field">
               <label htmlFor="identifier">Adresse e-mail</label>
               <div className={`input-wrap ${submitted && !EMAIL_PATTERN.test(identifier.trim()) ? "invalid" : ""}`}>

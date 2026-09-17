@@ -57,7 +57,7 @@ export function QrScanner({
         const tick = async () => {
           if (!active || !video) return;
           try {
-            const codes = await detector.detect(video);
+            const codes = await (detector as BarcodeDetectorLike).detect(video);
             const token = codes
               .map((code) => parseQrToken(code.rawValue))
               .find(isValidQrToken);

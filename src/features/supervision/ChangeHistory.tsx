@@ -19,6 +19,7 @@ export function ChangeHistory({ user }: SupervisionProps) {
   const [to, setTo] = useState(() => toDateInput(new Date()));
   const [type, setType] = useState("");
   const [search, setSearch] = useState("");
+  const [swapperId, setSwapperId] = useState("");
 
   const query = useMemo(() => {
     const params = new URLSearchParams();

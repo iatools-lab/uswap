@@ -96,7 +96,7 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
               id="email"
               type="email"
               required
-              placeholder="collaborateur@uswap.cm"
+              placeholder="prenom.nom@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
