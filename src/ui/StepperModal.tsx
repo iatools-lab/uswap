@@ -32,8 +32,11 @@ export function StepperModal({
 }: StepperModalProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const titleId = useId();
+  const modalRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
   const lastFocused = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -50,10 +53,33 @@ export function StepperModal({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        closeRef.current();
+        if (!busyRef.current) closeRef.current();
+        return;
+      }
+      if (event.key === "Tab" && modalRef.current) {
+        const focusable = Array.from(
+          modalRef.current.querySelectorAll<HTMLElement>(
+            'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+          ),
+        );
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     };
     document.addEventListener("keydown", onKeyDown);
+    requestAnimationFrame(() => {
+      modalRef.current
+        ?.querySelector<HTMLElement>("input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled)")
+        ?.focus();
+    });
 
     return () => {
       document.removeEventListener("keydown", onKeyDown);
@@ -69,6 +95,9 @@ export function StepperModal({
   const activeStep = steps[currentStep];
 
   const isCurrentStepValid = activeStep.isValid ? activeStep.isValid() : true;
+  const requestClose = () => {
+    if (!busy) onClose();
+  };
 
   const handleNext = () => {
     if (!isCurrentStepValid) return;
@@ -95,18 +124,18 @@ export function StepperModal({
   return (
     <div
       className="stepper-overlay"
-      onClick={onClose}
+      onClick={requestClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
     >
-      <div className="stepper-modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={modalRef} className="stepper-modal" onClick={(e) => e.stopPropagation()}>
         <div className="stepper-header">
           <div className="stepper-header-title">
             {icon && <span className="stepper-header-icon">{icon}</span>}
             <h2 id={titleId}>{title}</h2>
           </div>
-          <button type="button" className="stepper-close-btn" onClick={onClose} aria-label="Fermer">
+          <button type="button" className="stepper-close-btn" onClick={requestClose} disabled={busy} aria-label="Fermer">
             <X size={18} />
           </button>
         </div>
@@ -121,8 +150,16 @@ export function StepperModal({
               <div
                 key={step.id}
                 className={`stepper-pill ${isActive ? "is-active" : ""} ${isCompleted ? "is-completed" : ""} ${isClickable ? "is-clickable" : ""}`}
+                role={isClickable ? "button" : undefined}
+                tabIndex={isClickable ? 0 : undefined}
                 onClick={() => {
                   if (isClickable) {
+                    setCurrentStep(index);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (isClickable && (event.key === "Enter" || event.key === " ")) {
+                    event.preventDefault();
                     setCurrentStep(index);
                   }
                 }}
@@ -141,7 +178,7 @@ export function StepperModal({
           <div className="stepper-step-content">{activeStep.content}</div>
 
           <div className="stepper-footer">
-            <button type="button" className="text-button cancel-btn" onClick={onClose}>
+            <button type="button" className="text-button cancel-btn" onClick={requestClose} disabled={busy}>
               Annuler
             </button>
 
@@ -158,23 +195,21 @@ export function StepperModal({
               )}
 
               {!isLastStep ? (
-                /* CLÉ "next-btn" AJOUTÉE POUR ISOLER LE BOUTON */
                 <button
                   key="next-btn"
                   type="button"
                   className="admin-button primary-cta"
                   onClick={handleNext}
-                  disabled={!isCurrentStepValid}
+                  disabled={busy || !isCurrentStepValid}
                 >
                   Suivant
                 </button>
               ) : (
-                /* CLÉ "submit-btn" AJOUTÉE POUR ISOLER LA SOUMISSION */
                 <button
                   key="submit-btn"
                   type="submit"
                   className="admin-button primary-cta"
-                  disabled={busy}
+                  disabled={busy || !isCurrentStepValid}
                 >
                   {busy ? "Traitement en cours..." : submitLabel}
                 </button>

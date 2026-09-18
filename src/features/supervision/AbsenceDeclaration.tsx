@@ -32,7 +32,12 @@ export function AbsenceDeclaration({
     const drop = () => setOnline(false);
     window.addEventListener("online", sync);
     window.addEventListener("offline", drop);
-    return startOutboxSync();
+    const stopSync = startOutboxSync();
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", drop);
+      stopSync();
+    };
   }, []);
 
   async function submit(event: FormEvent) {

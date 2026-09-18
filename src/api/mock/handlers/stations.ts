@@ -34,6 +34,24 @@ const templatePayload = (body: Record<string, unknown>) => ({
   breakEnd: asText(body.breakEnd) || null,
 });
 
+const shiftBreakError = (
+  start: string,
+  end: string,
+  breakStart: string | null,
+  breakEnd: string | null,
+) => {
+  if (!breakStart && !breakEnd) return "";
+  if (!breakStart || !breakEnd) return "Renseignez le début et la fin de la pause.";
+  const shiftMinutes = slotMinutes(start, end);
+  const pauseMinutes = slotMinutes(breakStart, breakEnd);
+  if (!pauseMinutes) return "La pause doit avoir une durée supérieure à zéro.";
+  const mins = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
+  const pauseOffset = (mins(breakStart) - mins(start) + 1440) % 1440;
+  return pauseOffset >= shiftMinutes || pauseOffset + pauseMinutes > shiftMinutes
+    ? "La pause doit être entièrement comprise dans les horaires du shift."
+    : "";
+};
+
 const slotMinutes = (start: string, end: string) => {
   const minutes = (value: string) =>
     Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
@@ -142,8 +160,13 @@ export const stationRoutes: MockRoute[] = [
         throw new MockHttpError(400, "Libellé, début et fin du modèle sont obligatoires.");
       if (slotMinutes(payload.startTime, payload.endTime) === 0)
         throw new MockHttpError(400, "Le créneau doit avoir une durée supérieure à zéro.");
-      if (payload.breakStart !== payload.breakEnd && (!payload.breakStart || !payload.breakEnd))
-        throw new MockHttpError(400, "Renseignez le début et la fin de la pause.");
+      const breakError = shiftBreakError(
+        payload.startTime,
+        payload.endTime,
+        payload.breakStart,
+        payload.breakEnd,
+      );
+      if (breakError) throw new MockHttpError(400, breakError);
       if (
         ctx.db.templates.some(
           (item) =>
@@ -204,24 +227,33 @@ export const stationRoutes: MockRoute[] = [
           "Ce modèle a été modifié entre-temps. Rechargez la liste.",
         );
       const payload = templatePayload(ctx.body);
-      if (payload.label) template.label = payload.label;
-      if (payload.startTime && payload.endTime) {
-        if (slotMinutes(payload.startTime, payload.endTime) === 0)
-          throw new MockHttpError(400, "Le créneau doit avoir une durée supérieure à zéro.");
-        template.startTime = payload.startTime;
-        template.endTime = payload.endTime;
-        template.durationMinutes = slotMinutes(payload.startTime, payload.endTime);
-      }
-      if ("breakStart" in ctx.body || "breakEnd" in ctx.body) {
-        template.breakStart = asText(ctx.body.breakStart) || null;
-        template.breakEnd = asText(ctx.body.breakEnd) || null;
-        if (template.breakStart !== template.breakEnd && (!template.breakStart || !template.breakEnd))
-          throw new MockHttpError(400, "Renseignez le début et la fin de la pause.");
-        template.breakMinutes =
-          template.breakStart && template.breakEnd
-            ? slotMinutes(template.breakStart, template.breakEnd)
-            : 0;
-      }
+      const nextStart = payload.startTime || template.startTime;
+      const nextEnd = payload.endTime || template.endTime;
+      const updatesBreak = "breakStart" in ctx.body || "breakEnd" in ctx.body;
+      const nextBreakStart = updatesBreak ? payload.breakStart : template.breakStart;
+      const nextBreakEnd = updatesBreak ? payload.breakEnd : template.breakEnd;
+      if (slotMinutes(nextStart, nextEnd) === 0)
+        throw new MockHttpError(400, "Le créneau doit avoir une durée supérieure à zéro.");
+      const breakError = shiftBreakError(nextStart, nextEnd, nextBreakStart, nextBreakEnd);
+      if (breakError) throw new MockHttpError(400, breakError);
+      if (
+        ctx.db.templates.some(
+          (item) =>
+            item.id !== template.id &&
+            item.stationId === template.stationId &&
+            item.startTime === nextStart &&
+            item.endTime === nextEnd,
+        )
+      )
+        throw new MockHttpError(409, "Un modèle occupe déjà ce créneau sur cette station.");
+      template.label = payload.label || template.label;
+      template.startTime = nextStart;
+      template.endTime = nextEnd;
+      template.durationMinutes = slotMinutes(nextStart, nextEnd);
+      template.breakStart = nextBreakStart;
+      template.breakEnd = nextBreakEnd;
+      template.breakMinutes =
+        nextBreakStart && nextBreakEnd ? slotMinutes(nextBreakStart, nextBreakEnd) : 0;
       if (typeof ctx.body.isActive === "boolean") template.isActive = ctx.body.isActive;
       template.revision += 1;
       const { versions: _versions, ...snapshot } = template;

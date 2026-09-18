@@ -75,7 +75,7 @@ export function PlanningList({
 }: {
   plans: PlanningListItem[];
   userRole: string;
-  onOpen: (id: string) => void;
+  onOpen: (id: string) => void | Promise<void>;
   onCreate?: () => void;
   onGenerate?: () => void;
   busy?: boolean;
@@ -258,17 +258,21 @@ export function PlanningList({
                       role="link"
                       aria-busy={openingId === plan.id}
                       aria-label={`Ouvrir le planning ${plan.name || periodLabel(plan.startDate, plan.endDate)}`}
-                      onClick={() => {
+                      onClick={async () => {
                         if (busy || openingId) return;
                         setOpeningId(plan.id);
-                        onOpen(plan.id);
+                        try {
+                          await onOpen(plan.id);
+                        } finally {
+                          setOpeningId(null);
+                        }
                       }}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
                           if (busy || openingId) return;
                           setOpeningId(plan.id);
-                          onOpen(plan.id);
+                          void Promise.resolve(onOpen(plan.id)).finally(() => setOpeningId(null));
                         }
                       }}
                     >

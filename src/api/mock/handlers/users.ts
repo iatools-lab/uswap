@@ -47,6 +47,8 @@ type ImportRow = {
   fullName: string;
   email: string;
   role: string;
+  stationId: string | null;
+  stationName: string;
   status: "READY" | "IGNORED" | "REJECTED" | "CREATED";
   reason: string;
 };
@@ -72,6 +74,7 @@ export const userRoutes: MockRoute[] = [
       const sorted = [...filteredMembers(ctx.db.users, ctx.query)].sort((a, b) => {
         if (sort === "name") return a.fullName.localeCompare(b.fullName, "fr");
         if (sort === "role") return a.role.localeCompare(b.role);
+        if (sort === "oldest") return Date.parse(a.updatedAt) - Date.parse(b.updatedAt);
         return Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
       });
       const limit = Math.max(1, Number(ctx.query.get("limit")) || 8);
@@ -144,17 +147,29 @@ export const userRoutes: MockRoute[] = [
         const email = pick("email", "e-mail", "adresse e-mail", "mail").toLowerCase();
         const roleRaw = pick("rôle", "role");
         const role = ROLE_ALIASES[roleRaw.toLowerCase()] ?? "";
+        const stationRaw = pick("station", "station rattachée", "station rattachee");
+        const station = ctx.db.stations.find(
+          (item) =>
+            item.id.toLowerCase() === stationRaw.toLowerCase() ||
+            item.name.toLowerCase() === stationRaw.toLowerCase(),
+        );
+        const stationId = station?.id ?? null;
+        const stationName = station?.name ?? stationRaw;
         const line = index + 2;
         if (!fullName || !email)
-          return { line, fullName, email, role: roleRaw, status: "REJECTED", reason: "Nom ou e-mail manquant." };
+          return { line, fullName, email, role: roleRaw, stationId, stationName, status: "REJECTED", reason: "Nom ou e-mail manquant." };
         if (!EMAIL_PATTERN.test(email))
-          return { line, fullName, email, role: roleRaw, status: "REJECTED", reason: "Adresse e-mail invalide." };
+          return { line, fullName, email, role: roleRaw, stationId, stationName, status: "REJECTED", reason: "Adresse e-mail invalide." };
         if (!role)
-          return { line, fullName, email, role: roleRaw, status: "REJECTED", reason: "Rôle non reconnu." };
+          return { line, fullName, email, role: roleRaw, stationId, stationName, status: "REJECTED", reason: "Rôle non reconnu." };
+        if ((role === "SWAPPER" || role === "STATION_CHIEF") && !stationRaw)
+          return { line, fullName, email, role, stationId: null, stationName: "", status: "REJECTED", reason: "Station obligatoire pour ce rôle." };
+        if ((role === "SWAPPER" || role === "STATION_CHIEF") && !station)
+          return { line, fullName, email, role, stationId: null, stationName, status: "REJECTED", reason: "Station inconnue." };
         if (seen.has(email) || ctx.db.users.some((item) => item.email.toLowerCase() === email))
-          return { line, fullName, email, role, status: "IGNORED", reason: "Adresse déjà connue." };
+          return { line, fullName, email, role, stationId, stationName, status: "IGNORED", reason: "Adresse déjà connue." };
         seen.add(email);
-        return { line, fullName, email, role, status: "READY", reason: "" };
+        return { line, fullName, email, role, stationId, stationName, status: "READY", reason: "" };
       });
       const expiresAt = new Date(Date.now() + 30 * 60000).toISOString();
       const batchId = nextId("batch");
@@ -198,7 +213,7 @@ export const userRoutes: MockRoute[] = [
           role: row.role as MockUser["role"],
           phoneNumber: null,
           address: null,
-          stationId: null,
+          stationId: row.stationId,
           isActive: false,
           disabledAt: null,
           updatedAt: now,
@@ -212,7 +227,7 @@ export const userRoutes: MockRoute[] = [
               action: "IMPORTED",
               createdAt: now,
               before: {},
-              after: { fullName: row.fullName, email: row.email, role: row.role },
+              after: { fullName: row.fullName, email: row.email, role: row.role, stationId: row.stationId },
             },
           ],
         });
@@ -265,6 +280,13 @@ export const userRoutes: MockRoute[] = [
           throw new MockHttpError(409, "Un autre compte utilise déjà cette adresse.");
       }
       const role = (asText(ctx.body.role).toUpperCase() || target.role) as MockUser["role"];
+      if (!["ADMIN", "SUPERVISOR", "STATION_CHIEF", "SWAPPER"].includes(role))
+        throw new MockHttpError(400, "Choisissez un rôle valide.");
+      const stationId = asText(ctx.body.stationId) || null;
+      if ((role === "SWAPPER" || role === "STATION_CHIEF") && !stationId)
+        throw new MockHttpError(400, "Sélectionnez la station rattachée à ce collaborateur.");
+      if (stationId && !ctx.db.stations.some((station) => station.id === stationId))
+        throw new MockHttpError(400, "La station sélectionnée est introuvable.");
       const before = {
         fullName: target.fullName,
         email: target.email,
@@ -280,7 +302,7 @@ export const userRoutes: MockRoute[] = [
       target.address = asText(ctx.body.address) || null;
       target.stationId =
         role === "SWAPPER" || role === "STATION_CHIEF"
-          ? asText(ctx.body.stationId) || null
+          ? stationId
           : null;
       target.updatedAt = new Date().toISOString();
       target.audit.unshift({

@@ -92,7 +92,7 @@ export function currentUser(db: MockDb): MockUser | null {
 /* Accès et périmètres                                                 */
 /* ------------------------------------------------------------------ */
 
-export function requireUser(db: MockDb, user: MockUser | null): MockUser {
+export function requireUser(_db: MockDb, user: MockUser | null): MockUser {
   if (!user)
     throw new MockHttpError(401, "Identifiants invalides ou session expirée.");
   if (user.disabledAt) throw new MockHttpError(403, "Ce compte est désactivé.");
@@ -245,7 +245,7 @@ export function planningScopeOf(user: MockUser) {
       swapperId: user.id,
     };
   if (user.role === "STATION_CHIEF")
-    return { publishedOnly: false, stationId: user.stationId, swapperId: null };
+    return { publishedOnly: true, stationId: user.stationId, swapperId: null };
   return { publishedOnly: false, stationId: null, swapperId: null };
 }
 

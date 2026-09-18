@@ -108,7 +108,14 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
                       : "—"}
                   </td>
                   <td>
-                    {row.corrected ? (
+                    {row.isJustified ? (
+                      <span
+                        className="attendance-status attendance-status--closed"
+                        title={row.correctionReason ?? undefined}
+                      >
+                        Absence justifiée
+                      </span>
+                    ) : row.corrected ? (
                       <span
                         className="attendance-status attendance-status--closed"
                         title={row.correctionReason ?? undefined}

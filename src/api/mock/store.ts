@@ -1,8 +1,9 @@
-import { DB_VERSION, createSeed } from "./seed";
+import { ADMIN_PASSWORD, DB_VERSION, createSeed } from "./seed";
 import type { MockDb } from "./types";
 
 const STORAGE_KEY = `uswap.mock.db.v${DB_VERSION}`;
 const PLANNING_DATA_RESET_KEY = `uswap.mock.plannings-cleared.v1`;
+const ADMIN_ACCESS_REPAIR_KEY = `uswap.mock.admin-access-restored.v1`;
 
 /** Latence simulée : rend visibles les états de chargement des écrans. */
 export const MOCK_LATENCY_MS = 150;
@@ -28,6 +29,30 @@ function clearPlanningData(current: MockDb): MockDb {
   return current;
 }
 
+/** Réactive le compte principal sans journaliser le mot de passe en clair. */
+function restoreAdminAccess(current: MockDb): MockDb {
+  const admin = current.users.find(
+    (user) => user.id === "us-admin" || user.email.toLowerCase() === "admin@uswap.example.com",
+  );
+  if (!admin) return current;
+  const now = new Date().toISOString();
+  const before = { isActive: admin.isActive, disabledAt: admin.disabledAt };
+  admin.isActive = true;
+  admin.disabledAt = null;
+  admin.password = ADMIN_PASSWORD;
+  admin.invitationStatus = "ACTIVATED";
+  admin.invitationExpiresAt = null;
+  admin.updatedAt = now;
+  admin.audit.push({
+    id: `aud-admin-restored-${Date.now()}`,
+    action: "ACCOUNT_REACTIVATED",
+    createdAt: now,
+    before,
+    after: { isActive: true, disabledAt: null, passwordUpdated: true },
+  });
+  return current;
+}
+
 function storage(): Storage | null {
   try {
     return typeof localStorage === "undefined" ? null : localStorage;
@@ -43,15 +68,22 @@ export function loadDb(): MockDb {
   const raw = localStorage?.getItem(STORAGE_KEY);
   const mustClearExistingPlannings =
     localStorage?.getItem(PLANNING_DATA_RESET_KEY) !== "done";
+  const mustRestoreAdmin =
+    localStorage?.getItem(ADMIN_ACCESS_REPAIR_KEY) !== "done";
   if (raw) {
     try {
       const parsed = JSON.parse(raw) as MockDb;
       if (parsed?.version === DB_VERSION && Array.isArray(parsed.users)) {
-        db = mustClearExistingPlannings ? clearPlanningData(parsed) : parsed;
-        if (mustClearExistingPlannings) {
+        db = parsed;
+        if (mustClearExistingPlannings) clearPlanningData(db);
+        if (mustRestoreAdmin) restoreAdminAccess(db);
+        if (mustClearExistingPlannings || mustRestoreAdmin) {
           saveDb();
-          localStorage?.setItem(PLANNING_DATA_RESET_KEY, "done");
         }
+        if (mustClearExistingPlannings)
+          localStorage?.setItem(PLANNING_DATA_RESET_KEY, "done");
+        if (mustRestoreAdmin)
+          localStorage?.setItem(ADMIN_ACCESS_REPAIR_KEY, "done");
         return db;
       }
     } catch {
@@ -60,9 +92,10 @@ export function loadDb(): MockDb {
   }
   // Une nouvelle maquette démarre volontairement sans planning : l'utilisateur
   // crée ensuite ses propres périodes depuis l'interface.
-  db = clearPlanningData(createSeed(Date.now()));
+  db = restoreAdminAccess(clearPlanningData(createSeed(Date.now())));
   saveDb();
   localStorage?.setItem(PLANNING_DATA_RESET_KEY, "done");
+  localStorage?.setItem(ADMIN_ACCESS_REPAIR_KEY, "done");
   return db;
 }
 
@@ -77,7 +110,7 @@ export function saveDb(): void {
 
 /** Réinitialise la maquette (démonstration, recette). */
 export function resetDb(): MockDb {
-  db = clearPlanningData(createSeed(Date.now()));
+  db = restoreAdminAccess(clearPlanningData(createSeed(Date.now())));
   saveDb();
   return db;
 }

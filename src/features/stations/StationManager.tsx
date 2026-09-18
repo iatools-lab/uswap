@@ -72,14 +72,12 @@ const MAPTILER_TILE_URL = `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.
    ============================================================ */
 function MapLocationPicker({
   address,
-  city,
   latitude,
   longitude,
   onSelectLocation,
   onSelectAddress,
 }: {
   address: string;
-  city: string;
   latitude: number | string;
   longitude: number | string;
   onSelectLocation: (lat: number, lng: number) => void;
@@ -697,7 +695,6 @@ export function StationManager({
 
               <MapLocationPicker
                 address={String(form?.address || "")}
-                city={String(form?.city || "")}
                 latitude={form?.latitude ?? DEFAULT_LAT}
                 longitude={form?.longitude ?? DEFAULT_LNG}
                 onSelectLocation={(lat, lng) => {

@@ -17,6 +17,8 @@ type ImportRow = {
   fullName: string;
   email: string;
   role: string;
+  stationId: string | null;
+  stationName: string;
   status: 'READY' | 'IGNORED' | 'REJECTED' | 'CREATED';
   reason: string;
 };
@@ -231,6 +233,7 @@ export function UserImport({
                     <code>fullName</code>
                     <code>email</code>
                     <code>role</code>
+                    <code>station</code>
                   </div>
                 </li>
                 <li>
@@ -243,7 +246,7 @@ export function UserImport({
                   </div>
                 </li>
                 <li className="note-item">
-                  Les comptes importés seront créés en attente d'activation, sans envoi automatique d'invitation.
+                  La station est obligatoire pour les swappeurs et chefs de station. Les comptes seront créés en attente d'activation.
                 </li>
               </ul>
             </div>
@@ -297,6 +300,7 @@ export function UserImport({
                     <th>Collaborateur</th>
                     <th>E-mail</th>
                     <th>Rôle</th>
+                    <th>Station</th>
                     <th>Résultat</th>
                     <th>Motif</th>
                   </tr>
@@ -310,6 +314,7 @@ export function UserImport({
                       <td>
                         {row.role ? <code>{row.role}</code> : '—'}
                       </td>
+                      <td>{row.stationName || '—'}</td>
                       <td>
                         <span
                           className={`admin-badge ${

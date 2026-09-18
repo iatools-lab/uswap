@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BellIcon } from '@phosphor-icons/react';
 import { api, rolePaths, type User } from '../../api/auth-api';
+import { interceptNav } from '../../app/spaNav';
 
 type Notice = {
   id: string;
@@ -9,6 +11,7 @@ type Notice = {
 };
 
 export function PlanningInbox({ user }: { user: User }) {
+  const navigate = useNavigate();
   const [notices, setNotices] = useState<Notice[]>([]);
 
   useEffect(() => {
@@ -46,6 +49,7 @@ export function PlanningInbox({ user }: { user: User }) {
     <a
       className="planning-inbox"
       href={targetUrl}
+      onClick={(event) => interceptNav(event, navigate, targetUrl)}
       aria-label={`${notices.length} planning${notices.length > 1 ? 's' : ''} non lu${notices.length > 1 ? 's' : ''}`}
     >
       <BellIcon size={20} weight="regular" />

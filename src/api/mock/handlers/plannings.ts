@@ -17,6 +17,7 @@ import {
 import {
   MockHttpError,
   type MockCtx,
+  type MockDb,
   type MockOccurrence,
   type MockPlanning,
   type MockRoute,
@@ -25,8 +26,6 @@ import {
 const asText = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
 const pad = (value: number) => String(value).padStart(2, "0");
-const dayKeyOfIso = (iso: string) => iso.slice(0, 10);
-
 const dayList = (startIso: string, endIso: string): string[] => {
   const result: string[] = [];
   for (
@@ -71,6 +70,8 @@ function candidateWindows(
   const planning = ctx.db.plannings.find((item) => item.id === planningId);
   if (!planning) throw new MockHttpError(404, "Planning introuvable.");
   const station = stationOf(ctx.db, asText(body.stationId));
+  if (!station.isActive)
+    throw new MockHttpError(409, "Cette station est inactive : aucun shift ne peut être généré.");
   const templateIds = Array.isArray(body.templateIds)
     ? body.templateIds.map((value) => String(value))
     : [];
@@ -86,7 +87,10 @@ function candidateWindows(
     );
 
   const templates = ctx.db.templates.filter(
-    (item) => item.stationId === station.id && templateIds.includes(item.id),
+    (item) =>
+      item.stationId === station.id &&
+      item.isActive &&
+      templateIds.includes(item.id),
   );
   if (!templates.length)
     throw new MockHttpError(
@@ -136,6 +140,72 @@ function candidateWindows(
     }
   }
   return { planning, station, occurrences, duplicates };
+}
+
+function planningValidation(db: MockDb, planning: MockPlanning) {
+  const occurrences = db.occurrences.filter(
+    (item) => item.planningId === planning.id,
+  );
+  const errors: { code: string; message: string }[] = [];
+  const warnings: { code: string; message: string }[] = [];
+  if (!occurrences.length)
+    errors.push({
+      code: "EMPTY",
+      message: "Le planning ne contient aucun shift à publier.",
+    });
+  const vacant = occurrences.filter((item) => !item.swapperId);
+  if (vacant.length)
+    warnings.push({
+      code: "VACANT",
+      message: `${vacant.length} poste(s) sans swappeur seront publiés comme vacants.`,
+    });
+  const seen = new Set<string>();
+  for (const occurrence of occurrences) {
+    if (!occurrence.swapperId) continue;
+    const report = constraintReport(db, {
+      stationId: occurrence.stationId,
+      swapperId: occurrence.swapperId,
+      startTime: occurrence.startTime,
+      endTime: occurrence.endTime,
+      hours: durationHours(db, occurrence),
+      ignoreOccurrenceId: occurrence.id,
+    });
+    for (const issue of report.errors) {
+      const key = `${occurrence.id}:${issue.code}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      errors.push({
+        code: issue.code,
+        message: `${report.stationName} · ${occurrence.label} : ${issue.message}`,
+      });
+    }
+    for (const issue of report.warnings) {
+      const key = `${occurrence.id}:${issue.code}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      warnings.push({
+        code: issue.code,
+        message: `${report.stationName} · ${occurrence.label} : ${issue.message}`,
+      });
+    }
+  }
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    totals: {
+      occurrences: occurrences.length,
+      assigned: occurrences.length - vacant.length,
+      vacant: vacant.length,
+      hours:
+        Math.round(
+          occurrences.reduce(
+            (sum, item) => sum + durationHours(db, item),
+            0,
+          ) * 100,
+        ) / 100,
+    },
+  };
 }
 
 export const planningRoutes: MockRoute[] = [
@@ -588,58 +658,7 @@ export const planningRoutes: MockRoute[] = [
         (item) => item.id === ctx.params[0],
       );
       if (!planning) throw new MockHttpError(404, "Planning introuvable.");
-      const occurrences = ctx.db.occurrences.filter(
-        (item) => item.planningId === planning.id,
-      );
-      const errors: { code: string; message: string }[] = [];
-      const warnings: { code: string; message: string }[] = [];
-      if (!occurrences.length)
-        errors.push({
-          code: "EMPTY",
-          message: "Le planning ne contient aucune affectation à publier.",
-        });
-      const vacant = occurrences.filter((item) => !item.swapperId);
-      if (vacant.length)
-        warnings.push({
-          code: "VACANT",
-          message: `${vacant.length} poste(s) sans swappeur seront publiés comme vacants.`,
-        });
-      for (const occurrence of occurrences) {
-        if (!occurrence.swapperId) continue;
-        const report = constraintReport(ctx.db, {
-          stationId: occurrence.stationId,
-          swapperId: occurrence.swapperId,
-          startTime: occurrence.startTime,
-          endTime: occurrence.endTime,
-          hours: durationHours(ctx.db, occurrence),
-          ignoreOccurrenceId: occurrence.id,
-        });
-        const blocking = report.errors.filter(
-          (item) => item.code === "OVERLAP" || item.code === "REST",
-        );
-        if (blocking.length)
-          errors.push({
-            code: blocking[0].code,
-            message: `${report.stationName} · ${occurrence.label} : ${blocking[0].message}`,
-          });
-      }
-      return {
-        valid: errors.length === 0,
-        errors,
-        warnings,
-        totals: {
-          occurrences: occurrences.length,
-          assigned: occurrences.length - vacant.length,
-          vacant: vacant.length,
-          hours:
-            Math.round(
-              occurrences.reduce(
-                (sum, item) => sum + durationHours(ctx.db, item),
-                0,
-              ) * 100,
-            ) / 100,
-        },
-      };
+      return planningValidation(ctx.db, planning);
     },
   },
   {
@@ -665,10 +684,12 @@ export const planningRoutes: MockRoute[] = [
       const occurrences = ctx.db.occurrences.filter(
         (item) => item.planningId === planning.id,
       );
-      if (!occurrences.length)
+      const validation = planningValidation(ctx.db, planning);
+      if (!validation.valid)
         throw new MockHttpError(
-          400,
-          "Ajoutez au moins un shift avant de publier.",
+          409,
+          validation.errors[0]?.message ?? "Le planning contient une erreur bloquante.",
+          { validation },
         );
       // Une publication peut concerner un brouillon comme un planning déjà
       // publié que l'on vient de réviser : les personnes concernées sont

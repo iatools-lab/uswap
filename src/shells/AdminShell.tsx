@@ -59,6 +59,11 @@ export function AdminShell() {
     document.title = `${section.label} · Administration uSwap`;
   }, [section.label]);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+    requestAnimationFrame(() => title.current?.focus());
+  }, [location.pathname, location.search]);
+
   function go(
     event: MouseEvent<HTMLAnchorElement>,
     target: string,
@@ -66,7 +71,6 @@ export function AdminShell() {
   ) {
     if (!interceptNav(event, navigate, target)) return;
     if (subTab) setCurrentSubTab(subTab);
-    requestAnimationFrame(() => title.current?.focus());
   }
 
   const link = (target: string, subTab?: "list" | "map") => ({
@@ -124,6 +128,7 @@ export function AdminShell() {
                     {isStations ? (
                       <button
                         type="button"
+                        aria-current={stationsActive ? "page" : undefined}
                         onClick={() => {
                           setStationsOpen(true);
                           setCurrentSubTab("list");

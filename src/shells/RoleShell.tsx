@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AccountMenu } from "../features/account/AccountMenu";
 import { PlanningInbox } from "../features/inbox/PlanningInbox";
@@ -14,22 +14,29 @@ export function RoleShell() {
   const { session, busy, warning, error, disconnect, extend } = useSession();
   const location = useLocation();
   const navigate = useNavigate();
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const [planningResetKey, setPlanningResetKey] = useState(0);
-  if (!session) return null;
 
   const planning = location.pathname.endsWith("/plannings");
   const account = location.pathname.endsWith("/compte");
   const title =
-    session.user.role === "SUPERVISOR"
+    session?.user.role === "SUPERVISOR"
       ? "Supervision"
-      : session.user.role === "STATION_CHIEF"
+      : session?.user.role === "STATION_CHIEF"
         ? "Ma station"
         : "Mon espace";
-  const homePath = rolePaths[session.user.role];
+  const homePath = session ? rolePaths[session.user.role] : "/auth/login";
 
   useEffect(() => {
     document.title = `${account ? "Paramètres du compte" : planning ? "Plannings" : title} · uSwap`;
   }, [account, planning, title]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+    requestAnimationFrame(() => headingRef.current?.focus());
+  }, [location.pathname, location.search]);
+
+  if (!session) return null;
 
   function goHome(event: React.MouseEvent<HTMLAnchorElement>) {
     interceptNav(event, navigate, homePath);
@@ -128,7 +135,7 @@ export function RoleShell() {
           )}
           <div className="admin-page-heading">
             <div>
-              <h1>
+              <h1 ref={headingRef} tabIndex={-1}>
                 {account
                   ? "Paramètres du compte"
                   : planning

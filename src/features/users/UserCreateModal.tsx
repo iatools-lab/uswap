@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { StepperModal, type StepItem } from "../../ui/StepperModal";
 import { UserRound, Eye, EyeOff, CheckCheck } from "../../ui/icons";
-import { api, roles, type Role } from "../../api/auth-api";
+import { api, roles } from "../../api/auth-api";
 import { StationPicker } from "../stations/StationPicker";
 import { Select } from "../../ui/Select";
 interface UserCreateModalProps {
@@ -24,6 +24,7 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const requiresStation = role === "SWAPPER" || role === "STATION_CHIEF";
 
   const resetForm = () => {
     setFullName("");
@@ -107,14 +108,23 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
     {
       id: "role-station",
       label: "Rôle & Station",
-      isValid: () => !!role && Object.keys(roles).includes(role),
+      isValid: () =>
+        !!role &&
+        Object.keys(roles).includes(role) &&
+        (!requiresStation || !!stationId),
       content: (
         <div className="stepper-form-layout">
           <div className="stepper-field-group">
             <label>RÔLE DANS L'ÉCOSYSTÈME *</label>
             <Select
               value={role}
-              onChange={(value) => setRole(String(value))}
+              onChange={(value) => {
+                const nextRole = String(value);
+                setRole(nextRole);
+                if (nextRole !== "SWAPPER" && nextRole !== "STATION_CHIEF") {
+                  setStationId("");
+                }
+              }}
               placeholder="Sélectionner un rôle"
               options={Object.entries(roles).map(([val, label]) => ({
                 label,
@@ -123,14 +133,21 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
             />
           </div>
 
-          <div className="stepper-field-group">
-            <label>STATION RATTACHÉE</label>
-            <StationPicker
-  value={stationId}
-  onChange={setStationId}
-  stations={stations}
-/>
-          </div>
+          {requiresStation && (
+            <div className="stepper-field-group">
+              <label>STATION RATTACHÉE *</label>
+              <StationPicker
+                value={stationId}
+                onChange={setStationId}
+                stations={stations}
+                placeholder="Sélectionner une station"
+                allowEmpty={false}
+              />
+              <span className="field-hint">
+                Ce collaborateur ne verra et ne recevra que les données de cette station.
+              </span>
+            </div>
+          )}
         </div>
       ),
     },
@@ -156,10 +173,12 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
               <span>Rôle attribué :</span>
               <strong>{role ? roles[role as keyof typeof roles] : "—"}</strong>
             </div>
-            <div className="summary-row">
-              <span>Station :</span>
-              <strong>{stations.find((s) => s.id === stationId)?.name || "Aucune"}</strong>
-            </div>
+            {requiresStation && (
+              <div className="summary-row">
+                <span>Station :</span>
+                <strong>{stations.find((s) => s.id === stationId)?.name || "Non sélectionnée"}</strong>
+              </div>
+            )}
           </div>
 
           <div className="activation-field">

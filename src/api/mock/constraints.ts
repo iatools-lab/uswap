@@ -1,5 +1,5 @@
 import { addDaysKey, stationDayKey } from "./seed";
-import { durationHours, notifyStaff, stationOf, weekKeyOf } from "./shared";
+import { durationHours, notifyStaff, stationNameOf, stationOf, weekKeyOf } from "./shared";
 import type {
   AttendanceStatus,
   MockAttendance,
@@ -139,6 +139,11 @@ export function constraintReport(
     errors.push({ code: "SWAPPER_ROLE", message: "Ce compte n'est pas un swappeur." });
   else if (!swapper.isActive)
     errors.push({ code: "SWAPPER_INACTIVE", message: "Ce swappeur est désactivé." });
+  else if (swapper.stationId !== station.id)
+    errors.push({
+      code: "STATION_SCOPE",
+      message: `Ce swappeur est rattaché à ${stationNameOf(db, swapper.stationId) ?? "une autre station"}.`,
+    });
   if (!station.isActive)
     errors.push({
       code: "STATION_CLOSED",

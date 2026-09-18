@@ -20,7 +20,6 @@ export function ReplacementQueue({
   onSelect,
 }: {
   onSelect: (shiftId: string) => void;
-  onReplaceCandidate?: (shiftId: string, candidate: Candidate) => void;
 }) {
   const [rows, setRows] = useState<PendingReplacement[] | null>(null);
   const [error, setError] = useState("");

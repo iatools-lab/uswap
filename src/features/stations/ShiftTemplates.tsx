@@ -39,6 +39,24 @@ export const shiftDuration = (start: string, end: string) => {
   return start && end ? (mins(end) - mins(start) + 1440) % 1440 : 0;
 };
 
+export const shiftBreakError = (
+  start: string,
+  end: string,
+  breakStart: string,
+  breakEnd: string,
+) => {
+  if (!breakStart && !breakEnd) return "";
+  if (!breakStart || !breakEnd) return "Renseignez le début et la fin de la pause.";
+  const shiftMinutes = shiftDuration(start, end);
+  const pauseMinutes = shiftDuration(breakStart, breakEnd);
+  if (!pauseMinutes) return "La pause doit avoir une durée supérieure à zéro.";
+  const mins = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
+  const pauseOffset = (mins(breakStart) - mins(start) + 1440) % 1440;
+  if (pauseOffset >= shiftMinutes || pauseOffset + pauseMinutes > shiftMinutes)
+    return "La pause doit être entièrement comprise dans les horaires du shift.";
+  return "";
+};
+
 const durationLabel = (minutes: number) => {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
@@ -89,6 +107,9 @@ export function ShiftTemplates({
       ? shiftDuration(form.breakStart, form.breakEnd)
       : 0;
   const netDuration = Math.max(0, rawDuration - breakDuration);
+  const breakError = form
+    ? shiftBreakError(form.startTime, form.endTime, form.breakStart, form.breakEnd)
+    : "";
 
   function edit(item?: Template) {
     setEditing(item || null);
@@ -292,6 +313,9 @@ export function ShiftTemplates({
                     : 'Choisissez deux heures différentes.'}
                 </p>
               </div>
+              {breakError && (
+                <p className="error-message" role="alert">{breakError}</p>
+              )}
             </fieldset>
 
             <div className="user-form-actions planner-actions shift-template-form-actions">
@@ -305,7 +329,7 @@ export function ShiftTemplates({
               </button>
               <button
                 className="admin-button"
-                disabled={busy || !rawDuration || !form.label.trim()}
+                disabled={busy || !rawDuration || !form.label.trim() || !!breakError}
               >
                 Enregistrer le modèle
               </button>

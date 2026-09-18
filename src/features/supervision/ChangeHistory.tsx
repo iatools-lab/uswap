@@ -19,7 +19,6 @@ export function ChangeHistory({ user }: SupervisionProps) {
   const [to, setTo] = useState(() => toDateInput(new Date()));
   const [type, setType] = useState("");
   const [search, setSearch] = useState("");
-  const [swapperId, setSwapperId] = useState("");
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -41,7 +40,7 @@ export function ChangeHistory({ user }: SupervisionProps) {
   }, [load]);
 
   function exportCsv() {
-    if (!rows?.length) return;
+    if (!visibleRows.length) return;
     const header = [
       "Type",
       "Initiateur",
@@ -51,7 +50,7 @@ export function ChangeHistory({ user }: SupervisionProps) {
       "Motif",
       "Date",
     ];
-    const lines = rows.map((row) =>
+    const lines = visibleRows.map((row) =>
       [
         TYPE_LABEL[row.type],
         row.initiator,
@@ -78,6 +77,24 @@ export function ChangeHistory({ user }: SupervisionProps) {
     URL.revokeObjectURL(url);
   }
 
+  const visibleRows = useMemo(() => {
+    const needle = search.trim().toLocaleLowerCase("fr");
+    if (!needle) return rows ?? [];
+    return (rows ?? []).filter((row) =>
+      [
+        TYPE_LABEL[row.type],
+        row.initiator,
+        row.station,
+        row.outSwapper ?? "",
+        row.inSwapper ?? "",
+        row.reason ?? "",
+      ]
+        .join(" ")
+        .toLocaleLowerCase("fr")
+        .includes(needle),
+    );
+  }, [rows, search]);
+
   return (
     <section className="admin-card">
       <div className="admin-card-heading">
@@ -91,7 +108,7 @@ export function ChangeHistory({ user }: SupervisionProps) {
         <button
           type="button"
           className="admin-button secondary small"
-          disabled={!rows?.length}
+          disabled={!visibleRows.length}
           onClick={exportCsv}
         >
           <FileCsv size={16} />
@@ -128,11 +145,12 @@ export function ChangeHistory({ user }: SupervisionProps) {
           </select>
         </label>
         <label>
-          Swappeur
+          Rechercher
           <input
-            value={swapperId}
-            onChange={(event) => setSwapperId(event.target.value)}
-            placeholder="Identifiant (optionnel)"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Nom, station ou motif…"
           />
         </label>
       </div>
@@ -146,9 +164,9 @@ export function ChangeHistory({ user }: SupervisionProps) {
           <LoaderCircle className="spin" />
           Chargement de l’historique…
         </div>
-      ) : !rows.length ? (
+      ) : !visibleRows.length ? (
         <div className="admin-empty">
-          <h3>Aucun changement sur la période</h3>
+          <h3>{rows.length ? "Aucun changement ne correspond" : "Aucun changement sur la période"}</h3>
         </div>
       ) : (
         <div className="admin-table-wrap ops-table">
@@ -165,7 +183,7 @@ export function ChangeHistory({ user }: SupervisionProps) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {visibleRows.map((row) => (
                 <tr key={row.id}>
                   <td>
                     <span className="admin-badge">{TYPE_LABEL[row.type]}</span>

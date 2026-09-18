@@ -42,7 +42,7 @@ export type MonitorRow = {
   template: string | null;
   startTime: string;
   endTime: string;
-  status: "PRESENT" | "LATE" | "ABSENT" | "CLOSED" | "EXPECTED";
+  status: "PRESENT" | "LATE" | "ABSENT" | "JUSTIFIED" | "CLOSED" | "EXPECTED";
   checkedInAt: string | null;
   checkedOutAt: string | null;
   isLate: boolean;
@@ -57,6 +57,7 @@ export type MonitorData = {
     present: number;
     late: number;
     absent: number;
+    justified: number;
     closed: number;
   };
   rows: MonitorRow[];
@@ -73,6 +74,7 @@ export type AttendanceHistoryRow = {
   checkedOutAt: string | null;
   isLate: boolean;
   isAbsent: boolean;
+  isJustified: boolean;
   corrected: boolean;
   correctedAt: string | null;
   correctionReason: string | null;
@@ -88,6 +90,7 @@ export const STATUS_LABEL: Record<MonitorRow["status"], string> = {
   PRESENT: "Présent",
   LATE: "En retard",
   ABSENT: "Absent",
+  JUSTIFIED: "Absence justifiée",
   CLOSED: "Fin de service",
 };
 

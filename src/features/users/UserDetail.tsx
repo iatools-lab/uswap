@@ -2,7 +2,7 @@ import { notify } from "../../ui/Toast";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, roles, type Role } from "../../api/auth-api";
 import { ArrowLeft, LoaderCircle, Mail } from "../../ui/icons";
-import { ClockCounterClockwiseIcon, ShieldCheckIcon, UserCircleIcon, BuildingsIcon } from "@phosphor-icons/react";
+import { ClockCounterClockwiseIcon, ShieldCheckIcon, UserCircleIcon } from "@phosphor-icons/react";
 import { Modal } from "../../ui/Modal";
 import { StationPicker } from "../stations/StationPicker";
 import { Select } from "../../ui/Select";
@@ -142,6 +142,10 @@ export function UserDetail({
   function save(e: FormEvent) {
     e.preventDefault();
     if (!form) return;
+    if ((form.role === "SWAPPER" || form.role === "STATION_CHIEF") && !form.stationId) {
+      setError("Sélectionnez la station rattachée à ce collaborateur.");
+      return;
+    }
     void action(
       () =>
         api(
@@ -312,16 +316,18 @@ export function UserDetail({
                     />
                   </div>
 
-                  {/* Intégration du composant StationPicker unifié */}
-                  <div className="user-detail-field is-wide">
-                    <label>STATION RATTACHÉE</label>
-                    <StationPicker
-                      value={form.stationId || ""}
-                      onChange={(val) => set("stationId", val || null)}
-                      stations={stations}
-                      placeholder="Sélectionner une station (Optionnel)"
-                    />
-                  </div>
+                  {(form.role === "SWAPPER" || form.role === "STATION_CHIEF") && (
+                    <div className="user-detail-field is-wide">
+                      <label>STATION RATTACHÉE <span className="required">*</span></label>
+                      <StationPicker
+                        value={form.stationId || ""}
+                        onChange={(val) => set("stationId", val || null)}
+                        stations={stations}
+                        placeholder="Sélectionner une station"
+                        allowEmpty={false}
+                      />
+                    </div>
+                  )}
 
                 </div>
               </fieldset>
@@ -341,7 +347,15 @@ export function UserDetail({
                   >
                     Annuler
                   </button>
-                  <button type="submit" className="admin-button" disabled={busy || !isDirty}>
+                  <button
+                    type="submit"
+                    className="admin-button"
+                    disabled={
+                      busy ||
+                      !isDirty ||
+                      ((form.role === "SWAPPER" || form.role === "STATION_CHIEF") && !form.stationId)
+                    }
+                  >
                     {busy && <LoaderCircle className="spin" size={16} />}
                     Enregistrer les modifications
                   </button>

@@ -16,6 +16,7 @@ const STATUS_CLASS: Record<MonitorRow["status"], string> = {
   PRESENT: "attendance-status--present",
   LATE: "attendance-status--late",
   ABSENT: "attendance-status--absent",
+  JUSTIFIED: "attendance-status--closed",
   CLOSED: "attendance-status--closed",
   EXPECTED: "attendance-status--expected",
 };
@@ -26,6 +27,7 @@ const FILTERS: Array<MonitorRow["status"] | "ALL"> = [
   "PRESENT",
   "LATE",
   "ABSENT",
+  "JUSTIFIED",
   "CLOSED",
 ];
 
@@ -154,6 +156,15 @@ export function AttendanceMonitor({
         >
           <strong>{summary.absent}</strong>
           <span>Absences</span>
+        </button>
+        <button
+          type="button"
+          className="supervision-metric"
+          aria-pressed={filter === "JUSTIFIED"}
+          onClick={() => setFilter("JUSTIFIED")}
+        >
+          <strong>{summary.justified}</strong>
+          <span>Justifiées</span>
         </button>
         <button
           type="button"

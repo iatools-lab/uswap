@@ -72,9 +72,9 @@ export async function mockDownload(
   const path = url.split("?")[0].replace(/\/+$/, "");
   if (path === "/users/imports/template") {
     const sheet = XLSX.utils.json_to_sheet([
-      { "Nom complet": "Amina Mballa", "Adresse e-mail": `amina.mballa@${FICTITIOUS_DOMAIN}`, Rôle: "Swappeur" },
-      { "Nom complet": "Paul Nguema", "Adresse e-mail": `paul.nguema@${FICTITIOUS_DOMAIN}`, Rôle: "Chef de station" },
-      { "Nom complet": "Ariane Tchana", "Adresse e-mail": `ariane.tchana@${FICTITIOUS_DOMAIN}`, Rôle: "Superviseur" },
+      { "Nom complet": "Amina Mballa", "Adresse e-mail": `amina.mballa@${FICTITIOUS_DOMAIN}`, Rôle: "Swappeur", Station: "Station Bastos" },
+      { "Nom complet": "Paul Nguema", "Adresse e-mail": `paul.nguema@${FICTITIOUS_DOMAIN}`, Rôle: "Chef de station", Station: "Obobogo" },
+      { "Nom complet": "Ariane Tchana", "Adresse e-mail": `ariane.tchana@${FICTITIOUS_DOMAIN}`, Rôle: "Superviseur", Station: "" },
     ]);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "Utilisateurs");

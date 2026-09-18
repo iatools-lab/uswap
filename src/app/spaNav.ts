@@ -9,6 +9,6 @@ export function interceptNav(
   if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return false;
   event.preventDefault();
   navigate(target);
-  window.scrollTo({ top: 0, behavior: "instant" });
+  window.scrollTo({ top: 0, behavior: "auto" });
   return true;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "../../ui/Modal";
 import { StepperModal, type StepItem } from "../../ui/StepperModal";
 import {
@@ -10,15 +10,11 @@ import {
   PlusIcon,
   RowsIcon,
   ArrowLeftIcon,
-  TrashIcon,
   XIcon,
-  DotsThreeIcon,
 } from "@phosphor-icons/react";
 import {
   DownloadSimple,
   Clock3,
-  CaretDownIcon,
-  Building2,
 } from "../../ui/icons";
 import { api, type User } from "../../api/auth-api";
 import { notify } from "../../ui/Toast";
@@ -92,47 +88,6 @@ type Preview = {
 
 const day = (value: string) =>
   new Date(value).toLocaleDateString("fr-FR", { timeZone: "UTC" });
-const longDay = (value: string) => {
-  const d = new Date(value + "T00:00:00Z");
-  const wd = [
-    "dimanche",
-    "lundi",
-    "mardi",
-    "mercredi",
-    "jeudi",
-    "vendredi",
-    "samedi",
-  ][d.getUTCDay()];
-  return `${wd} ${two(d.getUTCDate())}/${two(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
-};
-const shortDay = (value: string) =>
-  new Date(value).toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "UTC",
-  });
-
-const occurrencesOnDay = (p: Planning, iso: string) => {
-  if (
-    !p.startDate ||
-    !p.endDate ||
-    p.startDate.slice(0, 10) > iso ||
-    p.endDate.slice(0, 10) < iso
-  )
-    return [];
-  return (p.occurrences || []).filter((o) => {
-    if (!o?.startTime || !o?.station?.timezone) return false;
-    return (
-      new Intl.DateTimeFormat("en-CA", {
-        timeZone: o.station.timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(new Date(o.startTime)) === iso
-    );
-  });
-};
-
 const dayKeyOf = (iso: string, timezone: string) =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
@@ -173,7 +128,6 @@ function periodShort(startIso: string, endIso: string) {
   if (sy === ey) return `Du ${two(sd)}/${two(sm)} au ${two(ed)}/${two(em)}`;
   return `Du ${two(sd)}/${two(sm)}/${sy} au ${two(ed)}/${two(em)}/${ey}`;
 }
-
 const period = (p: Planning) => periodShort(p.startDate, p.endDate);
 const weekdays = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -214,37 +168,11 @@ function groupOccurrences(list: Occurrence[]): ShiftGroup[] {
   }
   return Array.from(map.values());
 }
-
-function assignmentStatus(hasSwapper: boolean, planningStatus: string) {
-  const published = planningStatus !== "DRAFT";
-  if (hasSwapper) {
-    return { label: "Affecté", tone: "filled" as const, published };
-  }
-  return {
-    label: published ? "Non affecté" : "À affecter",
-    tone: "vacant" as const,
-    published,
-  };
-}
-
 function coverage(filled: number, total: number) {
   if (total > 0 && filled === total) return "full" as const;
   if (filled === 0) return "empty" as const;
   return "partial" as const;
 }
-
-type CalendarDay = {
-  key: string;
-  iso: string;
-  weekday: number;
-  occurrences: Occurrence[];
-};
-type CalendarWeek = {
-  key: string;
-  start: string;
-  end: string;
-  days: CalendarDay[];
-};
 
 const utcIso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -294,20 +222,6 @@ function monthCells(from: Date, to: Date) {
     inMonth: d.iso >= utcIso(from) && d.iso <= utcIso(to),
   }));
 }
-
-const periodTabs = [
-  ["day", "Journalier", "Jour", CalendarBlankIcon],
-  ["week", "Hebdomadaire", "Sem.", CalendarIcon],
-  ["month", "Mensuel", "Mois", CalendarDotsIcon],
-  ["year", "Annuel", "An", RowsIcon],
-] as const;
-
-const viewLabels: Record<string, string> = {
-  day: "journalière",
-  week: "hebdomadaire",
-  month: "mensuelle",
-  year: "annuelle",
-};
 
 function PeriodLegend() {
   return (
@@ -424,410 +338,10 @@ function ViewToolbar({
   );
 }
 
-function PeriodBoard({
-  view,
-  from,
-  to,
-  plans,
-  allPlansCount,
-  stations,
-  selectedStationFilter,
-  onStationFilterChange,
-  onDay,
-  onPlan,
-  onCreate,
-  busy,
-}: {
-  view: string;
-  from: Date;
-  to: Date;
-  plans: Planning[];
-  allPlansCount: number;
-  stations: Station[];
-  selectedStationFilter: string;
-  onStationFilterChange: (id: string) => void;
-  onDay: (iso: string) => void;
-  onPlan: (id: string) => void;
-  onCreate?: () => void;
-  busy: boolean;
-}) {
-  const today = utcIso(new Date());
-  const [selectedMobileDate, setSelectedMobileDate] = useState(today);
-
-  const filteredPlans = plans.filter((p) => {
-    if (!selectedStationFilter) return true;
-    const occurrences = p.occurrences || [];
-    return occurrences.some((o) => o.station?.id === selectedStationFilter);
-  });
-
-  const weekDaysList = (() => {
-    const startOfWeek = new Date(from);
-    startOfWeek.setUTCDate(
-      startOfWeek.getUTCDate() - ((startOfWeek.getUTCDay() + 6) % 7),
-    );
-    const list = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(startOfWeek);
-      d.setUTCDate(d.getUTCDate() + i);
-      list.push(utcIso(d));
-    }
-    return list;
-  })();
-
-  const selectedDayPlans = filteredPlans.filter((p) =>
-    covers(p, selectedMobileDate),
-  );
-
-  if (plans.length === 0) {
-    const anywhere = allPlansCount > 0;
-    return (
-      <section className="admin-card planner-empty">
-        <CalendarDotsIcon size={30} weight="regular" />
-        <h3>
-          {anywhere
-            ? "Aucun planning sur cette période"
-            : "Aucun planning pour le moment"}
-        </h3>
-        <p>
-          {anywhere
-            ? "Des plannings existent sur d’autres périodes. Naviguez avec les flèches ou choisissez une date pour les retrouver."
-            : onCreate
-              ? "Créez votre premier planning pour commencer à affecter des swappeurs aux shifts."
-              : "Les plannings apparaîtront ici dès leur publication."}
-        </p>
-        {onCreate && (
-          <div className="planner-empty-actions">
-            <button className="admin-button" onClick={onCreate}>
-              <PlusIcon weight="regular" size={16} /> Créer un planning
-            </button>
-          </div>
-        )}
-      </section>
-    );
-  }
-
-  const involvedStations = new Set<string>();
-  for (const p of filteredPlans)
-    for (const o of p.occurrences || [])
-      if (o.station?.id) involvedStations.add(o.station.id);
-  const showStationFilter = involvedStations.size > 1;
-
-  return (
-    <div className="planner-board">
-      {showStationFilter && (
-        <div className="planner-station-filter">
-          <div className="planner-station-filter-label">
-            <Building2 size={18} />
-            <span>Filtrer par station :</span>
-          </div>
-          <div className="planner-station-filter-picker">
-            <StationPicker
-              value={selectedStationFilter}
-              onChange={onStationFilterChange}
-              stations={stations}
-              placeholder="Toutes les stations"
-            />
-          </div>
-        </div>
-      )}
-
-      <PeriodLegend />
-
-      <div className="mobile-interactive-calendar-wrapper">
-        <div className="mobile-interactive-calendar">
-          <div className="mobile-days-strip">
-            {weekDaysList.map((isoStr) => {
-              const dObj = new Date(isoStr + "T00:00:00Z");
-              const weekdayName = weekdays[(dObj.getUTCDay() + 6) % 7];
-              const dayNum = Number(isoStr.slice(8));
-              const isActive = isoStr === selectedMobileDate;
-              const hasEvents = filteredPlans.some((p) => covers(p, isoStr));
-
-              return (
-                <button
-                  type="button"
-                  key={isoStr}
-                  className={"day-pill" + (isActive ? " active" : "")}
-                  aria-pressed={isActive}
-                  aria-label={`${weekdayName} ${dayNum}${hasEvents ? " — plannings prévus" : ""}`}
-                  onClick={() => setSelectedMobileDate(isoStr)}
-                >
-                  <small>{weekdayName}</small>
-                  <strong>{dayNum}</strong>
-                  {hasEvents && (
-                    <span className="event-dot" aria-hidden="true" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="selected-day-card">
-            <div className="day-card-header">
-              <strong>
-                {new Date(selectedMobileDate + "T00:00:00Z").toLocaleDateString(
-                  "fr-FR",
-                  {
-                    timeZone: "UTC",
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  },
-                )}
-              </strong>
-              <span className="admin-badge active">
-                {selectedDayPlans.length} planning
-                {selectedDayPlans.length > 1 ? "s" : ""}
-              </span>
-            </div>
-            <div className="day-card-body">
-              {selectedDayPlans.length === 0 ? (
-                <p className="planner-day-empty is-centered">
-                  Aucun planning pour cette date.
-                </p>
-              ) : (
-                selectedDayPlans.map((p) => {
-                  const isDraft = p.status === "DRAFT";
-                  const occurrences = p.occurrences || [];
-                  const count = p._count?.occurrences ?? occurrences.length;
-                  return (
-                    <button
-                      type="button"
-                      key={p.id}
-                      className={
-                        "planner-range mobile-row" +
-                        (isDraft ? " is-draft" : "")
-                      }
-                      disabled={busy}
-                      onClick={() => onPlan(p.id)}
-                    >
-                      <div className="planner-range-meta">
-                        <span
-                          className={
-                            "admin-badge" + (isDraft ? " draft" : " active")
-                          }
-                        >
-                          {isDraft ? "Brouillon" : "Publié"}
-                        </span>
-                        <small>{period(p)}</small>
-                      </div>
-                      <strong>
-                        {count} shift{count > 1 ? "s" : ""}
-                      </strong>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="desktop-calendar-views">
-        {view === "year" && (
-          <div className="planner-year" aria-label="Mois de l’année">
-            {Array.from({ length: 12 }, (_, i) => {
-              const start = new Date(Date.UTC(from.getUTCFullYear(), i, 1));
-              const end = new Date(Date.UTC(from.getUTCFullYear(), i + 1, 0));
-              const iso = utcIso(start);
-              const overlapping = filteredPlans.filter(
-                (p) =>
-                  p.startDate &&
-                  p.endDate &&
-                  p.startDate.slice(0, 10) <= utcIso(end) &&
-                  p.endDate.slice(0, 10) >= iso,
-              );
-              const covered = daysBetween(start, end).filter((d) =>
-                overlapping.some((p) => covers(p, d.iso)),
-              ).length;
-              return (
-                <button
-                  type="button"
-                  className="planner-year-month"
-                  key={iso}
-                  onClick={() => onDay(iso)}
-                >
-                  <strong>
-                    {start.toLocaleDateString("fr-FR", {
-                      timeZone: "UTC",
-                      month: "long",
-                    })}
-                  </strong>
-                  <span>
-                    {overlapping.length
-                      ? `${overlapping.length} planning${overlapping.length > 1 ? "s" : ""}`
-                      : "Aucun planning"}
-                  </span>
-                  {overlapping.length > 0 && <span>{covered} j. couverts</span>}
-                  <span className="planner-year-bar" aria-hidden="true">
-                    <i
-                      style={{
-                        width: `${Math.round((covered / end.getUTCDate()) * 100)}%`,
-                      }}
-                    />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {view === "month" && (
-          <div className="planner-month" aria-label="Calendrier du mois">
-            <div className="planner-month-weekdays">
-              {weekdays.map((d) => (
-                <span key={d}>{d}</span>
-              ))}
-            </div>
-            <div className="planner-month-grid">
-              {monthCells(from, to).map((d) => {
-                const overlapping = filteredPlans.filter(
-                  (p) => p.startDate && p.endDate && covers(p, d.iso),
-                );
-                return (
-                  <div
-                    key={d.iso}
-                    className={
-                      "planner-cell" +
-                      (d.inMonth ? "" : " is-outside") +
-                      (d.iso === today ? " is-today" : "")
-                    }
-                  >
-                    <button
-                      type="button"
-                      className="planner-cell-num"
-                      onClick={() => onDay(d.iso)}
-                    >
-                      {Number(d.iso.slice(8))}
-                    </button>
-
-                    {overlapping.length > 0 && (
-                      <div className="planner-cell-events">
-                        {overlapping.map((p) => {
-                          const isDraft = p.status === "DRAFT";
-                          const occurrences = p.occurrences || [];
-                          const count =
-                            p._count?.occurrences ?? occurrences.length;
-                          return (
-                            <button
-                              type="button"
-                              key={p.id}
-                              className={
-                                "planner-event-chip" +
-                                (isDraft ? " is-draft" : "")
-                              }
-                              disabled={busy}
-                              onClick={() => onPlan(p.id)}
-                              title={`Planning du ${day(p.startDate)} au ${day(p.endDate)} · ${count} shift${count > 1 ? "s" : ""} (${isDraft ? "Brouillon" : "Publié"}) — ouvrir`}
-                            >
-                              <span className="event-dot" />
-                              <span className="event-text">
-                                {count} shift{count > 1 ? "s" : ""}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {(view === "week" || view === "day") && (
-          <div
-            className={
-              "planner-week-overview" + (view === "day" ? " is-single" : "")
-            }
-            aria-label={
-              view === "day" ? "Jour sélectionné" : "Jours de la semaine"
-            }
-          >
-            {daysBetween(from, to).map((d) => {
-              const overlapping = filteredPlans.filter(
-                (p) => p.startDate && p.endDate && covers(p, d.iso),
-              );
-              return (
-                <div
-                  className={
-                    "planner-week-day" + (d.iso === today ? " is-today" : "")
-                  }
-                  key={d.iso}
-                >
-                  <button
-                    type="button"
-                    className="planner-week-day-head"
-                    onClick={() => onDay(d.iso)}
-                  >
-                    <strong>{weekdays[d.weekday]}</strong>
-                    <span>{Number(d.iso.slice(8))}</span>
-                  </button>
-                  {overlapping.length === 0 ? (
-                    <p className="planner-day-empty">Aucun planning</p>
-                  ) : (
-                    overlapping.map((p) => {
-                      const todayOccurrences = occurrencesOnDay(p, d.iso);
-                      const countToday = todayOccurrences.length;
-                      const filledToday = todayOccurrences.filter(
-                        (o) => o.swapper,
-                      ).length;
-                      const state =
-                        countToday === 0
-                          ? "none"
-                          : coverage(filledToday, countToday);
-                      return (
-                        <button
-                          type="button"
-                          className={
-                            "planner-range is-" +
-                            state +
-                            (p.status === "DRAFT" ? " is-draft" : "")
-                          }
-                          disabled={busy}
-                          key={p.id}
-                          onClick={() => onDay(d.iso)}
-                          title="Voir le détail des shifts de cette journée"
-                        >
-                          {countToday === 0 ? (
-                            <span className="planner-range-empty">
-                              Aucun shift ce jour
-                            </span>
-                          ) : (
-                            <>
-                              <span className="planner-range-count">
-                                <strong>{countToday}</strong>
-                                <small>
-                                  shift{countToday === 1 ? "" : "s"}
-                                </small>
-                              </span>
-                              <span className="planner-range-coverage">
-                                {filledToday}/{countToday} affecté
-                                {filledToday === 1 ? "" : "s"}
-                              </span>
-                            </>
-                          )}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function Planner({ user }: { user: User }) {
   const [planningName, setPlanningName] = useState("");
   const writable = user.role === "ADMIN" || user.role === "SUPERVISOR";
   const [plans, setPlans] = useState<Planning[]>([]);
-  const [showList, setShowList] = useState(true);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [current, setCurrent] = useState<Planning | null>(null);
   const [loading, setLoading] = useState(true);
@@ -836,10 +350,6 @@ export function Planner({ user }: { user: User }) {
   const [creating, setCreating] = useState(false);
   const [creationMode, setCreationMode] = useState<"manual" | "automatic">("manual");
 
-  const [view, setView] = useState("week"),
-    [anchor, setAnchor] = useState(new Date().toLocaleDateString("en-CA")),
-    [dayModalDate, setDayModalDate] = useState<string | null>(null);
-
   const [start, setStart] = useState(""),
     [end, setEnd] = useState(""),
     [reload, setReload] = useState(0);
@@ -847,7 +357,6 @@ export function Planner({ user }: { user: User }) {
   const [stations, setStations] = useState<Station[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [stationId, setStationId] = useState("");
-  const [stationFilter, setStationFilter] = useState("");
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [publishDirectly, setPublishDirectly] = useState(false);
@@ -855,6 +364,8 @@ export function Planner({ user }: { user: User }) {
   function openCreate(mode: "manual" | "automatic" = "manual") {
     setCreationMode(mode);
     setPlanningName("");
+    setStart("");
+    setEnd("");
     setStationId("");
     setSelectedTemplates([]);
     setSelectedDays([1, 2, 3, 4, 5]);
@@ -926,9 +437,7 @@ export function Planner({ user }: { user: User }) {
     setOpeningId(id);
     try {
       const plan = await api<Planning>("/plannings/" + id);
-      setAnchor(plan.startDate.slice(0, 10));
       setCurrent(plan);
-      setShowList(false);
       setOpeningId(null);
       const notices =
         await api<{ id: string; planningId: string }[]>("/plannings/notices");
@@ -951,7 +460,6 @@ export function Planner({ user }: { user: User }) {
     setBusy(true);
     setError("");
     try {
-      setAnchor(start);
       const p = await api<Planning>("/plannings", {
         name: planningName.trim(),
         startDate: start + "T00:00:00.000Z",
@@ -1022,43 +530,13 @@ export function Planner({ user }: { user: User }) {
         key={current.id}
         planning={current}
         writable={writable}
-        user={user}
         onUpdate={setCurrent}
         onBack={() => {
           setCurrent(null);
-          setShowList(true);
           setReload((n) => n + 1);
         }}
       />
     );
-
-  const anchorDate = new Date(anchor + "T00:00:00Z"),
-    from = new Date(anchorDate),
-    to = new Date(anchorDate);
-
-  if (view === "week") {
-    from.setUTCDate(from.getUTCDate() - ((from.getUTCDay() + 6) % 7));
-    to.setTime(+from);
-    to.setUTCDate(to.getUTCDate() + 6);
-  }
-
-  if (view === "month") {
-    from.setUTCDate(1);
-    to.setUTCMonth(to.getUTCMonth() + 1, 0);
-  }
-
-  if (view === "year") {
-    from.setUTCMonth(0, 1);
-    to.setUTCMonth(11, 31);
-  }
-
-  const visible = plans.filter(
-    (p) =>
-      p.startDate &&
-      p.endDate &&
-      p.startDate.slice(0, 10) <= to.toISOString().slice(0, 10) &&
-      p.endDate.slice(0, 10) >= from.toISOString().slice(0, 10),
-  );
 
   const createSteps: StepItem[] = [
     {
@@ -1234,124 +712,22 @@ export function Planner({ user }: { user: User }) {
     },
   ];
 
-  if (showList)
-    return (
-      <>
-        <PlanningList
-          plans={plans}
-          userRole={user.role}
-          busy={busy}
-          loading={loading || openingId !== null}
-          error={error}
-          onRetry={() => setReload((n) => n + 1)}
-          onCreate={writable ? () => openCreate("manual") : undefined}
-          onGenerate={writable ? () => openCreate("automatic") : undefined}
-          onOpen={(id) => void open(id)}
-        />
-        <StepperModal
-          open={creating}
-          title={creationMode === "automatic" ? "Générer un planning" : "Créer un planning"}
-          icon={<CalendarIcon size={20} />}
-          steps={createSteps}
-          submitLabel={creationMode === "automatic" ? "Générer et affecter" : "Créer le brouillon"}
-          busy={busy}
-          onClose={() => setCreating(false)}
-          onSubmit={createPlanning}
-        />
-      </>
-    );
-
   return (
-    <div className="planner">
-      <div className="planner-chrome">
-        <div className="settings-tabs planner-period-tabs">
-          {periodTabs.map(([value, label, short, Icon]) => (
-            <button
-              type="button"
-              key={value}
-              aria-pressed={view === value}
-              aria-label={`Vue ${label.toLowerCase()}`}
-              title={label}
-              onClick={() => setView(value)}
-            >
-              <Icon size={16} weight="regular" />
-              <span className="planner-tab-label-full">{label}</span>
-              <span className="planner-tab-label-short">{short}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="planner-period-nav">
-          <button
-            type="button"
-            className="planner-step"
-            aria-label="Période précédente"
-            onClick={() => setAnchor(shiftAnchor(anchor, view, -1))}
-          >
-            <CaretLeftIcon size={16} />
-          </button>
-
-          <div className="planner-period-picker">
-            <strong>{periodTitle(view, from, to)}</strong>
-            <input
-              type="date"
-              value={anchor}
-              onChange={(e) => {
-                if (e.target.value) setAnchor(e.target.value);
-              }}
-            />
-          </div>
-
-          <button
-            type="button"
-            className="planner-step"
-            aria-label="Période suivante"
-            onClick={() => setAnchor(shiftAnchor(anchor, view, 1))}
-          >
-            <CaretRightIcon size={16} />
-          </button>
-        </div>
-
-        {writable && !creating && (
-          <button
-            className="admin-button planner-create-btn"
-            onClick={() => openCreate("manual")}
-          >
-            <PlusIcon weight="regular" size={16} />
-            <span>Nouveau planning…</span>
-          </button>
-        )}
-      </div>
-
-      {!loading && (plans.length > 0 || visible.length > 0) && (
-        <p className="planner-context">
-          <CalendarDotsIcon size={15} weight="regular" />
-          <span>
-            Vue <strong>{viewLabels[view]}</strong> —{" "}
-            {periodTitle(view, from, to)}
-          </span>
-          <span className="planner-context-count">
-            {visible.length} planning{visible.length > 1 ? "s" : ""} sur la
-            période
-          </span>
-        </p>
-      )}
-
-      {error && !creating && (
-        <p className="error-message" role="alert">
-          {error}{" "}
-          <button
-            className="text-button"
-            onClick={() => setReload((n) => n + 1)}
-          >
-            Réessayer
-          </button>
-        </p>
-      )}
-
+    <>
+      <PlanningList
+        plans={plans}
+        userRole={user.role}
+        busy={busy}
+        loading={loading || openingId !== null}
+        error={error}
+        onRetry={() => setReload((n) => n + 1)}
+        onCreate={writable ? () => openCreate("manual") : undefined}
+        onGenerate={writable ? () => openCreate("automatic") : undefined}
+        onOpen={open}
+      />
       <StepperModal
         open={creating}
-        title="Création guidée du planning"
+        title={creationMode === "automatic" ? "Générer un planning" : "Créer un planning"}
         icon={<CalendarIcon size={20} />}
         steps={createSteps}
         submitLabel={creationMode === "automatic" ? "Générer et affecter" : "Créer le brouillon"}
@@ -1359,417 +735,18 @@ export function Planner({ user }: { user: User }) {
         onClose={() => setCreating(false)}
         onSubmit={createPlanning}
       />
-
-      {dayModalDate && (
-        <DaySummaryModal
-          dateIso={dayModalDate}
-          plans={plans}
-          writable={writable}
-          onClose={() => setDayModalDate(null)}
-          onChanged={() => setReload((n) => n + 1)}
-          onOpenPlanning={(id) => {
-            setDayModalDate(null);
-            void open(id);
-          }}
-        />
-      )}
-
-      {loading ? (
-        <div className="planner-skeleton" role="status" aria-live="polite">
-          <span>Chargement des plannings…</span>
-          <i />
-          <i />
-          <i />
-        </div>
-      ) : (
-        <PeriodBoard
-          view={view}
-          from={from}
-          to={to}
-          plans={visible}
-          allPlansCount={plans.length}
-          stations={stations}
-          selectedStationFilter={stationFilter}
-          onStationFilterChange={setStationFilter}
-          busy={busy}
-          onCreate={writable ? () => openCreate("manual") : undefined}
-          onPlan={open}
-          onDay={(iso) => {
-            setDayModalDate(iso);
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function DaySummaryModal({
-  dateIso,
-  plans,
-  writable,
-  onClose,
-  onChanged,
-  onOpenPlanning,
-}: {
-  dateIso: string;
-  plans: Planning[];
-  writable: boolean;
-  onClose: () => void;
-  onChanged: () => void;
-  onOpenPlanning: (planningId: string) => void;
-}) {
-  type Entry = {
-    planningId: string;
-    planningRevision: number;
-    planningStatus: string;
-    occurrence: Occurrence;
-  };
-
-  const dayOccurrences: Entry[] = [];
-
-  for (const p of plans) {
-    for (const o of occurrencesOnDay(p, dateIso)) {
-      dayOccurrences.push({
-        planningId: p.id,
-        planningRevision: p.revision,
-        planningStatus: p.status,
-        occurrence: o,
-      });
-    }
-  }
-
-  dayOccurrences.sort(
-    (a, b) =>
-      +new Date(a.occurrence.startTime) - +new Date(b.occurrence.startTime),
-  );
-
-  const groups = new Map<
-    string,
-    { key: string; stationName: string; sample: Entry; entries: Entry[] }
-  >();
-  for (const entry of dayOccurrences) {
-    const o = entry.occurrence;
-    const key = `${o.station?.id}|${o.templateVersion?.label}|${o.startTime}|${o.endTime}`;
-    const g = groups.get(key);
-    if (g) g.entries.push(entry);
-    else
-      groups.set(key, {
-        key,
-        stationName: o.station?.name || "",
-        sample: entry,
-        entries: [entry],
-      });
-  }
-  const shiftGroups = [...groups.values()];
-
-  const stationNames = [
-    ...new Set(shiftGroups.map((g) => g.stationName).filter(Boolean)),
-  ];
-  const singleStation = stationNames.length === 1 ? stationNames[0] : null;
-  const filled = dayOccurrences.filter((d) => d.occurrence.swapper).length;
-  const vacant = dayOccurrences.length - filled;
-  const anyDraft = dayOccurrences.some((d) => d.planningStatus === "DRAFT");
-
-  const [swappers, setSwappers] = useState<(User & { isActive: boolean })[]>(
-    [],
-  );
-  const [editingOccurrence, setEditingOccurrence] = useState<string | null>(
-    null,
-  );
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    api<(User & { isActive: boolean })[]>("/users?role=SWAPPER")
-      .then((u) => {
-        if (active) setSwappers(u.filter((s) => s.isActive));
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  async function setSwapper(
-    entry: (typeof dayOccurrences)[number],
-    swapperId: string | null,
-  ) {
-    setBusyId(entry.occurrence.id);
-    setError("");
-    try {
-      await api(
-        `/plannings/${entry.planningId}/occurrences/${entry.occurrence.id}`,
-        { swapperId, revision: entry.planningRevision },
-        "PATCH",
-      );
-      setEditingOccurrence(null);
-      notify(swapperId ? "Swappeur affecté." : "Affectation retirée.");
-      onChanged();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  return (
-    <Modal
-      open
-      title={longDay(dateIso)}
-      onClose={onClose}
-      subtitle={singleStation || undefined}
-    >
-      <div className="planner-day-sheet">
-        {dayOccurrences.length === 0 ? (
-          <div className="planner-day-empty-state">
-            <Clock3 size={30} />
-            <strong>Aucun shift pour cette date</strong>
-            <p>Ouvrez un planning pour y générer des shifts.</p>
-          </div>
-        ) : (
-          <>
-            <div className="planner-day-summary-bar">
-              <span className="planner-day-count">
-                <strong>{shiftGroups.length}</strong> shift
-                {shiftGroups.length === 1 ? "" : "s"}
-                {dayOccurrences.length !== shiftGroups.length && (
-                  <small> · {dayOccurrences.length} postes</small>
-                )}
-              </span>
-              <span
-                className={
-                  "planner-day-coverage" +
-                  (vacant === 0
-                    ? " is-complete"
-                    : filled === 0
-                      ? " is-empty"
-                      : "")
-                }
-              >
-                {vacant === 0
-                  ? "Tous les postes sont affectés"
-                  : `${filled} affecté${filled === 1 ? "" : "s"} · ${vacant} ${
-                      anyDraft
-                        ? "à pourvoir"
-                        : "non affecté" + (vacant === 1 ? "" : "s")
-                    }`}
-              </span>
-              {singleStation && (
-                <span className="planner-day-station-tag">{singleStation}</span>
-              )}
-            </div>
-
-            {error && (
-              <p className="error-message" role="alert">
-                {error}
-              </p>
-            )}
-
-            <ul className="planner-day-list">
-              <li className="planner-day-list-head" aria-hidden="true">
-                <span>Shift</span>
-                <span>
-                  Swappeur
-                  {shiftGroups.some((g) => g.entries.length > 1) ? "s" : ""}
-                </span>
-                <span>Actions</span>
-              </li>
-              {shiftGroups.map((group) => {
-                const s = group.sample.occurrence;
-                const groupFilled = group.entries.filter(
-                  (e) => e.occurrence.swapper,
-                ).length;
-                const state = coverage(groupFilled, group.entries.length);
-
-                return (
-                  <li className="planner-day-row is-group" key={group.key}>
-                    <div className="planner-day-shift">
-                      <strong>{s.templateVersion?.label || "Shift"}</strong>
-                      <span className="planner-day-time">
-                        {clock(s.startTime, s.station?.timezone)} –{" "}
-                        {clock(s.endTime, s.station?.timezone)}
-                        {!singleStation && s.station?.name && (
-                          <>
-                            <i>·</i>
-                            {s.station.name}
-                          </>
-                        )}
-                      </span>
-                      <span className={"planner-day-slots is-" + state}>
-                        <i aria-hidden="true" />
-                        {groupFilled}/{group.entries.length} poste
-                        {group.entries.length > 1 ? "s" : ""}
-                      </span>
-                    </div>
-
-                    <div className="planner-day-swappers">
-                      {group.entries.map((entry) => {
-                        const o = entry.occurrence;
-                        const busy = busyId === o.id;
-                        const status = assignmentStatus(
-                          !!o.swapper,
-                          entry.planningStatus,
-                        );
-                        if (!o.swapper)
-                          return (
-                            <span
-                              key={o.id}
-                              className={
-                                "planner-day-vacant" +
-                                (status.published ? " is-published" : "")
-                              }
-                            >
-                              {status.label}
-                            </span>
-                          );
-                        return (
-                          <span className="planner-day-swapper-chip" key={o.id}>
-                            <span>{o.swapper.fullName}</span>
-                            {writable && (
-                              <button
-                                type="button"
-                                className="planner-day-swapper-remove"
-                                aria-label={`Retirer ${o.swapper.fullName}`}
-                                title="Retirer ce swappeur"
-                                disabled={busy}
-                                onClick={() => void setSwapper(entry, null)}
-                              >
-                                <XIcon size={12} weight="bold" />
-                              </button>
-                            )}
-                          </span>
-                        );
-                      })}
-                    </div>
-
-                    <div className="planner-day-actions">
-                      {writable ? (
-                        editingOccurrence &&
-                        group.entries.some(
-                          (e) => e.occurrence.id === editingOccurrence,
-                        ) ? (
-                          <div className="planner-day-picker">
-                            <select
-                              autoFocus
-                              value=""
-                              disabled={busyId === editingOccurrence}
-                              onChange={(event) => {
-                                const entry = dayOccurrences.find(
-                                  (e) => e.occurrence.id === editingOccurrence,
-                                );
-                                if (event.target.value && entry)
-                                  void setSwapper(entry, event.target.value);
-                              }}
-                            >
-                              <option value="">Choisir un swappeur…</option>
-                              {swappers.map((sw) => (
-                                <option key={sw.id} value={sw.id}>
-                                  {sw.fullName}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              className="text-button"
-                              disabled={busyId === editingOccurrence}
-                              onClick={() => setEditingOccurrence(null)}
-                            >
-                              Annuler
-                            </button>
-                          </div>
-                        ) : group.entries.length > 1 ? (
-                          <details className="planner-day-menu-holder">
-                            <summary className="admin-button secondary small">
-                              <DotsThreeIcon size={18} weight="bold" />
-                              Actions
-                            </summary>
-                            <div className="planner-day-menu" role="menu">
-                              {group.entries.map((entry, i) => (
-                                <button
-                                  key={entry.occurrence.id}
-                                  type="button"
-                                  role="menuitem"
-                                  className="planner-day-menu-item"
-                                  onClick={() =>
-                                    setEditingOccurrence(entry.occurrence.id)
-                                  }
-                                >
-                                  <PlusIcon size={16} />
-                                  {entry.occurrence.swapper
-                                    ? `Réaffecter le poste ${i + 1}…`
-                                    : `Affecter le poste ${i + 1}…`}
-                                </button>
-                              ))}
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="planner-day-menu-item"
-                                onClick={() =>
-                                  onOpenPlanning(group.sample.planningId)
-                                }
-                              >
-                                <CalendarIcon size={16} />
-                                Ouvrir le planning
-                              </button>
-                            </div>
-                          </details>
-                        ) : (
-                          <button
-                            type="button"
-                            className="admin-button secondary small"
-                            disabled={busyId === group.sample.occurrence.id}
-                            onClick={() =>
-                              setEditingOccurrence(group.sample.occurrence.id)
-                            }
-                          >
-                            {group.sample.occurrence.swapper
-                              ? "Réaffecter"
-                              : "Ajouter"}
-                          </button>
-                        )
-                      ) : (
-                        <button
-                          type="button"
-                          className="admin-button secondary small"
-                          onClick={() =>
-                            onOpenPlanning(group.sample.planningId)
-                          }
-                        >
-                          Consulter
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        )}
-        <div className="planner-actions is-end">
-          <button
-            type="button"
-            className="admin-button secondary"
-            onClick={onClose}
-          >
-            Fermer
-          </button>
-        </div>
-      </div>
-    </Modal>
+    </>
   );
 }
 
 function PlanningEditor({
   planning: p,
   writable,
-  user,
   onUpdate,
   onBack,
 }: {
   planning: Planning;
   writable: boolean;
-  user: User;
   onUpdate: (p: Planning) => void;
   onBack: () => void;
 }) {
@@ -2366,8 +1343,6 @@ function PlanningEditor({
         <DayDetail
           date={dayKeyOf(openGroup.start, openGroup.station.timezone)}
           rows={rowsOfDay(dayKeyOf(openGroup.start, openGroup.station.timezone))}
-          stationCount={stationOptions.length}
-          status={p.status}
           canEdit={canEdit}
           busy={busy || adding}
           planning={p}
@@ -2618,8 +1593,6 @@ function PlanningEditor({
           onUpdate={onUpdate}
           date={dayDetail}
           rows={rowsOfDay(dayDetail)}
-          stationCount={stationOptions.length}
-          status={p.status}
           canEdit={canEdit}
           busy={busy || adding}
           onRemove={async (occurrence) => {
@@ -2640,8 +1613,6 @@ function DayDetail({
   initialEditingId,
   date,
   rows,
-  stationCount,
-  status,
   busy,
   canEdit,
   onRemove,
@@ -2652,14 +1623,11 @@ function DayDetail({
   initialEditingId?: string | null;
   date: string;
   rows: Occurrence[];
-  stationCount: number;
-  status: string;
   canEdit: boolean;
   busy: boolean;
   onRemove: (occurrence: Occurrence) => Promise<void>;
   onClose: () => void;
 }) {
-  const published = status !== "DRAFT";
   const groups = groupOccurrences(rows);
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState("");
@@ -2807,239 +1775,6 @@ function DayDetail({
         </div>
       </div>
     </Modal>
-  );
-}
-
-function ShiftRoster({
-  planning: p,
-  group: g,
-  canEdit,
-  focusOccurrenceId,
-  onConsumeFocus,
-  onUpdate,
-  onClose,
-}: {
-  planning: Planning;
-  group: ShiftGroup;
-  canEdit: boolean;
-  focusOccurrenceId: string | null;
-  onConsumeFocus: () => void;
-  onUpdate: (p: Planning) => void;
-  onClose: () => void;
-}) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (
-      focusOccurrenceId &&
-      g.occurrences.some((o) => o.id === focusOccurrenceId)
-    ) {
-      setEditingId(focusOccurrenceId);
-      onConsumeFocus();
-    }
-  }, [focusOccurrenceId]);
-
-  const editing = editingId
-    ? g.occurrences.find((o) => o.id === editingId) || null
-    : null;
-
-  if (editing)
-    return (
-      <Assignment
-        key={editing.id + ":" + p.revision}
-        planning={p}
-        occurrence={editing}
-        onClose={() => setEditingId(null)}
-        onSaved={async (opts) => {
-          const latest = await api<Planning>("/plannings/" + p.id);
-          onUpdate(latest);
-          if (opts?.keepOpen) setEditingId(editing.id);
-          else setEditingId(null);
-          notify(opts?.message || "Affectation enregistrée.");
-        }}
-      />
-    );
-
-  const multi = g.occurrences.length > 1;
-  const filled = g.occurrences.filter((o) => o.swapper).length;
-  const vacant = g.occurrences.length - filled;
-
-  async function addSlot() {
-    setBusy(true);
-    setError("");
-    try {
-      await api(
-        `/plannings/${p.id}/occurrences/${g.occurrences[0].id}/duplicate`,
-        { revision: p.revision },
-      );
-      onUpdate(await api<Planning>("/plannings/" + p.id));
-      notify("Poste ajouté.");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function removeSlot(occurrenceId: string) {
-    setBusy(true);
-    setError("");
-    try {
-      await api(`/plannings/${p.id}/occurrences/${occurrenceId}/remove`, {
-        revision: p.revision,
-      });
-      onUpdate(await api<Planning>("/plannings/" + p.id));
-      notify("Poste retiré.");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="planner-roster">
-      <p className="planner-roster-meta">
-        {clock(g.start, g?.station?.timezone)} –{" "}
-        {clock(g.end, g?.station?.timezone)}
-        {g.breakStart &&
-          ` · Pause ${g.breakStart}–${g.breakEnd} (${g.breakMinutes} min)`}
-      </p>
-
-      {canEdit && (
-        <p className="planner-muted">
-          <span className="planner-roster-count">
-            <strong>{filled}</strong>/{g.occurrences.length} poste
-            {multi ? "s" : ""} affecté
-            {filled === 1 ? "" : "s"}
-          </span>
-          {vacant > 0 && (
-            <span>
-              — chaque poste resté libre peut recevoir un swappeur différent.
-            </span>
-          )}
-        </p>
-      )}
-
-      {error && (
-        <p className="error-message" role="alert">
-          {error}
-        </p>
-      )}
-
-      <div className="admin-table-wrap planner-roster-table">
-        <table
-          className="admin-table"
-          aria-label="Swappeurs affectés à ce shift"
-        >
-          <thead>
-            <tr>
-              {multi && <th>Poste</th>}
-              <th>Swappeur</th>
-              <th>Contact</th>
-              <th>Statut</th>
-              {canEdit && <th aria-hidden="true" />}
-            </tr>
-          </thead>
-          <tbody>
-            {g.occurrences.map((o, i) => (
-              <tr key={o.id}>
-                {multi && (
-                  <td className="planner-roster-slot">Poste {i + 1}</td>
-                )}
-                <td>
-                  {o.swapper ? (
-                    <strong>{o?.swapper?.fullName}</strong>
-                  ) : (
-                    <span className="planner-muted">Non affecté</span>
-                  )}
-                </td>
-                <td>
-                  <div className="planner-roster-contact">
-                    {o.swapper ? (
-                      <>
-                        {o?.swapper?.email && (
-                          <a href={"mailto:" + o?.swapper?.email}>
-                            {o?.swapper?.email}
-                          </a>
-                        )}
-                        {o.swapper.phoneNumber && (
-                          <a href={"tel:" + o.swapper.phoneNumber}>
-                            {o.swapper.phoneNumber}
-                          </a>
-                        )}
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </div>
-                </td>
-                <td>
-                  <span
-                    className={
-                      "admin-badge" + (o.swapper ? " active" : " draft")
-                    }
-                  >
-                    {o.swapper
-                      ? "Affecté"
-                      : p.status === "DRAFT"
-                        ? "À affecter"
-                        : "Non affecté"}
-                  </span>
-                </td>
-                {canEdit && (
-                  <td className="planner-roster-action">
-                    <button
-                      type="button"
-                      className="text-button"
-                      disabled={busy}
-                      onClick={() => setEditingId(o.id)}
-                    >
-                      {o.swapper ? "Changer" : "Affecter"}
-                    </button>
-
-                    {!o.swapper && multi && (
-                      <button
-                        type="button"
-                        className="planner-icon-btn danger"
-                        disabled={busy}
-                        title="Supprimer ce poste"
-                        aria-label="Supprimer ce poste"
-                        onClick={() => removeSlot(o.id)}
-                      >
-                        <TrashIcon size={16} />
-                      </button>
-                    )}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="planner-actions">
-        <button
-          type="button"
-          className="admin-button secondary"
-          onClick={onClose}
-        >
-          Fermer
-        </button>
-        {canEdit && (
-          <button
-            type="button"
-            className="admin-button"
-            disabled={busy}
-            onClick={addSlot}
-          >
-            + Ajouter un poste
-          </button>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -3233,3 +1968,4 @@ function Assignment({
     </form>
   );
 }
+

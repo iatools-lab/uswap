@@ -130,7 +130,12 @@ export const coverageRoutes: MockRoute[] = [
       if (user.role === "STATION_CHIEF" && occurrence.stationId !== user.stationId)
         throw new MockHttpError(403, "Ce shift n'appartient pas à votre station.");
       const candidates = ctx.db.users
-        .filter((item) => item.role === "SWAPPER" && item.isActive)
+        .filter(
+          (item) =>
+            item.role === "SWAPPER" &&
+            item.isActive &&
+            item.stationId === occurrence.stationId,
+        )
         .map((item) => {
           if (item.id === occurrence.swapperId)
             return {

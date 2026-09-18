@@ -184,6 +184,8 @@ export type MockImportRow = {
   fullName: string;
   email: string;
   role: string;
+  stationId: string | null;
+  stationName: string;
   status: "READY" | "IGNORED" | "REJECTED" | "CREATED";
   reason: string;
 };

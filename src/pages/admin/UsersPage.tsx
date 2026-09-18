@@ -5,7 +5,7 @@ import {
   SortAscendingIcon,
   SquaresFourIcon,
 } from "@phosphor-icons/react";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Modal } from "../../ui/Modal";
 import { UserCreateModal } from "../../features/users/UserCreateModal";
@@ -252,7 +252,6 @@ export function UsersPage() {
         onClose={closeCreate}
         onCreated={() => {
           setRevision((value) => value + 1);
-          closeCreate();
         }}
       />
 

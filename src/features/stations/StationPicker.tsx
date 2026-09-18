@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Building2, Search, X, MapPin } from "../../ui/icons";
 import { CaretDownIcon } from "@phosphor-icons/react";
@@ -28,6 +28,9 @@ export function StationPicker({
 }: StationPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const titleId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const selectedStation = stations.find((s) => s.id === value);
 
@@ -48,26 +51,56 @@ export function StationPicker({
   // Bloque le défilement de la page quand le modal est ouvert
   // et repart d'une recherche vierge à chaque ouverture.
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-      setQuery("");
-    }
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setIsOpen(false);
+        triggerRef.current?.focus();
+        return;
+      }
+      if (event.key !== "Tab" || !panelRef.current) return;
+      const focusable = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
     return () => {
-      document.body.style.overflow = "";
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      setQuery("");
     };
   }, [isOpen]);
 
   const modalContent = isOpen ? (
-    <div className="stepper-overlay station-picker-overlay" onClick={() => setIsOpen(false)}>
-      <div className="station-picker-panel" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="stepper-overlay station-picker-overlay"
+      onClick={() => setIsOpen(false)}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+    >
+      <div ref={panelRef} className="station-picker-panel" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <h2 className="station-picker-title">Choisir une station</h2>
+            <h2 id={titleId} className="station-picker-title">Choisir une station</h2>
             <p className="modal-subtitle">Sélectionnez la station d'affectation</p>
           </div>
-          <button type="button" className="modal-close" onClick={() => setIsOpen(false)}>
+          <button type="button" className="modal-close" onClick={() => setIsOpen(false)} aria-label="Fermer la liste des stations">
             <X size={18} />
           </button>
         </div>
@@ -127,9 +160,12 @@ export function StationPicker({
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         className="station-picker-trigger"
         onClick={() => setIsOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
       >
         <span className={`station-picker-trigger-label${selectedStation ? " has-value" : ""}`}>
           <Building2 size={16} />

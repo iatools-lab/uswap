@@ -163,6 +163,8 @@ export const DB_VERSION = 2;
 
 /** Mot de passe commun aux comptes de démonstration (fictifs). */
 export const DEMO_PASSWORD = "uswap2026";
+/** Mot de passe dédié au compte administrateur demandé pour la maquette. */
+export const ADMIN_PASSWORD = "AdminUswap";
 
 /* ------------------------------------------------------------------ */
 /* Comptes                                                             */
@@ -230,7 +232,12 @@ const swapperEmail = (_fullName: string, index: number) =>
   index === 0 ? `swappeur@${FICTITIOUS_DOMAIN}` : `swappeur${pad2(index + 1)}@${FICTITIOUS_DOMAIN}`;
 
 const users: MockUser[] = [
-  user("us-admin", "Administrateur uSwap", `admin@${FICTITIOUS_DOMAIN}`, "ADMIN", null),
+  user("us-admin", "Administrateur uSwap", `admin@${FICTITIOUS_DOMAIN}`, "ADMIN", null, {
+    isActive: true,
+    disabledAt: null,
+    password: ADMIN_PASSWORD,
+    invitationStatus: "ACTIVATED",
+  }),
   user("us-supervisor", "Camille Nola", `superviseur@${FICTITIOUS_DOMAIN}`, "SUPERVISOR", null),
   user("us-chief-bastos", "Sam Kotto", `chef@${FICTITIOUS_DOMAIN}`, "STATION_CHIEF", "st-bastos"),
   user(
@@ -310,7 +317,6 @@ const userById = (list: MockUser[], id: string | null) =>
   id ? list.find((item) => item.id === id) ?? null : null;
 
 export function createSeed(nowMs: number): MockDb {
-  const iso = isoFromMs(nowMs);
   const day = stationDayKey(nowMs);
   const weekStart = weekStartKey(day);
   const nextWeekStart = addDaysKey(weekStart, 7);

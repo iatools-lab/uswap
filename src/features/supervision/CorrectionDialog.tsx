@@ -63,6 +63,7 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
           checkedOutAt: checkedOut ? new Date(checkedOut).toISOString() : null,
           isLate,
           isAbsent,
+          isJustified: isAbsent,
         },
         "PATCH",
       );
@@ -193,77 +194,5 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
         </div>
       </fieldset>
     </Modal>
-  );
-}
-
-export function CorrectionHistory({ shiftId }: { shiftId: string }) {
-  const [rows, setRows] = useState<
-    {
-      id: string;
-      reason: string;
-      createdAt: string;
-      previousCheckedIn: string | null;
-      newCheckedIn: string | null;
-      previousIsAbsent: boolean;
-      newIsAbsent: boolean;
-    }[]
-  >([]);
-
-  useEffect(() => {
-    let active = true;
-    api<typeof rows>(`/corrections/shifts/${shiftId}`)
-      .then((data) => {
-        if (active) setRows(data);
-      })
-      .catch(() => {
-        if (active) setRows([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [shiftId]);
-
-  if (!rows.length) return null;
-
-  return (
-    <section className="admin-card">
-      <div className="admin-card-heading">
-        <h2>Historique des corrections</h2>
-      </div>
-      <div className="admin-table-wrap ops-table">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Motif</th>
-              <th>Avant</th>
-              <th>Après</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td>{formatDateTime(row.createdAt)}</td>
-                <td>{row.reason}</td>
-                <td className="supervision-history__before">
-                  {row.previousIsAbsent
-                    ? "Absent"
-                    : row.previousCheckedIn
-                      ? formatDateTime(row.previousCheckedIn)
-                      : "—"}
-                </td>
-                <td className="supervision-history__after">
-                  {row.newIsAbsent
-                    ? "Absent"
-                    : row.newCheckedIn
-                      ? formatDateTime(row.newCheckedIn)
-                      : "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
   );
 }
