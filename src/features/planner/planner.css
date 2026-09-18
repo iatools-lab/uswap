@@ -1110,28 +1110,6 @@ dialog[open],
   margin-right: 12px;
 }
 
-.planner-swapper-list {
-  max-height: 200px;
-  overflow-y: auto;
-  background: #fff;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  display: grid;
-  gap: 4px;
-}
-
-.planner-swapper-list .checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.planner-swapper-list .checkbox-label span {
-  overflow-wrap: anywhere;
-}
-
 .stepper-field-group.is-tall {
   min-height: 260px;
 }
@@ -1154,6 +1132,17 @@ dialog[open],
   font-weight: 600;
   color: var(--ink);
   cursor: pointer;
+}
+
+.planner-form-note {
+  margin: 12px 0 0;
+  padding: 11px 13px;
+  border: 1px solid #dfe5ef;
+  border-radius: 9px;
+  background: #f7f9fc;
+  color: #59677e;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 /* Aperçu des shifts */

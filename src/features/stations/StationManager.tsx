@@ -101,8 +101,9 @@ function MapLocationPicker({
   }, [address]);
 
   useEffect(() => {
-    const L = (window as any).L;
-    if (!L || !mapContainerRef.current) return;
+    const startMap = () => {
+      const L = (window as any).L;
+      if (!L || !mapContainerRef.current || mapInstanceRef.current) return;
 
     if ((mapContainerRef.current as any)._leaflet_id) {
       (mapContainerRef.current as any)._leaflet_id = null;
@@ -143,6 +144,17 @@ function MapLocationPicker({
       clearTimeout(timer2);
       map.remove();
     };
+    };
+    if ((window as any).L) return startMap();
+    const existing = document.querySelector('script[data-uswap-leaflet]') as HTMLScriptElement | null;
+    if (existing) { existing.addEventListener("load", startMap); return () => existing.removeEventListener("load", startMap); }
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    script.async = true;
+    script.dataset.uswapLeaflet = "true";
+    script.onload = startMap;
+    document.head.appendChild(script);
+    return () => { script.onload = null; };
   }, []);
 
   useEffect(() => {

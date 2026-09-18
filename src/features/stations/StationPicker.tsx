@@ -16,6 +16,7 @@ interface StationPickerProps {
   stations: Station[];
   onChange: (id: string) => void;
   placeholder?: string;
+  allowEmpty?: boolean;
 }
 
 export function StationPicker({
@@ -23,6 +24,7 @@ export function StationPicker({
   stations,
   onChange,
   placeholder = "Sélectionner une station (Optionnel)",
+  allowEmpty = true,
 }: StationPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -83,15 +85,17 @@ export function StationPicker({
         </div>
 
         <div className="modal-body station-picker-list">
-          <button
-            type="button"
-            className={`station-picker-option is-none${value === "" ? " is-selected" : ""}`}
-            onClick={() => handleSelect("")}
-          >
-            <span className={`station-picker-option-none-label${value === "" ? " is-selected" : ""}`}>
-              Aucune station (Optionnel)
-            </span>
-          </button>
+          {allowEmpty && (
+            <button
+              type="button"
+              className={`station-picker-option is-none${value === "" ? " is-selected" : ""}`}
+              onClick={() => handleSelect("")}
+            >
+              <span className={`station-picker-option-none-label${value === "" ? " is-selected" : ""}`}>
+                Aucune station (Optionnel)
+              </span>
+            </button>
+          )}
 
           {filteredStations.map((station) => (
             <button

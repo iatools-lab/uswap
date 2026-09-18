@@ -5,6 +5,7 @@ import {
   CaretRightIcon,
   MagnifyingGlassIcon,
   PlusIcon,
+  LightningIcon,
 } from "@phosphor-icons/react";
 import { periodDuration } from "./duration";
 import "./planning-list.css";
@@ -66,6 +67,7 @@ export function PlanningList({
   userRole,
   onOpen,
   onCreate,
+  onGenerate,
   busy,
   loading,
   error,
@@ -75,6 +77,7 @@ export function PlanningList({
   userRole: string;
   onOpen: (id: string) => void;
   onCreate?: () => void;
+  onGenerate?: () => void;
   busy?: boolean;
   loading?: boolean;
   error?: string;
@@ -151,11 +154,23 @@ export function PlanningList({
               />
             </div>
           )}
+          {canCreate && onGenerate && (
+            <button
+              className="admin-button secondary planner-generate-btn"
+              onClick={onGenerate}
+              disabled={busy}
+              title="Crée les shifts puis répartit automatiquement les swappeurs de la station"
+            >
+              <LightningIcon size={18} aria-hidden="true" />
+              Générer un planning
+            </button>
+          )}
           {canCreate && onCreate && (
             <button
               className="admin-button primary-cta"
               onClick={onCreate}
               disabled={busy}
+              title="Crée un brouillon avec des postes à affecter depuis le calendrier"
             >
               <PlusIcon size={18} aria-hidden="true" />
               Nouveau planning

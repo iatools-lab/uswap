@@ -210,16 +210,37 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .admin-station details{margin-top:16px}
 
 /* --- Shift templates & constraint checks --- */
-.constraint-check{background:#f5f7fc;border:1px solid #dfe5f1;border-radius:10px;padding:18px;margin:20px 0 0}
-.constraint-check h3{font-size:16px;margin:0 0 8px}
-.constraint-check p{font-size:14px}
-.constraint-weeks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
-.constraint-weeks>div{display:grid;gap:5px;border-left:3px solid #001a70;padding:8px 12px}
-.constraint-weeks strong{font-size:18px}
-.constraint-weeks small,.constraint-note{color:#52617a}
-.constraint-errors{padding-left:20px;color:#9c2929;font-size:14px}
-.constraint-errors li{margin-top:10px}
-.constraint-note{font-size:12px!important;margin-bottom:0}
+.constraint-check{display:grid;gap:14px;background:#f8fafc;border:1px solid #dfe5ef;border-radius:12px;padding:16px;margin:20px 0 0;color:#1b2942}
+.constraint-check.is-valid{border-color:#cfe9dc;background:#f8fcfa}
+.constraint-check.is-blocked{border-color:#f0d6d0;background:#fffaf9}
+.constraint-check--pending{display:flex;align-items:center;gap:10px;font-size:13px;color:#52617a}
+.constraint-check__spinner{width:16px;height:16px;border:2px solid #d5dce8;border-top-color:#001a70;border-radius:50%;animation:constraint-spin .7s linear infinite}
+@keyframes constraint-spin{to{transform:rotate(360deg)}}
+.constraint-check__header{display:flex;align-items:flex-start;gap:11px}
+.constraint-check__icon{display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;border-radius:9px;background:#e6f5ee;color:#14704d}
+.constraint-check.is-blocked .constraint-check__icon{background:#fff0ed;color:#b43b2a}
+.constraint-check__eyebrow{display:block;margin-bottom:3px;color:#6a778c;font-size:10px;font-weight:700;letter-spacing:.55px;text-transform:uppercase}
+.constraint-check h3{font-size:14px;line-height:1.35;margin:0;color:#16233b}
+.constraint-check p{font-size:13px;line-height:1.55;margin:4px 0 0;color:#52617a}
+.constraint-weeks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:10px}
+.constraint-weeks>div{display:grid;gap:7px;padding:12px;border:1px solid #e1e7f0;border-radius:9px;background:#fff}
+.constraint-week__date{color:#68758b;font-size:11px;font-weight:600}
+.constraint-weeks p strong{color:#192740;font-size:inherit}
+.constraint-week__bar{height:5px;border-radius:999px;background:#e9edf4;overflow:hidden}
+.constraint-week__bar>span{display:block;height:100%;border-radius:inherit;background:#168561}
+.constraint-weeks .is-near .constraint-week__bar>span{background:#c58a18}
+.constraint-weeks .is-over .constraint-week__bar>span{background:#c53e32}
+.constraint-weeks small,.constraint-note{color:#647188;font-size:11px;line-height:1.45}
+.constraint-issues{display:grid;gap:8px}
+.constraint-issue{display:flex;align-items:flex-start;gap:9px;padding:10px 11px;border-radius:9px;font-size:12px}
+.constraint-issue>svg{flex:0 0 auto;margin-top:1px}
+.constraint-issue strong{display:block;font-size:12px;line-height:1.4}
+.constraint-issue p{font-size:12px;margin-top:2px}
+.constraint-issue.is-error{background:#fff0ed;color:#ae352a}
+.constraint-issue.is-error p{color:#7c3a34}
+.constraint-issue.is-warning{background:#fff7e6;color:#8b5c0d}
+.constraint-issue.is-warning p{color:#71582f}
+.constraint-note{margin:0!important}
 .template-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}
 .template-heading h2{font-size:22px;margin:10px 0 4px}
 .template-heading p{color:#59707d;margin:0}

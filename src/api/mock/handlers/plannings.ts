@@ -191,13 +191,6 @@ export const planningRoutes: MockRoute[] = [
           400,
           "La période ne peut pas dépasser 62 jours.",
         );
-      const duplicate = ctx.db.plannings.find(
-        (item) =>
-          dayKeyOfIso(item.startDate) === dayKeyOfIso(startDate) &&
-          dayKeyOfIso(item.endDate) === dayKeyOfIso(endDate),
-      );
-      if (duplicate)
-        throw new MockHttpError(409, "Un planning couvre déjà cette période.");
       const created = {
         id: nextId("pl"),
         name,
@@ -210,6 +203,49 @@ export const planningRoutes: MockRoute[] = [
       };
       ctx.db.plannings.push(created);
       return planningView(ctx.db, created.id);
+    },
+  },
+  {
+    method: "POST",
+    pattern: /^\/plannings\/([^/]+)\/auto-assign$/,
+    handler: (ctx) => {
+      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
+      const planning = ctx.db.plannings.find((item) => item.id === ctx.params[0]);
+      if (!planning) throw new MockHttpError(404, "Planning introuvable.");
+      const occurrences = ctx.db.occurrences
+        .filter((item) => item.planningId === planning.id && !item.swapperId)
+        .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
+      let assigned = 0;
+      for (const occurrence of occurrences) {
+        const candidates = ctx.db.users
+          .filter((user) => user.role === "SWAPPER" && user.isActive && user.stationId === occurrence.stationId)
+          .map((user) => ({
+            user,
+            hours: ctx.db.occurrences
+              .filter((item) => item.swapperId === user.id)
+              .reduce((total, item) => total + durationHours(ctx.db, item), 0),
+            randomOrder: Math.random(),
+          }))
+          // Une charge plus faible reste prioritaire ; à charge égale, l'ordre
+          // aléatoire évite d'affecter systématiquement les mêmes personnes.
+          .sort((a, b) => a.hours - b.hours || a.randomOrder - b.randomOrder);
+        const selected = candidates.find(({ user }) =>
+          constraintReport(ctx.db, {
+            stationId: occurrence.stationId,
+            swapperId: user.id,
+            startTime: occurrence.startTime,
+            endTime: occurrence.endTime,
+            hours: durationHours(ctx.db, occurrence),
+            ignoreOccurrenceId: occurrence.id,
+          }).valid,
+        );
+        if (selected) {
+          occurrence.swapperId = selected.user.id;
+          assigned += 1;
+        }
+      }
+      if (assigned) planning.revision += 1;
+      return { assigned, vacant: occurrences.length - assigned, planning: planningView(ctx.db, planning.id) };
     },
   },
   {
@@ -463,6 +499,8 @@ export const planningRoutes: MockRoute[] = [
       const afterUser = swapperId
         ? (ctx.db.users.find((item) => item.id === swapperId) ?? null)
         : null;
+      if (afterUser && (afterUser.role !== "SWAPPER" || afterUser.stationId !== occurrence.stationId))
+        throw new MockHttpError(409, "Ce swappeur n’est pas rattaché à la station de ce shift.");
       occurrence.swapperId = swapperId;
       if (counterpart) counterpart.swapperId = beforeUser?.id ?? null;
       planning.revision += 1;

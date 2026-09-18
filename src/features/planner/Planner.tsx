@@ -834,6 +834,7 @@ export function Planner({ user }: { user: User }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [creationMode, setCreationMode] = useState<"manual" | "automatic">("manual");
 
   const [view, setView] = useState("week"),
     [anchor, setAnchor] = useState(new Date().toLocaleDateString("en-CA")),
@@ -845,22 +846,18 @@ export function Planner({ user }: { user: User }) {
 
   const [stations, setStations] = useState<Station[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [swappers, setSwappers] = useState<(User & { isActive: boolean })[]>(
-    [],
-  );
   const [stationId, setStationId] = useState("");
   const [stationFilter, setStationFilter] = useState("");
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [selectedSwappers, setSelectedSwappers] = useState<string[]>([]);
   const [publishDirectly, setPublishDirectly] = useState(false);
 
-  function openCreate() {
+  function openCreate(mode: "manual" | "automatic" = "manual") {
+    setCreationMode(mode);
     setPlanningName("");
     setStationId("");
     setSelectedTemplates([]);
     setSelectedDays([1, 2, 3, 4, 5]);
-    setSelectedSwappers([]);
     setPublishDirectly(false);
     setError("");
     setCreating(true);
@@ -923,20 +920,6 @@ export function Planner({ user }: { user: User }) {
     };
   }, [stationId]);
 
-  useEffect(() => {
-    let active = true;
-    api<typeof swappers>("/users?role=SWAPPER")
-      .then((u) => {
-        if (active) setSwappers(u.filter((userItem) => userItem.isActive));
-      })
-      .catch((e) => {
-        if (active) setError(e.message);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
   async function open(id: string) {
     setBusy(true);
     setError("");
@@ -975,6 +958,7 @@ export function Planner({ user }: { user: User }) {
         endDate: end + "T23:59:59.999Z",
       });
 
+      let automaticAssignment: { assigned: number; vacant: number } | null = null;
       if (
         stationId &&
         selectedTemplates.length > 0 &&
@@ -994,16 +978,32 @@ export function Planner({ user }: { user: User }) {
           ...payload,
           previewHash: previewRes.previewHash,
         });
+        if (creationMode === "automatic")
+          automaticAssignment = await api<{ assigned: number; vacant: number }>(
+            `/plannings/${p.id}/auto-assign`,
+            {},
+          );
       }
 
-      if (publishDirectly) {
+      const canPublishAutomatically =
+        creationMode === "automatic" &&
+        publishDirectly &&
+        automaticAssignment?.vacant === 0;
+
+      if (canPublishAutomatically) {
         const latestPlan = await api<Planning>("/plannings/" + p.id);
         await api(`/plannings/${p.id}/publish`, {
           revision: latestPlan.revision,
         });
         notify("Planning créé et publié avec succès.");
+      } else if (creationMode === "automatic" && automaticAssignment) {
+        notify(
+          automaticAssignment.vacant > 0
+            ? `Planning généré en brouillon : ${automaticAssignment.assigned} poste(s) affecté(s), ${automaticAssignment.vacant} à compléter.`
+            : `Planning généré : ${automaticAssignment.assigned} poste(s) affecté(s) automatiquement.`,
+        );
       } else {
-        notify("Planning brouillon créé avec succès.");
+        notify("Planning créé en brouillon. Les postes peuvent maintenant être affectés depuis le calendrier.");
       }
 
       await open(p.id);
@@ -1029,20 +1029,6 @@ export function Planner({ user }: { user: User }) {
           setShowList(true);
           setReload((n) => n + 1);
         }}
-      />
-    );
-
-  if (showList)
-    return (
-      <PlanningList
-        plans={plans}
-        userRole={user.role}
-        busy={busy}
-        loading={loading || openingId !== null}
-        error={error}
-        onRetry={() => setReload((n) => n + 1)}
-        onCreate={writable ? openCreate : undefined}
-        onOpen={(id) => void open(id)}
       />
     );
 
@@ -1111,7 +1097,7 @@ export function Planner({ user }: { user: User }) {
     },
     {
       id: "station",
-      label: "Affecter la station",
+      label: "Choisir la station",
       isValid: () => !!stationId,
       content: (
         <div className="stepper-form-layout">
@@ -1121,6 +1107,8 @@ export function Planner({ user }: { user: User }) {
               value={stationId}
               onChange={(val: string) => setStationId(val)}
               stations={stations}
+              placeholder="Sélectionner une station"
+              allowEmpty={false}
             />
           </div>
         </div>
@@ -1129,7 +1117,7 @@ export function Planner({ user }: { user: User }) {
     {
       id: "shift",
       label: "Choix du shift",
-      isValid: () => true,
+      isValid: () => selectedTemplates.length > 0 && selectedDays.length > 0,
       content: (
         <div className="stepper-form-layout">
           <div className="stepper-field-group">
@@ -1190,38 +1178,6 @@ export function Planner({ user }: { user: User }) {
       ),
     },
     {
-      id: "swappers",
-      label: "Affecter les swappeurs",
-      isValid: () => true,
-      content: (
-        <div className="stepper-form-layout">
-          <div className="stepper-field-group">
-            <label>SÉLECTIONNER LES SWAPPEURS (OPTIONNEL)</label>
-            <div className="planner-swapper-list">
-              {swappers.map((u) => (
-                <label key={u.id} className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={selectedSwappers.includes(u.id)}
-                    onChange={(e) => {
-                      setSelectedSwappers(
-                        e.target.checked
-                          ? [...selectedSwappers, u.id]
-                          : selectedSwappers.filter((id) => id !== u.id),
-                      );
-                    }}
-                  />
-                  <span>
-                    <strong>{u.fullName}</strong> ({u.email})
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
-      ),
-    },
-    {
       id: "summary",
       label: "Récapitulatif",
       content: (
@@ -1247,26 +1203,63 @@ export function Planner({ user }: { user: User }) {
               <strong>{selectedTemplates.length} sélectionné(s)</strong>
             </div>
             <div className="summary-row">
-              <span>Swappeurs pré-sélectionnés :</span>
-              <strong>{selectedSwappers.length} collaborateur(s)</strong>
+              <span>Affectation :</span>
+              <strong>
+                {creationMode === "automatic"
+                  ? "Répartition automatique entre les swappeurs actifs de la station"
+                  : "Postes laissés libres pour une affectation depuis le calendrier"}
+              </strong>
             </div>
           </div>
 
-          <div className="planner-publish-toggle">
-            <input
-              type="checkbox"
-              id="publishDirectly"
-              checked={publishDirectly}
-              onChange={(e) => setPublishDirectly(e.target.checked)}
-            />
-            <label htmlFor="publishDirectly">
-              Publier directement le planning (sinon enregistré en brouillon)
-            </label>
-          </div>
+          {creationMode === "automatic" ? (
+            <div className="planner-publish-toggle">
+              <input
+                type="checkbox"
+                id="publishDirectly"
+                checked={publishDirectly}
+                onChange={(e) => setPublishDirectly(e.target.checked)}
+              />
+              <label htmlFor="publishDirectly">
+                Publier si tous les postes peuvent être affectés ; sinon conserver le brouillon
+              </label>
+            </div>
+          ) : (
+            <p className="planner-form-note">
+              Le planning sera enregistré en brouillon. Vous pourrez affecter les postes, contrôler les contraintes puis le publier depuis son calendrier.
+            </p>
+          )}
         </div>
       ),
     },
   ];
+
+  if (showList)
+    return (
+      <>
+        <PlanningList
+          plans={plans}
+          userRole={user.role}
+          busy={busy}
+          loading={loading || openingId !== null}
+          error={error}
+          onRetry={() => setReload((n) => n + 1)}
+          onCreate={writable ? () => openCreate("manual") : undefined}
+          onGenerate={writable ? () => openCreate("automatic") : undefined}
+          onOpen={(id) => void open(id)}
+        />
+        <StepperModal
+          open={creating}
+          title={creationMode === "automatic" ? "Générer un planning" : "Créer un planning"}
+          icon={<CalendarIcon size={20} />}
+          steps={createSteps}
+          submitLabel={creationMode === "automatic" ? "Générer et affecter" : "Créer le brouillon"}
+          busy={busy}
+          onClose={() => setCreating(false)}
+          onSubmit={createPlanning}
+        />
+      </>
+    );
 
   return (
     <div className="planner">
@@ -1322,7 +1315,7 @@ export function Planner({ user }: { user: User }) {
         {writable && !creating && (
           <button
             className="admin-button planner-create-btn"
-            onClick={openCreate}
+            onClick={() => openCreate("manual")}
           >
             <PlusIcon weight="regular" size={16} />
             <span>Nouveau planning…</span>
@@ -1361,9 +1354,7 @@ export function Planner({ user }: { user: User }) {
         title="Création guidée du planning"
         icon={<CalendarIcon size={20} />}
         steps={createSteps}
-        submitLabel={
-          publishDirectly ? "Créer et publier" : "Enregistrer le brouillon"
-        }
+        submitLabel={creationMode === "automatic" ? "Générer et affecter" : "Créer le brouillon"}
         busy={busy}
         onClose={() => setCreating(false)}
         onSubmit={createPlanning}
@@ -1401,7 +1392,7 @@ export function Planner({ user }: { user: User }) {
           selectedStationFilter={stationFilter}
           onStationFilterChange={setStationFilter}
           busy={busy}
-          onCreate={writable ? openCreate : undefined}
+          onCreate={writable ? () => openCreate("manual") : undefined}
           onPlan={open}
           onDay={(iso) => {
             setDayModalDate(iso);
@@ -2673,10 +2664,11 @@ function DayDetail({
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(initialEditingId || null);
+  const [temporaryVacantId, setTemporaryVacantId] = useState<string | null>(null);
   const editing = rows.find(o => o.id === editingId);
   async function addMember(group: ShiftGroup) {
     const vacant = group.occurrences.find(o => !o.swapper);
-    if (vacant) { setEditingId(vacant.id); return; }
+    if (vacant) { setTemporaryVacantId(null); setEditingId(vacant.id); return; }
     setRemoving(group.key);
     setRemoveError("");
     try {
@@ -2684,7 +2676,7 @@ function DayDetail({
       const latest = await api<Planning>(`/plannings/${planning.id}`);
       onUpdate(latest);
       const added = latest.occurrences.find(o => groupKey(o) === group.key && !o.swapper && !group.occurrences.some(old => old.id === o.id));
-      if (added) setEditingId(added.id);
+      if (added) { setTemporaryVacantId(added.id); setEditingId(added.id); }
     } catch (error) { setRemoveError(error instanceof Error ? error.message : "Impossible d’ajouter un poste."); }
     finally { setRemoving(null); }
   }
@@ -2706,6 +2698,18 @@ function DayDetail({
     }
     catch (error) { setRemoveError(error instanceof Error ? error.message : "Impossible de retirer cette affectation."); }
     finally { setRemoving(null); }
+  }
+  async function closeAssignment() {
+    const temporaryId = temporaryVacantId;
+    setEditingId(null);
+    setTemporaryVacantId(null);
+    if (!temporaryId) return;
+    try {
+      await api(`/plannings/${planning.id}/occurrences/${temporaryId}/remove`, { revision: planning.revision });
+      onUpdate(await api<Planning>(`/plannings/${planning.id}`));
+    } catch (error) {
+      setRemoveError(error instanceof Error ? error.message : "Impossible d’annuler l’ajout du poste.");
+    }
   }
   const filled = rows.filter((o) => o.swapper).length;
   const longDate = new Date(date + "T00:00:00Z").toLocaleDateString("fr-FR", {
@@ -2790,7 +2794,7 @@ function DayDetail({
 
         {removeError && <p role="alert" className="error-message">{removeError}</p>}
         {removing && <p role="status">Mise à jour…</p>}
-        {editing && canEdit && <Modal open title={editing.swapper ? "Changer de swappeur" : "Ajouter un swappeur"} subtitle={`${editing.station.name} · ${editing.templateVersion.label}`} onClose={() => setEditingId(null)}><div className="day-roster-assignment-dialog"><Assignment key={editing.id + ':' + planning.revision} planning={planning} occurrence={editing} onClose={() => setEditingId(null)} onSaved={async (opts) => { onUpdate(await api<Planning>(`/plannings/${planning.id}`)); setEditingId(null); notify(opts?.message || "Affectation enregistrée."); }}/></div></Modal>}
+        {editing && canEdit && <Modal open size="lg" title={editing.swapper ? "Modifier les affectations" : "Ajouter des swappeurs"} subtitle={`${editing.station.name} · ${editing.templateVersion.label}`} onClose={() => void closeAssignment()}><div className="day-roster-assignment-dialog"><Assignment key={editing.id + ':' + planning.revision} planning={planning} occurrence={editing} onClose={() => void closeAssignment()} onSaved={async (opts) => { setTemporaryVacantId(null); onUpdate(await api<Planning>(`/plannings/${planning.id}`)); setEditingId(null); notify(opts?.message || "Affectation enregistrée."); }}/></div></Modal>}
 
         <div className="planner-actions is-end">
           <button
@@ -3053,16 +3057,12 @@ function Assignment({
   const [users, setUsers] = useState<
       (User & { isActive: boolean; phoneNumber?: string | null })[] | undefined
     >(),
-    [swapperId, setSwapper] = useState(o.swapper?.id || ""),
+    [selectedIds, setSelectedIds] = useState<string[]>(o.swapper ? [o.swapper.id] : []),
     [query, setQuery] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [report, setReport] = useState<{
-      id: string;
-      value: ConstraintReport;
-    } | null>(null),
-    [checking, setChecking] = useState(false),
-    [retry, setRetry] = useState(0);
+    [activeInfoId, setActiveInfoId] = useState<string | null>(o.swapper?.id || null),
+    [reports, setReports] = useState<Record<string, { loading: boolean; value?: ConstraintReport; error?: string }>>({});
 
   useEffect(() => {
     let active = true;
@@ -3078,44 +3078,57 @@ function Assignment({
     };
   }, []);
 
-  useEffect(() => {
-    setReport(null);
-    setError("");
-    if (!swapperId) {
-      setChecking(false);
-      return;
-    }
-    let active = true;
-    setChecking(true);
+  function validateSwapper(swapperId: string, force = false) {
+    if (!force && reports[swapperId]) return;
+    setReports((current) => ({ ...current, [swapperId]: { loading: true } }));
     api<ConstraintReport>(`/plannings/${p.id}/occurrences/${o.id}/validate`, {
       swapperId,
       revision: p.revision,
     })
       .then((value) => {
-        if (active) setReport({ id: swapperId, value });
+        setReports((current) => ({ ...current, [swapperId]: { loading: false, value } }));
       })
       .catch((e) => {
-        if (active) setError(e.message);
-      })
-      .finally(() => {
-        if (active) setChecking(false);
+        setReports((current) => ({ ...current, [swapperId]: { loading: false, error: e.message } }));
       });
-    return () => {
-      active = false;
-    };
-  }, [swapperId, retry, p.id, p.revision, o.id]);
+  }
+
+  useEffect(() => {
+    if (o.swapper?.id) validateSwapper(o.swapper.id);
+    // Validation initiale de l'affectation déjà présente uniquement.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function toggleSwapper(id: string, checked: boolean) {
+    setSelectedIds((current) => checked ? [...new Set([...current, id])] : current.filter((item) => item !== id));
+    if (checked) validateSwapper(id);
+    setActiveInfoId(id);
+  }
 
   async function save(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
-      await api(
-        `/plannings/${p.id}/occurrences/${o.id}`,
-        { swapperId: swapperId || null, revision: p.revision },
-        "PATCH",
-      );
-      await onSaved();
+      let revision = p.revision;
+      for (let index = 0; index < selectedIds.length; index += 1) {
+        let occurrenceId = o.id;
+        if (index > 0) {
+          const duplicate = await api<{ id: string; revision: number }>(
+            `/plannings/${p.id}/occurrences/${o.id}/duplicate`,
+            { revision },
+          );
+          occurrenceId = duplicate.id;
+          revision = duplicate.revision;
+        }
+        const updated = await api<{ revision: number }>(
+          `/plannings/${p.id}/occurrences/${occurrenceId}`,
+          { swapperId: selectedIds[index], revision },
+          "PATCH",
+        );
+        revision = updated.revision;
+      }
+      await onSaved({ message: `${selectedIds.length} swappeur${selectedIds.length > 1 ? "s" : ""} affecté${selectedIds.length > 1 ? "s" : ""}.` });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -3123,25 +3136,14 @@ function Assignment({
     }
   }
 
-  async function remove() {
-    setBusy(true);
-    setError("");
-    try {
-      await api(
-        `/plannings/${p.id}/occurrences/${o.id}`,
-        { swapperId: null, revision: p.revision },
-        "PATCH",
-      );
-      setSwapper("");
-      await onSaved({ keepOpen: true, message: "Affectation retirée." });
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const current = report?.id === swapperId ? report.value : undefined;
+  const needle = query.trim().toLocaleLowerCase();
+  const stationUsers = (users || []).filter((u) => u.stationId === o.station.id);
+  const filteredUsers = stationUsers.filter((u) =>
+    [u.fullName, u.email, u.phoneNumber || "", o.station.name].join(" ").toLocaleLowerCase().includes(needle),
+  );
+  const activeReport = activeInfoId ? reports[activeInfoId] : undefined;
+  const activeUser = activeInfoId ? users?.find((user) => user.id === activeInfoId) : undefined;
+  const selectionReady = selectedIds.length > 0 && selectedIds.every((id) => reports[id]?.value?.valid);
 
   return (
     <form
@@ -3149,67 +3151,40 @@ function Assignment({
       onSubmit={save}
       aria-label="Affecter un swappeur"
     >
-      <h3>
-        {o?.templateVersion?.label} · {o?.station?.name}
-      </h3>
-      <p>
-        {time(o?.startTime, o?.station?.timezone)} –{" "}
-        {time(o?.endTime, o?.station?.timezone)}
-      </p>
-      {o.templateVersion.breakStart && (
-        <p>
-          Pause : {o.templateVersion.breakStart} – {o.templateVersion.breakEnd}{" "}
-          · {o.templateVersion.breakMinutes} min
-        </p>
-      )}
-      {o.swapper && (
-        <div className="planner-contact">
-          <strong>{o?.swapper?.fullName}</strong>
-          <a href={"mailto:" + o?.swapper?.email}>{o?.swapper?.email}</a>
-          {o.swapper.phoneNumber ? (
-            <a href={"tel:" + o.swapper.phoneNumber}>{o.swapper.phoneNumber}</a>
-          ) : (
-            <small>Téléphone non renseigné</small>
-          )}
-          <button
-            type="button"
-            className="text-button"
-            disabled={busy}
-            onClick={remove}
-          >
-            Retirer l’affectation
-          </button>
-        </div>
-      )}
+      <div className="assignment-shift-summary">
+        <strong>{o.templateVersion.label}</strong>
+        <span>{time(o.startTime, o.station.timezone)} – {time(o.endTime, o.station.timezone)}</span>
+        {o.templateVersion.breakStart && <small>Pause {o.templateVersion.breakStart}–{o.templateVersion.breakEnd} · {o.templateVersion.breakMinutes} min</small>}
+      </div>
       <div className="assignment-picker">
         <label className="assignment-search">
-          Rechercher un swappeur
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Nom ou adresse email"
+            placeholder="Rechercher par nom, e-mail ou téléphone…"
+            aria-label="Rechercher un swappeur"
           />
         </label>
-        <fieldset className="assignment-options" disabled={busy}>
-          <legend className="sr-only">Choisir un swappeur</legend>
+        <fieldset className="assignment-table-wrap" disabled={busy}>
+          <legend className="sr-only">Choisir un ou plusieurs swappeurs</legend>
           {!users && !error && <p role="status">Chargement des swappeurs…</p>}
-          {users && !users.some(u => (u.fullName + " " + u.email).toLocaleLowerCase().includes(query.toLocaleLowerCase())) && <p>Aucun swappeur trouvé.</p>}
-            {(users || [])
-              .filter(
-                (u) =>
-                  u.id === swapperId ||
-                  (u.fullName + " " + u.email)
-                    .toLocaleLowerCase()
-                    .includes(query.toLocaleLowerCase()),
-              )
-              .map((u) => (
-                <div key={u.id} className={`assignment-option${swapperId === u.id ? " is-selected" : ""}`}>
-                  <input aria-label={`Sélectionner ${u.fullName}`} type="radio" name={`swapper-${o.id}`} value={u.id} checked={swapperId === u.id} onChange={() => setSwapper(u.id)} />
-                  <span className="assignment-avatar" aria-hidden="true">{u.fullName.split(" ").map(part => part[0]).slice(0, 2).join("")}</span>
-                  <span><SwapperContact person={{ fullName: u.fullName, email: u.email, phoneNumber: u.phoneNumber || null }} disabled={busy}/></span>
-                </div>
-              ))}
+          {users && !filteredUsers.length && <p className="assignment-empty">Aucun swappeur trouvé dans cette station.</p>}
+          {!!filteredUsers.length && <table className="assignment-table">
+            <thead><tr><th aria-label="Sélection"/><th>Swappeur</th><th>Contact</th><th>Affectation</th></tr></thead>
+            <tbody>{filteredUsers.map((u) => {
+              const selected = selectedIds.includes(u.id);
+              const state = reports[u.id];
+              return <tr key={u.id} className={selected ? "is-selected" : ""}>
+                <td><input aria-label={`Sélectionner ${u.fullName}`} type="checkbox" checked={selected} onChange={(event) => toggleSwapper(u.id, event.target.checked)}/></td>
+                <td><div className="assignment-person"><span className="assignment-avatar" aria-hidden="true">{u.fullName.split(" ").map(part => part[0]).slice(0, 2).join("")}</span><strong>{u.fullName}</strong></div></td>
+                <td><span className="assignment-contact"><span>{u.email}</span><small>{u.phoneNumber || "Téléphone non renseigné"}</small></span></td>
+                <td><button type="button" aria-expanded={activeInfoId === u.id} className={`assignment-status ${state?.value?.valid ? "is-valid" : state?.value ? "is-invalid" : ""}`} onClick={() => { setActiveInfoId((current) => current === u.id ? null : u.id); validateSwapper(u.id); }}>
+                  {state?.loading ? "Vérification…" : activeInfoId === u.id ? "Masquer" : state?.value?.valid ? "Disponible" : state?.value ? "À corriger" : "Vérifier"}
+                </button></td>
+              </tr>;
+            })}</tbody>
+          </table>}
         </fieldset>
       </div>
 
@@ -3219,21 +3194,22 @@ function Assignment({
           <button
             type="button"
             className="text-button"
-            onClick={() => setRetry((n) => n + 1)}
+            onClick={() => activeInfoId && validateSwapper(activeInfoId, true)}
           >
             Réessayer
           </button>
         </p>
       )}
 
-      {swapperId && (
+      {activeInfoId && (
         <ShiftConstraints
+          subjectName={activeUser?.fullName}
           state={{
-            ready: !!current?.valid,
-            report: current,
-            pending: checking,
-            retry: () => setRetry((n) => n + 1),
-            error: undefined,
+            ready: !!activeReport?.value?.valid,
+            report: activeReport?.value,
+            pending: !!activeReport?.loading,
+            retry: () => validateSwapper(activeInfoId, true),
+            error: activeReport?.error,
           }}
         />
       )}
@@ -3249,9 +3225,9 @@ function Assignment({
         </button>
         <button
           className="admin-button"
-          disabled={busy || !!error || !swapperId || checking || !current?.valid}
+          disabled={busy || !!error || !selectionReady}
         >
-          {busy ? "Enregistrement…" : o.swapper ? "Modifier l’affectation" : "Affecter le swappeur"}
+          {busy ? "Enregistrement…" : `Affecter ${selectedIds.length || ""} swappeur${selectedIds.length > 1 ? "s" : ""}`}
         </button>
       </div>
     </form>
