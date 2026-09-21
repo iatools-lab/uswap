@@ -28,8 +28,8 @@ type Version = Template & { createdAt: string };
 
 const empty = {
   label: '',
-  startTime: '08:00',
-  endTime: '16:00',
+  startTime: '',
+  endTime: '',
   breakStart: '',
   breakEnd: '',
 };

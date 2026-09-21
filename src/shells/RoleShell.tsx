@@ -7,6 +7,7 @@ import { RouteFallback } from "../app/RouteFallback";
 import { useSession } from "../app/session";
 import { roles, rolePaths } from "../api/auth-api";
 import { Clock3, LayoutDashboard, UserRound, Zap } from "../ui/icons";
+import { SidebarSimpleIcon } from "@phosphor-icons/react";
 import "../styles/admin.css";
 
 export function RoleShell() {
@@ -15,6 +16,9 @@ export function RoleShell() {
   const navigate = useNavigate();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [planningResetKey, setPlanningResetKey] = useState(0);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("uswap:sidebar-collapsed") === "true",
+  );
 
   const planning = location.pathname.endsWith("/plannings");
   const account = location.pathname.endsWith("/compte");
@@ -35,6 +39,10 @@ export function RoleShell() {
     requestAnimationFrame(() => headingRef.current?.focus());
   }, [location.pathname, location.search]);
 
+  useEffect(() => {
+    localStorage.setItem("uswap:sidebar-collapsed", String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
   if (!session) return null;
 
   function goHome(event: React.MouseEvent<HTMLAnchorElement>) {
@@ -51,7 +59,7 @@ export function RoleShell() {
   }
 
   return (
-    <div className="admin-workspace role-workspace">
+    <div className={`admin-workspace role-workspace${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
       <a className="admin-skip" href="#role-main">
         Aller au contenu
       </a>
@@ -98,12 +106,34 @@ export function RoleShell() {
       </aside>
       <div className="admin-body">
         <header className="admin-topbar">
-          <span className="admin-mobile-brand">
-            uSwap<span>.</span>
-          </span>
-          <h1 ref={headingRef} tabIndex={-1} className="admin-breadcrumb">
-            {account ? "Paramètres du compte" : planning ? "Plannings" : title}
-          </h1>
+          <button
+            type="button"
+            className="sidebar-toggle"
+            aria-label={sidebarCollapsed ? "Afficher la navigation" : "Masquer la navigation"}
+            aria-pressed={sidebarCollapsed}
+            onClick={() => setSidebarCollapsed((value) => !value)}
+          >
+            <SidebarSimpleIcon size={20} weight="bold" />
+          </button>
+          <div className="admin-heading-copy">
+            <span className="admin-mobile-brand">
+              uSwap<span>.</span>
+            </span>
+            <h1 ref={headingRef} tabIndex={-1} className="admin-breadcrumb">
+              {account ? "Paramètres du compte" : planning ? "Plannings" : title}
+            </h1>
+            <p>
+              {account
+                ? "Gérez vos informations personnelles et la sécurité de votre compte."
+                : planning
+                  ? "Consultez les horaires publiés et les affectations de votre périmètre."
+                  : session.user.role === "SUPERVISOR"
+                    ? "Supervisez les présences, les absences et les remplacements du réseau."
+                    : session.user.role === "STATION_CHIEF"
+                      ? "Pilotez les opérations et les pointages de votre station."
+                      : "Retrouvez vos prochains shifts et effectuez vos pointages."}
+            </p>
+          </div>
           <div className="admin-topbar__actions">
             <NotificationBell />
             <AccountMenu

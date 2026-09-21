@@ -358,8 +358,6 @@
   margin: 0;
   display: grid;
   gap: 10px;
-  max-height: 60vh;
-  overflow-y: auto;
 }
 
 .shift-template-history-list li {

@@ -37,7 +37,7 @@
 .modal-panel {
   background: #ffffff;
   width: 100%;
-  max-height: 88vh;
+  max-height: min(94dvh, 960px);
   border-radius: 20px 20px 0 0;
   display: flex;
   flex-direction: column;
@@ -167,6 +167,7 @@
   padding: 18px 20px;
 
   overflow-y: auto;
+  overscroll-behavior: contain;
 
   flex: 1;
 
@@ -259,7 +260,7 @@
   .modal-panel {
     width: auto;
     min-width: 440px;
-    max-height: 85vh;
+    max-height: min(94dvh, 960px);
     border-radius: 16px;
 
     box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
@@ -327,11 +328,15 @@
 }
 
 .modal-panel.modal-panel--md {
-  max-width: min(560px, calc(100vw - 40px));
+  max-width: min(680px, calc(100vw - 40px));
 }
 
 .modal-panel.modal-panel--lg {
-  max-width: min(720px, calc(100vw - 40px));
+  max-width: min(960px, calc(100vw - 40px));
+}
+
+.modal-panel.modal-panel--xl {
+  max-width: min(1240px, calc(100vw - 40px));
 }
 
 .modal-panel:not([open]) {
@@ -399,4 +404,3 @@
     padding: 16px;
   }
 }
-

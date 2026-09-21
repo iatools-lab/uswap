@@ -293,9 +293,6 @@
 .user-detail-history {
   display: grid;
   gap: 12px;
-  max-height: 65vh;
-  overflow-y: auto;
-  padding-right: 4px;
 }
 
 .user-detail-history-empty {

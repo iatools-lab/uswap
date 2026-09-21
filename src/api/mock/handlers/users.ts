@@ -105,22 +105,17 @@ export const userRoutes: MockRoute[] = [
     handler: (ctx) => {
       requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
       const rows = filteredMembers(ctx.db.users, ctx.query);
-      const header = ["Nom complet", "E-mail", "Rôle", "Station", "Statut", "Téléphone"];
-      const lines = rows.map((user) =>
-        [
-          user.fullName,
-          user.email,
-          user.role,
-          ctx.db.stations.find((item) => item.id === user.stationId)?.name ?? "",
-          memberStatusOf(user),
-          user.phoneNumber ?? "",
-        ]
-          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
-          .join(";"),
-      );
       return {
-        csv: [header.join(";"), ...lines].join("\r\n"),
-        filename: "utilisateurs-uswap.csv",
+        rows: rows.map((user) => ({
+          fullName: user.fullName,
+          email: user.email,
+          role: user.role,
+          station: ctx.db.stations.find((item) => item.id === user.stationId)?.name ?? "—",
+          status: memberStatusOf(user),
+          phoneNumber: user.phoneNumber ?? "—",
+          address: user.address ?? "—",
+        })),
+        filename: "utilisateurs_uswap",
       };
     },
   },

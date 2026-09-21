@@ -99,6 +99,8 @@ export const authRoutes: MockRoute[] = [
       const email = asText(ctx.body.email).toLowerCase();
       const role = asText(ctx.body.role).toUpperCase() as MockUser["role"];
       const stationId = asText(ctx.body.stationId) || null;
+      const phoneNumber = asText(ctx.body.phoneNumber) || null;
+      const address = asText(ctx.body.address) || null;
       const password = typeof ctx.body.password === "string" ? ctx.body.password : "";
       const active = asText(ctx.body.accountStatus).toUpperCase() === "ACTIVE";
       if (!fullName || !email.includes("@"))
@@ -121,8 +123,8 @@ export const authRoutes: MockRoute[] = [
         fullName,
         email,
         role,
-        phoneNumber: null,
-        address: null,
+        phoneNumber,
+        address,
         stationId: role === "SWAPPER" || role === "STATION_CHIEF" ? stationId : null,
         isActive: active,
         disabledAt: null,
@@ -137,7 +139,7 @@ export const authRoutes: MockRoute[] = [
             action: "CREATED",
             createdAt: now,
             before: {},
-            after: { fullName, email, role, stationId },
+            after: { fullName, email, role, stationId, phoneNumber, address },
           },
         ],
       };

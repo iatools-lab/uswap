@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { notify } from "../../ui/Toast";
-import { ShiftTemplates } from "./ShiftTemplates";
+import { ShiftTemplates, shiftBreakError, shiftDuration } from "./ShiftTemplates";
 import { api } from "../../api/auth-api";
 import { exportToExcel } from "../../utils/excelExport";
 import { StepperModal, type StepItem } from "../../ui/StepperModal";
@@ -64,18 +64,64 @@ const emptyForm = {
   checkoutQrTtl: 300,
 };
 
+const blankStationForm: typeof emptyForm = {
+  name: "",
+  address: "",
+  city: "",
+  latitude: "",
+  longitude: "",
+  location: "",
+  timezone: "",
+  contactName: "",
+  contactPhone: "",
+  latenessToleranceMinutes: "" as unknown as number,
+  minRestHours: "" as unknown as number,
+  weeklyHoursLimit: "" as unknown as number,
+  blockPublishingWithVacancies: false,
+  checkinQrTtl: "" as unknown as number,
+  checkoutQrTtl: "" as unknown as number,
+};
+
+const blankSharedShift = {
+  label: "",
+  startTime: "",
+  endTime: "",
+  breakStart: "",
+  breakEnd: "",
+  stationIds: [] as string[],
+};
+
 const DEFAULT_LAT = 4.051056;
 const DEFAULT_LNG = 9.708533;
 const MAPTILER_API_KEY = import.meta.env.VITE_MAPTILER_KEY?.trim() || "";
 const MAP_TILE_URL = MAPTILER_API_KEY
   ? `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${MAPTILER_API_KEY}`
-  : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+  : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
 const MAP_TILE_OPTIONS = MAPTILER_API_KEY
   ? { tileSize: 512, zoomOffset: -1 }
   : { tileSize: 256, zoomOffset: 0 };
 const MAP_ATTRIBUTION = MAPTILER_API_KEY
   ? '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+function ensureLeafletStyles() {
+  if (document.querySelector('link[href*="leaflet.css"]')) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+  link.dataset.uswapLeafletCss = "true";
+  document.head.appendChild(link);
+}
+
+function uswapMapMarker(L: any) {
+  return L.divIcon({
+    className: "uswap-map-marker",
+    html: "<span aria-hidden=\"true\"></span>",
+    iconSize: [28, 32],
+    iconAnchor: [14, 30],
+    popupAnchor: [0, -28],
+  });
+}
 
 /* ============================================================
    Sélecteur GPS Bidirectionnel & Suggestions optimisées (Cameroun)
@@ -109,6 +155,7 @@ function MapLocationPicker({
   }, [address]);
 
   useEffect(() => {
+    ensureLeafletStyles();
     const startMap = () => {
       const L = (window as any).L;
       if (!L || !mapContainerRef.current || mapInstanceRef.current) return;
@@ -127,7 +174,10 @@ function MapLocationPicker({
       attribution: MAP_ATTRIBUTION,
     }).addTo(map);
 
-    const marker = L.marker([currentLat, currentLng], { draggable: true }).addTo(map);
+    const marker = L.marker([currentLat, currentLng], {
+      draggable: true,
+      icon: uswapMapMarker(L),
+    }).addTo(map);
     markerRef.current = marker;
 
     const timer1 = setTimeout(() => map.invalidateSize(), 150);
@@ -372,7 +422,7 @@ function StationsMapView({
           const lng = Number(s.longitude);
           bounds.extend([lat, lng]);
 
-          const marker = L.marker([lat, lng]).addTo(mapInstance);
+          const marker = L.marker([lat, lng], { icon: uswapMapMarker(L) }).addTo(mapInstance);
           
           marker.bindPopup(`
             <div style="font-family: inherit; padding: 4px; min-width: 160px;">
@@ -403,10 +453,7 @@ function StationsMapView({
     };
 
     if (!(window as any).L) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(link);
+      ensureLeafletStyles();
 
       const script = document.createElement("script");
       script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
@@ -531,6 +578,7 @@ export function StationManager({
   const [cityFilter, setCityFilter] = useState("ALL");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [confirm, setConfirm] = useState<StationData | null>(null);
+  const [sharedShift, setSharedShift] = useState<typeof blankSharedShift | null>(null);
   
   const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -562,7 +610,7 @@ export function StationManager({
             contactName: station.contactName || "",
             contactPhone: station.contactPhone || "",
           }
-        : emptyForm,
+        : { ...blankStationForm },
     );
     setError("");
   }
@@ -625,6 +673,44 @@ export function StationManager({
     } catch (e) {
       setError((e as Error).message);
       notify((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveSharedShift() {
+    if (!sharedShift) return;
+    const breakError = shiftBreakError(
+      sharedShift.startTime,
+      sharedShift.endTime,
+      sharedShift.breakStart,
+      sharedShift.breakEnd,
+    );
+    if (!sharedShift.label.trim() || !shiftDuration(sharedShift.startTime, sharedShift.endTime) || breakError || !sharedShift.stationIds.length) {
+      setError(breakError || "Renseignez le modèle et choisissez au moins une station.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await api("/shift-templates/apply", {
+        stationIds: sharedShift.stationIds,
+        label: sharedShift.label.trim(),
+        startTime: sharedShift.startTime,
+        endTime: sharedShift.endTime,
+        breakStart: sharedShift.breakStart || null,
+        breakEnd: sharedShift.breakEnd || null,
+      });
+      notify(
+        `Modèle appliqué à ${sharedShift.stationIds.length} station${sharedShift.stationIds.length > 1 ? "s" : ""}.`,
+        "success",
+      );
+      setSharedShift(null);
+      onChanged();
+    } catch (reason) {
+      const message = (reason as Error).message;
+      setError(message);
+      notify(message, "error");
     } finally {
       setBusy(false);
     }
@@ -762,6 +848,15 @@ export function StationManager({
         {
           id: "rules",
           label: "Règles & Sécurité",
+          isValid: () =>
+            String(form.latenessToleranceMinutes).trim() !== "" &&
+            Number(form.latenessToleranceMinutes) >= 0 &&
+            String(form.minRestHours).trim() !== "" &&
+            Number(form.minRestHours) >= 0 &&
+            String(form.weeklyHoursLimit).trim() !== "" &&
+            Number(form.weeklyHoursLimit) > 0 &&
+            String(form.checkinQrTtl).trim() !== "" &&
+            Number(form.checkinQrTtl) > 0,
           content: (
             <div className="stepper-form-layout">
               <div className="user-form-grid-2">
@@ -773,7 +868,7 @@ export function StationManager({
                     min={0}
                     step={1}
                     value={form?.latenessToleranceMinutes ?? 0}
-                    onChange={(e) => set("latenessToleranceMinutes", Number(e.target.value))}
+                    onChange={(e) => set("latenessToleranceMinutes", e.target.value === "" ? "" : Number(e.target.value))}
                   />
                 </div>
 
@@ -785,7 +880,7 @@ export function StationManager({
                     min={0}
                     step={1}
                     value={form?.minRestHours ?? 0}
-                    onChange={(e) => set("minRestHours", Number(e.target.value))}
+                    onChange={(e) => set("minRestHours", e.target.value === "" ? "" : Number(e.target.value))}
                   />
                 </div>
               </div>
@@ -799,7 +894,7 @@ export function StationManager({
                     min={1}
                     step={1}
                     value={form?.weeklyHoursLimit ?? 0}
-                    onChange={(e) => set("weeklyHoursLimit", Number(e.target.value))}
+                    onChange={(e) => set("weeklyHoursLimit", e.target.value === "" ? "" : Number(e.target.value))}
                   />
                 </div>
 
@@ -810,9 +905,9 @@ export function StationManager({
                     required
                     min={1}
                     step={1}
-                    value={(form?.checkinQrTtl ?? 300) / 60}
+                    value={form?.checkinQrTtl ? Number(form.checkinQrTtl) / 60 : ""}
                     onChange={(e) => {
-                      const val = Number(e.target.value) * 60;
+                      const val = e.target.value === "" ? "" : Number(e.target.value) * 60;
                       set("checkinQrTtl", val);
                       set("checkoutQrTtl", val);
                     }}
@@ -946,9 +1041,87 @@ export function StationManager({
         )}
       </Modal>
 
+      <Modal
+        open={sharedShift !== null}
+        size="lg"
+        onClose={() => !busy && setSharedShift(null)}
+        title="Créer un modèle de shift"
+        subtitle="Définissez le créneau une seule fois, puis choisissez les stations qui pourront l’utiliser."
+      >
+        {sharedShift && (
+          <form
+            className="shared-shift-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveSharedShift();
+            }}
+          >
+            <div className="user-form-grid shift-template-form-grid">
+              <label className="wide">
+                Libellé
+                <input
+                  autoFocus
+                  required
+                  placeholder="Ex. Équipe du matin"
+                  value={sharedShift.label}
+                  onChange={(event) => setSharedShift({ ...sharedShift, label: event.target.value })}
+                />
+              </label>
+              <label>
+                Heure de début
+                <input type="time" required value={sharedShift.startTime} onChange={(event) => setSharedShift({ ...sharedShift, startTime: event.target.value })} />
+              </label>
+              <label>
+                Heure de fin
+                <input type="time" required value={sharedShift.endTime} onChange={(event) => setSharedShift({ ...sharedShift, endTime: event.target.value })} />
+              </label>
+              <label>
+                Début de pause
+                <input type="time" value={sharedShift.breakStart} onChange={(event) => setSharedShift({ ...sharedShift, breakStart: event.target.value })} />
+              </label>
+              <label>
+                Fin de pause
+                <input type="time" value={sharedShift.breakEnd} onChange={(event) => setSharedShift({ ...sharedShift, breakEnd: event.target.value })} />
+              </label>
+            </div>
+
+            <fieldset className="shared-shift-stations">
+              <legend>Stations concernées</legend>
+              <p>Le modèle restera modifiable séparément dans chaque station.</p>
+              <div>
+                {(stations || []).filter((station) => station.isActive).map((station) => (
+                  <label key={station.id}>
+                    <input
+                      type="checkbox"
+                      checked={sharedShift.stationIds.includes(station.id)}
+                      onChange={(event) =>
+                        setSharedShift({
+                          ...sharedShift,
+                          stationIds: event.target.checked
+                            ? [...sharedShift.stationIds, station.id]
+                            : sharedShift.stationIds.filter((id) => id !== station.id),
+                        })
+                      }
+                    />
+                    <span><strong>{station.name}</strong><small>{station.city || station.address || "Adresse non renseignée"}</small></span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            {error && <p className="error-message" role="alert">{error}</p>}
+            <div className="modal-form-actions">
+              <button type="button" className="admin-button secondary" disabled={busy} onClick={() => setSharedShift(null)}>Annuler</button>
+              <button type="submit" className="admin-button primary-cta" disabled={busy}>Appliquer aux stations</button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
       {/* Modal dédié pour ouvrir ShiftTemplates en surimpression */}
       <Modal
         open={templateStation !== null}
+        size="xl"
         onClose={() => setTemplateStation(null)}
         title={templateStation ? `Modèles de shifts — ${templateStation.name}` : "Modèles de shifts"}
       >
@@ -1036,6 +1209,18 @@ export function StationManager({
                   <span>Grille</span>
                 </button>
               </div>
+
+              <button
+                type="button"
+                className="admin-button secondary small"
+                onClick={() => {
+                  setError("");
+                  setSharedShift({ ...blankSharedShift, stationIds: [] });
+                }}
+              >
+                <Clock3 size={15} />
+                <span>Créer un modèle de shift</span>
+              </button>
 
               <button
                 type="button"
@@ -1131,10 +1316,11 @@ export function StationManager({
                             <button
                               type="button"
                               className="admin-button secondary small"
+                              title="Gérer les modèles de shifts"
                               onClick={() => setTemplateStation(s)}
                             >
                               <Clock3 size={13} />
-                              <span>Modèles de shifts</span>
+                              <span>Shifts</span>
                             </button>
                             <button
                               type="button"

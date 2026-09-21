@@ -26,6 +26,7 @@ import {
   ShieldCheckIcon,
   Users,
 } from "../../ui/icons";
+import { exportToExcel } from "../../utils/excelExport";
 
 type Member = User & {
   isActive: boolean;
@@ -162,13 +163,31 @@ export function UsersPage() {
     setExportError("");
     try {
       const params = new URLSearchParams({ q: query, role, status, stationId: plannedStation });
-      const result = await api<{ csv: string; filename: string }>("/users/export?" + params);
-      const url = URL.createObjectURL(new Blob([result.csv], { type: "text/csv;charset=utf-8" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = result.filename;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      type ExportRow = {
+        fullName: string;
+        email: string;
+        role: string;
+        station: string;
+        status: string;
+        phoneNumber: string;
+        address: string;
+      };
+      const result = await api<{ rows: ExportRow[]; filename: string }>("/users/export?" + params);
+      exportToExcel({
+        data: result.rows,
+        filename: result.filename,
+        sheetName: "Utilisateurs",
+        columns: [
+          { header: "Nom complet", key: "fullName", width: 26 },
+          { header: "Adresse e-mail", key: "email", width: 32 },
+          { header: "Rôle", key: "role", width: 20 },
+          { header: "Station", key: "station", width: 24 },
+          { header: "Statut", key: "status", width: 14 },
+          { header: "Téléphone", key: "phoneNumber", width: 20 },
+          { header: "Adresse", key: "address", width: 32 },
+        ],
+      });
+      notify("Exportation Excel terminée.", "success");
     } catch (e) {
       setExportError((e as Error).message);
     } finally {
@@ -347,7 +366,7 @@ export function UsersPage() {
                     void exportUsers();
                   }}
                 >
-                  Exporter la liste (CSV)
+                  Exporter la liste (Excel)
                 </button>
               </div>
             )}

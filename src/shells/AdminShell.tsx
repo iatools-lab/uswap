@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { CaretDownIcon } from "@phosphor-icons/react";
+import { CaretDownIcon, SidebarSimpleIcon } from "@phosphor-icons/react";
 import { AccountMenu } from "../features/account/AccountMenu";
 import { NotificationBell } from "../features/notifications/NotificationBell";
 import { interceptNav } from "../app/spaNav";
@@ -24,6 +24,14 @@ const sections = [
   { path: "/app/admin/compte", label: "Paramètres du compte", Icon: UserRound },
 ];
 
+const sectionDescriptions: Record<string, string> = {
+  "/app/admin": "Suivez l’activité du réseau et accédez rapidement aux tâches prioritaires.",
+  "/app/admin/utilisateurs": "Gérez les collaborateurs, leurs rôles, leurs stations et leurs accès.",
+  "/app/admin/stations": "Configurez les stations, leurs règles, leurs shifts et leur localisation.",
+  "/app/admin/plannings": "Créez, publiez et ajustez les horaires des équipes.",
+  "/app/admin/compte": "Mettez à jour vos informations et vos préférences de compte.",
+};
+
 export function AdminShell() {
   const { session, busy, warning, error, disconnect, extend } = useSession();
   const location = useLocation();
@@ -35,6 +43,9 @@ export function AdminShell() {
   );
   const [currentSubTab, setCurrentSubTab] = useState<"list" | "map">(() =>
     new URLSearchParams(location.search).get("tab") === "map" ? "map" : "list",
+  );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("uswap:sidebar-collapsed") === "true",
   );
 
   const section =
@@ -56,6 +67,10 @@ export function AdminShell() {
         : "list",
     );
   }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    localStorage.setItem("uswap:sidebar-collapsed", String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     document.title = `${section.label} · Administration uSwap`;
@@ -84,7 +99,7 @@ export function AdminShell() {
   if (!session) return null;
 
   return (
-    <div className="admin-workspace">
+    <div className={`admin-workspace${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
       <a className="admin-skip" href="#admin-main">
         Aller au contenu
       </a>
@@ -119,7 +134,7 @@ export function AdminShell() {
               );
 
               return (
-                <div key={target} style={{ display: "grid", gap: "2px" }}>
+                <div key={target} className="admin-nav-group" style={{ display: "grid", gap: "2px" }}>
                   <div
                     style={{
                       display: "flex",
@@ -188,6 +203,7 @@ export function AdminShell() {
 
                   {isStations && stationsOpen && (
                     <div
+                      className="admin-station-subnav"
                       style={{
                         display: "grid",
                         gap: "2px",
@@ -255,13 +271,23 @@ export function AdminShell() {
 
       <div className="admin-body">
         <header className="admin-topbar">
-          <div>
+          <button
+            type="button"
+            className="sidebar-toggle"
+            aria-label={sidebarCollapsed ? "Afficher la navigation" : "Masquer la navigation"}
+            aria-pressed={sidebarCollapsed}
+            onClick={() => setSidebarCollapsed((value) => !value)}
+          >
+            <SidebarSimpleIcon size={20} weight="bold" />
+          </button>
+          <div className="admin-heading-copy">
             <span className="admin-mobile-brand">
               uSwap<span>.</span>
             </span>
             <h1 ref={title} tabIndex={-1} className="admin-breadcrumb">
               {section.label}
             </h1>
+            <p>{sectionDescriptions[section.path]}</p>
           </div>
           <div className="admin-topbar__actions">
             <NotificationBell />

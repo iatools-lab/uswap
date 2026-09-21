@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/auth-api";
-import { FileCsv, LoaderCircle } from "../../ui/icons";
+import { FileSpreadsheet, LoaderCircle } from "../../ui/icons";
+import { exportToExcel } from "../../utils/excelExport";
 import { toDateInput, formatDateTime } from "./format";
 import type { ShiftChange, SupervisionProps } from "./types";
 
@@ -40,42 +41,22 @@ export function ChangeHistory({ user }: SupervisionProps) {
     load();
   }, [load]);
 
-  function exportCsv() {
+  function exportExcel() {
     if (!visibleRows.length) return;
-    const header = [
-      "Type",
-      "Initiateur",
-      "Station",
-      "Sortant",
-      "Entrant",
-      "Motif",
-      "Date",
-    ];
-    const lines = visibleRows.map((row) =>
-      [
-        TYPE_LABEL[row.type],
-        row.initiator,
-        row.station,
-        row.outSwapper ?? "",
-        row.inSwapper ?? "",
-        row.reason ?? "",
-        row.createdAt,
-      ]
-        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
-        .join(";"),
-    );
-    const blob = new Blob(
-      [`\uFEFF${[header.join(";"), ...lines].join("\r\n")}`],
-      {
-        type: "text/csv;charset=utf-8",
-      },
-    );
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `uswap-changements-${toDateInput(new Date())}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    exportToExcel<ShiftChange>({
+      data: visibleRows,
+      filename: `uswap-changements-${toDateInput(new Date())}`,
+      sheetName: "Changements",
+      columns: [
+        { header: "Type", key: (row) => TYPE_LABEL[row.type], width: 18 },
+        { header: "Initiateur", key: (row) => row.initiator, width: 24 },
+        { header: "Station", key: (row) => row.station, width: 24 },
+        { header: "Sortant", key: (row) => row.outSwapper ?? "", width: 24 },
+        { header: "Entrant", key: (row) => row.inSwapper ?? "", width: 24 },
+        { header: "Motif", key: (row) => row.reason ?? "", width: 38 },
+        { header: "Date", key: (row) => formatDateTime(row.createdAt), width: 22 },
+      ],
+    });
   }
 
   const visibleRows = useMemo(() => {
@@ -110,10 +91,10 @@ export function ChangeHistory({ user }: SupervisionProps) {
           type="button"
           className="admin-button secondary small"
           disabled={!visibleRows.length}
-          onClick={exportCsv}
+          onClick={exportExcel}
         >
-          <FileCsv size={16} />
-          Exporter
+          <FileSpreadsheet size={16} />
+          Exporter Excel
         </button>
       </div>
       <div className="supervision-toolbar">

@@ -14,6 +14,8 @@ interface UserCreateModalProps {
 export function UserCreateModal({ open, stations, onClose, onCreated }: UserCreateModalProps) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [address, setAddress] = useState("");
   const [role, setRole] = useState<string>("");
   const [stationId, setStationId] = useState("");
 
@@ -29,6 +31,8 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
   const resetForm = () => {
     setFullName("");
     setEmail("");
+    setPhoneNumber("");
+    setAddress("");
     setRole("");
     setStationId("");
     setActivationMethod("link");
@@ -56,6 +60,8 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
       await api("/auth/register", {
         fullName: fullName.trim(),
         email: email.trim().toLowerCase(),
+        phoneNumber: phoneNumber.trim() || null,
+        address: address.trim() || null,
         role,
         accountStatus: isPasswordMode ? "ACTIVE" : "PENDING",
         sendInvite: !isPasswordMode,
@@ -89,6 +95,31 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
             />
+          </div>
+
+          <div className="user-form-grid-2">
+            <div className="stepper-field-group">
+              <label htmlFor="phoneNumber">NUMÉRO DE TÉLÉPHONE</label>
+              <input
+                id="phoneNumber"
+                type="tel"
+                autoComplete="tel"
+                placeholder="Ex. +237 6 99 00 00 00"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+              />
+            </div>
+            <div className="stepper-field-group">
+              <label htmlFor="address">ADRESSE</label>
+              <input
+                id="address"
+                type="text"
+                autoComplete="street-address"
+                placeholder="Quartier, ville"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="stepper-field-group">
@@ -172,6 +203,14 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
             <div className="summary-row">
               <span>Rôle attribué :</span>
               <strong>{role ? roles[role as keyof typeof roles] : "—"}</strong>
+            </div>
+            <div className="summary-row">
+              <span>Téléphone :</span>
+              <strong>{phoneNumber || "Non renseigné"}</strong>
+            </div>
+            <div className="summary-row">
+              <span>Adresse :</span>
+              <strong>{address || "Non renseignée"}</strong>
             </div>
             {requiresStation && (
               <div className="summary-row">

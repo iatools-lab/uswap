@@ -64,6 +64,70 @@ const slotMinutes = (start: string, end: string) => {
 
 export const stationRoutes: MockRoute[] = [
   {
+    method: "POST",
+    pattern: /^\/shift-templates\/apply$/,
+    handler: (ctx) => {
+      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
+      const stationIds = Array.isArray(ctx.body.stationIds)
+        ? [...new Set(ctx.body.stationIds.map(asText).filter(Boolean))]
+        : [];
+      const payload = templatePayload(ctx.body);
+      if (!stationIds.length)
+        throw new MockHttpError(400, "Choisissez au moins une station.");
+      if (!payload.label || !payload.startTime || !payload.endTime)
+        throw new MockHttpError(400, "Libellé, début et fin du modèle sont obligatoires.");
+      if (slotMinutes(payload.startTime, payload.endTime) === 0)
+        throw new MockHttpError(400, "Le créneau doit avoir une durée supérieure à zéro.");
+      const breakError = shiftBreakError(
+        payload.startTime,
+        payload.endTime,
+        payload.breakStart,
+        payload.breakEnd,
+      );
+      if (breakError) throw new MockHttpError(400, breakError);
+      const stations = stationIds.map((id) => stationOf(ctx.db, id));
+      const conflict = stations.find((station) =>
+        ctx.db.templates.some(
+          (item) =>
+            item.stationId === station.id &&
+            item.startTime === payload.startTime &&
+            item.endTime === payload.endTime,
+        ),
+      );
+      if (conflict)
+        throw new MockHttpError(
+          409,
+          `Un modèle occupe déjà ce créneau à ${conflict.name}.`,
+        );
+      const createdAt = new Date().toISOString();
+      const created = stations.map((station) => {
+        const base = {
+          id: nextId("tpl"),
+          stationId: station.id,
+          label: payload.label,
+          startTime: payload.startTime,
+          endTime: payload.endTime,
+          breakStart: payload.breakStart,
+          breakEnd: payload.breakEnd,
+          breakMinutes:
+            payload.breakStart && payload.breakEnd
+              ? slotMinutes(payload.breakStart, payload.breakEnd)
+              : 0,
+          durationMinutes: slotMinutes(payload.startTime, payload.endTime),
+          isActive: true,
+          revision: 1,
+        };
+        const template: MockTemplate = {
+          ...base,
+          versions: [{ ...base, createdAt }],
+        };
+        ctx.db.templates.push(template);
+        return template;
+      });
+      return { created };
+    },
+  },
+  {
     method: "GET",
     pattern: /^\/stations$/,
     handler: (ctx) => {
