@@ -1,0 +1,398 @@
+/* ============================================================
+   Écran liste des plannings
+   Entrée de la planification : on choisit d'abord un planning,
+   puis on entre dans son espace (calendrier + filtres).
+   ============================================================ */
+
+.planner-listing {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Barre de commande commune : statuts, recherche et création. */
+.planner-listing .planner-listing__head {
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid var(--line, #dce3f0);
+  border-radius: 12px;
+  box-shadow: none;
+}
+.planner-listing .planner-listing__filters {
+  order: -1;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 9px;
+  background: #f2f4f8;
+}
+.planner-listing .planner-listing__chip {
+  border-color: transparent;
+  background: transparent;
+  white-space: nowrap;
+  min-height: 36px;
+}
+.planner-listing .planner-listing__chip[aria-pressed="true"] {
+  background: var(--navy, #001a70);
+  color: white;
+}
+.planner-listing .planner-listing__actions {
+  flex: 1;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.planner-listing .planner-listing__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 140px;
+  max-width: 340px;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line, #dce3f0);
+  border-radius: 8px;
+  color: #66758d;
+}
+.planner-listing .planner-listing__search input {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+  box-shadow: none;
+}
+.planner-listing__search:focus-within {
+  outline: 2px solid var(--navy, #001a70);
+  outline-offset: 2px;
+}
+.planner-listing .primary-cta {
+  flex-shrink: 0;
+  min-height: 42px;
+  font-size: 14px;
+  white-space: nowrap;
+  border-radius: 8px;
+}
+.planner-listing .planner-generate-btn {
+  flex-shrink: 0;
+  min-height: 42px;
+  padding-inline: 14px;
+  gap: 7px;
+  white-space: nowrap;
+  border-radius: 8px;
+  color: var(--navy, #001a70);
+  background: #f3f6ff;
+  border-color: #cbd6ef;
+}
+.planner-listing .planner-generate-btn:hover:not(:disabled) {
+  background: #e9efff;
+  border-color: #aebee5;
+}
+.planner-table__title strong { overflow-wrap: anywhere; }
+@container (max-width: 850px) {
+  .planner-listing .planner-listing__head { flex-wrap: wrap; gap: 10px; }
+  .planner-listing .planner-listing__actions { flex-basis: 100%; width: 100%; }
+  .planner-listing .planner-listing__search { max-width: none; min-width: 0; }
+  .planner-listing .planner-listing__filters { max-width: 100%; overflow-x: auto; }
+}
+@container (max-width: 400px) {
+  .planner-listing .planner-listing__actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .planner-listing .planner-listing__search { grid-column: 1 / -1; }
+  .planner-listing .primary-cta { padding-inline: 10px; font-size: 12px; }
+  .planner-listing .planner-generate-btn { padding-inline: 10px; font-size: 12px; }
+  .planner-listing .primary-cta svg { display: none; }
+  .planner-listing .planner-listing__chip { padding-inline: 9px; }
+}
+
+.planner-listing__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.planner-listing__intro h2 {
+  margin: 0 0 3px;
+  font-size: 19px;
+  color: var(--navy, #001a70);
+}
+
+.planner-listing__intro p {
+  margin: 0;
+  max-width: 62ch;
+}
+
+.planner-listing__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.planner-listing__search {
+  min-width: 244px;
+}
+
+/* ---------- Filtres par statut ---------- */
+.planner-listing__filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.planner-listing__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--line, #dce3f0);
+  border-radius: 8px;
+  background: #fff;
+  color: #3a4761;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.planner-listing__chip span {
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: #eef1f8;
+  color: #4a5570;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-listing__chip:hover {
+  background: #f5f7fc;
+  border-color: #c3d0e6;
+}
+
+.planner-listing__chip[aria-pressed="true"] {
+  background: #001a70;
+  border-color: #001a70;
+  color: #fff;
+}
+
+.planner-listing__chip[aria-pressed="true"] span {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+/* ---------- Tableau ---------- */
+.planner-listing__table-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.planner-table {
+  width: 100%;
+}
+
+.planner-table__row {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.planner-table__row:hover td,
+.planner-table__row:focus-visible td {
+  background: #f4f7ff;
+}
+
+.planner-table__row.is-opening {
+  cursor: progress;
+}
+
+.planner-table__row.is-opening td {
+  background: #eef3ff;
+  opacity: 0.85;
+}
+
+.planner-table__row.is-opening .planner-table__go {
+  color: #001a70;
+}
+
+.planner-table__spinner {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border: 2px solid #c3d0e6;
+  border-top-color: #001a70;
+  border-radius: 50%;
+  animation: planner-spin 0.7s linear infinite;
+}
+
+@keyframes planner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planner-table__spinner {
+    animation-duration: 1.6s;
+  }
+}
+
+.planner-table__row:focus-visible {
+  outline: 2px solid #001a70;
+  outline-offset: -2px;
+}
+
+.planner-table__title {
+  display: grid;
+  gap: 2px;
+}
+
+.planner-table__title strong {
+  font-size: 13.5px;
+  color: #18243e;
+}
+
+.planner-table__title small {
+  font-size: 11px;
+  color: var(--muted, #6b7794);
+}
+
+.planner-table__dates {
+  white-space: nowrap;
+  color: #3a4761;
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-table__arrow {
+  margin: 0 6px;
+  color: #ffb703;
+  font-weight: 700;
+}
+
+.planner-table__duration,
+.planner-table__stations,
+.planner-table__shifts {
+  display: grid;
+  gap: 2px;
+}
+
+.planner-table__duration strong,
+.planner-table__stations strong,
+.planner-table__shifts strong {
+  font-size: 13px;
+  color: #18243e;
+  font-weight: 600;
+}
+
+.planner-table__duration small,
+.planner-table__stations small,
+.planner-table__shifts small {
+  font-size: 11px;
+  color: var(--muted, #6b7794);
+}
+
+.planner-table__go {
+  width: 40px;
+  text-align: right;
+  color: #9aa8c2;
+}
+
+.planner-table__row:hover .planner-table__go {
+  color: #001a70;
+}
+
+.planner-listing__note {
+  margin: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line, #dce3f0);
+  background: #f7f9fd;
+  font-size: 12.5px;
+  color: var(--muted, #6b7794);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+  .planner-listing__head {
+    align-items: stretch;
+  }
+  .planner-listing__actions {
+    width: 100%;
+  }
+  .planner-listing__search {
+    flex: 1;
+    min-width: 0;
+  }
+  .planner-listing__search input {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  /* Sous cette largeur, le tableau devient une liste de cartes empilées :
+     plus lisible au doigt et sans défilement horizontal. */
+  .planner-table thead {
+    display: none;
+  }
+  .planner-table,
+  .planner-table tbody,
+  .planner-table tr,
+  .planner-table td {
+    display: block;
+    width: 100%;
+  }
+  .planner-table tbody {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+  }
+  .planner-table__row {
+    border: 1px solid var(--line, #dce3f0);
+    border-radius: 12px;
+    padding: 14px 14px 6px;
+    background: #fff;
+  }
+  .planner-table__row:hover td,
+  .planner-table__row:focus-visible td {
+    background: transparent;
+  }
+  .planner-table td {
+    border: 0;
+    padding: 5px 0;
+    background: transparent !important;
+  }
+  .planner-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8590a8;
+    margin-bottom: 2px;
+  }
+  .planner-table__row td:first-child {
+    padding-top: 0;
+    margin-bottom: 6px;
+  }
+  .planner-table__row td:first-child::before {
+    display: none;
+  }
+  .planner-table__title strong {
+    font-size: 15px;
+  }
+  .planner-table__go {
+    display: none;
+  }
+}
