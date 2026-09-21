@@ -86,6 +86,7 @@ export function runAutomation(db: MockDb, now: number): void {
       shiftId: occurrence.id,
       swapperId: occurrence.swapperId,
       reason: "Absence automatique : aucun pointage après le délai de tolérance.",
+      attachmentId: null,
       clientRef: null,
       reportedAt: new Date(start + tolerance).toISOString(),
       origin: "AUTOMATIC_ABSENCE",

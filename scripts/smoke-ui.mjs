@@ -49,6 +49,7 @@ async function createPlanning(page, { mode, name, start, end }) {
   );
   await page.getByRole("button", { name: "Suivant", exact: true }).click();
   await page.locator('.planner-options input[type="checkbox"]').first().check();
+  await page.locator('.planner-days input[type="checkbox"]').first().check();
   await page.getByRole("button", { name: "Suivant", exact: true }).click();
   await page.getByRole("button", { name: mode === "automatic" ? "Générer et affecter" : "Créer le brouillon", exact: true }).click();
   await page.getByRole("button", { name: "Tous les plannings", exact: true }).waitFor();
@@ -191,7 +192,18 @@ await exercise(
     await page.getByRole("button", { name: "Signaler", exact: true }).waitFor();
     await page.getByRole("button", { name: "Signaler", exact: true }).click();
     await page.getByRole("heading", { name: "Signaler une absence" }).waitFor();
-    await page.getByRole("button", { name: "Fermer" }).click();
+    const sendAbsence = page.getByRole("button", { name: "Envoyer", exact: true });
+    assert.ok(await sendAbsence.isDisabled(), "Une absence vierge ne doit pas pouvoir être envoyée");
+    await page.getByRole("button", { name: "Shift concerné" }).click();
+    await page.getByRole("option").last().click();
+    await page.locator('#absence-declaration input[type="file"]').setInputFiles({
+      name: "justificatif.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4\n% justificatif recette uSwap"),
+    });
+    await page.locator('#absence-declaration input[placeholder*="Maladie"]').fill("Indisponibilité médicale");
+    await sendAbsence.click();
+    await page.getByText("Absence déclarée.", { exact: true }).waitFor();
     await page.getByRole("heading", { name: "Mes pointages" }).waitFor();
     await page.getByRole("link", { name: "Plannings", exact: true }).click();
     await page.waitForURL(/\/app\/mon-espace\/plannings$/);

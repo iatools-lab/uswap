@@ -126,6 +126,7 @@ export type MockAbsence = {
   shiftId: string;
   swapperId: string;
   reason: string;
+  attachmentId: string | null;
   clientRef: string | null;
   reportedAt: string;
   origin: "DECLARATION" | "AUTOMATIC_ABSENCE";

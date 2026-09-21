@@ -99,9 +99,23 @@ export async function flush(): Promise<{ sent: number; remaining: number }> {
   try {
     for (const mutation of await pending()) {
       try {
+        let body = mutation.body;
+        if (
+          mutation.path === "/operations/absences" &&
+          mutation.body.attachment instanceof File
+        ) {
+          const form = new FormData();
+          form.append("file", mutation.body.attachment);
+          const uploaded = await api<{ id: string }>(
+            "/operations/absences/attachments",
+            form,
+          );
+          const { attachment: _attachment, ...absence } = mutation.body;
+          body = { ...absence, attachmentId: uploaded.id };
+        }
         await api(
           mutation.path,
-          mutation.body,
+          body,
           mutation.method === "PATCH" ? "PATCH" : undefined,
         );
         await remove(mutation.id);

@@ -656,6 +656,30 @@ button.ops-callout:hover {
   color: var(--navy);
 }
 
+.ops-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.ops-file-remove {
+  width: 46px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.ops-file-remove:hover,
+.ops-file-remove:focus-visible {
+  border-color: #efb6b6;
+  background: #fff7f7;
+  color: #b42318;
+}
+
 .ops-toggles {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -103,14 +103,39 @@ const pendingReplacements = (ctx: MockCtx, stationId: string | null) => {
 export const coverageRoutes: MockRoute[] = [
   {
     method: "POST",
+    pattern: /^\/operations\/absences\/attachments$/,
+    handler: (ctx) => {
+      requireRole(requireUser(ctx.db, ctx.user), ["SWAPPER"]);
+      if (!ctx.file) throw new MockHttpError(400, "Aucune pièce justificative reçue.");
+      if (ctx.file.size > 5 * 1024 * 1024)
+        throw new MockHttpError(413, "Le justificatif dépasse 5 Mo.");
+      const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+      if (!allowed.includes(ctx.file.type))
+        throw new MockHttpError(400, "Utilisez un fichier PDF, JPG, PNG ou WebP.");
+      const created = {
+        id: nextId("att"),
+        name: ctx.file.name,
+        size: ctx.file.size,
+        type: ctx.file.type,
+        createdAt: isoFromMs(ctx.now),
+      };
+      ctx.db.attachments.push(created);
+      return { id: created.id };
+    },
+  },
+  {
+    method: "POST",
     pattern: /^\/operations\/absences$/,
     handler: (ctx) => {
       const user = requireRole(requireUser(ctx.db, ctx.user), ["SWAPPER"]);
       const occurrence = occurrenceOf(ctx.db, asText(ctx.body.shiftId));
       const reason = asText(ctx.body.reason);
+      const attachmentId = asText(ctx.body.attachmentId);
       const clientRef = asText(ctx.body.clientRef) || null;
       if (reason.length < 3)
         throw new MockHttpError(400, "Précisez un motif d'absence (3 caractères minimum).");
+      if (!ctx.db.attachments.some((item) => item.id === attachmentId))
+        throw new MockHttpError(400, "Une pièce justificative valide est obligatoire.");
       if (occurrence.swapperId !== user.id)
         throw new MockHttpError(403, "Ce shift ne vous est pas affecté.");
       if (Date.parse(occurrence.endTime) < ctx.now)
@@ -130,6 +155,7 @@ export const coverageRoutes: MockRoute[] = [
         shiftId: occurrence.id,
         swapperId: user.id,
         reason,
+        attachmentId,
         clientRef,
         reportedAt: isoFromMs(ctx.now),
         origin: "DECLARATION" as const,
@@ -166,7 +192,9 @@ export const coverageRoutes: MockRoute[] = [
       const candidates = ctx.db.users
         .filter(
           (item) =>
-            item.role === "SWAPPER" && item.isActive,
+            item.role === "SWAPPER" &&
+            item.isActive &&
+            item.stationId === occurrence.stationId,
         )
         .map((item) => {
           if (item.id === occurrence.swapperId)
@@ -212,7 +240,16 @@ export const coverageRoutes: MockRoute[] = [
       const occurrence = occurrenceOf(ctx.db, ctx.params[0]);
       const swapperId = asText(ctx.body.swapperId);
       const swapper = ctx.db.users.find((item) => item.id === swapperId);
-      if (!swapper) throw new MockHttpError(400, "Sélectionnez un remplaçant.");
+      if (
+        !swapper ||
+        swapper.role !== "SWAPPER" ||
+        !swapper.isActive ||
+        swapper.stationId !== occurrence.stationId
+      )
+        throw new MockHttpError(
+          400,
+          "Sélectionnez un swappeur actif rattaché à cette station.",
+        );
       const report = constraintReport(ctx.db, {
         stationId: occurrence.stationId,
         swapperId,

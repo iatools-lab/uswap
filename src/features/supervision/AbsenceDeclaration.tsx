@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "../../api/auth-api";
 import { notify } from "../../ui/Toast";
 import { Modal } from "../../ui/Modal";
-import { LoaderCircle, Warning } from "../../ui/icons";
+import { LoaderCircle, UploadSimple, Warning, X } from "../../ui/icons";
 import { Select } from "../../ui/Select";
 import { enqueue, startOutboxSync } from "../offline/outbox";
 import { formatDateTime } from "./format";
@@ -19,10 +19,9 @@ export function AbsenceDeclaration({
     (shift) => shift.publishedAt && Date.parse(shift.endTime) > Date.now(),
   );
   const [open, setOpen] = useState(false);
-  const [shiftId, setShiftId] = useState(
-    eligible.length === 1 ? eligible[0].id : "",
-  );
+  const [shiftId, setShiftId] = useState("");
   const [reason, setReason] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [online, setOnline] = useState(navigator.onLine);
@@ -50,6 +49,14 @@ export function AbsenceDeclaration({
       setError("Indiquez un motif.");
       return;
     }
+    if (!file) {
+      setError("Ajoutez une pièce justificative.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Le justificatif dépasse 5 Mo.");
+      return;
+    }
     setBusy(true);
     setError("");
     const clientRef =
@@ -59,8 +66,17 @@ export function AbsenceDeclaration({
     const payload = { shiftId, reason: reason.trim(), clientRef };
     try {
       if (!navigator.onLine) throw new ApiError(0, "hors connexion");
-      await api("/operations/absences", payload);
-      setReason("");
+      const form = new FormData();
+      form.append("file", file);
+      const attachment = await api<{ id: string }>(
+        "/operations/absences/attachments",
+        form,
+      );
+      await api("/operations/absences", {
+        ...payload,
+        attachmentId: attachment.id,
+      });
+      reset();
       setOpen(false);
       notify("Absence déclarée.");
       onDeclared();
@@ -68,8 +84,11 @@ export function AbsenceDeclaration({
       const network =
         err instanceof ApiError && (err.status === 0 || err.status >= 500);
       if (network) {
-        await enqueue("/operations/absences", "POST", payload);
-        setReason("");
+        await enqueue("/operations/absences", "POST", {
+          ...payload,
+          attachment: file,
+        });
+        reset();
         setError("");
         setOpen(false);
         notify(
@@ -81,6 +100,19 @@ export function AbsenceDeclaration({
     } finally {
       setBusy(false);
     }
+  }
+
+  function reset() {
+    setShiftId("");
+    setReason("");
+    setFile(null);
+    setError("");
+  }
+
+  function close() {
+    if (busy) return;
+    reset();
+    setOpen(false);
   }
 
   if (!eligible.length) return null;
@@ -99,7 +131,10 @@ export function AbsenceDeclaration({
           <button
             type="button"
             className="admin-button secondary"
-            onClick={() => setOpen(true)}
+            onClick={() => {
+              reset();
+              setOpen(true);
+            }}
           >
             Signaler
           </button>
@@ -108,15 +143,15 @@ export function AbsenceDeclaration({
 
       <Modal
         open={open}
-        onClose={busy ? () => undefined : () => setOpen(false)}
+        onClose={close}
         title="Signaler une absence"
-        subtitle="Shift concerné et motif obligatoires."
+        subtitle="Indiquez le service concerné, le motif et joignez un justificatif."
         footer={
           <>
             <button
               type="button"
               className="admin-button secondary"
-              onClick={() => setOpen(false)}
+              onClick={close}
               disabled={busy}
             >
               Annuler
@@ -125,7 +160,7 @@ export function AbsenceDeclaration({
               type="submit"
               form="absence-declaration"
               className="admin-button primary-cta"
-              disabled={busy || !shiftId}
+              disabled={busy || !shiftId || !file}
             >
               {busy && <LoaderCircle className="spin" size={16} />}
               Envoyer
@@ -169,6 +204,31 @@ export function AbsenceDeclaration({
                 placeholder="Maladie, imprévu personnel…"
               />
             </label>
+            <div className="ops-file-row">
+              <label className="ops-file">
+                <input
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                />
+                <UploadSimple size={22} />
+                <span>
+                  <strong>{file ? file.name : "Joindre un justificatif"}</strong>
+                  <small>PDF ou image · 5 Mo max · obligatoire</small>
+                </span>
+              </label>
+              {file && (
+                <button
+                  type="button"
+                  className="ops-file-remove"
+                  aria-label="Retirer le justificatif"
+                  title="Retirer le justificatif"
+                  onClick={() => setFile(null)}
+                >
+                  <X size={18} />
+                </button>
+              )}
+            </div>
           </fieldset>
         </form>
       </Modal>
