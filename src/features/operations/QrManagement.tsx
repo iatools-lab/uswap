@@ -20,25 +20,33 @@ export function QrManagement({ data }: { data: OperationData }) {
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
 
-  const shifts = useMemo(
-    () =>
-      data.shifts
-        .filter(
-          (shift) =>
-            shift.publishedAt &&
-            shift.station.id &&
-            shift.swapper.fullName !== "Poste vacant" &&
-            (kind === "CHECKIN"
-              ? !shift.attendance?.checkedInAt &&
-                Date.parse(shift.startTime) <= now &&
-                Date.parse(shift.endTime) >= now
-              : Boolean(shift.attendance?.checkedInAt) &&
-                !shift.attendance?.checkedOutAt),
-        )
-        .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime)),
-    [data.shifts, kind, now],
-  );
-  const target = shifts.find((shift) => shift.id === shiftId) ?? null;
+  const shifts = useMemo(() => {
+    const eligible = data.shifts.filter(
+      (shift) =>
+        shift.publishedAt &&
+        shift.station.id &&
+        shift.swapper.fullName !== "Poste vacant" &&
+        Date.parse(shift.startTime) <= now &&
+        Date.parse(shift.endTime) >= now &&
+        (kind === "CHECKIN"
+          ? !shift.attendance?.checkedInAt
+          : Boolean(shift.attendance?.checkedInAt) && !shift.attendance?.checkedOutAt),
+    );
+    const grouped = new Map<
+      string,
+      (typeof eligible)[number] & { slotKey: string; participantCount: number }
+    >();
+    for (const shift of eligible) {
+      const slotKey = `${shift.station.id}|${shift.templateId}|${shift.startTime}|${shift.endTime}`;
+      const current = grouped.get(slotKey);
+      if (current) current.participantCount += 1;
+      else grouped.set(slotKey, { ...shift, slotKey, participantCount: 1 });
+    }
+    return Array.from(grouped.values()).sort(
+      (a, b) => Date.parse(a.startTime) - Date.parse(b.startTime),
+    );
+  }, [data.shifts, kind, now]);
+  const target = shifts.find((shift) => shift.slotKey === shiftId) ?? null;
   const remaining = qr ? Math.max(0, Date.parse(qr.expiresAt) - now) : 0;
 
   useEffect(() => {
@@ -122,8 +130,8 @@ export function QrManagement({ data }: { data: OperationData }) {
                 placeholder="Choisir un shift"
                 onChange={(value) => setShiftId(String(value))}
                 options={shifts.map((shift) => ({
-                  value: shift.id,
-                  label: `${shift.station.name} · ${shift.swapper.fullName} · ${formatDate(shift.startTime, shift.station.timezone || "Africa/Douala")}`,
+                  value: shift.slotKey,
+                  label: `${shift.label} · ${shift.station.name} · ${formatDate(shift.startTime, shift.station.timezone || "Africa/Douala")} – ${formatDate(shift.endTime, shift.station.timezone || "Africa/Douala")} · ${shift.participantCount} poste${shift.participantCount > 1 ? "s" : ""}`,
                 }))}
               />
             </label>
@@ -137,7 +145,9 @@ export function QrManagement({ data }: { data: OperationData }) {
                 <Clock3 size={17} />
                 <span>
                   <strong>{target.station.name}</strong>
+                  <small>{target.label}</small>
                   <small>{formatDate(target.startTime, target.station.timezone || "Africa/Douala")} – {formatDate(target.endTime, target.station.timezone || "Africa/Douala")}</small>
+                  <small>{target.participantCount} swappeur{target.participantCount > 1 ? "s" : ""} concerné{target.participantCount > 1 ? "s" : ""}</small>
                 </span>
               </div>
             )}

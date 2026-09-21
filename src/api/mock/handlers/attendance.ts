@@ -60,6 +60,8 @@ export const attendanceRoutes: MockRoute[] = [
             const station = stationOf(ctx.db, item.stationId);
             return {
               id: item.id,
+              templateId: item.templateId,
+              label: item.label,
               startTime: item.startTime,
               endTime: item.endTime,
               publishedAt:
@@ -94,6 +96,8 @@ export const attendanceRoutes: MockRoute[] = [
           const record = recordOf(ctx, item.id);
           return {
             id: item.id,
+            templateId: item.templateId,
+            label: item.label,
             startTime: item.startTime,
             endTime: item.endTime,
             publishedAt:
@@ -255,14 +259,23 @@ export const attendanceRoutes: MockRoute[] = [
         );
       if (Date.parse(token.expiresAt) < ctx.now)
         throw new MockHttpError(410, "Ce QR a expiré. Demandez-en un nouveau.");
-      const occurrence = occurrenceOf(ctx.db, token.shiftId);
+      const qrOccurrence = occurrenceOf(ctx.db, token.shiftId);
+      const occurrence = ctx.db.occurrences.find(
+        (item) =>
+          item.planningId === qrOccurrence.planningId &&
+          item.stationId === qrOccurrence.stationId &&
+          item.templateId === qrOccurrence.templateId &&
+          item.startTime === qrOccurrence.startTime &&
+          item.endTime === qrOccurrence.endTime &&
+          item.swapperId === user.id,
+      );
+      if (!occurrence)
+        throw new MockHttpError(403, "Ce shift ne vous est pas affecté.");
       if (askedShiftId && askedShiftId !== occurrence.id)
         throw new MockHttpError(
           409,
-          "Ce QR correspond à une autre affectation que celle sélectionnée.",
+          "Ce QR correspond à un autre shift que celui sélectionné.",
         );
-      if (occurrence.swapperId !== user.id)
-        throw new MockHttpError(403, "Ce shift ne vous est pas affecté.");
       if (token.consumedBy.includes(user.id))
         throw new MockHttpError(409, "Ce QR a déjà été utilisé pour ce service.");
       const station = stationOf(ctx.db, occurrence.stationId);

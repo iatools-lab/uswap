@@ -373,7 +373,7 @@ export function Planner({ user }: { user: User }) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [stationId, setStationId] = useState("");
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
-  const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [publishDirectly, setPublishDirectly] = useState(false);
 
   function openCreate(mode: "manual" | "automatic" = "manual") {
@@ -383,7 +383,7 @@ export function Planner({ user }: { user: User }) {
     setEnd("");
     setStationId("");
     setSelectedTemplates([]);
-    setSelectedDays([1, 2, 3, 4, 5]);
+    setSelectedDays([]);
     setPublishDirectly(false);
     setError("");
     setCreating(true);
@@ -556,10 +556,7 @@ export function Planner({ user }: { user: User }) {
       <PlanningEditor
         key={current.id}
         planning={current}
-        writable={
-          user.role === "SUPERVISOR" ||
-          (user.role === "ADMIN" && current.status === "DRAFT")
-        }
+        writable={user.role === "SUPERVISOR" || user.role === "ADMIN"}
         canPublish={user.role === "SUPERVISOR"}
         onUpdate={setCurrent}
         onBack={() => {
@@ -874,7 +871,7 @@ function PlanningEditor({
     [templates, setTemplates] = useState<Template[]>([]),
     [stationId, setStation] = useState(""),
     [selected, setSelected] = useState<string[]>([]),
-    [days, setDays] = useState([1, 2, 3, 4, 5]),
+    [days, setDays] = useState<number[]>([]),
     [preview, setPreview] = useState<Preview | null>(null),
     [adding, setAdding] = useState(false),
     [busy, setBusy] = useState(false),
@@ -911,7 +908,7 @@ function PlanningEditor({
   function openAdding() {
     setStation("");
     setSelected([]);
-    setDays([1, 2, 3, 4, 5]);
+    setDays([]);
     setPreview(null);
     setError("");
     setAdding(true);
@@ -1974,7 +1971,7 @@ function DayDetail({
                     onClick={() => void addMember(g)}
                   >
                     <PlusIcon size={14}/> Ajouter
-                  </button> : <span className="planner-muted">Consultation</span>}</td>
+                  </button> : null}</td>
                 </tr>
               );
             })}
@@ -1984,7 +1981,7 @@ function DayDetail({
 
         {removeError && <p role="alert" className="error-message">{removeError}</p>}
         {removing && <p role="status">Mise à jour…</p>}
-        {editing && canEdit && <Modal open size="lg" title={editing.swapper ? "Modifier les affectations" : "Ajouter des swappeurs"} subtitle={`${editing.station.name} · ${editing.templateVersion.label}`} onClose={() => void closeAssignment()}><div className="day-roster-assignment-dialog"><Assignment key={editing.id + ':' + planning.revision} planning={planning} occurrence={editing} onClose={() => void closeAssignment()} onSaved={async (opts) => { setTemporaryVacantId(null); onUpdate(await api<Planning>(`/plannings/${planning.id}`)); setEditingId(null); notify(opts?.message || "Affectation enregistrée."); }}/></div></Modal>}
+        {editing && canEdit && <Modal open size="xl" title={editing.swapper ? "Modifier les affectations" : "Ajouter des swappeurs"} subtitle={`${editing.station.name} · ${editing.templateVersion.label}`} onClose={() => void closeAssignment()}><div className="day-roster-assignment-dialog"><Assignment key={editing.id + ':' + planning.revision} planning={planning} occurrence={editing} onClose={() => void closeAssignment()} onSaved={async (opts) => { setTemporaryVacantId(null); onUpdate(await api<Planning>(`/plannings/${planning.id}`)); setEditingId(null); notify(opts?.message || "Affectation enregistrée."); }}/></div></Modal>}
 
         <div className="planner-actions is-end">
           <button
@@ -2190,4 +2187,3 @@ function Assignment({
     </form>
   );
 }
-

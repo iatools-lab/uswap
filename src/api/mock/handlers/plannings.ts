@@ -28,17 +28,11 @@ const asText = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
 
 /**
- * L'administrateur peut préparer un brouillon (décision métier ajoutée au
- * Sprint 2). Dès publication, les changements opérationnels relèvent du
- * superviseur (US 2031 et 2043).
+ * Administrateurs et superviseurs peuvent corriger un planning, y compris
+ * après sa publication. Les contrôles et notifications restent appliqués à
+ * chaque modification.
  */
-function assertCanMutatePlanning(user: MockUser, planning: MockPlanning) {
-  if (user.role === "ADMIN" && planning.status === "PUBLISHED")
-    throw new MockHttpError(
-      403,
-      "Un planning publié ne peut être modifié que par un superviseur.",
-    );
-}
+function assertCanMutatePlanning(_user: MockUser, _planning: MockPlanning) {}
 const pad = (value: number) => String(value).padStart(2, "0");
 const dayList = (startIso: string, endIso: string): string[] => {
   const result: string[] = [];
@@ -330,7 +324,12 @@ export const planningRoutes: MockRoute[] = [
       let assigned = 0;
       for (const occurrence of occurrences) {
         const candidates = ctx.db.users
-          .filter((user) => user.role === "SWAPPER" && user.isActive)
+          .filter(
+            (user) =>
+              user.role === "SWAPPER" &&
+              user.isActive &&
+              user.stationId === occurrence.stationId,
+          )
           .map((user) => ({
             user,
             hours: ctx.db.occurrences
@@ -543,6 +542,17 @@ export const planningRoutes: MockRoute[] = [
       assertCanMutatePlanning(actor, planning);
       const swapperId = asText(ctx.body.swapperId);
       if (!swapperId) throw new MockHttpError(400, "Sélectionnez un swappeur.");
+      const swapper = ctx.db.users.find((item) => item.id === swapperId);
+      if (
+        !swapper ||
+        swapper.role !== "SWAPPER" ||
+        !swapper.isActive ||
+        swapper.stationId !== occurrence.stationId
+      )
+        throw new MockHttpError(
+          409,
+          "Ce swappeur actif n’est pas rattaché à la station du shift.",
+        );
       return constraintReport(ctx.db, {
         stationId: occurrence.stationId,
         swapperId,
@@ -621,6 +631,14 @@ export const planningRoutes: MockRoute[] = [
         : null;
       if (afterUser && afterUser.role !== "SWAPPER")
         throw new MockHttpError(409, "Le collaborateur sélectionné n’est pas un swappeur.");
+      if (
+        afterUser &&
+        (!afterUser.isActive || afterUser.stationId !== occurrence.stationId)
+      )
+        throw new MockHttpError(
+          409,
+          "Ce swappeur actif n’est pas rattaché à la station du shift.",
+        );
       occurrence.swapperId = swapperId;
       if (counterpart) counterpart.swapperId = beforeUser?.id ?? null;
       planning.revision += 1;

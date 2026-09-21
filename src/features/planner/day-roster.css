@@ -42,7 +42,7 @@
 .assignment-shift-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 11px 13px; border: 1px solid #e3e8f1; border-radius: 9px; background: #f8f9fc; }
 .assignment-shift-summary strong { font-size: 13px; color: #18243e; }
 .assignment-shift-summary span, .assignment-shift-summary small { font-size: 12px; color: #617086; }
-.assignment-table-wrap { min-width: 0; padding: 0; margin: 0; border: 1px solid #e2e7f0; border-radius: 10px; overflow: auto; max-height: 290px; scrollbar-gutter: stable; }
+.assignment-table-wrap { min-width: 0; padding: 0; margin: 0; border: 1px solid #e2e7f0; border-radius: 10px; overflow: auto; max-height: min(52vh, 520px); }
 .assignment-table { width: 100%; min-width: 600px; border-collapse: collapse; font-size: 12px; }
 .assignment-table th { position: sticky; top: 0; z-index: 1; padding: 9px 12px; text-align: left; background: #f6f8fb; color: #67748b; font-size: 10px; font-weight: 600; letter-spacing: .45px; text-transform: uppercase; }
 .assignment-table th:first-child, .assignment-table td:first-child { width: 44px; text-align: center; }
@@ -65,7 +65,7 @@
 .day-roster-assignment-dialog .assignment-option { display: flex; flex-direction: row; min-height: 52px; gap: 12px; padding: 9px 12px; }
 .day-roster-assignment-dialog .assignment-option input[type="radio"] { appearance: auto; width: 18px; height: 18px; min-width: 18px; min-height: 18px; padding: 0; margin: 0; border-radius: 50%; box-shadow: none; }
 .day-roster-assignment-dialog .assignment-avatar { width: 32px; height: 32px; min-width: 32px; flex: 0 0 32px; }
-.day-roster-assignment-dialog .assignment-options { max-height: 280px; align-content: start; scrollbar-gutter: stable; }
+.day-roster-assignment-dialog .assignment-options { max-height: min(52vh, 520px); align-content: start; }
 .day-roster-assignment-dialog .assignment-option .day-roster-name { font-size: 14px; font-weight: 500; }
 .day-roster-assignment-dialog .constraint-check { margin: 0; }
 .assignment-search { display: grid; gap: 8px; font-size: 13px; font-weight: 500; }

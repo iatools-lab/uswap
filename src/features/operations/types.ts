@@ -2,6 +2,8 @@ import type { User } from "../../api/auth-api";
 
 export type OperationShift = {
   id: string;
+  templateId: string;
+  label: string;
   startTime: string;
   endTime: string;
   publishedAt: string | null;
