@@ -1,92 +1,53 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/auth-api";
-import { LoaderCircle } from "../../ui/icons";
-import {
-  ResponsiveDataTable,
-  type ResponsiveColumn,
-} from "../../ui/ResponsiveDataTable";
+import { LoaderCircle, Clock3 } from "../../ui/icons";
 import { formatDateTime } from "./format";
 import type { AttendanceHistoryRow } from "./types";
+
+function renderAttendanceStatus(row: AttendanceHistoryRow) {
+  if (row.isJustified) {
+    return (
+      <span
+        className="attendance-status attendance-status--closed"
+        title={row.correctionReason ?? undefined}
+      >
+        Absence justifiée
+      </span>
+    );
+  }
+  if (row.corrected) {
+    return (
+      <span
+        className="attendance-status attendance-status--closed"
+        title={row.correctionReason ?? undefined}
+      >
+        Corrigé
+      </span>
+    );
+  }
+  if (row.isAbsent) {
+    return <span className="attendance-status attendance-status--absent">Absent</span>;
+  }
+  if (row.checkedOutAt) {
+    return <span className="attendance-status attendance-status--present">Terminé</span>;
+  }
+  if (row.checkedInAt) {
+    return (
+      <span
+        className={`attendance-status ${row.isLate ? "attendance-status--late" : "attendance-status--present"}`}
+      >
+        {row.isLate ? "En retard" : "À l’heure"}
+      </span>
+    );
+  }
+  return <span className="attendance-status attendance-status--expected">Attendu</span>;
+}
 
 export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
   const [rows, setRows] = useState<AttendanceHistoryRow[] | null>(null);
   const [error, setError] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-
-  const columns: ResponsiveColumn<AttendanceHistoryRow>[] = [
-    {
-      key: "date",
-      header: "Date et heure",
-      primary: true,
-      render: (row) => (
-        <strong>
-          {formatDateTime(row.plannedStart, row.station.timezone)}
-        </strong>
-      ),
-    },
-    { key: "station", header: "Station", render: (row) => row.station.name },
-    { key: "shift", header: "Shift", render: (row) => row.template ?? "—" },
-    {
-      key: "planned",
-      header: "Prévu",
-      render: (row) => `${row.plannedHours.toFixed(2)} h`,
-    },
-    {
-      key: "checkin",
-      header: "Début",
-      render: (row) =>
-        row.checkedInAt
-          ? formatDateTime(row.checkedInAt, row.station.timezone)
-          : "—",
-    },
-    {
-      key: "checkout",
-      header: "Fin",
-      render: (row) =>
-        row.checkedOutAt
-          ? formatDateTime(row.checkedOutAt, row.station.timezone)
-          : "—",
-    },
-    {
-      key: "status",
-      header: "Statut",
-      render: (row) =>
-        row.isJustified ? (
-          <span
-            className="attendance-status attendance-status--closed"
-            title={row.correctionReason ?? undefined}
-          >
-            Absence justifiée
-          </span>
-        ) : row.corrected ? (
-          <span
-            className="attendance-status attendance-status--closed"
-            title={row.correctionReason ?? undefined}
-          >
-            Corrigé
-          </span>
-        ) : row.isAbsent ? (
-          <span className="attendance-status attendance-status--absent">
-            Absent
-          </span>
-        ) : row.checkedOutAt ? (
-          <span className="attendance-status attendance-status--present">
-            Terminé
-          </span>
-        ) : row.checkedInAt ? (
-          <span
-            className={`attendance-status ${row.isLate ? "attendance-status--late" : "attendance-status--present"}`}
-          >
-            {row.isLate ? "En retard" : "À l’heure"}
-          </span>
-        ) : (
-          <span className="attendance-status attendance-status--expected">
-            Attendu
-          </span>
-        ),
-    },
-  ];
 
   useEffect(() => {
     let active = true;
@@ -118,7 +79,7 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
           </p>
         </div>
       </div>
-      <div className="supervision-toolbar">
+      <div className="supervision-toolbar swapper-attendance-toolbar">
         <label>
           Du
           <input
@@ -148,16 +109,51 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
         </div>
       ) : !rows.length ? (
         <div className="admin-empty">
+          <Clock3 size={36} />
           <h3>Aucun pointage sur la période</h3>
         </div>
       ) : (
-        <ResponsiveDataTable
-          rows={rows}
-          columns={columns}
-          rowKey={(row) => row.shiftId}
-          ariaLabel="Historique de mes pointages"
-          className="ops-table"
-        />
+        <div className="swapper-attendance-cards-list">
+          {rows.map((row) => (
+            <div key={row.shiftId} className="swapper-attendance-card">
+              <div className="swapper-attendance-header">
+                <div>
+                  <span className="swapper-attendance-date">
+                    {formatDateTime(row.plannedStart, row.station.timezone)}
+                  </span>
+                  <div className="swapper-attendance-station">
+                    {row.station.name} {row.template ? `· ${row.template}` : ""}
+                  </div>
+                </div>
+                {renderAttendanceStatus(row)}
+              </div>
+
+              <div className="swapper-attendance-details">
+                <div className="time-block">
+                  <small>DÉBUT</small>
+                  <strong>
+                    {row.checkedInAt
+                      ? formatDateTime(row.checkedInAt, row.station.timezone)
+                      : "—"}
+                  </strong>
+                </div>
+                <div className="time-separator" aria-hidden="true">→</div>
+                <div className="time-block">
+                  <small>FIN</small>
+                  <strong>
+                    {row.checkedOutAt
+                      ? formatDateTime(row.checkedOutAt, row.station.timezone)
+                      : "—"}
+                  </strong>
+                </div>
+                <div className="time-block duration-block">
+                  <small>PRÉVU</small>
+                  <strong>{row.plannedHours.toFixed(2)} h</strong>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </section>
   );

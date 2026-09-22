@@ -3,7 +3,9 @@ import {
   CalendarBlankIcon,
   CalendarDotsIcon,
   CaretRightIcon,
+  ClockIcon,
   MagnifyingGlassIcon,
+  MapPinIcon,
   PlusIcon,
   LightningIcon,
 } from "@phosphor-icons/react";
@@ -19,6 +21,9 @@ export type PlanningListItem = {
   revision: number;
   occurrences: {
     station: { id: string; name: string };
+    startTime?: string;
+    endTime?: string;
+    templateVersion?: { label?: string };
   }[];
   _count?: { occurrences: number };
   /** Stations effectivement visibles dans le périmètre de l'utilisateur. */
@@ -89,6 +94,7 @@ export function PlanningList({
   const [openingId, setOpeningId] = useState<string | null>(null);
 
   const canCreate = userRole === "ADMIN" || userRole === "SUPERVISOR";
+  const isSwapper = userRole === "SWAPPER";
 
   const counts = useMemo(() => {
     let published = 0;
@@ -137,6 +143,102 @@ export function PlanningList({
         )}
       </section>
     );
+
+  if (isSwapper) {
+    const visiblePlans = plans.filter(
+      (plan) => plan.status === "PUBLISHED" && plan.occurrences.length > 0,
+    );
+    return (
+      <section className="swapper-planning-directory" aria-label="Mes plannings publiés">
+        <header className="swapper-planning-directory__intro">
+          <div>
+            <span className="admin-eyebrow">Mes affectations</span>
+            <h2>Plannings publiés</h2>
+            <p>Retrouvez uniquement les plannings dans lesquels vous avez un service.</p>
+          </div>
+          <span className="swapper-planning-directory__count">
+            {visiblePlans.length}
+          </span>
+        </header>
+
+        {!visiblePlans.length ? (
+          <section className="admin-card admin-empty">
+            <CalendarBlankIcon size={30} />
+            <h3>Aucun planning publié</h3>
+            <p>Vos plannings apparaîtront ici dès qu’une affectation vous sera publiée.</p>
+          </section>
+        ) : (
+          <div className="swapper-planning-directory__list">
+            {visiblePlans.map((plan) => {
+              const stations = stationNamesOf(plan);
+              const nextShift = plan.occurrences
+                .filter((occurrence) => occurrence.startTime && Date.parse(occurrence.endTime || occurrence.startTime) >= Date.now())
+                .sort((a, b) => Date.parse(a.startTime || "") - Date.parse(b.startTime || ""))[0];
+              const opening = openingId === plan.id;
+              return (
+                <button
+                  type="button"
+                  key={plan.id}
+                  className="swapper-planning-entry"
+                  disabled={busy || Boolean(openingId)}
+                  aria-busy={opening}
+                  aria-label={`Ouvrir le planning ${plan.name || periodLabel(plan.startDate, plan.endDate)}`}
+                  onClick={async () => {
+                    setOpeningId(plan.id);
+                    try {
+                      await onOpen(plan.id);
+                    } finally {
+                      setOpeningId(null);
+                    }
+                  }}
+                >
+                  <span className="swapper-planning-entry__topline">
+                    <span className="swapper-planning-entry__icon" aria-hidden="true">
+                      <CalendarDotsIcon size={20} />
+                    </span>
+                    <span className="swapper-planning-entry__title">
+                      <strong>{plan.name || periodLabel(plan.startDate, plan.endDate)}</strong>
+                      <small>{periodLabel(plan.startDate, plan.endDate)}</small>
+                    </span>
+                    {opening ? (
+                      <span className="planner-table__spinner" aria-hidden="true" />
+                    ) : (
+                      <CaretRightIcon size={18} weight="bold" aria-hidden="true" />
+                    )}
+                  </span>
+
+                  <span className="swapper-planning-entry__meta">
+                    <span><MapPinIcon size={14} /> {stations.join(", ") || "Station"}</span>
+                    <span><CalendarBlankIcon size={14} /> {plan.occurrences.length} shift{plan.occurrences.length > 1 ? "s" : ""}</span>
+                  </span>
+
+                  {nextShift ? (
+                    <span className="swapper-planning-entry__next">
+                      <ClockIcon size={15} />
+                      <span>
+                        <small>Prochain service</small>
+                        <strong>
+                          {new Date(nextShift.startTime || "").toLocaleString("fr-FR", {
+                            day: "2-digit",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                          {nextShift.templateVersion?.label ? ` · ${nextShift.templateVersion.label}` : ""}
+                        </strong>
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="swapper-planning-entry__complete">Période terminée</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    );
+  }
 
   return (
     <section className="planner-listing">

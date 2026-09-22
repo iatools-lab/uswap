@@ -503,7 +503,7 @@ await exercise(
       .first()
       .waitFor();
     await assertNoHorizontalOverflow(page, "Planning mobile");
-    await page.getByRole("link", { name: /Ouvrir le planning/ }).first().click();
+    await page.getByRole("button", { name: /Ouvrir le planning/ }).first().click();
     await page.locator(".swapper-calendar").waitFor();
     assert.equal(
       await page.locator(".swapper-planning-desktop").isVisible(),
