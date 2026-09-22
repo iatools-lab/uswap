@@ -12,7 +12,8 @@ import {
 } from "../shared";
 import { MockHttpError, type MockCtx, type MockRoute } from "../types";
 
-const asText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+const asText = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
 
 const recordOf = (ctx: MockCtx, shiftId: string) =>
   ctx.db.attendance.find((item) => item.shiftId === shiftId) ?? null;
@@ -28,20 +29,36 @@ const urgencyOf = (startTime: string, now: number) => {
 /** Absences sans remplaçant, congés approuvés inclus lorsque fournis (US 2047). */
 const pendingReplacements = (ctx: MockCtx, stationId: string | null) => {
   const published = new Set(
-    ctx.db.plannings.filter((item) => item.status === "PUBLISHED").map((item) => item.id),
+    ctx.db.plannings
+      .filter((item) => item.status === "PUBLISHED")
+      .map((item) => item.id),
   );
   const absenceRows = ctx.db.absences
     .filter((item) => item.status === "OPEN")
-    .map((absence) => ({ absence, occurrence: occurrenceOf(ctx.db, absence.shiftId) }))
+    .map((absence) => ({
+      absence,
+      occurrence: occurrenceOf(ctx.db, absence.shiftId),
+    }))
     .filter(({ occurrence }) => published.has(occurrence.planningId))
-    .filter(({ occurrence }) => Date.parse(occurrence.endTime) > ctx.now - 2 * 3600000)
-    .filter(({ occurrence }) => (stationId ? occurrence.stationId === stationId : true))
+    .filter(
+      ({ occurrence }) =>
+        Date.parse(occurrence.endTime) > ctx.now - 2 * 3600000,
+    )
+    .filter(({ occurrence }) =>
+      stationId ? occurrence.stationId === stationId : true,
+    )
     .map(({ absence, occurrence }) => {
       const station = stationOf(ctx.db, occurrence.stationId);
-      const swapper = ctx.db.users.find((item) => item.id === absence.swapperId);
+      const swapper = ctx.db.users.find(
+        (item) => item.id === absence.swapperId,
+      );
       return {
         shiftId: occurrence.id,
-        station: { id: station.id, name: station.name, timezone: station.timezone },
+        station: {
+          id: station.id,
+          name: station.name,
+          timezone: station.timezone,
+        },
         swapper: {
           id: swapper?.id ?? absence.swapperId,
           fullName: swapper?.fullName ?? "—",
@@ -51,7 +68,9 @@ const pendingReplacements = (ctx: MockCtx, stationId: string | null) => {
         endTime: occurrence.endTime,
         urgency: urgencyOf(occurrence.startTime, ctx.now),
         hoursUntilStart:
-          Math.round(((Date.parse(occurrence.startTime) - ctx.now) / 3600000) * 10) / 10,
+          Math.round(
+            ((Date.parse(occurrence.startTime) - ctx.now) / 3600000) * 10,
+          ) / 10,
         origin: absence.origin,
         reason: absence.reason,
         reportedAt: absence.reportedAt,
@@ -70,15 +89,26 @@ const pendingReplacements = (ctx: MockCtx, stationId: string | null) => {
             Date.parse(occurrence.startTime) < Date.parse(leave.endTime) &&
             Date.parse(occurrence.endTime) > Date.parse(leave.startTime),
         )
-        .filter((occurrence) => Date.parse(occurrence.endTime) > ctx.now - 2 * 3600000)
-        .filter((occurrence) => (stationId ? occurrence.stationId === stationId : true))
+        .filter(
+          (occurrence) =>
+            Date.parse(occurrence.endTime) > ctx.now - 2 * 3600000,
+        )
+        .filter((occurrence) =>
+          stationId ? occurrence.stationId === stationId : true,
+        )
         .filter((occurrence) => !absenceShiftIds.has(occurrence.id))
         .map((occurrence) => {
           const station = stationOf(ctx.db, occurrence.stationId);
-          const swapper = ctx.db.users.find((item) => item.id === leave.swapperId);
+          const swapper = ctx.db.users.find(
+            (item) => item.id === leave.swapperId,
+          );
           return {
             shiftId: occurrence.id,
-            station: { id: station.id, name: station.name, timezone: station.timezone },
+            station: {
+              id: station.id,
+              name: station.name,
+              timezone: station.timezone,
+            },
             swapper: {
               id: swapper?.id ?? leave.swapperId,
               fullName: swapper?.fullName ?? "—",
@@ -88,7 +118,9 @@ const pendingReplacements = (ctx: MockCtx, stationId: string | null) => {
             endTime: occurrence.endTime,
             urgency: urgencyOf(occurrence.startTime, ctx.now),
             hoursUntilStart:
-              Math.round(((Date.parse(occurrence.startTime) - ctx.now) / 3600000) * 10) / 10,
+              Math.round(
+                ((Date.parse(occurrence.startTime) - ctx.now) / 3600000) * 10,
+              ) / 10,
             origin: "APPROVED_LEAVE" as const,
             reason: leave.reason,
             reportedAt: null,
@@ -96,8 +128,9 @@ const pendingReplacements = (ctx: MockCtx, stationId: string | null) => {
         }),
     );
 
-  return [...absenceRows, ...leaveRows]
-    .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
+  return [...absenceRows, ...leaveRows].sort(
+    (a, b) => Date.parse(a.startTime) - Date.parse(b.startTime),
+  );
 };
 
 export const coverageRoutes: MockRoute[] = [
@@ -106,12 +139,21 @@ export const coverageRoutes: MockRoute[] = [
     pattern: /^\/operations\/absences\/attachments$/,
     handler: (ctx) => {
       requireRole(requireUser(ctx.db, ctx.user), ["SWAPPER"]);
-      if (!ctx.file) throw new MockHttpError(400, "Aucune pièce justificative reçue.");
+      if (!ctx.file)
+        throw new MockHttpError(400, "Aucune pièce justificative reçue.");
       if (ctx.file.size > 5 * 1024 * 1024)
         throw new MockHttpError(413, "Le justificatif dépasse 5 Mo.");
-      const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+      const allowed = [
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+      ];
       if (!allowed.includes(ctx.file.type))
-        throw new MockHttpError(400, "Utilisez un fichier PDF, JPG, PNG ou WebP.");
+        throw new MockHttpError(
+          400,
+          "Utilisez un fichier PDF, JPG, PNG ou WebP.",
+        );
       const created = {
         id: nextId("att"),
         name: ctx.file.name,
@@ -133,15 +175,23 @@ export const coverageRoutes: MockRoute[] = [
       const attachmentId = asText(ctx.body.attachmentId);
       const clientRef = asText(ctx.body.clientRef) || null;
       if (reason.length < 3)
-        throw new MockHttpError(400, "Précisez un motif d'absence (3 caractères minimum).");
+        throw new MockHttpError(
+          400,
+          "Précisez un motif d'absence (3 caractères minimum).",
+        );
       if (!ctx.db.attachments.some((item) => item.id === attachmentId))
-        throw new MockHttpError(400, "Une pièce justificative valide est obligatoire.");
+        throw new MockHttpError(
+          400,
+          "Une pièce justificative valide est obligatoire.",
+        );
       if (occurrence.swapperId !== user.id)
         throw new MockHttpError(403, "Ce shift ne vous est pas affecté.");
       if (Date.parse(occurrence.endTime) < ctx.now)
         throw new MockHttpError(409, "Ce service est déjà terminé.");
       if (clientRef) {
-        const replayed = ctx.db.absences.find((item) => item.clientRef === clientRef);
+        const replayed = ctx.db.absences.find(
+          (item) => item.clientRef === clientRef,
+        );
         if (replayed) return { id: replayed.id, replayed: true };
       }
       if (
@@ -149,7 +199,10 @@ export const coverageRoutes: MockRoute[] = [
           (item) => item.shiftId === occurrence.id && item.status === "OPEN",
         )
       )
-        throw new MockHttpError(409, "Une absence est déjà déclarée pour ce shift.");
+        throw new MockHttpError(
+          409,
+          "Une absence est déjà déclarée pour ce shift.",
+        );
       const created = {
         id: nextId("abs"),
         shiftId: occurrence.id,
@@ -259,10 +312,16 @@ export const coverageRoutes: MockRoute[] = [
         ignoreOccurrenceId: occurrence.id,
       });
       if (!report.valid)
-        throw new MockHttpError(409, report.errors[0]?.message ?? "Remplacement impossible.");
-      const planning = ctx.db.plannings.find((item) => item.id === occurrence.planningId);
+        throw new MockHttpError(
+          409,
+          report.errors[0]?.message ?? "Remplacement impossible.",
+        );
+      const planning = ctx.db.plannings.find(
+        (item) => item.id === occurrence.planningId,
+      );
       const previous = occurrence.swapperId
-        ? ctx.db.users.find((item) => item.id === occurrence.swapperId) ?? null
+        ? (ctx.db.users.find((item) => item.id === occurrence.swapperId) ??
+          null)
         : null;
       occurrence.swapperId = swapperId;
       if (planning) planning.revision += 1;
@@ -288,7 +347,8 @@ export const coverageRoutes: MockRoute[] = [
         inSwapperId: swapper.id,
         before: { swapper: previous?.fullName ?? null },
         after: { swapper: swapper.fullName },
-        reason: asText(ctx.body.reason) || "Remplacement décidé par le superviseur",
+        reason:
+          asText(ctx.body.reason) || "Remplacement décidé par le superviseur",
         createdAt: isoFromMs(ctx.now),
       });
       notifyStaff(
@@ -317,7 +377,8 @@ export const coverageRoutes: MockRoute[] = [
       const from = fromValue ? Date.parse(fromValue) : ctx.now - 30 * 86400000;
       const to = toValue ? Date.parse(toValue) : ctx.now;
       const type = asText(ctx.query.get("type")).toUpperCase();
-      const stationFilter = asText(ctx.query.get("stationId")) || scopeStationId(user);
+      const stationFilter =
+        asText(ctx.query.get("stationId")) || scopeStationId(user);
       const swapperFilter = asText(ctx.query.get("swapperId"));
       return ctx.db.changes
         .filter((item) => {
@@ -325,10 +386,13 @@ export const coverageRoutes: MockRoute[] = [
           return at >= from && at <= to;
         })
         .filter((item) => (type ? item.type === type : true))
-        .filter((item) => (stationFilter ? item.stationId === stationFilter : true))
+        .filter((item) =>
+          stationFilter ? item.stationId === stationFilter : true,
+        )
         .filter((item) =>
           swapperFilter
-            ? item.outSwapperId === swapperFilter || item.inSwapperId === swapperFilter
+            ? item.outSwapperId === swapperFilter ||
+              item.inSwapperId === swapperFilter
             : true,
         )
         .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
@@ -339,7 +403,8 @@ export const coverageRoutes: MockRoute[] = [
     pattern: /^\/corrections\/attachments$/,
     handler: (ctx) => {
       requireRole(requireUser(ctx.db, ctx.user), ["SUPERVISOR"]);
-      if (!ctx.file) throw new MockHttpError(400, "Aucune pièce justificative reçue.");
+      if (!ctx.file)
+        throw new MockHttpError(400, "Aucune pièce justificative reçue.");
       if (ctx.file.size > 5 * 1024 * 1024)
         throw new MockHttpError(413, "Le justificatif dépasse 5 Mo.");
       const created = {
@@ -366,22 +431,39 @@ export const coverageRoutes: MockRoute[] = [
           400,
           "Le motif de correction est obligatoire (5 caractères minimum).",
         );
-      const attachment = ctx.db.attachments.find((item) => item.id === attachmentId);
-      if (!attachment)
-        throw new MockHttpError(400, "Une pièce justificative valide est obligatoire.");
+      if (
+        attachmentId &&
+        !ctx.db.attachments.some((item) => item.id === attachmentId)
+      )
+        throw new MockHttpError(400, "La pièce justificative est invalide.");
       if (!occurrence.swapperId)
-        throw new MockHttpError(409, "Ce poste n'a pas de swappeur à corriger.");
+        throw new MockHttpError(
+          409,
+          "Ce poste n'a pas de swappeur à corriger.",
+        );
 
       // US 2045 : le statut « justifié » est distinct de l'absence constatée.
       const justified = ctx.body.isJustified === true;
       const absent = justified || ctx.body.isAbsent === true;
       const plannedMissed = asText(ctx.body.checkedInAt);
       const checkedInAt = absent ? null : plannedMissed || null;
-      const checkedOutAt = absent ? null : asText(ctx.body.checkedOutAt) || null;
-      if (checkedInAt && checkedOutAt && Date.parse(checkedOutAt) <= Date.parse(checkedInAt))
-        throw new MockHttpError(400, "La fin de service doit suivre la prise de service.");
+      const checkedOutAt = absent
+        ? null
+        : asText(ctx.body.checkedOutAt) || null;
+      if (
+        checkedInAt &&
+        checkedOutAt &&
+        Date.parse(checkedOutAt) <= Date.parse(checkedInAt)
+      )
+        throw new MockHttpError(
+          400,
+          "La fin de service doit suivre la prise de service.",
+        );
       if (!absent && !checkedInAt)
-        throw new MockHttpError(400, "Indiquez l'heure de prise de service ou un statut d'absence.");
+        throw new MockHttpError(
+          400,
+          "Indiquez l'heure de prise de service ou un statut d'absence.",
+        );
 
       const existing = recordOf(ctx, occurrence.id);
       const status = justified
@@ -400,11 +482,21 @@ export const coverageRoutes: MockRoute[] = [
             checkedOutAt: existing.checkedOutAt,
             isLate: existing.isLate,
           }
-        : { status: "ABSENT", checkedInAt: null, checkedOutAt: null, isLate: false };
-      const after = { status, checkedInAt, checkedOutAt, isLate: !absent && ctx.body.isLate === true };
+        : {
+            status: "ABSENT",
+            checkedInAt: null,
+            checkedOutAt: null,
+            isLate: false,
+          };
+      const after = {
+        status,
+        checkedInAt,
+        checkedOutAt,
+        isLate: !absent && ctx.body.isLate === true,
+      };
       const correction = {
         reason,
-        attachmentId,
+        attachmentId: attachmentId || null,
         authorId: actor.id,
         authorName: actor.fullName,
         at: isoFromMs(ctx.now),

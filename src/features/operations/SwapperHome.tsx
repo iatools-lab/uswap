@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { notify } from "../../ui/Toast";
 import { api } from "../../api/auth-api";
 import { Select } from "../../ui/Select";
+import { Modal } from "../../ui/Modal";
 import { CheckCircle, LoaderCircle, Scan, Warning } from "../../ui/icons";
 import { QrScanner } from "./QrScanner";
 import {
@@ -23,6 +24,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
   const [busy, setBusy] = useState(false);
   const [token, setToken] = useState(() => captureQrToken());
   const [scanning, setScanning] = useState(false);
+  const [punchOpen, setPunchOpen] = useState(false);
   const [shiftId, setShiftId] = useState(() =>
     openShifts.length === 1 ? openShifts[0].id : "",
   );
@@ -30,7 +32,10 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
   useEffect(() => {
     const receive = () => {
       const nextToken = captureQrToken();
-      if (nextToken) setToken(nextToken);
+      if (nextToken) {
+        setToken(nextToken);
+        setPunchOpen(true);
+      }
     };
     receive();
     window.addEventListener("hashchange", receive);
@@ -42,7 +47,6 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
   }, [openShifts.length, openShifts[0]?.id]);
 
   const selected = data.shifts.find((shift) => shift.id === shiftId);
-  const showForm = Boolean(token.trim()) || openShifts.length > 0;
   const noShiftInWindow = liveShifts.length === 0;
   const scanned = isValidQrToken(parseQrToken(token) || token.trim());
 
@@ -83,6 +87,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
             : "Prise de service enregistrée."
           : "Fin de service enregistrée.",
       );
+      setPunchOpen(false);
       onChanged();
     } catch (err) {
       setResult(null);
@@ -94,12 +99,6 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
 
   return (
     <>
-      {error && (
-        <p className="error-message" role="alert">
-          {error}
-        </p>
-      )}
-
       {result && (
         <p
           className={`ops-result ${
@@ -123,7 +122,11 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
       )}
 
       {next && (
-        <section className="admin-card operations-hero" data-shift-start={next.startTime} data-shift-end={next.endTime}>
+        <section
+          className="admin-card operations-hero"
+          data-shift-start={next.startTime}
+          data-shift-end={next.endTime}
+        >
           <p className="admin-eyebrow">Prochaine affectation</p>
           <h2>{next.station?.name}</h2>
           <p>
@@ -155,23 +158,40 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
         </section>
       )}
 
-      {showForm && (
-        <section className="admin-card ops-action-card">
-          <form onSubmit={punch}>
-            <div className="admin-card-heading">
+      <section className="admin-card ops-quick-action">
               <div>
                 <h2>Pointer mon service</h2>
-                <p className="operations-hint">
-                  Scannez le QR affiché par le chef, choisissez votre shift,
-                  puis confirmez. Internet est obligatoire : rien n’est mis en
-                  file hors connexion.
+          <p>
+            Scannez le QR du shift et confirmez votre prise ou votre fin de
+            service.
                 </p>
               </div>
-            </div>
+        <button
+          type="button"
+          className="admin-button primary-cta"
+          onClick={() => setPunchOpen(true)}
+        >
+          <Scan size={18} /> Ouvrir le pointage
+        </button>
+      </section>
+
+      <Modal
+        open={punchOpen}
+        size="md"
+        title="Pointer mon service"
+        subtitle="Scannez le QR affiché par le chef, choisissez votre shift, puis confirmez."
+        onClose={() => !busy && setPunchOpen(false)}
+      >
+        <form className="ops-punch-modal" onSubmit={punch}>
+          {error && (
+            <p className="error-message" role="alert">
+              {error}
+            </p>
+          )}
             {!openShifts.length && (
               <p className="error-message" role="status">
-                Aucun shift ouvert pour vous. Conservez le QR et réessayez
-                pendant le créneau.
+              Aucun shift ouvert pour vous. Conservez le QR et réessayez pendant
+              le créneau.
               </p>
             )}
             {!!openShifts.length && noShiftInWindow && (
@@ -243,8 +263,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
               </button>
             </div>
           </form>
-        </section>
-      )}
+      </Modal>
 
       <QrScanner
         open={scanning}

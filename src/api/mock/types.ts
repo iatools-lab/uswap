@@ -9,12 +9,7 @@
 export type Role = "ADMIN" | "SUPERVISOR" | "STATION_CHIEF" | "SWAPPER";
 
 export type AttendanceStatus =
-  | "EXPECTED"
-  | "PRESENT"
-  | "LATE"
-  | "CLOSED"
-  | "ABSENT"
-  | "JUSTIFIED";
+  "EXPECTED" | "PRESENT" | "LATE" | "CLOSED" | "ABSENT" | "JUSTIFIED";
 
 export type MockStation = {
   id: string;
@@ -112,7 +107,7 @@ export type MockAttendance = {
   justified: boolean;
   correction: {
     reason: string;
-    attachmentId: string;
+    attachmentId: string | null;
     authorId: string;
     authorName: string;
     at: string;

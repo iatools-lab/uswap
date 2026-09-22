@@ -41,24 +41,24 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
       );
       return;
     }
-    if (!file) {
-      setError("Une pièce justificative est obligatoire.");
-      return;
-    }
     setBusy(true);
     setError("");
     try {
+      let attachmentId: string | null = null;
+      if (file) {
       const form = new FormData();
       form.append("file", file);
       const attachment = await api<{ id: string }>(
         "/corrections/attachments",
         form,
       );
+        attachmentId = attachment.id;
+      }
       await api(
         `/corrections/shifts/${row.shiftId}`,
         {
           reason: reason.trim(),
-          attachmentId: attachment.id,
+          attachmentId,
           checkedInAt: checkedIn ? new Date(checkedIn).toISOString() : null,
           checkedOutAt: checkedOut ? new Date(checkedOut).toISOString() : null,
           isLate,
@@ -110,8 +110,9 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
       }
     >
       <p className="operations-hint">
-        Motif et justificatif obligatoires. L’ancienne valeur reste dans
-        l’audit ; le swappeur et le chef de station sont notifiés.
+        Le motif est obligatoire. Vous pouvez joindre un justificatif si la
+        correction en nécessite un. L’ancienne valeur reste dans l’audit ; le
+        swappeur et le chef de station sont notifiés.
       </p>
 
       {error && (
@@ -148,10 +149,8 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
           />
           <UploadSimple size={22} />
           <span>
-            <strong>
-              {file ? file.name : "Joindre un justificatif"}
-            </strong>
-            <small>PDF ou image · 5 Mo max · obligatoire</small>
+            <strong>{file ? file.name : "Joindre un justificatif"}</strong>
+            <small>PDF ou image · 5 Mo max · facultatif</small>
           </span>
         </label>
 
