@@ -39,6 +39,18 @@ export function AbsenceDeclaration({
     };
   }, []);
 
+  useEffect(() => {
+    const requestedShift = new URLSearchParams(window.location.search).get(
+      "absence",
+    );
+    if (!requestedShift) return;
+    if (eligible.some((shift) => shift.id === requestedShift)) {
+      setShiftId(requestedShift);
+      setOpen(true);
+    }
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [eligible]);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!shiftId) {

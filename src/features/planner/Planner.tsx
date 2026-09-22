@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { Modal } from "../../ui/Modal";
 import { StepperModal, type StepItem } from "../../ui/StepperModal";
 import {
@@ -28,6 +29,7 @@ import "./day-roster.css";
 import { SwapperContact } from "./SwapperContact";
 import { StationPicker } from "../stations/StationPicker";
 import { PlanningList } from "./PlanningList";
+import { SwapperMobileCalendar } from "./SwapperMobileCalendar";
 
 type Station = {
   id: string;
@@ -353,6 +355,7 @@ function ViewToolbar({
 }
 
 export function Planner({ user }: { user: User }) {
+  const navigate = useNavigate();
   const [planningName, setPlanningName] = useState("");
   const writable = user.role === "ADMIN" || user.role === "SUPERVISOR";
   const [plans, setPlans] = useState<Planning[]>([]);
@@ -550,6 +553,38 @@ export function Planner({ user }: { user: User }) {
       setBusy(false);
     }
   }
+
+  if (current && user.role === "SWAPPER" && current.status === "PUBLISHED")
+    return (
+      <>
+        <SwapperMobileCalendar
+          planning={current}
+          onBack={() => {
+            setCurrent(null);
+            setReload((n) => n + 1);
+          }}
+          onPunch={(shiftId) =>
+            navigate(`/app/mon-espace?pointage=${encodeURIComponent(shiftId)}`)
+          }
+          onAbsence={(shiftId) =>
+            navigate(`/app/mon-espace/conges?absence=${encodeURIComponent(shiftId)}`)
+          }
+        />
+        <div className="swapper-planning-desktop">
+          <PlanningEditor
+            key={current.id}
+            planning={current}
+            writable={false}
+            canPublish={false}
+            onUpdate={setCurrent}
+            onBack={() => {
+              setCurrent(null);
+              setReload((n) => n + 1);
+            }}
+          />
+        </div>
+      </>
+    );
 
   if (current)
     return (

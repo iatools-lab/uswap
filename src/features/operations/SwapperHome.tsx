@@ -46,6 +46,18 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
     if (openShifts.length === 1) setShiftId(openShifts[0].id);
   }, [openShifts.length, openShifts[0]?.id]);
 
+  useEffect(() => {
+    const requestedShift = new URLSearchParams(window.location.search).get(
+      "pointage",
+    );
+    if (!requestedShift) return;
+    if (data.shifts.some((shift) => shift.id === requestedShift)) {
+      setShiftId(requestedShift);
+      setPunchOpen(true);
+    }
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [data.shifts]);
+
   const selected = data.shifts.find((shift) => shift.id === shiftId);
   const noShiftInWindow = liveShifts.length === 0;
   const scanned = isValidQrToken(parseQrToken(token) || token.trim());

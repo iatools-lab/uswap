@@ -461,7 +461,9 @@ await exercise(
     await page.getByRole("heading", { name: "Mes pointages" }).waitFor();
     assert.ok(
       await page
-        .locator(".responsive-data-table__mobile .responsive-data-card")
+        .locator(
+          ".responsive-data-table__mobile .responsive-data-card, .swapper-attendance-card",
+        )
         .count(),
       "Les pointages doivent devenir des cartes sur mobile",
     );
@@ -501,6 +503,29 @@ await exercise(
       .first()
       .waitFor();
     await assertNoHorizontalOverflow(page, "Planning mobile");
+    await page.getByRole("link", { name: /Ouvrir le planning/ }).first().click();
+    await page.locator(".swapper-calendar").waitFor();
+    assert.equal(
+      await page.locator(".swapper-planning-desktop").isVisible(),
+      false,
+      "La vue desktop du planning doit être masquée sur mobile",
+    );
+    await page.getByRole("button", { name: "Mois suivant" }).click();
+    await page.getByRole("button", { name: "Mois précédent" }).click();
+    await page.locator(".swapper-calendar__day.has-shift").first().click();
+    const shiftDialog = page.getByRole("dialog").last();
+    await shiftDialog.getByText("Horaires", { exact: true }).first().waitFor();
+    await shiftDialog
+      .locator(".swapper-shift-state")
+      .first()
+      .waitFor();
+    const absenceShortcut = shiftDialog.getByRole("button", {
+      name: "Signaler une absence",
+    });
+    if (await absenceShortcut.count())
+      assert.ok(await absenceShortcut.first().isVisible());
+    await assertNoHorizontalOverflow(page, "Détail mobile d’un shift");
+    await shiftDialog.getByRole("button", { name: /Fermer/ }).click();
     await page.getByRole("link", { name: "Compte", exact: true }).click();
     await page.waitForURL(/\/app\/mon-espace\/compte$/);
     await assertNoHorizontalOverflow(page, "Compte mobile");
