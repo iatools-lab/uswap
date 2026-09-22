@@ -2015,7 +2015,7 @@ function Assignment({
     [query, setQuery] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [activeInfoId, setActiveInfoId] = useState<string | null>(o.swapper?.id || null),
+    [activeInfoId, setActiveInfoId] = useState<string | null>(null),
     [reports, setReports] = useState<Record<string, { loading: boolean; value?: ConstraintReport; error?: string }>>({});
 
   useEffect(() => {
@@ -2048,15 +2048,43 @@ function Assignment({
   }
 
   useEffect(() => {
-    if (o.swapper?.id) validateSwapper(o.swapper.id);
-    // Validation initiale de l'affectation déjà présente uniquement.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!users) return;
+    let active = true;
+    const candidates = users.filter(
+      (userItem) => userItem.stationId === o.station.id,
+    );
+    setReports((current) => {
+      const next = { ...current };
+      for (const candidate of candidates) next[candidate.id] = { loading: true };
+      return next;
+    });
+    Promise.allSettled(
+      candidates.map(async (candidate) => ({
+        id: candidate.id,
+        value: await api<ConstraintReport>(
+          `/plannings/${p.id}/occurrences/${o.id}/validate`,
+          { swapperId: candidate.id, revision: p.revision },
+        ),
+      })),
+    ).then((results) => {
+      if (!active) return;
+      setReports((current) => {
+        const next = { ...current };
+        results.forEach((result, index) => {
+          const id = candidates[index].id;
+          next[id] = result.status === "fulfilled"
+            ? { loading: false, value: result.value.value }
+            : { loading: false, error: result.reason instanceof Error ? result.reason.message : "Contrôle indisponible." };
+        });
+        return next;
+      });
+    });
+    return () => { active = false; };
+  }, [users, o.id, o.station.id, p.id, p.revision]);
 
   function toggleSwapper(id: string, checked: boolean) {
     setSelectedIds((current) => checked ? [...new Set([...current, id])] : current.filter((item) => item !== id));
-    if (checked) validateSwapper(id);
-    setActiveInfoId(id);
+    if (checked && !reports[id]) validateSwapper(id);
   }
 
   async function save(e: FormEvent) {
@@ -2133,8 +2161,8 @@ function Assignment({
                 <td><input aria-label={`Sélectionner ${u.fullName}`} type="checkbox" checked={selected} onChange={(event) => toggleSwapper(u.id, event.target.checked)}/></td>
                 <td><div className="assignment-person"><span className="assignment-avatar" aria-hidden="true">{u.fullName.split(" ").map(part => part[0]).slice(0, 2).join("")}</span><strong>{u.fullName}</strong></div></td>
                 <td><span className="assignment-contact"><span>{u.email}</span><small>{u.phoneNumber || "Téléphone non renseigné"}</small></span></td>
-                <td><button type="button" aria-expanded={activeInfoId === u.id} className={`assignment-status ${state?.value?.valid ? "is-valid" : state?.value ? "is-invalid" : ""}`} onClick={() => { setActiveInfoId((current) => current === u.id ? null : u.id); validateSwapper(u.id); }}>
-                  {state?.loading ? "Vérification…" : activeInfoId === u.id ? "Masquer" : state?.value?.valid ? "Disponible" : state?.value ? "À corriger" : "Vérifier"}
+                <td><button type="button" aria-haspopup="dialog" className={`assignment-status ${state?.value?.valid ? "is-valid" : state?.value ? "is-invalid" : ""}`} onClick={() => { setActiveInfoId(u.id); validateSwapper(u.id, Boolean(state?.error)); }}>
+                  {state?.loading ? "Vérification…" : state?.error ? "Réessayer" : state?.value?.valid ? "Disponible" : state?.value ? "Indisponible" : "Vérifier"}
                 </button></td>
               </tr>;
             })}</tbody>
@@ -2155,8 +2183,15 @@ function Assignment({
         </p>
       )}
 
-      {activeInfoId && (
-        <ShiftConstraints
+      <Modal
+        open={!!activeInfoId}
+        size="lg"
+        title="Résultat du contrôle"
+        subtitle={activeUser ? `${activeUser.fullName} · ${o.station.name} · ${o.templateVersion.label}` : undefined}
+        onClose={() => setActiveInfoId(null)}
+        footer={<button type="button" className="admin-button secondary" onClick={() => setActiveInfoId(null)}>Fermer</button>}
+      >
+        {activeInfoId && <ShiftConstraints
           subjectName={activeUser?.fullName}
           state={{
             ready: !!activeReport?.value?.valid,
@@ -2165,8 +2200,8 @@ function Assignment({
             retry: () => validateSwapper(activeInfoId, true),
             error: activeReport?.error,
           }}
-        />
-      )}
+        />}
+      </Modal>
 
       <div className="planner-actions">
         <button
