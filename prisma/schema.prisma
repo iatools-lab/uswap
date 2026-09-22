@@ -85,8 +85,7 @@ model User {
 
   attendances Attendance[]
 
-  attendanceQrsCreated AttendanceQr[] @relation("AttendanceQrCreatedBy")
-
+  attendanceQrsCreated  AttendanceQr[]         @relation("AttendanceQrCreatedBy")
   attendanceCorrections AttendanceCorrection[] @relation("AttendanceCorrectionBy")
 
   replacementRequestsCreated ReplacementRequest[] @relation("ReplacementRequestedByUser")

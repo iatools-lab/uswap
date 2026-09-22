@@ -8,14 +8,11 @@ import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
 imports: [PrismaModule],
-
 controllers: [AttendanceController],
-
 providers: [
 AttendanceService,
 AttendanceScheduler,
 ],
-
 exports: [AttendanceService],
 })
 export class AttendanceModule {}

@@ -11,23 +11,18 @@ UseGuards,
 } from '@nestjs/common';
 
 import {
-ApiBearerAuth,
-ApiOperation,
-ApiQuery,
-ApiTags,
-} from '@nestjs/swagger';
-
-import { AttendanceStatus, Role } from '@prisma/client';
+AttendanceStatus,
+AttendanceQrType,
+Role,
+} from '@prisma/client';
 
 import { AttendanceService } from './attendance.service';
-
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
-@ApiTags('attendance')
-@ApiBearerAuth()
 @Controller('attendance')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class AttendanceController {
 constructor(
 private readonly attendanceService: AttendanceService,
@@ -38,18 +33,14 @@ private readonly attendanceService: AttendanceService,
 // ============================================================
 
 @Post('qr')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.SUPERVISOR)
-@ApiOperation({
-summary: 'Generate attendance QR code',
-})
+@Roles(Role.SUPERVISOR, Role.STATION_CHIEF)
 async generateQr(
-@Req() req: { user: { id: string } },
+@Req() req: any,
 @Body()
 body: {
 shiftId: string;
 stationId: string;
-type: 'START' | 'END';
+type: AttendanceQrType;
 },
 ) {
 return this.attendanceService.generateQr(
@@ -65,13 +56,9 @@ body.type,
 // ============================================================
 
 @Post('check-in')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.SWAPPER)
-@ApiOperation({
-summary: 'Check in using attendance QR code',
-})
 async checkIn(
-@Req() req: { user: { id: string } },
+@Req() req: any,
 @Body()
 body: {
 token: string;
@@ -96,13 +83,9 @@ body.longitude,
 // ============================================================
 
 @Post('check-out')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.SWAPPER)
-@ApiOperation({
-summary: 'Check out using attendance QR code',
-})
 async checkOut(
-@Req() req: { user: { id: string } },
+@Req() req: any,
 @Body()
 body: {
 token: string;
@@ -123,20 +106,11 @@ body.longitude,
 }
 
 // ============================================================
-// GET ALL ATTENDANCES
+// FIND ALL ATTENDANCES
 // ============================================================
 
 @Get()
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN, Role.SUPERVISOR)
-@ApiOperation({
-summary: 'Get all attendance records',
-})
-@ApiQuery({
-name: 'status',
-required: false,
-enum: AttendanceStatus,
-})
 async findAll(
 @Query('status') status?: AttendanceStatus,
 ) {
@@ -144,34 +118,21 @@ return this.attendanceService.findAll(status);
 }
 
 // ============================================================
-// DASHBOARD STATISTICS
+// GET ATTENDANCE STATISTICS
 // ============================================================
 
 @Get('statistics')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN, Role.SUPERVISOR)
-@ApiOperation({
-summary: 'Get attendance dashboard statistics',
-})
 async getStatistics() {
 return this.attendanceService.getStatistics();
 }
 
 // ============================================================
-// GET ATTENDANCE BY SHIFT
+// FIND ATTENDANCES BY SHIFT
 // ============================================================
 
 @Get('shift/:shiftId')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN, Role.SUPERVISOR)
-@ApiOperation({
-summary: 'Get attendance records for a shift',
-})
-@ApiQuery({
-name: 'status',
-required: false,
-enum: AttendanceStatus,
-})
 async findByShift(
 @Param('shiftId') shiftId: string,
 @Query('status') status?: AttendanceStatus,
@@ -183,15 +144,11 @@ status,
 }
 
 // ============================================================
-// GET SWAPPERS PENDING CHECK-OUT
+// FIND PENDING CHECKOUTS
 // ============================================================
 
 @Get('shift/:shiftId/pending-checkout')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN, Role.SUPERVISOR)
-@ApiOperation({
-summary: 'Get swappers who have not checked out',
-})
 async findPendingCheckouts(
 @Param('shiftId') shiftId: string,
 ) {
@@ -201,20 +158,11 @@ shiftId,
 }
 
 // ============================================================
-// GET ATTENDANCE BY STATION
+// FIND ATTENDANCES BY STATION
 // ============================================================
 
 @Get('station/:stationId')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN, Role.SUPERVISOR)
-@ApiOperation({
-summary: 'Get attendance records for a station',
-})
-@ApiQuery({
-name: 'status',
-required: false,
-enum: AttendanceStatus,
-})
 async findByStation(
 @Param('stationId') stationId: string,
 @Query('status') status?: AttendanceStatus,
@@ -226,20 +174,11 @@ status,
 }
 
 // ============================================================
-// GET ATTENDANCE BY SWAPPER
+// FIND ATTENDANCES BY SWAPPER
 // ============================================================
 
 @Get('swapper/:swapperId')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN, Role.SUPERVISOR)
-@ApiOperation({
-summary: 'Get attendance history for a swapper',
-})
-@ApiQuery({
-name: 'status',
-required: false,
-enum: AttendanceStatus,
-})
 async findBySwapper(
 @Param('swapperId') swapperId: string,
 @Query('status') status?: AttendanceStatus,
@@ -255,14 +194,9 @@ status,
 // ============================================================
 
 @Patch(':id/correct')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN, Role.SUPERVISOR)
-@ApiOperation({
-summary: 'Correct an attendance record',
-})
 async correctAttendance(
-@Req() req: { user: { id: string } },
-@Param('id') attendanceId: string,
+@Param('id') id: string,
 @Body()
 body: {
 newStatus: AttendanceStatus;
@@ -271,9 +205,10 @@ checkInAt?: string;
 checkOutAt?: string;
 evidenceUrl?: string;
 },
+@Req() req: any,
 ) {
 return this.attendanceService.correctAttendance(
-attendanceId,
+id,
 req.user.id,
 body.newStatus,
 body.reason,
@@ -284,18 +219,12 @@ body.evidenceUrl,
 }
 
 // ============================================================
-// GET ONE ATTENDANCE
+// FIND ONE ATTENDANCE
 // ============================================================
 
 @Get(':id')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN, Role.SUPERVISOR)
-@ApiOperation({
-summary: 'Get one attendance record',
-})
-async findOne(
-@Param('id') id: string,
-) {
+async findOne(@Param('id') id: string) {
 return this.attendanceService.findOne(id);
 }
 }
