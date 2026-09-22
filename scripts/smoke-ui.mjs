@@ -61,6 +61,13 @@ await exercise(
   "AdminUswap",
   "/app/admin",
   async (page) => {
+    const workspace = page.locator(".admin-workspace");
+    await page.getByRole("button", { name: "Masquer la navigation" }).click();
+    await page.waitForFunction(() => document.querySelector(".admin-sidebar")?.getBoundingClientRect().width < 90);
+    assert.ok(await workspace.evaluate((element) => element.classList.contains("is-sidebar-collapsed")), "La navigation doit pouvoir se replier depuis son rail");
+    await page.getByRole("button", { name: "Afficher la navigation" }).click();
+    await page.waitForFunction(() => document.querySelector(".admin-sidebar")?.getBoundingClientRect().width > 200);
+    assert.ok(!(await workspace.evaluate((element) => element.classList.contains("is-sidebar-collapsed"))), "La navigation doit pouvoir être réaffichée");
     await page.getByRole("link", { name: "Utilisateurs", exact: true }).click();
     await page.waitForURL(/\/app\/admin\/utilisateurs$/);
     assert.equal(await page.locator("h1").count(), 1, "Le titre de page ne doit apparaître qu'une fois");
@@ -86,15 +93,32 @@ await exercise(
 
     await page.getByRole("link", { name: "Plannings", exact: true }).click();
     await page.waitForURL(/\/app\/admin\/plannings$/);
+    await page.getByRole("link", { name: /Ouvrir le planning/ }).first().click();
+    await page.locator(".planner-range").first().click();
+    await page.getByRole("button", { name: "Ajouter", exact: true }).first().click();
+    await page.getByRole("heading", { name: "Ajouter des swappeurs" }).waitFor();
+    await page.getByRole("form", { name: "Affecter un swappeur" }).getByText(/Pause .*60 min/).waitFor();
+    const assignmentStatus = page.locator(".assignment-status").first();
+    await page.locator('.assignment-table input[type="checkbox"]').first().check();
+    assert.equal(await page.getByRole("heading", { name: "Résultat du contrôle" }).count(), 0, "La sélection d’un swappeur ne doit pas ouvrir le détail des contraintes");
+    await assignmentStatus.waitFor();
+    await assignmentStatus.click();
+    await page.getByRole("heading", { name: "Résultat du contrôle" }).waitFor();
+    await page.getByRole("dialog").last().getByRole("button", { name: "Fermer", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Tous les plannings", exact: true }).click();
     await page.getByRole("button", { name: /Nouveau planning|Créer un planning/ }).first().click();
     await page.getByRole("heading", { name: "Créer un planning" }).waitFor();
-    await page.getByRole("button", { name: "Fermer" }).click();
+    await page.keyboard.press("Escape");
 
     await page.getByRole("button", { name: /Stations/ }).click();
     await page.waitForURL(/\/app\/admin\/stations\?tab=list$/);
     await page.getByRole("button", { name: "Créer une station" }).click();
     await page.getByRole("heading", { name: "Nouvelle station" }).waitFor();
-    await page.getByRole("button", { name: "Fermer" }).click();
+    await page.locator(".map-picker-wrapper .leaflet-container").waitFor();
+    assert.match((await page.locator(".map-picker-wrapper .leaflet-tile").first().getAttribute("src")) || "", /server\.arcgisonline\.com/, "La mini-carte doit utiliser un fond sans clé API");
+    await page.keyboard.press("Escape");
 
     await page.getByRole("link", { name: "Plannings", exact: true }).click();
     await page.waitForURL(/\/app\/admin\/plannings$/);
@@ -188,6 +212,17 @@ await exercise(
   "/app/mon-espace",
   async (page) => {
     await page.getByRole("heading", { name: "Pointer mon service" }).waitFor();
+    const nextShift = page.locator(".operations-hero");
+    if (await nextShift.count()) {
+      const nextEnd = await nextShift.getAttribute("data-shift-end");
+      assert.ok(nextEnd && Date.parse(nextEnd) >= Date.now(), "La prochaine affectation ne doit pas être un shift déjà terminé");
+    }
+    const automatedCheckoutAbsence = await page.evaluate(() => {
+      const db = JSON.parse(localStorage.getItem("uswap.mock.db.v9") || "null");
+      if (!db) return false;
+      return db.attendance.some((record) => record.checkedInAt && !record.checkedOutAt && record.status === "ABSENT" && db.absences.some((absence) => absence.shiftId === record.shiftId && /sans pointage de fin/i.test(absence.reason)));
+    });
+    assert.ok(automatedCheckoutAbsence, "Un pointage sans fin de service doit produire une absence automatique");
     await page.getByRole("heading", { name: "Absence imprévue" }).waitFor();
     await page.getByRole("button", { name: "Signaler", exact: true }).waitFor();
     await page.getByRole("button", { name: "Signaler", exact: true }).click();

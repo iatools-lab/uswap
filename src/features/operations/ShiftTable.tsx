@@ -4,6 +4,7 @@ import type { OperationShift } from "./types";
 import { formatDate, shiftStatus } from "./format";
 
 function statusClass(shift: OperationShift) {
+  if (shift.attendance?.status === "ABSENT") return "attendance-status--absent";
   if (shift.attendance?.checkedOutAt) return "attendance-status--closed";
   if (shift.attendance?.isLate) return "attendance-status--late";
   if (shift.attendance) return "attendance-status--present";

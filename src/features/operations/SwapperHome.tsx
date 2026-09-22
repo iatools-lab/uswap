@@ -123,7 +123,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
       )}
 
       {next && (
-        <section className="admin-card operations-hero">
+        <section className="admin-card operations-hero" data-shift-start={next.startTime} data-shift-end={next.endTime}>
           <p className="admin-eyebrow">Prochaine affectation</p>
           <h2>{next.station?.name}</h2>
           <p>

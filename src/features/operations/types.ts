@@ -10,6 +10,7 @@ export type OperationShift = {
   station: { id?: string; name: string; timezone?: string };
   swapper: { fullName: string };
   attendance: {
+    status: "PRESENT" | "LATE" | "CLOSED" | "JUSTIFIED" | "ABSENT";
     checkedInAt: string;
     checkedOutAt: string | null;
     isLate: boolean;

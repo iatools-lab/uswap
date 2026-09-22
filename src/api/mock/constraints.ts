@@ -61,9 +61,9 @@ export function hoursInWeek(
 }
 
 /**
- * US 2038 — Un traitement automatique classe absent le swappeur sans pointage
- * après la tolérance de la station, une seule fois par affectation, puis
- * notifie le superviseur, le chef de station et le swappeur concerné.
+ * US 2038 — Un traitement automatique classe absent le swappeur qui n'a pas
+ * pointé après la tolérance ou qui n'a pas enregistré sa fin de service. Il
+ * ne traite chaque affectation qu'une fois et notifie les acteurs concernés.
  */
 export function runAutomation(db: MockDb, now: number): void {
   const published = new Set(
@@ -72,23 +72,33 @@ export function runAutomation(db: MockDb, now: number): void {
   for (const occurrence of db.occurrences) {
     if (!published.has(occurrence.planningId)) continue;
     if (!occurrence.swapperId) continue;
-    if (db.automatedAbsences.includes(occurrence.id)) continue;
     const station = db.stations.find((item) => item.id === occurrence.stationId);
     if (!station) continue;
     const start = Date.parse(occurrence.startTime);
     const end = Date.parse(occurrence.endTime);
     const tolerance = station.latenessToleranceMinutes * 60000;
-    if (now < start + tolerance || now > end + 2 * 3600000) continue;
-    if (attendanceRecord(db, occurrence.id)) continue;
+    if (now < start + tolerance) continue;
+    const record = attendanceRecord(db, occurrence.id);
+    const missedCheckin = !record;
+    const missedCheckout = now > end && Boolean(record?.checkedInAt) && !record?.checkedOutAt;
+    if (!missedCheckin && !missedCheckout) continue;
+    if (missedCheckout && record) {
+      record.status = "ABSENT";
+      record.justified = false;
+    }
+    if (db.automatedAbsences.includes(occurrence.id)) continue;
     db.automatedAbsences.push(occurrence.id);
+    const reason = missedCheckout
+      ? "Absence automatique : prise de service enregistrée sans pointage de fin."
+      : "Absence automatique : aucun pointage après le délai de tolérance.";
     db.absences.push({
       id: `abs-auto-${occurrence.id}`,
       shiftId: occurrence.id,
       swapperId: occurrence.swapperId,
-      reason: "Absence automatique : aucun pointage après le délai de tolérance.",
+      reason,
       attachmentId: null,
       clientRef: null,
-      reportedAt: new Date(start + tolerance).toISOString(),
+      reportedAt: new Date(missedCheckout ? end : start + tolerance).toISOString(),
       origin: "AUTOMATIC_ABSENCE",
       status: "OPEN",
       coveredBy: null,
@@ -99,7 +109,9 @@ export function runAutomation(db: MockDb, now: number): void {
       occurrence.stationId,
       "AUTOMATIC_ABSENCE",
       "Absence automatique",
-      `${swapper?.fullName ?? "Un swappeur"} n'a pas pointé à ${station.name} (${occurrence.label}).`,
+      missedCheckout
+        ? `${swapper?.fullName ?? "Un swappeur"} n'a pas enregistré sa fin de service à ${station.name} (${occurrence.label}).`
+        : `${swapper?.fullName ?? "Un swappeur"} n'a pas pointé à ${station.name} (${occurrence.label}).`,
       [occurrence.swapperId],
     );
   }

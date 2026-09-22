@@ -164,7 +164,7 @@ export const FICTITIOUS_DOMAIN = "uswap.example.com";
  * referme aussi les sessions en cours (comportement attendu lors d'un
  * changement de schéma, jamais lors d'un simple rechargement).
  */
-export const DB_VERSION = 8;
+export const DB_VERSION = 9;
 
 /** Mot de passe commun aux comptes de démonstration (fictifs). */
 export const DEMO_PASSWORD = "uswap2026";
@@ -283,9 +283,9 @@ const users: MockUser[] = [
 /* ------------------------------------------------------------------ */
 
 const templateSeeds = [
-  { label: "Matin", start: "06:00", end: "14:00", breakStart: "10:00", breakEnd: "10:30" },
-  { label: "Après-midi", start: "14:00", end: "22:00", breakStart: "18:00", breakEnd: "18:30" },
-  { label: "Nuit", start: "22:00", end: "06:00", breakStart: "02:00", breakEnd: "02:30" },
+  { label: "Matin", start: "06:00", end: "14:00", breakStart: "10:00", breakEnd: "11:00" },
+  { label: "Après-midi", start: "14:00", end: "22:00", breakStart: "18:00", breakEnd: "19:00" },
+  { label: "Nuit", start: "22:00", end: "06:00", breakStart: "02:00", breakEnd: "03:00" },
 ];
 
 function buildTemplates(): MockTemplate[] {
@@ -514,6 +514,17 @@ export function createSeed(nowMs: number): MockDb {
               before: { status: "ABSENT", checkedInAt: null },
               after: { status: "JUSTIFIED", checkedInAt: isoFromMs(start + 2 * 60000) },
             },
+          }),
+        );
+        return;
+      }
+      if (index === 1) {
+        // Cas de recette : prise de service effectuée, mais aucun pointage de
+        // fin. L'automatisation doit le classer absent une fois le shift échu.
+        attendance.push(
+          makeAttendance(item, "PRESENT", {
+            checkedInAt: isoFromMs(start + 1 * 60000),
+            checkedOutAt: null,
           }),
         );
         return;

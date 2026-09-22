@@ -70,6 +70,7 @@ export const attendanceRoutes: MockRoute[] = [
               swapper: { fullName: user.fullName },
               attendance: record?.checkedInAt
                 ? {
+                    status: record.status,
                     checkedInAt: record.checkedInAt,
                     checkedOutAt: record.checkedOutAt,
                     isLate: record.isLate,
@@ -106,6 +107,7 @@ export const attendanceRoutes: MockRoute[] = [
             swapper: { fullName: swapper?.fullName ?? "Poste vacant" },
             attendance: record?.checkedInAt
               ? {
+                  status: record.status,
                   checkedInAt: record.checkedInAt,
                   checkedOutAt: record.checkedOutAt,
                   isLate: record.isLate,
@@ -316,7 +318,10 @@ export const attendanceRoutes: MockRoute[] = [
               item.shiftId === occurrence.id &&
               item.origin === "AUTOMATIC_ABSENCE" &&
               item.status === "OPEN"
-            ),
+          ),
+        );
+        ctx.db.automatedAbsences = ctx.db.automatedAbsences.filter(
+          (shiftId) => shiftId !== occurrence.id,
         );
         notifyStaff(
           ctx.db,
