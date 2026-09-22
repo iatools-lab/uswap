@@ -7,7 +7,7 @@ import { RouteFallback } from "../app/RouteFallback";
 import { useSession } from "../app/session";
 import { roles, rolePaths } from "../api/auth-api";
 import { Clock3, LayoutDashboard, UserRound, Zap } from "../ui/icons";
-import { SidebarSimpleIcon } from "@phosphor-icons/react";
+import { SidebarToggle } from "./SidebarToggle";
 import "../styles/admin.css";
 
 export function RoleShell() {
@@ -64,6 +64,7 @@ export function RoleShell() {
         Aller au contenu
       </a>
       <aside className="admin-sidebar">
+        <SidebarToggle collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} />
         <a className="brand" href={homePath} onClick={goHome}>
           <span className="brand-symbol">
             <Zap weight="fill" />
@@ -84,7 +85,7 @@ export function RoleShell() {
             aria-current={!account && !planning ? "page" : undefined}
           >
             <LayoutDashboard />
-            {title}
+            <span>{title}</span>
           </a>
           <a
             href={`${homePath}/plannings`}
@@ -92,7 +93,7 @@ export function RoleShell() {
             aria-current={planning ? "page" : undefined}
           >
             <Clock3 />
-            Plannings
+            <span>Plannings</span>
           </a>
           <a
             href={`${homePath}/compte`}
@@ -100,21 +101,12 @@ export function RoleShell() {
             aria-current={account ? "page" : undefined}
           >
             <UserRound />
-            Mon compte
+            <span>Mon compte</span>
           </a>
         </nav>
       </aside>
       <div className="admin-body">
         <header className="admin-topbar">
-          <button
-            type="button"
-            className="sidebar-toggle"
-            aria-label={sidebarCollapsed ? "Afficher la navigation" : "Masquer la navigation"}
-            aria-pressed={sidebarCollapsed}
-            onClick={() => setSidebarCollapsed((value) => !value)}
-          >
-            <SidebarSimpleIcon size={20} weight="bold" />
-          </button>
           <div className="admin-heading-copy">
             <span className="admin-mobile-brand">
               uSwap<span>.</span>

@@ -137,6 +137,31 @@
   color: #fff;
 }
 
+.sidebar-rail-toggle {
+  position: absolute;
+  top: 28px;
+  right: -16px;
+  z-index: 5;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #dce4f1;
+  border-radius: 9px;
+  background: #fff;
+  color: #40516d;
+  box-shadow: 0 5px 16px rgba(15, 35, 82, .14);
+  cursor: pointer;
+  transition: color .16s ease, border-color .16s ease, transform .16s ease;
+}
+
+.sidebar-rail-toggle:hover,
+.sidebar-rail-toggle:focus-visible {
+  color: var(--navy);
+  border-color: #aebdd3;
+  transform: translateY(-1px);
+}
+
 .admin-workspace,
 .admin-sidebar,
 .admin-sidebar .brand-lockup,
@@ -2538,7 +2563,8 @@
   .admin-workspace.is-sidebar-collapsed {
     display: flex;
   }
-  .sidebar-toggle {
+  .sidebar-toggle,
+  .sidebar-rail-toggle {
     display: none;
   }
   .admin-heading-copy > p {

@@ -1,11 +1,12 @@
 import { Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { CaretDownIcon, SidebarSimpleIcon } from "@phosphor-icons/react";
+import { CaretDownIcon } from "@phosphor-icons/react";
 import { AccountMenu } from "../features/account/AccountMenu";
 import { NotificationBell } from "../features/notifications/NotificationBell";
 import { interceptNav } from "../app/spaNav";
 import { RouteFallback } from "../app/RouteFallback";
 import { useSession } from "../app/session";
+import { SidebarToggle } from "./SidebarToggle";
 import {
   Building2,
   Clock3,
@@ -104,6 +105,7 @@ export function AdminShell() {
         Aller au contenu
       </a>
       <aside className="admin-sidebar">
+        <SidebarToggle collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} />
         <a
           className="brand"
           {...link("/app/admin")}
@@ -271,15 +273,6 @@ export function AdminShell() {
 
       <div className="admin-body">
         <header className="admin-topbar">
-          <button
-            type="button"
-            className="sidebar-toggle"
-            aria-label={sidebarCollapsed ? "Afficher la navigation" : "Masquer la navigation"}
-            aria-pressed={sidebarCollapsed}
-            onClick={() => setSidebarCollapsed((value) => !value)}
-          >
-            <SidebarSimpleIcon size={20} weight="bold" />
-          </button>
           <div className="admin-heading-copy">
             <span className="admin-mobile-brand">
               uSwap<span>.</span>

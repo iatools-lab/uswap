@@ -93,16 +93,11 @@ const blankSharedShift = {
 
 const DEFAULT_LAT = 4.051056;
 const DEFAULT_LNG = 9.708533;
-const MAPTILER_API_KEY = import.meta.env.VITE_MAPTILER_KEY?.trim() || "";
-const MAP_TILE_URL = MAPTILER_API_KEY
-  ? `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${MAPTILER_API_KEY}`
-  : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-const MAP_TILE_OPTIONS = MAPTILER_API_KEY
-  ? { tileSize: 512, zoomOffset: -1 }
-  : { tileSize: 256, zoomOffset: 0 };
-const MAP_ATTRIBUTION = MAPTILER_API_KEY
-  ? '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const MAP_TILE_URL =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}";
+const MAP_TILE_OPTIONS = { tileSize: 256, zoomOffset: 0 };
+const MAP_ATTRIBUTION =
+  'Tiles &copy; <a href="https://www.esri.com/">Esri</a> — sources Esri, HERE, Garmin et contributeurs OpenStreetMap';
 
 function ensureLeafletStyles() {
   if (document.querySelector('link[href*="leaflet.css"]')) return;
@@ -247,16 +242,12 @@ function MapLocationPicker({
 
   async function reverseGeocode(lat: number, lng: number) {
     try {
-      const url = MAPTILER_API_KEY
-        ? `https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${MAPTILER_API_KEY}&language=fr&types=poi,address&limit=1`
-        : `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=fr`;
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=fr`;
       const res = await fetch(url);
       const data = await res.json();
-      const feature = MAPTILER_API_KEY
-        ? data?.features?.[0]
-        : data?.display_name
-          ? { place_name: data.display_name, text: data.name || data.display_name }
-          : null;
+      const feature = data?.display_name
+        ? { place_name: data.display_name, text: data.name || data.display_name }
+        : null;
       if (feature) {
         const detailedName = formatDetailedAddress(feature);
         setSearchQuery(detailedName);
@@ -279,20 +270,16 @@ function MapLocationPicker({
     setIsSearching(true);
     try {
       const queryText = encodeURIComponent(value);
-      const url = MAPTILER_API_KEY
-        ? `https://api.maptiler.com/geocoding/${queryText}.json?key=${MAPTILER_API_KEY}&language=fr&country=cm&types=poi,address&limit=10`
-        : `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${queryText}&countrycodes=cm&limit=10&addressdetails=1&accept-language=fr`;
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${queryText}&countrycodes=cm&limit=10&addressdetails=1&accept-language=fr`;
       const res = await fetch(url);
       const data = await res.json();
-      const features = MAPTILER_API_KEY
-        ? data?.features || []
-        : Array.isArray(data)
-          ? data.map((item: any) => ({
-              text: item.name || item.display_name,
-              place_name: item.display_name,
-              center: [Number(item.lon), Number(item.lat)],
-            }))
-          : [];
+      const features = Array.isArray(data)
+        ? data.map((item: any) => ({
+            text: item.name || item.display_name,
+            place_name: item.display_name,
+            center: [Number(item.lon), Number(item.lat)],
+          }))
+        : [];
       setSuggestions(features);
     } catch (e) {
       console.error("Erreur de recherche de stations", e);
