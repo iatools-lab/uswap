@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/auth-api";
 import { FileSpreadsheet, LoaderCircle } from "../../ui/icons";
+import {
+  ResponsiveDataTable,
+  type ResponsiveColumn,
+} from "../../ui/ResponsiveDataTable";
 import { exportToExcel } from "../../utils/excelExport";
 import { toDateInput, formatDateTime } from "./format";
 import type { ShiftChange, SupervisionProps } from "./types";
@@ -54,7 +58,11 @@ export function ChangeHistory({ user }: SupervisionProps) {
         { header: "Sortant", key: (row) => row.outSwapper ?? "", width: 24 },
         { header: "Entrant", key: (row) => row.inSwapper ?? "", width: 24 },
         { header: "Motif", key: (row) => row.reason ?? "", width: 38 },
-        { header: "Date", key: (row) => formatDateTime(row.createdAt), width: 22 },
+        {
+          header: "Date",
+          key: (row) => formatDateTime(row.createdAt),
+          width: 22,
+        },
       ],
     });
   }
@@ -76,6 +84,26 @@ export function ChangeHistory({ user }: SupervisionProps) {
           : true,
       );
   }, [rows, stationSearch, swapperSearch]);
+  const columns: ResponsiveColumn<ShiftChange>[] = [
+    {
+      key: "type",
+      header: "Type",
+      primary: true,
+      render: (row) => (
+        <span className="admin-badge">{TYPE_LABEL[row.type]}</span>
+      ),
+    },
+    { key: "initiator", header: "Initiateur", render: (row) => row.initiator },
+    { key: "station", header: "Station", render: (row) => row.station },
+    { key: "out", header: "Sortant", render: (row) => row.outSwapper ?? "—" },
+    { key: "in", header: "Entrant", render: (row) => row.inSwapper ?? "—" },
+    { key: "reason", header: "Motif", render: (row) => row.reason ?? "—" },
+    {
+      key: "date",
+      header: "Date",
+      render: (row) => formatDateTime(row.createdAt),
+    },
+  ];
 
   return (
     <section className="admin-card">
@@ -157,39 +185,20 @@ export function ChangeHistory({ user }: SupervisionProps) {
         </div>
       ) : !visibleRows.length ? (
         <div className="admin-empty">
-          <h3>{rows.length ? "Aucun changement ne correspond" : "Aucun changement sur la période"}</h3>
+          <h3>
+            {rows.length
+              ? "Aucun changement ne correspond"
+              : "Aucun changement sur la période"}
+          </h3>
         </div>
       ) : (
-        <div className="admin-table-wrap ops-table">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Initiateur</th>
-                <th>Station</th>
-                <th>Sortant</th>
-                <th>Entrant</th>
-                <th>Motif</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <span className="admin-badge">{TYPE_LABEL[row.type]}</span>
-                  </td>
-                  <td>{row.initiator}</td>
-                  <td>{row.station}</td>
-                  <td>{row.outSwapper ?? "—"}</td>
-                  <td>{row.inSwapper ?? "—"}</td>
-                  <td>{row.reason ?? "—"}</td>
-                  <td>{formatDateTime(row.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveDataTable
+          rows={visibleRows}
+          columns={columns}
+          rowKey={(row) => row.id}
+          ariaLabel="Historique des changements d’affectation"
+          className="ops-table"
+        />
       )}
       <p className="operations-hint">
         Historique en lecture seule.{" "}

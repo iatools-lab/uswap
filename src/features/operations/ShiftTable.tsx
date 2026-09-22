@@ -1,5 +1,9 @@
 import type { User } from "../../api/auth-api";
 import { Clock3 } from "../../ui/icons";
+import {
+  ResponsiveDataTable,
+  type ResponsiveColumn,
+} from "../../ui/ResponsiveDataTable";
 import type { OperationShift } from "./types";
 import { formatDate, shiftStatus } from "./format";
 
@@ -33,38 +37,45 @@ export function ShiftTable({
     );
   }
 
-  return (
-    <div className="admin-table-wrap ops-table ops-shift-table">
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Station</th>
-            {user.role !== "SWAPPER" && <th>Swappeur</th>}
-            <th>Début</th>
-            <th>Fin</th>
-            <th>Statut</th>
-            {onPublish && <th>Action</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {shifts.map((shift) => (
-            <tr key={shift.id}>
-              <td data-label="Station">
-                <strong>{shift.station?.name}</strong>
-              </td>
-              {user.role !== "SWAPPER" && (
-                <td data-label="Swappeur">{shift.swapper?.fullName}</td>
-              )}
-              <td data-label="Début">{formatDate(shift.startTime)}</td>
-              <td data-label="Fin">{formatDate(shift.endTime)}</td>
-              <td data-label="Statut">
+  const columns: ResponsiveColumn<OperationShift>[] = [
+    {
+      key: "station",
+      header: "Station",
+      primary: true,
+      render: (shift) => <strong>{shift.station?.name}</strong>,
+    },
+    ...(user.role !== "SWAPPER"
+      ? [
+          {
+            key: "swapper",
+            header: "Swappeur",
+            render: (shift: OperationShift) => shift.swapper?.fullName,
+          },
+        ]
+      : []),
+    {
+      key: "start",
+      header: "Début",
+      render: (shift) => formatDate(shift.startTime),
+    },
+    { key: "end", header: "Fin", render: (shift) => formatDate(shift.endTime) },
+    {
+      key: "status",
+      header: "Statut",
+      render: (shift) => (
                 <span className={`attendance-status ${statusClass(shift)}`}>
                   {shiftStatus(shift)}
                 </span>
-              </td>
-              {onPublish && (
-                <td data-label="Action">
-                  {!shift.publishedAt && (
+      ),
+    },
+    ...(onPublish
+      ? [
+          {
+            key: "action",
+            header: "Action",
+            className: "responsive-data-card__action",
+            render: (shift: OperationShift) =>
+              !shift.publishedAt ? (
                     <button
                       type="button"
                       className="admin-button secondary small"
@@ -73,13 +84,21 @@ export function ShiftTable({
                     >
                       Publier
                     </button>
-                  )}
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+              ) : (
+                "—"
+              ),
+          },
+        ]
+      : []),
+  ];
+
+  return (
+    <ResponsiveDataTable
+      rows={shifts}
+      columns={columns}
+      rowKey={(shift) => shift.id}
+      ariaLabel="Shifts"
+      className="ops-table ops-shift-table"
+    />
   );
 }

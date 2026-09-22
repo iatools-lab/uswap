@@ -1233,7 +1233,7 @@ export function StationManager({
           {viewMode === "table" ? (
             <div className="admin-card">
               <div className="admin-table-wrap">
-                <table className="admin-table station-compact-table">
+                <table className="admin-table station-compact-table mobile-card-table">
                   <thead>
                     <tr>
                       <th>Station</th>
@@ -1248,7 +1248,7 @@ export function StationManager({
                   <tbody>
                     {filteredStations.map((s) => (
                       <tr key={s?.id}>
-                        <td>
+                        <td data-label="Station">
                           <div className="admin-person">
                             <span className="admin-stat-icon orange station-person-icon">
                               <Building2 size={16} />
@@ -1259,13 +1259,13 @@ export function StationManager({
                             </div>
                           </div>
                         </td>
-                        <td>
+                        <td data-label="Ville & adresse">
                           <div className="station-cell-city">
                             <strong>{s?.city || "Non spécifiée"}</strong>
                             <span>{s?.address || s?.location || "—"}</span>
                           </div>
                         </td>
-                        <td>
+                        <td data-label="GPS">
                           {s?.latitude != null && s?.longitude != null ? (
                             <a
                               href={`https://www.google.com/maps?q=${s.latitude},${s.longitude}`}
@@ -1280,25 +1280,25 @@ export function StationManager({
                             <span className="station-gps-empty">—</span>
                           )}
                         </td>
-                        <td>
+                        <td data-label="Responsable">
                           <div className="station-cell-contact">
                             <span>{s?.contactName || "—"}</span>
                             {s?.contactPhone && <span>{s.contactPhone}</span>}
                           </div>
                         </td>
-                        <td>
+                        <td data-label="Contraintes">
                           <div className="code-chips station-code-chips">
                             <code>Tol: {s?.latenessToleranceMinutes ?? 0}m</code>
                             <code>Repos: {s?.minRestHours ?? 0}h</code>
                             <code>Max: {s?.weeklyHoursLimit ?? 0}h</code>
                           </div>
                         </td>
-                        <td>
+                        <td data-label="Statut">
                           <span className={`admin-badge ${s?.isActive ? "active" : "draft"}`}>
                             {s?.isActive ? "Active" : "Inactive"}
                           </span>
                         </td>
-                        <td className="station-cell-right">
+                        <td data-label="Actions" className="station-cell-right">
                           <div className="station-row-actions">
                             <button
                               type="button"

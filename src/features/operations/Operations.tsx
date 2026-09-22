@@ -1,8 +1,8 @@
 import { SwapperHome } from "./SwapperHome";
 import { ChiefHome } from "./ChiefHome";
 import { SupervisorHome } from "./SupervisorHome";
-import { SwapperPanel } from "../supervision/SwapperPanel";
 import { AttendanceMonitor } from "../supervision/AttendanceMonitor";
+import { MyAttendanceHistory } from "../supervision/MyAttendanceHistory";
 import type { OperationData } from "./types";
 import type { User } from "../../api/auth-api";
 import "./operations.css";
@@ -22,7 +22,7 @@ export function Operations({
     return (
       <div className="operations-stack">
         <SwapperHome user={user} data={data} onChanged={onChanged} />
-        <SwapperPanel user={user} data={data} onChanged={onChanged} />
+        <MyAttendanceHistory swapperId={user.id} />
       </div>
     );
   if (user.role === "STATION_CHIEF")

@@ -1,6 +1,6 @@
 import { notify } from "../../ui/Toast";
-import { useRef, useState, type DragEvent } from 'react';
-import { api, download } from '../../api/auth-api';
+import { useRef, useState, type DragEvent } from "react";
+import { api, download } from "../../api/auth-api";
 import {
   ArrowLeft,
   CheckCheck,
@@ -10,7 +10,7 @@ import {
   FileSpreadsheet,
   Info,
   X,
-} from '../../ui/icons';
+} from "../../ui/icons";
 
 type ImportRow = {
   line: number;
@@ -19,7 +19,7 @@ type ImportRow = {
   role: string;
   stationId: string | null;
   stationName: string;
-  status: 'READY' | 'IGNORED' | 'REJECTED' | 'CREATED';
+  status: "READY" | "IGNORED" | "REJECTED" | "CREATED";
   reason: string;
 };
 
@@ -34,10 +34,10 @@ type Preview = {
 };
 
 const labels: Record<string, string> = {
-  READY: 'Valide',
-  IGNORED: 'Ignoré',
-  REJECTED: 'Rejeté',
-  CREATED: 'Créé',
+  READY: "Valide",
+  IGNORED: "Ignoré",
+  REJECTED: "Rejeté",
+  CREATED: "Créé",
 };
 
 export function UserImport({
@@ -50,8 +50,8 @@ export function UserImport({
   const [preview, setPreview] = useState<Preview | null>(null);
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [filename, setFilename] = useState('');
+  const [error, setError] = useState("");
+  const [filename, setFilename] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -59,24 +59,24 @@ export function UserImport({
 
   async function inspect(file?: File) {
     if (!file) return;
-    setError('');
+    setError("");
     setPreview(null);
     setDone(false);
     setFilename(file.name);
 
     if (!/\.(csv|xlsx)$/i.test(file.name) || file.size > 2 * 1024 * 1024) {
-      setError('Choisissez un fichier CSV ou XLSX de 2 Mo maximum.');
+      setError("Choisissez un fichier CSV ou XLSX de 2 Mo maximum.");
       return;
     }
 
     setBusy(true);
     try {
       const form = new FormData();
-      form.append('file', file);
-      const res = await api<Preview>('/users/imports/preview', form);
+      form.append("file", file);
+      const res = await api<Preview>("/users/imports/preview", form);
       setPreview(res);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Lecture impossible.');
+      setError(err instanceof Error ? err.message : "Lecture impossible.");
     } finally {
       setBusy(false);
     }
@@ -85,15 +85,18 @@ export function UserImport({
   async function confirm() {
     if (!preview) return;
     setBusy(true);
-    setError('');
+    setError("");
     try {
-      const result = await api<Preview>(`/users/imports/${preview.batchId}/confirm`, {});
+      const result = await api<Preview>(
+        `/users/imports/${preview.batchId}/confirm`,
+        {},
+      );
       setPreview({ ...preview, ...result });
       setDone(true);
       notify("Import terminé. Consultez le bilan.");
       onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Import impossible.');
+      setError(err instanceof Error ? err.message : "Import impossible.");
     } finally {
       setBusy(false);
     }
@@ -101,11 +104,16 @@ export function UserImport({
 
   async function template() {
     setDownloading(true);
-    setError('');
+    setError("");
     try {
-      await download('/users/imports/template', 'modele-utilisateurs-uswap.xlsx');
+      await download(
+        "/users/imports/template",
+        "modele-utilisateurs-uswap.xlsx",
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Téléchargement impossible.');
+      setError(
+        err instanceof Error ? err.message : "Téléchargement impossible.",
+      );
     } finally {
       setDownloading(false);
     }
@@ -131,20 +139,24 @@ export function UserImport({
 
   const clearSelection = () => {
     setPreview(null);
-    setFilename('');
-    setError('');
+    setFilename("");
+    setError("");
     setDone(false);
-    if (fileInput.current) fileInput.current.value = '';
+    if (fileInput.current) fileInput.current.value = "";
   };
 
   return (
     <div className="user-import-wrapper">
       <div className="user-import-header">
-        <button type="button" className="text-button back-link" onClick={onBack}>
+        <button
+          type="button"
+          className="text-button back-link"
+          onClick={onBack}
+        >
           <ArrowLeft size={16} />
           <span>Utilisateurs</span>
         </button>
-        <h2>{done ? 'Bilan de l’importation' : 'Importer des utilisateurs'}</h2>
+        <h2>{done ? "Bilan de l’importation" : "Importer des utilisateurs"}</h2>
       </div>
 
       {error && (
@@ -163,11 +175,11 @@ export function UserImport({
               type="file"
               accept=".csv,.xlsx"
               onChange={(e) => inspect(e.target.files?.[0])}
-              style={{ display: 'none' }}
+              style={{ display: "none" }}
             />
 
             <div
-              className={`file-dropzone ${isDragging ? 'dragging' : ''}`}
+              className={`file-dropzone ${isDragging ? "dragging" : ""}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -206,7 +218,10 @@ export function UserImport({
             <div className="template-download-box">
               <div className="template-box-content">
                 <strong>Modèle de fichier</strong>
-                <p>Téléchargez le modèle Excel préformaté pour garantir la conformité des colonnes.</p>
+                <p>
+                  Téléchargez le modèle Excel préformaté pour garantir la
+                  conformité des colonnes.
+                </p>
               </div>
               <button
                 type="button"
@@ -215,7 +230,7 @@ export function UserImport({
                 onClick={template}
               >
                 <DownloadSimple size={16} />
-                {downloading ? 'Préparation…' : 'Télécharger le modèle Excel'}
+                {downloading ? "Préparation…" : "Télécharger le modèle Excel"}
               </button>
             </div>
 
@@ -246,7 +261,8 @@ export function UserImport({
                   </div>
                 </li>
                 <li className="note-item">
-                  La station est obligatoire pour les swappeurs et chefs de station. Les comptes seront créés en attente d'activation.
+                  La station est obligatoire pour les swappeurs et chefs de
+                  station. Les comptes seront créés en attente d'activation.
                 </li>
               </ul>
             </div>
@@ -278,8 +294,12 @@ export function UserImport({
 
           <div className="import-summary-grid">
             <div className="summary-card success">
-              <span className="summary-val">{done ? preview.created : preview.ready}</span>
-              <span className="summary-label">{done ? 'Comptes créés' : 'Lignes valides'}</span>
+              <span className="summary-val">
+                {done ? preview.created : preview.ready}
+              </span>
+              <span className="summary-label">
+                {done ? "Comptes créés" : "Lignes valides"}
+              </span>
             </div>
             <div className="summary-card warning">
               <span className="summary-val">{preview.ignored}</span>
@@ -293,7 +313,7 @@ export function UserImport({
 
           <div className="admin-card import-table-card">
             <div className="admin-table-wrap">
-              <table className="admin-table">
+              <table className="admin-table mobile-card-table">
                 <thead>
                   <tr>
                     <th>Ligne</th>
@@ -308,27 +328,31 @@ export function UserImport({
                 <tbody>
                   {preview.rows.map((row) => (
                     <tr key={row.line}>
-                      <td><strong>#{row.line}</strong></td>
-                      <td>{row.fullName || '—'}</td>
-                      <td>{row.email || '—'}</td>
-                      <td>
-                        {row.role ? <code>{row.role}</code> : '—'}
+                      <td data-label="Ligne">
+                        <strong>#{row.line}</strong>
                       </td>
-                      <td>{row.stationName || '—'}</td>
-                      <td>
+                      <td data-label="Collaborateur">{row.fullName || "—"}</td>
+                      <td data-label="E-mail">{row.email || "—"}</td>
+                      <td data-label="Rôle">
+                        {row.role ? <code>{row.role}</code> : "—"}
+                      </td>
+                      <td data-label="Station">{row.stationName || "—"}</td>
+                      <td data-label="Résultat">
                         <span
                           className={`admin-badge ${
-                            ['READY', 'CREATED'].includes(row.status)
-                              ? 'active'
-                              : row.status === 'IGNORED'
-                              ? 'pending'
-                              : 'inactive'
+                            ["READY", "CREATED"].includes(row.status)
+                              ? "active"
+                              : row.status === "IGNORED"
+                                ? "pending"
+                                : "inactive"
                           }`}
                         >
                           {labels[row.status] || row.status}
                         </span>
                       </td>
-                      <td className="import-reason">{row.reason || '—'}</td>
+                      <td data-label="Motif" className="import-reason">
+                        {row.reason || "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -358,7 +382,8 @@ export function UserImport({
                     onClick={confirm}
                   >
                     {busy && <LoaderCircle className="spin" size={16} />}
-                    Importer {preview.ready} utilisateur{preview.ready > 1 ? 's' : ''}
+                    Importer {preview.ready} utilisateur
+                    {preview.ready > 1 ? "s" : ""}
                   </button>
                 </>
               )}

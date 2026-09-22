@@ -11,13 +11,21 @@ const adminExact = [
 ];
 
 export const isAdminPath = (path: string) =>
-  adminExact.includes(path) || /^\/app\/admin\/utilisateurs\/[a-f0-9-]{36}$/.test(path);
+  adminExact.includes(path) ||
+  /^\/app\/admin\/utilisateurs\/[a-f0-9-]{36}$/.test(path);
 
 export const isRolePath = (user: User, path: string) =>
-  [rolePaths[user.role], `${rolePaths[user.role]}/compte`, `${rolePaths[user.role]}/plannings`].includes(path);
+  [
+    rolePaths[user.role],
+    `${rolePaths[user.role]}/compte`,
+    `${rolePaths[user.role]}/plannings`,
+    ...(user.role === "SWAPPER" ? [`${rolePaths[user.role]}/conges`] : []),
+  ].includes(path);
 
 export const isAccountPath = (path: string) =>
-  path === "/auth/activate" || path === "/auth/reset-password" || path === "/auth/forgot-password";
+  path === "/auth/activate" ||
+  path === "/auth/reset-password" ||
+  path === "/auth/forgot-password";
 
 export const isSessionPath = (user: User, path: string) =>
   user.role === "ADMIN" ? isAdminPath(path) : isRolePath(user, path);

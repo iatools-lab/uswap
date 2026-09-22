@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api/auth-api";
 import { LoaderCircle } from "../../ui/icons";
+import {
+  ResponsiveDataTable,
+  type ResponsiveColumn,
+} from "../../ui/ResponsiveDataTable";
 import { formatDateTime } from "./format";
 import type { AttendanceHistoryRow } from "./types";
 
@@ -9,6 +13,80 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
   const [error, setError] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+
+  const columns: ResponsiveColumn<AttendanceHistoryRow>[] = [
+    {
+      key: "date",
+      header: "Date et heure",
+      primary: true,
+      render: (row) => (
+        <strong>
+          {formatDateTime(row.plannedStart, row.station.timezone)}
+        </strong>
+      ),
+    },
+    { key: "station", header: "Station", render: (row) => row.station.name },
+    { key: "shift", header: "Shift", render: (row) => row.template ?? "—" },
+    {
+      key: "planned",
+      header: "Prévu",
+      render: (row) => `${row.plannedHours.toFixed(2)} h`,
+    },
+    {
+      key: "checkin",
+      header: "Début",
+      render: (row) =>
+        row.checkedInAt
+          ? formatDateTime(row.checkedInAt, row.station.timezone)
+          : "—",
+    },
+    {
+      key: "checkout",
+      header: "Fin",
+      render: (row) =>
+        row.checkedOutAt
+          ? formatDateTime(row.checkedOutAt, row.station.timezone)
+          : "—",
+    },
+    {
+      key: "status",
+      header: "Statut",
+      render: (row) =>
+        row.isJustified ? (
+          <span
+            className="attendance-status attendance-status--closed"
+            title={row.correctionReason ?? undefined}
+          >
+            Absence justifiée
+          </span>
+        ) : row.corrected ? (
+          <span
+            className="attendance-status attendance-status--closed"
+            title={row.correctionReason ?? undefined}
+          >
+            Corrigé
+          </span>
+        ) : row.isAbsent ? (
+          <span className="attendance-status attendance-status--absent">
+            Absent
+          </span>
+        ) : row.checkedOutAt ? (
+          <span className="attendance-status attendance-status--present">
+            Terminé
+          </span>
+        ) : row.checkedInAt ? (
+          <span
+            className={`attendance-status ${row.isLate ? "attendance-status--late" : "attendance-status--present"}`}
+          >
+            {row.isLate ? "En retard" : "À l’heure"}
+          </span>
+        ) : (
+          <span className="attendance-status attendance-status--expected">
+            Attendu
+          </span>
+        ),
+    },
+  ];
 
   useEffect(() => {
     let active = true;
@@ -73,84 +151,13 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
           <h3>Aucun pointage sur la période</h3>
         </div>
       ) : (
-        <div className="admin-table-wrap ops-table">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Station</th>
-                <th>Shift</th>
-                <th>Prévu</th>
-                <th>Début</th>
-                <th>Fin</th>
-                <th>Statut</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.shiftId}>
-                  <td>
-                    <strong>
-                      {formatDateTime(row.plannedStart, row.station.timezone)}
-                    </strong>
-                  </td>
-                  <td>{row.station.name}</td>
-                  <td>{row.template ?? "—"}</td>
-                  <td>{row.plannedHours.toFixed(2)} h</td>
-                  <td>
-                    {row.checkedInAt
-                      ? formatDateTime(row.checkedInAt, row.station.timezone)
-                      : "—"}
-                  </td>
-                  <td>
-                    {row.checkedOutAt
-                      ? formatDateTime(row.checkedOutAt, row.station.timezone)
-                      : "—"}
-                  </td>
-                  <td>
-                    {row.isJustified ? (
-                      <span
-                        className="attendance-status attendance-status--closed"
-                        title={row.correctionReason ?? undefined}
-                      >
-                        Absence justifiée
-                      </span>
-                    ) : row.corrected ? (
-                      <span
-                        className="attendance-status attendance-status--closed"
-                        title={row.correctionReason ?? undefined}
-                      >
-                        Corrigé
-                      </span>
-                    ) : row.isAbsent ? (
-                      <span className="attendance-status attendance-status--absent">
-                        Absent
-                      </span>
-                    ) : row.checkedOutAt ? (
-                      <span className="attendance-status attendance-status--present">
-                        Terminé
-                      </span>
-                    ) : row.checkedInAt ? (
-                      <span
-                        className={`attendance-status ${
-                          row.isLate
-                            ? "attendance-status--late"
-                            : "attendance-status--present"
-                        }`}
-                      >
-                        {row.isLate ? "En retard" : "À l’heure"}
-                      </span>
-                    ) : (
-                      <span className="attendance-status attendance-status--expected">
-                        Attendu
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveDataTable
+          rows={rows}
+          columns={columns}
+          rowKey={(row) => row.shiftId}
+          ariaLabel="Historique de mes pointages"
+          className="ops-table"
+        />
       )}
     </section>
   );

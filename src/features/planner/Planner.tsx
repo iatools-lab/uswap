@@ -1933,9 +1933,9 @@ function DayDetail({
               const groupFilled = g.occurrences.filter((o) => o.swapper).length;
               const state = coverage(groupFilled, g.occurrences.length);
               return (
-                <tr key={g.key}>
+                <tr key={g.key} data-station={g.station.name}>
                   {(index === 0 || orderedGroups[index - 1].station.id !== g.station.id) && <th scope="rowgroup" rowSpan={groups.filter(row => row.station.id === g.station.id).length} className="day-roster-station">{g.station.name}</th>}
-                  <td><div className="planner-day-detail__shift">
+                  <td data-label="Shift"><div className="planner-day-detail__shift">
                     <strong>{g.label}</strong>
                     <span>
                       {clock(g.start, g.station.timezone)} –{" "}
@@ -1947,7 +1947,7 @@ function DayDetail({
                       {g.occurrences.length > 1 ? "s" : ""}
                     </span>
                   </div></td>
-                  <td><div className="planner-day-detail__people">
+                  <td data-label="Swappeurs"><div className="planner-day-detail__people">
                     {g.occurrences.map((o) =>
                       o.swapper ? (
                         <div key={o.id} className="day-roster-member"><span className={`planner-day-swapper-chip tone-${colors[people.indexOf(o.swapper.id) % colors.length]}`}>
@@ -1964,7 +1964,7 @@ function DayDetail({
                       ),
                     )}
                   </div></td>
-                  <td>{canEdit ? <button
+                  <td data-label="Actions">{canEdit ? <button
                     type="button"
                     className="admin-button secondary small"
                     disabled={busy || removing !== null}
@@ -2158,10 +2158,10 @@ function Assignment({
               const selected = selectedIds.includes(u.id);
               const state = reports[u.id];
               return <tr key={u.id} className={selected ? "is-selected" : ""}>
-                <td><input aria-label={`Sélectionner ${u.fullName}`} type="checkbox" checked={selected} onChange={(event) => toggleSwapper(u.id, event.target.checked)}/></td>
-                <td><div className="assignment-person"><span className="assignment-avatar" aria-hidden="true">{u.fullName.split(" ").map(part => part[0]).slice(0, 2).join("")}</span><strong>{u.fullName}</strong></div></td>
-                <td><span className="assignment-contact"><span>{u.email}</span><small>{u.phoneNumber || "Téléphone non renseigné"}</small></span></td>
-                <td><button type="button" aria-haspopup="dialog" className={`assignment-status ${state?.value?.valid ? "is-valid" : state?.value ? "is-invalid" : ""}`} onClick={() => { setActiveInfoId(u.id); validateSwapper(u.id, Boolean(state?.error)); }}>
+                <td data-label="Sélection"><input aria-label={`Sélectionner ${u.fullName}`} type="checkbox" checked={selected} onChange={(event) => toggleSwapper(u.id, event.target.checked)}/></td>
+                <td data-label="Swappeur"><div className="assignment-person"><span className="assignment-avatar" aria-hidden="true">{u.fullName.split(" ").map(part => part[0]).slice(0, 2).join("")}</span><strong>{u.fullName}</strong></div></td>
+                <td data-label="Contact"><span className="assignment-contact"><span>{u.email}</span><small>{u.phoneNumber || "Téléphone non renseigné"}</small></span></td>
+                <td data-label="Affectation"><button type="button" aria-haspopup="dialog" className={`assignment-status ${state?.value?.valid ? "is-valid" : state?.value ? "is-invalid" : ""}`} onClick={() => { setActiveInfoId(u.id); validateSwapper(u.id, Boolean(state?.error)); }}>
                   {state?.loading ? "Vérification…" : state?.error ? "Réessayer" : state?.value?.valid ? "Disponible" : state?.value ? "Indisponible" : "Vérifier"}
                 </button></td>
               </tr>;

@@ -150,9 +150,12 @@
   border-radius: 9px;
   background: #fff;
   color: #40516d;
-  box-shadow: 0 5px 16px rgba(15, 35, 82, .14);
+  box-shadow: 0 5px 16px rgba(15, 35, 82, 0.14);
   cursor: pointer;
-  transition: color .16s ease, border-color .16s ease, transform .16s ease;
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.16s ease;
 }
 
 .sidebar-rail-toggle:hover,
@@ -166,7 +169,10 @@
 .admin-sidebar,
 .admin-sidebar .brand-lockup,
 .admin-sidebar nav a span {
-  transition: grid-template-columns 0.2s ease, padding 0.2s ease, opacity 0.15s ease;
+  transition:
+    grid-template-columns 0.2s ease,
+    padding 0.2s ease,
+    opacity 0.15s ease;
 }
 
 .is-sidebar-collapsed .admin-sidebar {
@@ -334,7 +340,10 @@
   background: #fff;
   color: #53627a;
   cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
 .sidebar-toggle:hover {
@@ -1297,6 +1306,95 @@
 
 .admin-table tr:last-child td {
   border-bottom: 0;
+}
+
+@media (max-width: 767px) {
+  .admin-table-wrap:has(.mobile-card-table) {
+    overflow: visible;
+  }
+
+  .mobile-card-table,
+  .mobile-card-table tbody,
+  .mobile-card-table tr,
+  .mobile-card-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mobile-card-table thead {
+    display: none;
+  }
+
+  .mobile-card-table tbody {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .mobile-card-table tr {
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 3px 12px rgba(19, 44, 85, 0.035);
+  }
+
+  .mobile-card-table td,
+  .mobile-card-table td.users-cell-right,
+  .mobile-card-table td.station-cell-right {
+    min-height: 44px;
+    display: grid;
+    grid-template-columns: minmax(92px, 0.8fr) minmax(0, 1.2fr);
+    align-items: center;
+    gap: 12px;
+    padding: 9px 0 !important;
+    border: 0;
+    border-top: 1px solid #eef1f6;
+    text-align: right;
+    white-space: normal;
+  }
+
+  .mobile-card-table td:first-child {
+    display: block;
+    min-height: 44px;
+    padding-top: 0 !important;
+    border-top: 0;
+    text-align: left;
+  }
+
+  .mobile-card-table td::before {
+    content: attr(data-label);
+    color: #738097;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .mobile-card-table td:first-child::before {
+    display: block;
+    margin-bottom: 7px;
+  }
+
+  .mobile-card-table .row-actions,
+  .mobile-card-table .station-row-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .mobile-card-table button,
+  .mobile-card-table a {
+    min-height: 44px;
+  }
+
+  .mobile-card-table .import-reason {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
 }
 
 .admin-person {

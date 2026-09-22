@@ -61,7 +61,12 @@ export function UsersPage() {
   const [sort, setSort] = useState("recent");
   const [showCreateModal, setShowCreateModal] = useState(creating);
   const [members, setMembers] = useState<Member[] | null>(null);
-  const [counts, setCounts] = useState<Record<string, number>>({ all: 0, active: 0, pending: 0, inactive: 0 });
+  const [counts, setCounts] = useState<Record<string, number>>({
+    all: 0,
+    active: 0,
+    pending: 0,
+    inactive: 0,
+  });
   const [total, setTotal] = useState(0);
   const [lastPage, setLastPage] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
@@ -73,7 +78,9 @@ export function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
   const [role, setRole] = useState("");
-  const [status, setStatus] = useState(() => new URLSearchParams(location.search).get("status") || "");
+  const [status, setStatus] = useState(
+    () => new URLSearchParams(location.search).get("status") || "",
+  );
   const [plannedStation, setPlannedStation] = useState("");
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
@@ -87,10 +94,16 @@ export function UsersPage() {
 
   useEffect(() => {
     const handleClickOutside = (e: globalThis.MouseEvent) => {
-      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) {
+      if (
+        actionsRef.current &&
+        !actionsRef.current.contains(e.target as Node)
+      ) {
         setActionsOpen(false);
       }
-      if (filtersRef.current && !filtersRef.current.contains(e.target as Node)) {
+      if (
+        filtersRef.current &&
+        !filtersRef.current.contains(e.target as Node)
+      ) {
         setOpenFilter(null);
       }
     };
@@ -144,7 +157,11 @@ export function UsersPage() {
         if (!active) return;
         setMembers(null);
         setStations(null);
-        if (errorData instanceof ApiError && [401, 403].includes(errorData.status)) onAccessLost();
+        if (
+          errorData instanceof ApiError &&
+          [401, 403].includes(errorData.status)
+        )
+          onAccessLost();
         else setLoadError("Les données n’ont pas pu être chargées. Réessayez.");
       })
       .finally(() => {
@@ -156,13 +173,27 @@ export function UsersPage() {
     return () => {
       active = false;
     };
-  }, [revision, currentPage, debouncedQuery, role, status, plannedStation, sort, onAccessLost]);
+  }, [
+    revision,
+    currentPage,
+    debouncedQuery,
+    role,
+    status,
+    plannedStation,
+    sort,
+    onAccessLost,
+  ]);
 
   async function exportUsers() {
     setExporting(true);
     setExportError("");
     try {
-      const params = new URLSearchParams({ q: query, role, status, stationId: plannedStation });
+      const params = new URLSearchParams({
+        q: query,
+        role,
+        status,
+        stationId: plannedStation,
+      });
       type ExportRow = {
         fullName: string;
         email: string;
@@ -172,7 +203,9 @@ export function UsersPage() {
         phoneNumber: string;
         address: string;
       };
-      const result = await api<{ rows: ExportRow[]; filename: string }>("/users/export?" + params);
+      const result = await api<{ rows: ExportRow[]; filename: string }>(
+        "/users/export?" + params,
+      );
       exportToExcel({
         data: result.rows,
         filename: result.filename,
@@ -199,9 +232,18 @@ export function UsersPage() {
     if (!confirmingMember) return;
     setActionBusy(true);
     try {
-      const current = await api<{ updatedAt: string; disabledAt: string | null }>("/users/" + confirmingMember.id);
-      await api("/users/" + confirmingMember.id + "/status", { enabled: !!current.disabledAt, updatedAt: current.updatedAt }, "PATCH");
-      notify(confirmingMember.disabledAt ? "Compte réactivé." : "Compte désactivé.");
+      const current = await api<{
+        updatedAt: string;
+        disabledAt: string | null;
+      }>("/users/" + confirmingMember.id);
+      await api(
+        "/users/" + confirmingMember.id + "/status",
+        { enabled: !!current.disabledAt, updatedAt: current.updatedAt },
+        "PATCH",
+      );
+      notify(
+        confirmingMember.disabledAt ? "Compte réactivé." : "Compte désactivé.",
+      );
       setConfirmingMember(null);
       setRevision((value) => value + 1);
     } catch (e) {
@@ -224,7 +266,10 @@ export function UsersPage() {
         <RefreshCw size={25} />
         <h2>Chargement indisponible</h2>
         <p>{loadError}</p>
-        <button className="admin-button" onClick={() => setRevision((value) => value + 1)}>
+        <button
+          className="admin-button"
+          onClick={() => setRevision((value) => value + 1)}
+        >
           Réessayer
         </button>
       </div>
@@ -243,7 +288,11 @@ export function UsersPage() {
       <Modal
         open={!!confirmingMember}
         onClose={() => !actionBusy && setConfirmingMember(null)}
-        title={confirmingMember?.disabledAt ? "Réactiver le collaborateur" : "Désactiver le collaborateur"}
+        title={
+          confirmingMember?.disabledAt
+            ? "Réactiver le collaborateur"
+            : "Désactiver le collaborateur"
+        }
       >
         {confirmingMember && (
           <div className="directory-confirm">
@@ -253,10 +302,20 @@ export function UsersPage() {
                 : `Voulez-vous désactiver le compte de « ${confirmingMember.fullName} » ? Ses sessions actives seront fermées.`}
             </p>
             <div className="directory-confirm-actions">
-              <button type="button" className="admin-button secondary" disabled={actionBusy} onClick={() => setConfirmingMember(null)}>
+              <button
+                type="button"
+                className="admin-button secondary"
+                disabled={actionBusy}
+                onClick={() => setConfirmingMember(null)}
+              >
                 Annuler
               </button>
-              <button type="button" className="admin-button" disabled={actionBusy} onClick={handleToggleStatus}>
+              <button
+                type="button"
+                className="admin-button"
+                disabled={actionBusy}
+                onClick={handleToggleStatus}
+              >
                 {actionBusy && <LoaderCircle className="spin" size={16} />}
                 Confirmer
               </button>
@@ -344,7 +403,10 @@ export function UsersPage() {
               onClick={() => setActionsOpen((open) => !open)}
             >
               <span>Actions</span>
-              <CaretDownIcon size={13} className={`caret${actionsOpen ? " is-open" : ""}`} />
+              <CaretDownIcon
+                size={13}
+                className={`caret${actionsOpen ? " is-open" : ""}`}
+              />
             </button>
             {actionsOpen && (
               <div className="directory-dropdown-menu" role="menu">
@@ -353,7 +415,11 @@ export function UsersPage() {
                   href="/app/admin/utilisateurs/import"
                   onClick={(event) => {
                     setActionsOpen(false);
-                    interceptNav(event, navigate, "/app/admin/utilisateurs/import");
+                    interceptNav(
+                      event,
+                      navigate,
+                      "/app/admin/utilisateurs/import",
+                    );
                   }}
                 >
                   Importer un fichier (CSV)
@@ -376,7 +442,11 @@ export function UsersPage() {
 
       {/* Barre de filtres immersive : statut + rôle + station sur une seule ligne */}
       <div className="users-filterbar" ref={filtersRef}>
-        <div className="status-chips" role="group" aria-label="Statut des utilisateurs">
+        <div
+          className="status-chips"
+          role="group"
+          aria-label="Statut des utilisateurs"
+        >
           {[
             ["", "Tous"],
             ["active", "Actifs"],
@@ -408,12 +478,19 @@ export function UsersPage() {
             className={`users-filter-toggle${role ? " is-active" : ""}${openFilter === "role" ? " is-open" : ""}`}
             aria-haspopup="listbox"
             aria-expanded={openFilter === "role"}
-            onClick={() => setOpenFilter((current) => (current === "role" ? null : "role"))}
+            onClick={() =>
+              setOpenFilter((current) => (current === "role" ? null : "role"))
+            }
           >
             <ShieldCheckIcon size={15} />
             <span>Rôle :</span>
-            <strong>{role ? roles[role as keyof typeof roles] || role : "Tous"}</strong>
-            <CaretDownIcon size={13} className={`caret${openFilter === "role" ? " is-open" : ""}`} />
+            <strong>
+              {role ? roles[role as keyof typeof roles] || role : "Tous"}
+            </strong>
+            <CaretDownIcon
+              size={13}
+              className={`caret${openFilter === "role" ? " is-open" : ""}`}
+            />
           </button>
           {openFilter === "role" && (
             <div className="users-filter-menu" role="listbox">
@@ -456,12 +533,21 @@ export function UsersPage() {
             className={`users-filter-toggle${plannedStation ? " is-active" : ""}${openFilter === "station" ? " is-open" : ""}`}
             aria-haspopup="listbox"
             aria-expanded={openFilter === "station"}
-            onClick={() => setOpenFilter((current) => (current === "station" ? null : "station"))}
+            onClick={() =>
+              setOpenFilter((current) =>
+                current === "station" ? null : "station",
+              )
+            }
           >
             <Building2 size={15} />
             <span>Station :</span>
-            <strong>{stations?.find((s) => s.id === plannedStation)?.name || "Toutes"}</strong>
-            <CaretDownIcon size={13} className={`caret${openFilter === "station" ? " is-open" : ""}`} />
+            <strong>
+              {stations?.find((s) => s.id === plannedStation)?.name || "Toutes"}
+            </strong>
+            <CaretDownIcon
+              size={13}
+              className={`caret${openFilter === "station" ? " is-open" : ""}`}
+            />
           </button>
           {openFilter === "station" && (
             <div className="users-filter-menu" role="listbox">
@@ -526,7 +612,7 @@ export function UsersPage() {
       ) : visibleMembers.length ? (
         viewMode === "table" ? (
           <div className="admin-table-wrap">
-            <table className="admin-table users-table">
+            <table className="admin-table users-table mobile-card-table">
               <thead>
                 <tr>
                   <th>Collaborateur</th>
@@ -541,11 +627,17 @@ export function UsersPage() {
                   const info = statusInfo(member);
                   return (
                     <tr key={member.id}>
-                      <td>
+                      <td data-label="Collaborateur">
                         <a
                           className="admin-person"
                           href={"/app/admin/utilisateurs/" + member.id}
-                          onClick={(event) => interceptNav(event, navigate, "/app/admin/utilisateurs/" + member.id)}
+                          onClick={(event) =>
+                            interceptNav(
+                              event,
+                              navigate,
+                              "/app/admin/utilisateurs/" + member.id,
+                            )
+                          }
                         >
                           <span className="admin-avatar" aria-hidden="true">
                             {initials(member.fullName)}
@@ -556,23 +648,35 @@ export function UsersPage() {
                           </div>
                         </a>
                       </td>
-                      <td>
-                        <span className="users-role-chip">{roles[member.role]}</span>
-                      </td>
-                      <td>
-                        <span className={`admin-badge ${info.tone}`}>{info.label}</span>
-                      </td>
-                      <td>
-                        <span className="users-station-name">
-                          {stations?.find((station) => station.id === member.stationId)?.name || "Non affecté"}
+                      <td data-label="Rôle">
+                        <span className="users-role-chip">
+                          {roles[member.role]}
                         </span>
                       </td>
-                      <td className="users-cell-right">
+                      <td data-label="Statut">
+                        <span className={`admin-badge ${info.tone}`}>
+                          {info.label}
+                        </span>
+                      </td>
+                      <td data-label="Station rattachée">
+                        <span className="users-station-name">
+                          {stations?.find(
+                            (station) => station.id === member.stationId,
+                          )?.name || "Non affecté"}
+                        </span>
+                      </td>
+                      <td data-label="Actions" className="users-cell-right">
                         <div className="row-actions station-row-actions">
                           <a
                             className="admin-button secondary small"
                             href={"/app/admin/utilisateurs/" + member.id}
-                            onClick={(event) => interceptNav(event, navigate, "/app/admin/utilisateurs/" + member.id)}
+                            onClick={(event) =>
+                              interceptNav(
+                                event,
+                                navigate,
+                                "/app/admin/utilisateurs/" + member.id,
+                              )
+                            }
                           >
                             <PencilSimple size={13} />
                             <span>Modifier</span>
@@ -596,14 +700,24 @@ export function UsersPage() {
           <div className="admin-station-grid users-grid">
             {visibleMembers.map((member) => {
               const info = statusInfo(member);
-              const stationName = stations?.find((station) => station.id === member.stationId)?.name;
+              const stationName = stations?.find(
+                (station) => station.id === member.stationId,
+              )?.name;
               return (
-                <section className="admin-card admin-station users-card" key={member.id}>
+                <section
+                  className="admin-card admin-station users-card"
+                  key={member.id}
+                >
                   <div className="admin-station-top">
-                    <span className="admin-avatar admin-avatar-lg" aria-hidden="true">
+                    <span
+                      className="admin-avatar admin-avatar-lg"
+                      aria-hidden="true"
+                    >
                       {initials(member.fullName)}
                     </span>
-                    <span className={`admin-badge ${info.tone}`}>{info.label}</span>
+                    <span className={`admin-badge ${info.tone}`}>
+                      {info.label}
+                    </span>
                   </div>
 
                   <div className="station-main-info">
@@ -629,7 +743,13 @@ export function UsersPage() {
                     <a
                       className="admin-button secondary small"
                       href={"/app/admin/utilisateurs/" + member.id}
-                      onClick={(event) => interceptNav(event, navigate, "/app/admin/utilisateurs/" + member.id)}
+                      onClick={(event) =>
+                        interceptNav(
+                          event,
+                          navigate,
+                          "/app/admin/utilisateurs/" + member.id,
+                        )
+                      }
                     >
                       <PencilSimple size={15} />
                       Modifier
@@ -650,8 +770,14 @@ export function UsersPage() {
       ) : (
         <div className="admin-empty">
           <Users size={26} />
-          <h3>{query || role || status ? "Aucun résultat" : "Aucun utilisateur"}</h3>
-          <p>{query || role || status ? "Essayez avec d’autres critères." : "Les comptes apparaîtront ici une fois créés."}</p>
+          <h3>
+            {query || role || status ? "Aucun résultat" : "Aucun utilisateur"}
+          </h3>
+          <p>
+            {query || role || status
+              ? "Essayez avec d’autres critères."
+              : "Les comptes apparaîtront ici une fois créés."}
+          </p>
         </div>
       )}
 
@@ -660,13 +786,21 @@ export function UsersPage() {
           {total} résultat{total === 1 ? "" : "s"}
         </span>
         <div>
-          <button aria-label="Page précédente" disabled={listLoading || currentPage === 1} onClick={() => setCurrentPage(currentPage - 1)}>
+          <button
+            aria-label="Page précédente"
+            disabled={listLoading || currentPage === 1}
+            onClick={() => setCurrentPage(currentPage - 1)}
+          >
             <ChevronLeft size={17} />
           </button>
           <span>
             {currentPage} / {lastPage}
           </span>
-          <button aria-label="Page suivante" disabled={listLoading || currentPage === lastPage} onClick={() => setCurrentPage(currentPage + 1)}>
+          <button
+            aria-label="Page suivante"
+            disabled={listLoading || currentPage === lastPage}
+            onClick={() => setCurrentPage(currentPage + 1)}
+          >
             <ChevronRight size={17} />
           </button>
         </div>

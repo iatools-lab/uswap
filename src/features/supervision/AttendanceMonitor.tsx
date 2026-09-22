@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/auth-api";
 import { LoaderCircle, RefreshCw } from "../../ui/icons";
+import {
+  ResponsiveDataTable,
+  type ResponsiveColumn,
+} from "../../ui/ResponsiveDataTable";
 import { formatDateTime } from "./format";
 import {
   STATUS_LABEL,
@@ -63,6 +67,68 @@ export function AttendanceMonitor({
     if (filter === "ALL") return data.rows;
     return data.rows.filter((row) => row.status === filter);
   }, [data, filter]);
+  const columns: ResponsiveColumn<MonitorRow>[] = [
+    {
+      key: "swapper",
+      header: "Swappeur",
+      primary: true,
+      render: (row) => (
+        <span className="ops-person">
+          <strong>{row.swapper.fullName}</strong>
+          {row.template && <small>{row.template}</small>}
+        </span>
+      ),
+    },
+    { key: "station", header: "Station", render: (row) => row.station.name },
+    {
+      key: "planned",
+      header: "Shift prévu",
+      render: (row) => formatDateTime(row.startTime, row.station.timezone),
+    },
+    {
+      key: "checkin",
+      header: "Début",
+      render: (row) =>
+        row.checkedInAt
+          ? formatDateTime(row.checkedInAt, row.station.timezone)
+          : "—",
+    },
+    {
+      key: "checkout",
+      header: "Fin",
+      render: (row) =>
+        row.checkedOutAt
+          ? formatDateTime(row.checkedOutAt, row.station.timezone)
+          : "—",
+    },
+    {
+      key: "status",
+      header: "État",
+      render: (row) => (
+        <span className={`attendance-status ${STATUS_CLASS[row.status]}`}>
+          {STATUS_LABEL[row.status]}
+        </span>
+      ),
+    },
+    ...(onCorrect
+      ? [
+          {
+            key: "action",
+            header: "Action",
+            className: "responsive-data-card__action",
+            render: (row: MonitorRow) => (
+              <button
+                type="button"
+                className="admin-button secondary small"
+                onClick={() => onCorrect(row)}
+              >
+                Corriger
+              </button>
+            ),
+          },
+        ]
+      : []),
+  ];
 
   if (error)
     return (
@@ -186,63 +252,13 @@ export function AttendanceMonitor({
           </h3>
         </div>
       ) : (
-        <div className="admin-table-wrap ops-table">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Swappeur</th>
-                <th>Station</th>
-                <th>Shift prévu</th>
-                <th>Début</th>
-                <th>Fin</th>
-                <th>État</th>
-                {onCorrect && <th aria-label="Actions" />}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.shiftId}>
-                  <td>
-                    <span className="ops-person">
-                      <strong>{row.swapper.fullName}</strong>
-                      {row.template && <small>{row.template}</small>}
-                    </span>
-                  </td>
-                  <td>{row.station.name}</td>
-                  <td>{formatDateTime(row.startTime, row.station.timezone)}</td>
-                  <td>
-                    {row.checkedInAt
-                      ? formatDateTime(row.checkedInAt, row.station.timezone)
-                      : "—"}
-                  </td>
-                  <td>
-                    {row.checkedOutAt
-                      ? formatDateTime(row.checkedOutAt, row.station.timezone)
-                      : "—"}
-                  </td>
-                  <td>
-                    <span
-                      className={`attendance-status ${STATUS_CLASS[row.status]}`}
-                    >
-                      {STATUS_LABEL[row.status]}
-                    </span>
-                  </td>
-                  {onCorrect && (
-                    <td>
-                      <button
-                        type="button"
-                        className="admin-button secondary small"
-                        onClick={() => onCorrect(row)}
-                      >
-                        Corriger
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveDataTable
+          rows={rows}
+          columns={columns}
+          rowKey={(row) => row.shiftId}
+          ariaLabel="Suivi des présences"
+          className="ops-table"
+        />
       )}
     </section>
   );

@@ -6,7 +6,14 @@ import { interceptNav } from "../app/spaNav";
 import { RouteFallback } from "../app/RouteFallback";
 import { useSession } from "../app/session";
 import { roles, rolePaths } from "../api/auth-api";
-import { Clock3, LayoutDashboard, UserRound, Zap } from "../ui/icons";
+import {
+  CalendarBlank,
+  Clock3,
+  LayoutDashboard,
+  Scan,
+  UserRound,
+  Zap,
+} from "../ui/icons";
 import { SidebarToggle } from "./SidebarToggle";
 import "../styles/admin.css";
 
@@ -21,6 +28,7 @@ export function RoleShell() {
   );
 
   const planning = location.pathname.endsWith("/plannings");
+  const leave = location.pathname.endsWith("/conges");
   const account = location.pathname.endsWith("/compte");
   const title =
     session?.user.role === "SUPERVISOR"
@@ -31,8 +39,8 @@ export function RoleShell() {
   const homePath = session ? rolePaths[session.user.role] : "/auth/login";
 
   useEffect(() => {
-    document.title = `${account ? "Paramètres du compte" : planning ? "Plannings" : title} · uSwap`;
-  }, [account, planning, title]);
+    document.title = `${account ? "Compte" : leave ? "Congés" : planning ? "Planning" : session?.user.role === "SWAPPER" ? "Pointage" : title} · uSwap`;
+  }, [account, leave, planning, session?.user.role, title]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -58,13 +66,22 @@ export function RoleShell() {
     interceptNav(event, navigate, `${homePath}/plannings`);
   }
 
+  function goLeave(event: React.MouseEvent<HTMLAnchorElement>) {
+    interceptNav(event, navigate, `${homePath}/conges`);
+  }
+
   return (
-    <div className={`admin-workspace role-workspace${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
+    <div
+      className={`admin-workspace role-workspace${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
+    >
       <a className="admin-skip" href="#role-main">
         Aller au contenu
       </a>
       <aside className="admin-sidebar">
-        <SidebarToggle collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} />
+        <SidebarToggle
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((value) => !value)}
+        />
         <a className="brand" href={homePath} onClick={goHome}>
           <span className="brand-symbol">
             <Zap weight="fill" />
@@ -82,10 +99,10 @@ export function RoleShell() {
           <a
             href={homePath}
             onClick={goHome}
-            aria-current={!account && !planning ? "page" : undefined}
+            aria-current={!account && !planning && !leave ? "page" : undefined}
           >
-            <LayoutDashboard />
-            <span>{title}</span>
+            {session.user.role === "SWAPPER" ? <Scan /> : <LayoutDashboard />}
+            <span>{session.user.role === "SWAPPER" ? "Pointage" : title}</span>
           </a>
           <a
             href={`${homePath}/plannings`}
@@ -93,15 +110,25 @@ export function RoleShell() {
             aria-current={planning ? "page" : undefined}
           >
             <Clock3 />
-            <span>Plannings</span>
+            <span>Planning</span>
           </a>
+          {session.user.role === "SWAPPER" && (
+            <a
+              href={`${homePath}/conges`}
+              onClick={goLeave}
+              aria-current={leave ? "page" : undefined}
+            >
+              <CalendarBlank />
+              <span>Congés</span>
+          </a>
+          )}
           <a
             href={`${homePath}/compte`}
             onClick={goAccount}
             aria-current={account ? "page" : undefined}
           >
             <UserRound />
-            <span>Mon compte</span>
+            <span>Compte</span>
           </a>
         </nav>
       </aside>
@@ -112,11 +139,21 @@ export function RoleShell() {
               uSwap<span>.</span>
             </span>
             <h1 ref={headingRef} tabIndex={-1} className="admin-breadcrumb">
-              {account ? "Paramètres du compte" : planning ? "Plannings" : title}
+              {account
+                ? "Compte"
+                : leave
+                  ? "Congés"
+                  : planning
+                    ? "Planning"
+                    : session.user.role === "SWAPPER"
+                      ? "Pointage"
+                      : title}
             </h1>
             <p>
               {account
                 ? "Gérez vos informations personnelles et la sécurité de votre compte."
+                : leave
+                  ? "Signalez une absence ou un congé pour un shift à venir."
                 : planning
                   ? "Consultez les horaires publiés et les affectations de votre périmètre."
                   : session.user.role === "SUPERVISOR"
