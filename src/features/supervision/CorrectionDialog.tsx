@@ -46,12 +46,12 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
     try {
       let attachmentId: string | null = null;
       if (file) {
-      const form = new FormData();
-      form.append("file", file);
-      const attachment = await api<{ id: string }>(
-        "/corrections/attachments",
-        form,
-      );
+        const form = new FormData();
+        form.append("file", file);
+        const attachment = await api<{ id: string }>(
+          "/corrections/attachments",
+          form,
+        );
         attachmentId = attachment.id;
       }
       await api(
