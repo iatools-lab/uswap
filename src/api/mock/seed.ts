@@ -4,6 +4,8 @@ import type {
   MockChange,
   MockDb,
   MockLeave,
+  MockLeaveBalance,
+  MockNotificationPreference,
   MockNotice,
   MockNotification,
   MockOccurrence,
@@ -32,7 +34,8 @@ export function stationIso(dayKey: string, hhmm: string): string {
   const [year, month, day] = dayKey.split("-").map(Number);
   const [hours, minutes] = hhmm.split(":").map(Number);
   return new Date(
-    Date.UTC(year, month - 1, day, hours, minutes) - STATION_OFFSET_MINUTES * 60000,
+    Date.UTC(year, month - 1, day, hours, minutes) -
+      STATION_OFFSET_MINUTES * 60000,
   ).toISOString();
 }
 
@@ -50,7 +53,9 @@ export function weekStartKey(dayKey: string): string {
 }
 
 export function dayKeys(startKey: string, count: number): string[] {
-  return Array.from({ length: count }, (_, index) => addDaysKey(startKey, index));
+  return Array.from({ length: count }, (_, index) =>
+    addDaysKey(startKey, index),
+  );
 }
 
 /** Durée brute d'un créneau « HH:MM » → « HH:MM », en minutes (gère la nuit). */
@@ -164,7 +169,7 @@ export const FICTITIOUS_DOMAIN = "uswap.example.com";
  * referme aussi les sessions en cours (comportement attendu lors d'un
  * changement de schéma, jamais lors d'un simple rechargement).
  */
-export const DB_VERSION = 9;
+export const DB_VERSION = 10;
 
 /** Mot de passe commun aux comptes de démonstration (fictifs). */
 export const DEMO_PASSWORD = "uswap2026";
@@ -231,20 +236,42 @@ const swapperNames: [string, string][] = [
 ];
 
 const stationOfSwapper = (id: string) =>
-  Object.entries(SWAPPER_POOL).find(([, pool]) => pool.includes(id))?.[0] ?? null;
+  Object.entries(SWAPPER_POOL).find(([, pool]) => pool.includes(id))?.[0] ??
+  null;
 
 const swapperEmail = (_fullName: string, index: number) =>
-  index === 0 ? `swappeur@${FICTITIOUS_DOMAIN}` : `swappeur${pad2(index + 1)}@${FICTITIOUS_DOMAIN}`;
+  index === 0
+    ? `swappeur@${FICTITIOUS_DOMAIN}`
+    : `swappeur${pad2(index + 1)}@${FICTITIOUS_DOMAIN}`;
 
 const users: MockUser[] = [
-  user("us-admin", "Administrateur uSwap", `admin@${FICTITIOUS_DOMAIN}`, "ADMIN", null, {
-    isActive: true,
-    disabledAt: null,
-    password: ADMIN_PASSWORD,
-    invitationStatus: "ACTIVATED",
-  }),
-  user("us-supervisor", "Camille Nola", `superviseur@${FICTITIOUS_DOMAIN}`, "SUPERVISOR", null),
-  user("us-chief-bastos", "Sam Kotto", `chef@${FICTITIOUS_DOMAIN}`, "STATION_CHIEF", "st-bastos"),
+  user(
+    "us-admin",
+    "Administrateur uSwap",
+    `admin@${FICTITIOUS_DOMAIN}`,
+    "ADMIN",
+    null,
+    {
+      isActive: true,
+      disabledAt: null,
+      password: ADMIN_PASSWORD,
+      invitationStatus: "ACTIVATED",
+    },
+  ),
+  user(
+    "us-supervisor",
+    "Camille Nola",
+    `superviseur@${FICTITIOUS_DOMAIN}`,
+    "SUPERVISOR",
+    null,
+  ),
+  user(
+    "us-chief-bastos",
+    "Sam Kotto",
+    `chef@${FICTITIOUS_DOMAIN}`,
+    "STATION_CHIEF",
+    "st-bastos",
+  ),
   user(
     "us-chief-obobogo",
     "Ariane Tchana",
@@ -283,9 +310,27 @@ const users: MockUser[] = [
 /* ------------------------------------------------------------------ */
 
 const templateSeeds = [
-  { label: "Matin", start: "06:00", end: "14:00", breakStart: "10:00", breakEnd: "11:00" },
-  { label: "Après-midi", start: "14:00", end: "22:00", breakStart: "18:00", breakEnd: "19:00" },
-  { label: "Nuit", start: "22:00", end: "06:00", breakStart: "02:00", breakEnd: "03:00" },
+  {
+    label: "Matin",
+    start: "06:00",
+    end: "14:00",
+    breakStart: "10:00",
+    breakEnd: "11:00",
+  },
+  {
+    label: "Après-midi",
+    start: "14:00",
+    end: "22:00",
+    breakStart: "18:00",
+    breakEnd: "19:00",
+  },
+  {
+    label: "Nuit",
+    start: "22:00",
+    end: "06:00",
+    breakStart: "02:00",
+    breakEnd: "03:00",
+  },
 ];
 
 function buildTemplates(): MockTemplate[] {
@@ -300,14 +345,19 @@ function buildTemplates(): MockTemplate[] {
         endTime: seed.end,
         breakStart: seed.breakStart,
         breakEnd: seed.breakEnd,
-        breakMinutes: seed.breakStart && seed.breakEnd ? slotMinutes(seed.breakStart, seed.breakEnd) : 0,
+        breakMinutes:
+          seed.breakStart && seed.breakEnd
+            ? slotMinutes(seed.breakStart, seed.breakEnd)
+            : 0,
         durationMinutes: slotMinutes(seed.start, seed.end),
         isActive: true,
         revision: 1,
       };
       list.push({
         ...base,
-        versions: [{ ...base, createdAt: isoFromMs(Date.now() - 30 * 86400000) }],
+        versions: [
+          { ...base, createdAt: isoFromMs(Date.now() - 30 * 86400000) },
+        ],
       });
     });
   }
@@ -319,7 +369,7 @@ function buildTemplates(): MockTemplate[] {
 /* ------------------------------------------------------------------ */
 
 const userById = (list: MockUser[], id: string | null) =>
-  id ? list.find((item) => item.id === id) ?? null : null;
+  id ? (list.find((item) => item.id === id) ?? null) : null;
 
 export function createSeed(nowMs: number): MockDb {
   const day = stationDayKey(nowMs);
@@ -355,7 +405,9 @@ export function createSeed(nowMs: number): MockDb {
 
   /** Un swappeur prend au plus un shift par jour : les données publiées sont cohérentes. */
   const assign = (stationId: string, sequence: number) => {
-    const pool = SWAPPER_POOL[stationId].filter((id) => userById(users, id)?.isActive);
+    const pool = SWAPPER_POOL[stationId].filter(
+      (id) => userById(users, id)?.isActive,
+    );
     if (!pool.length) return null;
     if (sequence % 8 === 5) return null;
     return pool[sequence % pool.length];
@@ -370,9 +422,13 @@ export function createSeed(nowMs: number): MockDb {
     let sequence = 0;
     for (const currentDay of days) {
       for (const station of includeStations) {
-        for (const template of templates.filter((item) => item.stationId === station.id)) {
+        for (const template of templates.filter(
+          (item) => item.stationId === station.id,
+        )) {
           const crossesMidnight = template.startTime >= template.endTime;
-          const endDay = crossesMidnight ? addDaysKey(currentDay, 1) : currentDay;
+          const endDay = crossesMidnight
+            ? addDaysKey(currentDay, 1)
+            : currentDay;
           occurrences.push({
             id: `occ-${planningId.slice(3)}-${sequence}`,
             planningId,
@@ -455,11 +511,17 @@ export function createSeed(nowMs: number): MockDb {
     const station = stationOf(item.stationId);
     const start = Date.parse(item.startTime);
     const end = Date.parse(item.endTime);
-    if (start <= nowMs && nowMs < end && coversNow(templateOf(item.templateId))) {
+    if (
+      start <= nowMs &&
+      nowMs < end &&
+      coversNow(templateOf(item.templateId))
+    ) {
       if (item.stationId === "st-obobogo") {
         attendance.push(
           makeAttendance(item, "LATE", {
-            checkedInAt: isoFromMs(start + (station.latenessToleranceMinutes + 9) * 60000),
+            checkedInAt: isoFromMs(
+              start + (station.latenessToleranceMinutes + 9) * 60000,
+            ),
             isLate: true,
           }),
         );
@@ -469,10 +531,13 @@ export function createSeed(nowMs: number): MockDb {
           id: `abs-${item.id}`,
           shiftId: item.id,
           swapperId: item.swapperId,
-          reason: "Absence automatique : aucun pointage après le délai de tolérance.",
+          reason:
+            "Absence automatique : aucun pointage après le délai de tolérance.",
           attachmentId: null,
           clientRef: null,
-          reportedAt: isoFromMs(start + station.latenessToleranceMinutes * 60000),
+          reportedAt: isoFromMs(
+            start + station.latenessToleranceMinutes * 60000,
+          ),
           origin: "AUTOMATIC_ABSENCE",
           status: "OPEN",
           coveredBy: null,
@@ -512,7 +577,10 @@ export function createSeed(nowMs: number): MockDb {
               authorName: "Camille Nola",
               at: isoFromMs(nowMs - 20 * 3600000),
               before: { status: "ABSENT", checkedInAt: null },
-              after: { status: "JUSTIFIED", checkedInAt: isoFromMs(start + 2 * 60000) },
+              after: {
+                status: "JUSTIFIED",
+                checkedInAt: isoFromMs(start + 2 * 60000),
+              },
             },
           }),
         );
@@ -568,10 +636,51 @@ export function createSeed(nowMs: number): MockDb {
       swapperId: "sw-02",
       startTime: isoFromMs(nowMs + 20 * 3600000),
       endTime: isoFromMs(nowMs + 44 * 3600000),
+      type: "ANNUAL",
       status: "APPROVED",
       reason: "Congé personnel approuvé",
+      attachmentId: null,
+      externalId: "LV-DEMO-2048",
+      clientRef: "leave-seed-approved-sw02",
+      createdAt: isoFromMs(nowMs - 10 * 86400000),
+      updatedAt: isoFromMs(nowMs - 3 * 86400000),
+      submittedAt: isoFromMs(nowMs - 9 * 86400000),
+      decidedAt: isoFromMs(nowMs - 3 * 86400000),
+      decisionReason: "Demande approuvée par le service RH.",
+      cancellable: false,
+      editable: false,
     },
   ];
+
+  const currentYear = new Date(nowMs).getUTCFullYear();
+  const leaveBalances: MockLeaveBalance[] = users
+    .filter((item) => item.role === "SWAPPER")
+    .map((item, index) => ({
+      swapperId: item.id,
+      year: currentYear,
+      entitledDays: 24,
+      usedDays: index % 3 === 0 ? 6 : 4,
+      pendingDays: index % 4 === 0 ? 2 : 0,
+      remainingDays: 24 - (index % 3 === 0 ? 6 : 4),
+      syncedAt: isoFromMs(nowMs - (12 + index) * 60000),
+    }));
+
+  const notificationPreferences: MockNotificationPreference[] = users.map(
+    (item) => ({
+      userId: item.id,
+      internalEnabled: true,
+      emailEnabled: true,
+      pushEnabled: item.role === "SWAPPER",
+      categories: {
+        PLANNING: { email: true, push: true },
+        ATTENDANCE: { email: false, push: true },
+        LEAVE: { email: true, push: true },
+        INCIDENT: { email: item.role !== "SWAPPER", push: true },
+        REPORT: { email: item.role === "ADMIN", push: false },
+      },
+      updatedAt: isoFromMs(nowMs - 7 * 86400000),
+    }),
+  );
 
   /* Historique des changements d'affectation (US 2046). */
   const changeSeed: {
@@ -598,7 +707,10 @@ export function createSeed(nowMs: number): MockDb {
     },
     {
       type: "PERMUTATION",
-      shiftId: publishedYesterday[3]?.id ?? publishedToday[1]?.id ?? publishedToday[0].id,
+      shiftId:
+        publishedYesterday[3]?.id ??
+        publishedToday[1]?.id ??
+        publishedToday[0].id,
       outSwapper: "Amina Mballa",
       inSwapper: "Serge Bello",
       outSwapperId: "sw-05",
@@ -609,7 +721,10 @@ export function createSeed(nowMs: number): MockDb {
     },
     {
       type: "REASSIGNMENT",
-      shiftId: publishedYesterday[5]?.id ?? publishedToday[2]?.id ?? publishedToday[0].id,
+      shiftId:
+        publishedYesterday[5]?.id ??
+        publishedToday[2]?.id ??
+        publishedToday[0].id,
       outSwapper: "Carole Meka",
       inSwapper: "Yves Ndjock",
       outSwapperId: "sw-09",
@@ -762,6 +877,12 @@ export function createSeed(nowMs: number): MockDb {
     attendance,
     absences,
     leaves,
+    leaveBalances,
+    leaveSyncOperations: [],
+    incidents: [],
+    notificationPreferences,
+    scheduledReports: [],
+    offlineOperations: [],
     changes,
     notifications,
     notices,

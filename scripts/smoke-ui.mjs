@@ -470,7 +470,9 @@ await exercise(
       );
     }
     const automatedCheckoutAbsence = await page.evaluate(() => {
-      const db = JSON.parse(localStorage.getItem("uswap.mock.db.v9") || "null");
+      const db = JSON.parse(
+        localStorage.getItem("uswap.mock.db.v10") || "null",
+      );
       if (!db) return false;
       return db.attendance.some(
         (record) =>
@@ -561,6 +563,51 @@ await exercise(
     await assertNoHorizontalOverflow(page, "Compte mobile");
   },
 );
+
+const migrationContext = await browser.newContext();
+const migrationPage = await migrationContext.newPage();
+await migrationPage.goto(`${baseUrl}/auth/login`, {
+  waitUntil: "domcontentloaded",
+});
+await migrationPage.locator("#demo-profile").waitFor();
+await migrationPage.evaluate(() => {
+  const current = JSON.parse(
+    localStorage.getItem("uswap.mock.db.v10") || "null",
+  );
+  if (!current) throw new Error("Base v10 absente avant le test de migration");
+  current.version = 9;
+  current.plannings[0].name = "Planning conservé par migration";
+  delete current.leaveBalances;
+  delete current.leaveSyncOperations;
+  delete current.incidents;
+  delete current.notificationPreferences;
+  delete current.scheduledReports;
+  delete current.offlineOperations;
+  localStorage.setItem("uswap.mock.db.v9", JSON.stringify(current));
+  localStorage.removeItem("uswap.mock.db.v10");
+});
+await migrationPage.reload({ waitUntil: "domcontentloaded" });
+await migrationPage.locator("#demo-profile").waitFor();
+const migrated = await migrationPage.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem("uswap.mock.db.v10") || "null");
+  return {
+    version: db?.version,
+    planningName: db?.plannings?.[0]?.name,
+    hasSprint4Collections:
+      Array.isArray(db?.leaveBalances) &&
+      Array.isArray(db?.incidents) &&
+      Array.isArray(db?.notificationPreferences) &&
+      Array.isArray(db?.scheduledReports),
+    oldKeyRemoved: localStorage.getItem("uswap.mock.db.v9") === null,
+  };
+});
+assert.deepEqual(migrated, {
+  version: 10,
+  planningName: "Planning conservé par migration",
+  hasSprint4Collections: true,
+  oldKeyRemoved: true,
+});
+await migrationContext.close();
 
 await browser.close();
 if (failures.length)

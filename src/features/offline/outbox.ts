@@ -1,8 +1,12 @@
 import { api, ApiError } from "../../api/auth-api";
+import {
+  createIdempotencyKey,
+  exponentialRetryDelay,
+} from "../../domain/idempotency";
 
 const DB_NAME = "uswap-outbox";
 const STORE = "mutations";
-const VERSION = 1;
+const VERSION = 2;
 
 export type QueuedMutation = {
   id: string;
@@ -10,7 +14,10 @@ export type QueuedMutation = {
   method: "POST" | "PATCH";
   body: Record<string, unknown>;
   queuedAt: string;
+  idempotencyKey: string;
+  status: "QUEUED" | "PROCESSING" | "FAILED";
   attempts: number;
+  nextAttemptAt?: string;
   lastError?: string;
 };
 
@@ -57,6 +64,11 @@ export async function enqueue(
     method,
     body,
     queuedAt: new Date().toISOString(),
+    idempotencyKey:
+      typeof body.clientRef === "string"
+        ? body.clientRef
+        : createIdempotencyKey(path),
+    status: "QUEUED",
     attempts: 0,
   };
   await withStore("readwrite", (store) => store.put(mutation));
@@ -75,13 +87,22 @@ async function remove(id: string) {
 }
 
 async function bump(mutation: QueuedMutation, error: string) {
+  const attempts = mutation.attempts + 1;
   await withStore("readwrite", (store) =>
     store.put({
       ...mutation,
-      attempts: mutation.attempts + 1,
+      status: "FAILED",
+      attempts,
       lastError: error,
+      nextAttemptAt: new Date(
+        Date.now() + exponentialRetryDelay(attempts),
+      ).toISOString(),
     }),
   );
+}
+
+export async function discard(id: string): Promise<void> {
+  await remove(id);
 }
 
 let flushing = false;
@@ -98,6 +119,11 @@ export async function flush(): Promise<{ sent: number; remaining: number }> {
   let sent = 0;
   try {
     for (const mutation of await pending()) {
+      if (
+        mutation.nextAttemptAt &&
+        Date.parse(mutation.nextAttemptAt) > Date.now()
+      )
+        continue;
       try {
         let body = mutation.body;
         if (
@@ -115,7 +141,7 @@ export async function flush(): Promise<{ sent: number; remaining: number }> {
         }
         await api(
           mutation.path,
-          body,
+          { ...body, idempotencyKey: mutation.idempotencyKey },
           mutation.method === "PATCH" ? "PATCH" : undefined,
         );
         await remove(mutation.id);
