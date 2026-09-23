@@ -40,7 +40,7 @@ export function RoleShell() {
   const homePath = session ? rolePaths[session.user.role] : "/auth/login";
 
   useEffect(() => {
-    document.title = `${account ? "Compte" : leave ? "Congés" : planning ? "Planning" : attendance ? "Pointages" : session?.user.role === "SWAPPER" ? "Pointage" : title} · uSwap`;
+    document.title = `${account ? (session?.user.role === "SUPERVISOR" ? "Mon compte" : "Compte") : leave ? "Congés" : planning ? "Planning" : attendance ? "Pointages" : session?.user.role === "SWAPPER" ? "Pointage" : title} · uSwap`;
   }, [account, attendance, leave, planning, session?.user.role, title]);
 
   useEffect(() => {
@@ -161,7 +161,9 @@ export function RoleShell() {
             </span>
             <h1 ref={headingRef} tabIndex={-1} className="admin-breadcrumb">
               {account
-                ? "Compte"
+                ? session.user.role === "SUPERVISOR"
+                  ? "Mon compte"
+                  : "Compte"
                 : leave
                   ? "Congés"
                   : planning

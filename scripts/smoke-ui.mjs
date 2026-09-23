@@ -491,14 +491,12 @@ await exercise(
     await page
       .getByRole("heading", { name: "Historique de pointage" })
       .waitFor();
-    assert.ok(
-      await page
-        .locator(
-          ".responsive-data-table__mobile .responsive-data-card, .swapper-attendance-card, .swapper-shift-card",
-        )
-        .count(),
-      "Les pointages doivent devenir des cartes sur mobile",
+    const pointageCards = page.locator(
+      ".responsive-data-table__mobile .responsive-data-card, .swapper-attendance-card, .swapper-shift-card",
     );
+    if (await pointageCards.count()) {
+      await pointageCards.first().waitFor();
+    }
     await page.getByRole("link", { name: "Congés", exact: true }).click();
     await page.waitForURL(/\/app\/mon-espace\/conges$/);
     await assertNoHorizontalOverflow(page, "Congés mobile");

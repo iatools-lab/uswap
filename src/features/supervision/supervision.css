@@ -8,6 +8,42 @@
   gap: 18px;
 }
 
+.supervision-stack .ops-person {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.supervision-stack .ops-person strong {
+  overflow: hidden;
+  color: #17243c;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.supervision-stack .ops-person small {
+  color: #71809a;
+  font-size: 11px;
+}
+
+@media (min-width: 768px) {
+  .supervision-stack .ops-table .admin-table tbody tr {
+    transition: background-color 160ms ease;
+  }
+
+  .supervision-stack .ops-table .admin-table tbody tr:hover {
+    background: #f8faff;
+  }
+
+  .supervision-stack .ops-table .admin-table th {
+    color: #65738b;
+    font-size: 10.5px;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+  }
+}
+
 .supervision-tabs {
   display: flex;
   gap: 4px;
