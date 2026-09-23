@@ -269,6 +269,35 @@ await exercise(
   "uswap2026",
   "/app/supervision",
   async (page) => {
+    await page
+      .getByRole("link", { name: "Supervision", exact: true })
+      .waitFor();
+    for (const label of [
+      "Supervision",
+      "Pointages",
+      "Planning",
+      "Mon compte",
+    ]) {
+      assert.equal(
+        await page.getByRole("link", { name: label, exact: true }).count(),
+        1,
+        `Navigation superviseur manquante : ${label}`,
+      );
+    }
+    await page.getByRole("heading", { name: "Shifts à remplacer" }).waitFor();
+    const replaceButtons = page.getByRole("button", {
+      name: "Affecter",
+      exact: true,
+    });
+    if (await replaceButtons.count()) {
+      await replaceButtons.first().click();
+      await page
+        .getByRole("heading", { name: "Affecter un remplaçant" })
+        .waitFor();
+      await page.getByRole("button", { name: "Fermer" }).click();
+    }
+    await page.getByRole("link", { name: "Pointages", exact: true }).click();
+    await page.waitForURL(/\/app\/supervision\/pointages$/);
     const correctionButtons = page.getByRole("button", {
       name: "Corriger",
       exact: true,
@@ -297,25 +326,23 @@ await exercise(
       0,
       "Le superviseur suit les opérations sans générer les QR",
     );
-    await page.getByRole("tab", { name: "À remplacer" }).click();
-    await page.getByRole("heading", { name: "Shifts à remplacer" }).waitFor();
-    const replaceButtons = page.getByRole("button", {
-      name: "Affecter",
-      exact: true,
-    });
-    if (await replaceButtons.count()) {
-      await replaceButtons.first().click();
-      await page
-        .getByRole("heading", { name: "Affecter un remplaçant" })
-        .waitFor();
-      await page.getByRole("button", { name: "Fermer" }).click();
-    }
     await page.getByRole("tab", { name: "Historique" }).click();
     await page
       .getByRole("heading", {
         name: "Historique des changements d’affectation",
       })
       .waitFor();
+    await page.setViewportSize({ width: 375, height: 812 });
+    assert.equal(
+      await page.locator(".admin-sidebar nav > a").count(),
+      4,
+      "Le superviseur doit disposer de quatre onglets mobiles",
+    );
+    assert.ok(
+      (await page.evaluate(() => document.documentElement.scrollWidth)) <= 375,
+      "L’espace superviseur ne doit pas déborder horizontalement sur mobile",
+    );
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.getByRole("link", { name: "Planning", exact: true }).click();
     await page.waitForURL(/\/app\/supervision\/plannings$/);
     await page
@@ -364,7 +391,7 @@ await exercise(
       .click();
     await page.getByRole("heading", { name: /Présence du jour/ }).waitFor();
     await page
-      .getByRole("heading", { name: /Pointages/ })
+      .getByRole("heading", { name: /pointages/i })
       .last()
       .waitFor();
     await page.getByRole("link", { name: "Planning", exact: true }).click();
@@ -417,20 +444,23 @@ await exercise(
   "/app/mon-espace",
   async (page) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    await page.getByRole("heading", { name: "Pointer mon service" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Historique de pointage" })
+      .waitFor();
     for (const name of ["Pointage", "Planning", "Congés", "Compte"]) {
       await page.getByRole("link", { name, exact: true }).waitFor();
     }
     await assertNoHorizontalOverflow(page, "Pointage mobile");
-    await page
-      .getByRole("button", { name: "Ouvrir le pointage", exact: true })
-      .click();
-    const punchDialog = page.getByRole("dialog", {
-      name: /Pointer mon service/,
-    });
-    await punchDialog.waitFor();
-    await assertNoHorizontalOverflow(page, "Modale de pointage mobile");
-    await punchDialog.getByRole("button", { name: /Fermer/ }).click();
+    const punchButton = page.getByRole("button", { name: /Prise de service/ });
+    if (await punchButton.count()) {
+      await punchButton.click();
+      const punchDialog = page.getByRole("dialog", {
+        name: /Scanner le QR/,
+      });
+      await punchDialog.waitFor();
+      await assertNoHorizontalOverflow(page, "Modale de pointage mobile");
+      await punchDialog.getByRole("button", { name: /Fermer/ }).click();
+    }
     const nextShift = page.locator(".operations-hero");
     if (await nextShift.count()) {
       const nextEnd = await nextShift.getAttribute("data-shift-end");
@@ -458,11 +488,13 @@ await exercise(
       automatedCheckoutAbsence,
       "Un pointage sans fin de service doit produire une absence automatique",
     );
-    await page.getByRole("heading", { name: "Mes pointages" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Historique de pointage" })
+      .waitFor();
     assert.ok(
       await page
         .locator(
-          ".responsive-data-table__mobile .responsive-data-card, .swapper-attendance-card",
+          ".responsive-data-table__mobile .responsive-data-card, .swapper-attendance-card, .swapper-shift-card",
         )
         .count(),
       "Les pointages doivent devenir des cartes sur mobile",
@@ -487,10 +519,10 @@ await exercise(
     await page
       .locator('#absence-declaration input[type="file"]')
       .setInputFiles({
-      name: "justificatif.pdf",
-      mimeType: "application/pdf",
-      buffer: Buffer.from("%PDF-1.4\n% justificatif recette uSwap"),
-    });
+        name: "justificatif.pdf",
+        mimeType: "application/pdf",
+        buffer: Buffer.from("%PDF-1.4\n% justificatif recette uSwap"),
+      });
     await page
       .locator('#absence-declaration input[placeholder*="Maladie"]')
       .fill("Indisponibilité médicale");
@@ -503,7 +535,10 @@ await exercise(
       .first()
       .waitFor();
     await assertNoHorizontalOverflow(page, "Planning mobile");
-    await page.getByRole("button", { name: /Ouvrir le planning/ }).first().click();
+    await page
+      .getByRole("button", { name: /Ouvrir le planning/ })
+      .first()
+      .click();
     await page.locator(".swapper-calendar").waitFor();
     assert.equal(
       await page.locator(".swapper-planning-desktop").isVisible(),
@@ -515,10 +550,7 @@ await exercise(
     await page.locator(".swapper-calendar__day.has-shift").first().click();
     const shiftDialog = page.getByRole("dialog").last();
     await shiftDialog.getByText("Horaires", { exact: true }).first().waitFor();
-    await shiftDialog
-      .locator(".swapper-shift-state")
-      .first()
-      .waitFor();
+    await shiftDialog.locator(".swapper-shift-state").first().waitFor();
     const absenceShortcut = shiftDialog.getByRole("button", {
       name: "Signaler une absence",
     });

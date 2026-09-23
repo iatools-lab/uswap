@@ -19,6 +19,9 @@ export const isRolePath = (user: User, path: string) =>
     rolePaths[user.role],
     `${rolePaths[user.role]}/compte`,
     `${rolePaths[user.role]}/plannings`,
+    ...(user.role === "SUPERVISOR"
+      ? [`${rolePaths[user.role]}/pointages`]
+      : []),
     ...(user.role === "SWAPPER" ? [`${rolePaths[user.role]}/conges`] : []),
   ].includes(path);
 

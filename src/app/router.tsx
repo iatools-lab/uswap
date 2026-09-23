@@ -67,6 +67,11 @@ const SwapperLeavePage = lazy(() =>
     default: m.SwapperLeavePage,
   })),
 );
+const SupervisorAttendancePage = lazy(() =>
+  import("../pages/role/SupervisorAttendancePage").then((m) => ({
+    default: m.SupervisorAttendancePage,
+  })),
+);
 
 function page(node: ReactNode) {
   return (
@@ -142,6 +147,12 @@ export function AppRoutes() {
         >
           <Route index element={page(<OperationsPage />)} />
           <Route path="plannings" element={page(<RolePlannerPage />)} />
+          {role === "SUPERVISOR" && (
+            <Route
+              path="pointages"
+              element={page(<SupervisorAttendancePage />)}
+            />
+          )}
           {role === "SWAPPER" && (
             <Route path="conges" element={page(<SwapperLeavePage />)} />
           )}

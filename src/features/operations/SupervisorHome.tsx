@@ -1,62 +1,149 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarIcon } from "@phosphor-icons/react";
+import { CalendarIcon, CaretRight, Clock, MapPin } from "@phosphor-icons/react";
 import { interceptNav } from "../../app/spaNav";
-import { SupervisionPanel } from "../supervision/SupervisionPanel";
-import { ShiftTable } from "./ShiftTable";
+import {
+  ReplacementDialog,
+  ReplacementQueue,
+} from "../supervision/ReplacementQueue";
+import { formatDate } from "./format";
 import type { OperationsViewProps } from "./types";
 
-/**
- * Le superviseur prepare et publie les affectations **via les plannings**
- * (flux unifie : modeles de shift -> occurrences -> publication).
- * Cet ecran ne fait plus de creation de shift isole : il oriente vers le Planner.
- */
-
-export function SupervisorHome({ user, data }: OperationsViewProps) {
+export function SupervisorHome({ data }: OperationsViewProps) {
   const navigate = useNavigate();
+  const [replacementShift, setReplacementShift] = useState<string | null>(null);
+  const [queueKey, setQueueKey] = useState(0);
   const published = data.shifts.filter((shift) => shift.publishedAt);
   const plannerPath = "/app/supervision/plannings";
+  const pointagesPath = "/app/supervision/pointages";
 
   return (
-    <>
-      <section className="admin-card operations-hero">
-        <p className="admin-eyebrow">Preparation des affectations</p>
-        <h2>Planifiez les shifts et affectez les swappeurs</h2>
-        <p>
-          Les affectations se preparent desormais dans le planning : choisissez
-          une periode libre, generez les shifts a partir des modeles de la
-          station, affectez les swappeurs puis publiez. Le systeme controle
-          automatiquement les chevauchements, les conges approuves, le repos
-          minimal et la limite hebdomadaire.
-        </p>
-        <div className="operations-hero-actions">
+    <div className="operations-stack supervisor-dashboard">
+      {replacementShift && (
+        <ReplacementDialog
+          shiftId={replacementShift}
+          onClose={() => setReplacementShift(null)}
+          onReplaced={() => {
+            setReplacementShift(null);
+            setQueueKey((value) => value + 1);
+          }}
+        />
+      )}
+
+      <section
+        className="supervisor-overview"
+        aria-labelledby="supervisor-overview-title"
+      >
+        <div>
+          <span className="premium-eyebrow">Vue réseau</span>
+          <h2 id="supervisor-overview-title">
+            Les opérations essentielles, au même endroit
+          </h2>
+          <p>
+            Surveillez les besoins de couverture, puis accédez directement aux
+            pointages ou aux plannings de votre périmètre.
+          </p>
+        </div>
+        <div className="supervisor-overview__actions">
           <a
             className="admin-button primary-cta"
+            href={pointagesPath}
+            onClick={(event) => interceptNav(event, navigate, pointagesPath)}
+          >
+            Voir les pointages
+          </a>
+          <a
+            className="admin-button secondary"
             href={plannerPath}
             onClick={(event) => interceptNav(event, navigate, plannerPath)}
           >
-            <CalendarIcon size={16} weight="bold" />
             Ouvrir le planning
           </a>
         </div>
       </section>
 
-      <section className="admin-card">
-        <div className="admin-card-heading">
-          <h2>Affectations publiées</h2>
-        </div>
-        <ShiftTable
-          user={user}
-          shifts={published}
-          emptyLabel="Aucune affectation publiée à venir"
-        />
-        {data.shifts.length === data.limit && (
-          <p className="workspace-limit">
-            Les {data.limit} prochaines affectations sont affichées.
-          </p>
-        )}
+      <section
+        className="supervisor-summary"
+        aria-label="Synthèse opérationnelle"
+      >
+        <article>
+          <span>Shifts publiés</span>
+          <strong>{published.length}</strong>
+          <small>visibles par les équipes</small>
+        </article>
+        <article>
+          <span>Stations suivies</span>
+          <strong>
+            {
+              new Set(
+                published.map((shift) => shift.station?.id).filter(Boolean),
+              ).size
+            }
+          </strong>
+          <small>dans votre périmètre</small>
+        </article>
+        <article>
+          <span>À venir</span>
+          <strong>
+            {
+              published.filter(
+                (shift) => new Date(shift.startTime) > new Date(),
+              ).length
+            }
+          </strong>
+          <small>services planifiés</small>
+        </article>
       </section>
 
-      <SupervisionPanel user={user} />
-    </>
+      <div className="supervisor-dashboard__grid">
+        <div key={queueKey} className="supervisor-dashboard__coverage">
+          <ReplacementQueue onSelect={setReplacementShift} />
+        </div>
+
+        <section className="admin-card supervisor-upcoming">
+          <div className="admin-card-heading">
+            <div>
+              <h2>Prochains shifts</h2>
+              <p className="operations-hint">
+                Les affectations publiées les plus proches.
+              </p>
+            </div>
+            <span className="admin-badge draft">{published.length}</span>
+          </div>
+          {!published.length ? (
+            <div className="admin-empty">
+              <h3>Aucun shift publié</h3>
+              <p>Les prochains services apparaîtront ici après publication.</p>
+            </div>
+          ) : (
+            <ul className="supervisor-shift-list">
+              {published.slice(0, 5).map((shift) => (
+                <li key={shift.id}>
+                  <span className="supervisor-shift-list__date">
+                    <CalendarIcon size={18} />
+                    {formatDate(shift.startTime)}
+                  </span>
+                  <div>
+                    <strong>{shift.station?.name || "Station"}</strong>
+                    <span>
+                      <Clock size={14} />{" "}
+                      {formatDate(
+                        shift.startTime,
+                        shift.station?.timezone,
+                        true,
+                      )}
+                    </span>
+                    <span>
+                      <MapPin size={14} /> {shift.station?.name || "Sur site"}
+                    </span>
+                  </div>
+                  <CaretRight size={17} aria-hidden="true" />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </div>
   );
 }

@@ -1,9 +1,5 @@
 import type { User } from "../../api/auth-api";
-import { Clock3 } from "../../ui/icons";
-import {
-  ResponsiveDataTable,
-  type ResponsiveColumn,
-} from "../../ui/ResponsiveDataTable";
+import { Clock3, CalendarBlankIcon, MapPinIcon } from "../../ui/icons";
 import type { OperationShift } from "./types";
 import { formatDate, shiftStatus } from "./format";
 
@@ -37,68 +33,59 @@ export function ShiftTable({
     );
   }
 
-  const columns: ResponsiveColumn<OperationShift>[] = [
-    {
-      key: "station",
-      header: "Station",
-      primary: true,
-      render: (shift) => <strong>{shift.station?.name}</strong>,
-    },
-    ...(user.role !== "SWAPPER"
-      ? [
-          {
-            key: "swapper",
-            header: "Swappeur",
-            render: (shift: OperationShift) => shift.swapper?.fullName,
-          },
-        ]
-      : []),
-    {
-      key: "start",
-      header: "Début",
-      render: (shift) => formatDate(shift.startTime),
-    },
-    { key: "end", header: "Fin", render: (shift) => formatDate(shift.endTime) },
-    {
-      key: "status",
-      header: "Statut",
-      render: (shift) => (
-                <span className={`attendance-status ${statusClass(shift)}`}>
-                  {shiftStatus(shift)}
-                </span>
-      ),
-    },
-    ...(onPublish
-      ? [
-          {
-            key: "action",
-            header: "Action",
-            className: "responsive-data-card__action",
-            render: (shift: OperationShift) =>
-              !shift.publishedAt ? (
-                    <button
-                      type="button"
-                      className="admin-button secondary small"
-                      disabled={busy}
-                      onClick={() => onPublish(shift.id)}
-                    >
-                      Publier
-                    </button>
-              ) : (
-                "—"
-              ),
-          },
-        ]
-      : []),
-  ];
-
   return (
-    <ResponsiveDataTable
-      rows={shifts}
-      columns={columns}
-      rowKey={(shift) => shift.id}
-      ariaLabel="Shifts"
-      className="ops-table ops-shift-table"
-    />
+    <div className="swapper-shifts-cards-list">
+      {shifts.map((shift) => {
+        const isSwapper = user.role === "SWAPPER";
+        return (
+          <div key={shift.id} className="swapper-shift-card">
+            <div className="swapper-shift-header">
+              <div className="swapper-shift-station">
+                <span className="station-name">{shift.station?.name}</span>
+              </div>
+              <span className={`attendance-status ${statusClass(shift)}`}>
+                {shiftStatus(shift)}
+              </span>
+            </div>
+
+            {!isSwapper && shift.swapper && (
+              <div className="swapper-shift-row">
+                <span className="label">Swappeur</span>
+                <span className="value font-semibold">
+                  {shift.swapper.fullName}
+                </span>
+              </div>
+            )}
+
+            <div className="swapper-shift-details">
+              <div className="time-block">
+                <small>DÉBUT</small>
+                <strong>{formatDate(shift.startTime)}</strong>
+              </div>
+              <div className="time-separator" aria-hidden="true">
+                →
+              </div>
+              <div className="time-block">
+                <small>FIN</small>
+                <strong>{formatDate(shift.endTime)}</strong>
+              </div>
+            </div>
+
+            {onPublish && !shift.publishedAt && (
+              <div className="swapper-shift-footer">
+                <button
+                  type="button"
+                  className="admin-button secondary small full-width"
+                  disabled={busy}
+                  onClick={() => onPublish(shift.id)}
+                >
+                  Publier ce shift
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }

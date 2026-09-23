@@ -1,9 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, useMemo, type FormEvent } from "react";
 import { notify } from "../../ui/Toast";
 import { api } from "../../api/auth-api";
-import { Select } from "../../ui/Select";
 import { Modal } from "../../ui/Modal";
-import { CheckCircle, LoaderCircle, Scan, Warning } from "../../ui/icons";
+import { CheckCircle, Scan, Warning, Clock3 } from "../../ui/icons";
 import { QrScanner } from "./QrScanner";
 import {
   captureQrToken,
@@ -12,80 +11,142 @@ import {
   parseQrToken,
 } from "./qrToken";
 import { formatDate, isInWindow, isOpenShift, pickNextShift } from "./format";
-import { ShiftTable } from "./ShiftTable";
 import type { OperationsViewProps, ScanResult } from "./types";
 
 export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
   const openShifts = data.shifts.filter(isOpenShift);
   const liveShifts = openShifts.filter((shift) => isInWindow(shift));
   const next = pickNextShift(data.shifts);
+
+  // Détermination automatique du shift le plus proche (en cours ou prochain)
+  const targetShift = liveShifts[0] || next;
+
   const [error, setError] = useState("");
   const [result, setResult] = useState<ScanResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [token, setToken] = useState(() => captureQrToken());
   const [scanning, setScanning] = useState(false);
-  const [punchOpen, setPunchOpen] = useState(false);
-  const [shiftId, setShiftId] = useState(() =>
-    openShifts.length === 1 ? openShifts[0].id : "",
-  );
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<
+    "ALL" | "PRESENT" | "LATE" | "ABSENT"
+  >("ALL");
 
   useEffect(() => {
     const receive = () => {
       const nextToken = captureQrToken();
-      if (nextToken) {
+      if (nextToken && targetShift) {
         setToken(nextToken);
-        setPunchOpen(true);
+        void executePunch(nextToken, targetShift.id);
       }
     };
     receive();
     window.addEventListener("hashchange", receive);
     return () => window.removeEventListener("hashchange", receive);
-  }, []);
+  }, [targetShift]);
 
-  useEffect(() => {
-    if (openShifts.length === 1) setShiftId(openShifts[0].id);
-  }, [openShifts.length, openShifts[0]?.id]);
-
-  useEffect(() => {
-    const requestedShift = new URLSearchParams(window.location.search).get(
-      "pointage",
+  // Calcul des KPI détaillés pour le diagramme circulaire
+  const kpiStats = useMemo(() => {
+    const evaluatedShifts = data.shifts.filter(
+      (s) => s.attendance || new Date(s.endTime).getTime() < Date.now(),
     );
-    if (!requestedShift) return;
-    if (data.shifts.some((shift) => shift.id === requestedShift)) {
-      setShiftId(requestedShift);
-      setPunchOpen(true);
-    }
-    window.history.replaceState(null, "", window.location.pathname);
+    const total = evaluatedShifts.length;
+
+    if (total === 0)
+      return {
+        onTime: 0,
+        late: 0,
+        absent: 0,
+        total: 0,
+        onTimePct: 0,
+        latePct: 0,
+        absentPct: 0,
+        presenceRate: 0,
+      };
+
+    let onTime = 0;
+    let late = 0;
+    let absent = 0;
+
+    evaluatedShifts.forEach((s) => {
+      if (
+        s.attendance?.status === "ABSENT" ||
+        (!s.attendance && new Date(s.endTime).getTime() < Date.now())
+      ) {
+        absent++;
+      } else if (s.attendance?.isLate) {
+        late++;
+      } else {
+        onTime++;
+      }
+    });
+
+    return {
+      onTime,
+      late,
+      absent,
+      total,
+      onTimePct: Math.round((onTime / total) * 100),
+      latePct: Math.round((late / total) * 100),
+      absentPct: Math.round((absent / total) * 100),
+      presenceRate: Math.round(((onTime + late) / total) * 100),
+    };
   }, [data.shifts]);
 
-  const selected = data.shifts.find((shift) => shift.id === shiftId);
-  const noShiftInWindow = liveShifts.length === 0;
-  const scanned = isValidQrToken(parseQrToken(token) || token.trim());
+  const completedShifts = useMemo(() => {
+    return data.shifts.filter(
+      (s) => s.attendance || new Date(s.endTime).getTime() < Date.now(),
+    );
+  }, [data.shifts]);
 
-  async function punch(e: FormEvent) {
-    e.preventDefault();
-    const raw = parseQrToken(token) || token.trim();
+  const recentPointages = useMemo(() => {
+    return [...completedShifts]
+      .sort(
+        (a, b) =>
+          new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
+      )
+      .slice(0, 5);
+  }, [completedShifts]);
+
+  const filteredModalShifts = useMemo(() => {
+    return completedShifts
+      .filter((s) => {
+        if (historyFilter === "PRESENT")
+          return (
+            s.attendance &&
+            !s.attendance.isLate &&
+            s.attendance.status !== "ABSENT"
+          );
+        if (historyFilter === "LATE") return s.attendance?.isLate;
+        if (historyFilter === "ABSENT")
+          return (
+            s.attendance?.status === "ABSENT" ||
+            (!s.attendance && new Date(s.endTime).getTime() < Date.now())
+          );
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
+      );
+  }, [completedShifts, historyFilter]);
+
+  async function executePunch(rawToken: string, shiftToPunchId: string) {
+    const raw = parseQrToken(rawToken) || rawToken.trim();
     if (!isValidQrToken(raw)) {
       setError(
         "Scannez le QR ou collez le lien fourni par le chef de station.",
       );
       return;
     }
-    if (!openShifts.length) {
-      setError(
-        "Aucune affectation n’est ouverte pendant cette fenêtre. Le pointage n’est possible que pendant le créneau de votre shift.",
-      );
-      return;
-    }
-    if (!shiftId) {
-      setError("Choisissez l’affectation à pointer.");
+    if (!targetShift) {
+      setError("Aucun shift éligible pour le pointage actuellement.");
       return;
     }
     setBusy(true);
     setError("");
     try {
       const scan = await api<ScanResult>("/attendance", {
-        shiftId,
+        shiftId: shiftToPunchId,
         token: raw,
       });
       setToken("");
@@ -95,11 +156,11 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
       notify(
         scan.kind === "CHECKIN"
           ? scan.status === "LATE"
-            ? "Prise de service enregistrée. Pointage en retard."
-            : "Prise de service enregistrée."
-          : "Fin de service enregistrée.",
+            ? "Prise de service enregistrée (En retard)."
+            : "Prise de service enregistrée avec succès."
+          : "Fin de service enregistrée avec succès.",
       );
-      setPunchOpen(false);
+      setScanning(false);
       onChanged();
     } catch (err) {
       setResult(null);
@@ -108,6 +169,15 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
       setBusy(false);
     }
   }
+
+  const handleDirectAction = () => {
+    if (!targetShift) {
+      setError("Aucun shift disponible pour l'action de pointage.");
+      return;
+    }
+    setError("");
+    setScanning(true);
+  };
 
   return (
     <>
@@ -126,178 +196,458 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
           <span>
             {result.kind === "CHECKIN"
               ? result.status === "LATE"
-                ? `Prise de service à ${formatDate(result.checkedInAt, result.timezone, true)} · En retard (tolérance ${result.toleranceMinutes} min).`
+                ? `Prise de service à ${formatDate(result.checkedInAt, result.timezone, true)} · En retard.`
                 : `Prise de service à ${formatDate(result.checkedInAt, result.timezone, true)} · À l’heure.`
               : `Fin de service à ${formatDate(result.checkedOutAt || result.checkedInAt, result.timezone, true)}.`}
           </span>
         </p>
       )}
 
-      {next && (
-        <section
-          className="admin-card operations-hero"
-          data-shift-start={next.startTime}
-          data-shift-end={next.endTime}
+      {error && (
+        <p
+          className="error-message"
+          role="alert"
+          style={{ margin: "0 0 16px" }}
         >
-          <p className="admin-eyebrow">Prochaine affectation</p>
-          <h2>{next.station?.name}</h2>
-          <p>
-            {formatDate(next.startTime)} – {formatDate(next.endTime)}
-          </p>
-          <span
-            className={`attendance-status ${
-              next.attendance?.checkedOutAt
-                ? "attendance-status--closed"
-                : next.attendance
-                  ? next.attendance.isLate
-                    ? "attendance-status--late"
-                    : "attendance-status--present"
-                  : isInWindow(next)
-                    ? "attendance-status--present"
-                    : "attendance-status--expected"
-            }`}
-          >
-            {next.attendance?.checkedOutAt
-              ? "Terminé"
-              : next.attendance
-                ? next.attendance.isLate
-                  ? "Présent · en retard"
-                  : "Début déjà pointé"
-                : isInWindow(next)
-                  ? "Créneau en cours"
-                  : "Hors créneau"}
-          </span>
-        </section>
+          {error}
+        </p>
       )}
 
-      <section className="admin-card ops-quick-action">
-              <div>
-                <h2>Pointer mon service</h2>
-          <p>
-            Scannez le QR du shift et confirmez votre prise ou votre fin de
-            service.
-                </p>
-              </div>
-        <button
-          type="button"
-          className="admin-button primary-cta"
-          onClick={() => setPunchOpen(true)}
+      {/* KPI Interactifs & Diagramme Circulaire */}
+      <section className="admin-card" style={{ padding: "20px" }}>
+        <h3
+          style={{
+            margin: "0 0 16px",
+            fontSize: "15px",
+            fontWeight: 600,
+            color: "var(--navy)",
+          }}
         >
-          <Scan size={18} /> Ouvrir le pointage
-        </button>
-      </section>
+          Indicateurs de performance
+        </h3>
 
-      <Modal
-        open={punchOpen}
-        size="md"
-        title="Pointer mon service"
-        subtitle="Scannez le QR affiché par le chef, choisissez votre shift, puis confirmez."
-        onClose={() => !busy && setPunchOpen(false)}
-      >
-        <form className="ops-punch-modal" onSubmit={punch}>
-          {error && (
-            <p className="error-message" role="alert">
-              {error}
-            </p>
-          )}
-            {!openShifts.length && (
-              <p className="error-message" role="status">
-              Aucun shift ouvert pour vous. Conservez le QR et réessayez pendant
-              le créneau.
-              </p>
-            )}
-            {!!openShifts.length && noShiftInWindow && (
-              <p className="ops-callout ops-callout--warn" role="status">
-                Aucun de vos shifts n’est dans sa fenêtre actuelle.
-              </p>
-            )}
-            {scanned && (
-              <p className="ops-result ops-result--ok" role="status">
-                <Scan size={18} />
-                QR détecté — choisissez l’affectation puis confirmez.
-              </p>
-            )}
-            <fieldset disabled={busy} className="ops-form ops-form--padded">
-              <div className="user-form-grid">
-                <label>
-                  Affectation
-                  {openShifts.length ? (
-                    <Select
-                      ariaLabel="Affectation"
-                      value={shiftId}
-                      placeholder="Sélectionner"
-                      onChange={(value) => setShiftId(String(value))}
-                      options={openShifts.map((shift) => ({
-                        value: shift.id,
-                        label: `${shift.station?.name} · ${formatDate(shift.startTime)}`,
-                      }))}
-                    />
-                  ) : (
-                    <span className="operations-hint">
-                      Aucune affectation ouverte à sélectionner.
-                    </span>
-                  )}
-                </label>
-                <label>
-                  Lien ou code QR
-                  <input
-                    required
-                    autoComplete="off"
-                    value={token || ""}
-                    onChange={(e) => setToken(e.target.value)}
-                    placeholder="Coller le lien, ou scanner ci-dessous"
-                  />
-                </label>
+        {kpiStats.total > 0 ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+            <div
+              style={{
+                position: "relative",
+                width: "110px",
+                height: "110px",
+                borderRadius: "50%",
+                background: `conic-gradient(
+                  #10b981 0% ${kpiStats.onTimePct}%,
+                  #f59e0b ${kpiStats.onTimePct}% ${kpiStats.onTimePct + kpiStats.latePct}%,
+                  #ef4444 ${kpiStats.onTimePct + kpiStats.latePct}% 100%
+                )`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+              }}
+            >
+              <div
+                style={{
+                  width: "82px",
+                  height: "82px",
+                  backgroundColor: "#ffffff",
+                  borderRadius: "50%",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "inset 0 2px 4px rgba(0,0,0,0.04)",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: 800,
+                    color: "var(--navy)",
+                    lineHeight: "1.1",
+                  }}
+                >
+                  {kpiStats.presenceRate}%
+                </span>
+                <span
+                  style={{
+                    fontSize: "9px",
+                    fontWeight: 600,
+                    color: "var(--muted)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  Présence
+                </span>
               </div>
-            </fieldset>
-            {selected && !isInWindow(selected) && !selected.attendance && (
-              <p className="operations-hint ops-form--padded" role="status">
-                Ce shift n’est pas dans sa fenêtre (
-                {formatDate(selected.startTime)} – {formatDate(selected.endTime)}
-                ).
-              </p>
-            )}
-            <div className="user-form-actions planner-actions ops-form--padded">
-              <button
-                type="button"
-                className="admin-button secondary"
-                onClick={() => setScanning(true)}
-              >
-                <Scan size={16} />
-                Scanner le QR
-              </button>
-              <button
-                className="admin-button primary-cta"
-                disabled={busy || !openShifts.length || !shiftId}
-              >
-                {busy && <LoaderCircle className="spin" size={16} />}
-                Confirmer le pointage
-              </button>
             </div>
-          </form>
-      </Modal>
 
-      <QrScanner
-        open={scanning}
-        onClose={() => setScanning(false)}
-        onDetected={setToken}
-      />
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  fontSize: "13px",
+                }}
+              >
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    color: "var(--muted)",
+                    fontWeight: 500,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "50%",
+                      backgroundColor: "#10b981",
+                    }}
+                  />
+                  À l'heure
+                </span>
+                <strong style={{ color: "var(--ink)" }}>
+                  {kpiStats.onTime}{" "}
+                  <span
+                    style={{
+                      color: "var(--muted)",
+                      fontSize: "11px",
+                      marginLeft: "4px",
+                    }}
+                  >
+                    ({kpiStats.onTimePct}%)
+                  </span>
+                </strong>
+              </div>
 
-      <section className="admin-card">
-        <div className="admin-card-heading">
-          <h2>Mes affectations</h2>
-        </div>
-        <ShiftTable
-          user={user}
-          shifts={data.shifts}
-          emptyLabel="Aucune affectation à venir"
-        />
-        {data.shifts.length === data.limit && (
-          <p className="workspace-limit">
-            Les {data.limit} prochaines affectations sont affichées.
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  fontSize: "13px",
+                }}
+              >
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    color: "var(--muted)",
+                    fontWeight: 500,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "50%",
+                      backgroundColor: "#f59e0b",
+                    }}
+                  />
+                  En retard
+                </span>
+                <strong style={{ color: "var(--ink)" }}>
+                  {kpiStats.late}{" "}
+                  <span
+                    style={{
+                      color: "var(--muted)",
+                      fontSize: "11px",
+                      marginLeft: "4px",
+                    }}
+                  >
+                    ({kpiStats.latePct}%)
+                  </span>
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  fontSize: "13px",
+                }}
+              >
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    color: "var(--muted)",
+                    fontWeight: 500,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "50%",
+                      backgroundColor: "#ef4444",
+                    }}
+                  />
+                  Absent
+                </span>
+                <strong style={{ color: "var(--ink)" }}>
+                  {kpiStats.absent}{" "}
+                  <span
+                    style={{
+                      color: "var(--muted)",
+                      fontSize: "11px",
+                      marginLeft: "4px",
+                    }}
+                  >
+                    ({kpiStats.absentPct}%)
+                  </span>
+                </strong>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p style={{ margin: 0, fontSize: "13px", color: "var(--muted)" }}>
+            Aucune donnée de performance disponible pour le moment.
           </p>
         )}
       </section>
+
+      {/* --- CARTE UNIQUE UNIFIÉE : Shift Cible & Actions de Service --- */}
+      {targetShift && (
+        <section className="admin-card operations-unified-card">
+          <div className="operations-unified-header">
+            <div>
+              <span className="admin-eyebrow">
+                {isInWindow(targetShift)
+                  ? "Shift en cours (Live)"
+                  : "Prochain shift cible"}
+              </span>
+              <h2>{targetShift.station?.name}</h2>
+              <p className="operations-unified-time">
+                {formatDate(targetShift.startTime)} –{" "}
+                {formatDate(targetShift.endTime)}
+              </p>
+            </div>
+            <span
+              className={`attendance-status ${
+                targetShift.attendance?.checkedOutAt
+                  ? "attendance-status--closed"
+                  : targetShift.attendance
+                    ? targetShift.attendance.isLate
+                      ? "attendance-status--late"
+                      : "attendance-status--present"
+                    : isInWindow(targetShift)
+                      ? "attendance-status--present"
+                      : "attendance-status--expected"
+              }`}
+            >
+              {targetShift.attendance?.checkedOutAt
+                ? "Terminé"
+                : targetShift.attendance
+                  ? targetShift.attendance.isLate
+                    ? "Présent · en retard"
+                    : "Début déjà pointé"
+                  : isInWindow(targetShift)
+                    ? "Créneau en cours"
+                    : "Accessible"}
+            </span>
+          </div>
+
+          <div className="operations-unified-divider" />
+
+          <div className="operations-unified-actions">
+            <button
+              type="button"
+              className="admin-button primary-cta"
+              onClick={handleDirectAction}
+            >
+              <Scan size={18} /> Prise de service
+            </button>
+            <button
+              type="button"
+              className="admin-button secondary"
+              onClick={handleDirectAction}
+            >
+              <CheckCircle size={18} /> Fin de service
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* Historique de pointage (Top 5) */}
+      <section className="admin-card">
+        <div
+          className="admin-card-heading"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <h2>Historique de pointage</h2>
+          {completedShifts.length > 5 && (
+            <button
+              type="button"
+              className="admin-button secondary small"
+              onClick={() => setHistoryModalOpen(true)}
+            >
+              Voir plus
+            </button>
+          )}
+        </div>
+
+        {!recentPointages.length ? (
+          <div className="admin-empty">
+            <Clock3 size={36} />
+            <h3>Aucun pointage effectué</h3>
+          </div>
+        ) : (
+          <div className="swapper-shifts-cards-list">
+            {recentPointages.map((shift) => (
+              <div key={shift.id} className="swapper-shift-card">
+                <div className="swapper-shift-header">
+                  <div className="swapper-shift-station">
+                    <span className="station-name">{shift.station?.name}</span>
+                  </div>
+                  <span
+                    className={`attendance-status ${shift.attendance?.checkedOutAt ? "attendance-status--closed" : shift.attendance?.status === "ABSENT" || (!shift.attendance && new Date(shift.endTime).getTime() < Date.now()) ? "attendance-status--absent" : "attendance-status--present"}`}
+                  >
+                    {shift.attendance?.checkedOutAt
+                      ? "Terminé"
+                      : shift.attendance?.status === "ABSENT" ||
+                          (!shift.attendance &&
+                            new Date(shift.endTime).getTime() < Date.now())
+                        ? "Absent"
+                        : shift.attendance
+                          ? "En cours"
+                          : "Non pointé"}
+                  </span>
+                </div>
+                <div className="swapper-shift-details">
+                  <div className="time-block">
+                    <small>DÉBUT</small>
+                    <strong>{formatDate(shift.startTime)}</strong>
+                  </div>
+                  <div className="time-separator" aria-hidden="true">
+                    →
+                  </div>
+                  <div className="time-block">
+                    <small>FIN</small>
+                    <strong>{formatDate(shift.endTime)}</strong>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Modal "Voir plus" avec Filtre Intelligent */}
+      <Modal
+        open={historyModalOpen}
+        size="lg"
+        title="Historique de pointage complet"
+        subtitle="Retrouvez l'ensemble de vos pointages avec filtres intelligents."
+        onClose={() => setHistoryModalOpen(false)}
+      >
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            marginBottom: "14px",
+            flexWrap: "wrap",
+          }}
+        >
+          {(["ALL", "PRESENT", "LATE", "ABSENT"] as const).map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              className={`admin-button secondary ${historyFilter === filter ? "active-filter" : ""}`}
+              onClick={() => setHistoryFilter(filter)}
+              style={{
+                fontSize: "12px",
+                minHeight: "32px",
+                padding: "4px 10px",
+              }}
+            >
+              {filter === "ALL"
+                ? "Tous"
+                : filter === "PRESENT"
+                  ? "À l'heure"
+                  : filter === "LATE"
+                    ? "En retard"
+                    : "Absences"}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ maxHeight: "55vh", overflowY: "auto", padding: "4px" }}>
+          {!filteredModalShifts.length ? (
+            <div className="admin-empty">
+              <h3>Aucun résultat pour ce filtre</h3>
+            </div>
+          ) : (
+            <div className="swapper-shifts-cards-list">
+              {filteredModalShifts.map((shift) => (
+                <div key={shift.id} className="swapper-shift-card">
+                  <div className="swapper-shift-header">
+                    <div className="swapper-shift-station">
+                      <span className="station-name">
+                        {shift.station?.name}
+                      </span>
+                    </div>
+                    <span
+                      className={`attendance-status ${shift.attendance?.status === "ABSENT" || (!shift.attendance && new Date(shift.endTime).getTime() < Date.now()) ? "attendance-status--absent" : "attendance-status--present"}`}
+                    >
+                      {shift.attendance?.status === "ABSENT" ||
+                      (!shift.attendance &&
+                        new Date(shift.endTime).getTime() < Date.now())
+                        ? "Absent"
+                        : shift.attendance?.isLate
+                          ? "En retard"
+                          : "Validé"}
+                    </span>
+                  </div>
+                  <div className="swapper-shift-details">
+                    <div className="time-block">
+                      <small>DÉBUT</small>
+                      <strong>{formatDate(shift.startTime)}</strong>
+                    </div>
+                    <div className="time-separator" aria-hidden="true">
+                      →
+                    </div>
+                    <div className="time-block">
+                      <small>FIN</small>
+                      <strong>{formatDate(shift.endTime)}</strong>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Scanner QR direct */}
+      <QrScanner
+        open={scanning}
+        onClose={() => setScanning(false)}
+        onDetected={(detectedToken) => {
+          if (targetShift) {
+            void executePunch(detectedToken, targetShift.id);
+          }
+        }}
+      />
     </>
   );
 }

@@ -25,14 +25,14 @@ const STATUS_CLASS: Record<MonitorRow["status"], string> = {
   EXPECTED: "attendance-status--expected",
 };
 
-const FILTERS: Array<MonitorRow["status"] | "ALL"> = [
-  "ALL",
-  "EXPECTED",
-  "PRESENT",
-  "LATE",
-  "ABSENT",
-  "JUSTIFIED",
-  "CLOSED",
+const FILTERS: Array<{ key: MonitorRow["status"] | "ALL"; label: string }> = [
+  { key: "ALL", label: "Tous" },
+  { key: "EXPECTED", label: "Attendus" },
+  { key: "PRESENT", label: "À l'heure" },
+  { key: "LATE", label: "Retards" },
+  { key: "ABSENT", label: "Absences" },
+  { key: "JUSTIFIED", label: "Justifiées" },
+  { key: "CLOSED", label: "Fins de service" },
 ];
 
 export function AttendanceMonitor({
@@ -42,7 +42,7 @@ export function AttendanceMonitor({
   const [data, setData] = useState<MonitorData | null>(null);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]>("ALL");
+  const [filter, setFilter] = useState<MonitorRow["status"] | "ALL">("ALL");
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setError("");
@@ -65,30 +65,36 @@ export function AttendanceMonitor({
   const rows = useMemo(() => {
     if (!data) return [];
     if (filter === "ALL") return data.rows;
-    return data.rows.filter((row) => row.status === filter);
+    return data.rows.filter((row: MonitorRow) => row.status === filter);
   }, [data, filter]);
+
   const columns: ResponsiveColumn<MonitorRow>[] = [
     {
       key: "swapper",
       header: "Swappeur",
       primary: true,
-      render: (row) => (
+      render: (row: MonitorRow) => (
         <span className="ops-person">
           <strong>{row.swapper.fullName}</strong>
           {row.template && <small>{row.template}</small>}
         </span>
       ),
     },
-    { key: "station", header: "Station", render: (row) => row.station.name },
+    {
+      key: "station",
+      header: "Station",
+      render: (row: MonitorRow) => row.station.name,
+    },
     {
       key: "planned",
       header: "Shift prévu",
-      render: (row) => formatDateTime(row.startTime, row.station.timezone),
+      render: (row: MonitorRow) =>
+        formatDateTime(row.startTime, row.station.timezone),
     },
     {
       key: "checkin",
       header: "Début",
-      render: (row) =>
+      render: (row: MonitorRow) =>
         row.checkedInAt
           ? formatDateTime(row.checkedInAt, row.station.timezone)
           : "—",
@@ -96,7 +102,7 @@ export function AttendanceMonitor({
     {
       key: "checkout",
       header: "Fin",
-      render: (row) =>
+      render: (row: MonitorRow) =>
         row.checkedOutAt
           ? formatDateTime(row.checkedOutAt, row.station.timezone)
           : "—",
@@ -104,7 +110,7 @@ export function AttendanceMonitor({
     {
       key: "status",
       header: "État",
-      render: (row) => (
+      render: (row: MonitorRow) => (
         <span className={`attendance-status ${STATUS_CLASS[row.status]}`}>
           {STATUS_LABEL[row.status]}
         </span>
@@ -130,7 +136,7 @@ export function AttendanceMonitor({
       : []),
   ];
 
-  if (error)
+  if (error) {
     return (
       <section className="admin-card admin-empty" role="alert">
         <h2>Suivi indisponible</h2>
@@ -140,126 +146,114 @@ export function AttendanceMonitor({
         </button>
       </section>
     );
+  }
 
-  if (!data)
+  if (!data) {
     return (
       <div className="admin-loading" role="status">
-        <LoaderCircle className="spin" />
-        Chargement du suivi…
+        <LoaderCircle className="spin" /> Chargement du suivi…
       </div>
     );
+  }
 
-  const { summary } = data;
+  const getCount = (key: string) => {
+    if (key === "ALL") return data.rows.length;
+    if (key === "EXPECTED") return data.summary.expected;
+    if (key === "PRESENT") return data.summary.present;
+    if (key === "LATE") return data.summary.late;
+    if (key === "ABSENT") return data.summary.absent;
+    if (key === "JUSTIFIED") return data.summary.justified;
+    if (key === "CLOSED") return data.summary.closed;
+    return 0;
+  };
 
   return (
-    <section className="admin-card">
-      <div className="admin-card-heading">
+    <div className="operations-stack" style={{ paddingBottom: "24px" }}>
+      <div className="premium-list-header">
         <div>
-          <h2>
-            Pointages
-            <span className="ops-live" aria-hidden="true">
-              Live
-            </span>
-          </h2>
-          <p className="operations-hint">
-            Actualisé toutes les 30 s · {formatDateTime(data.generatedAt)}
-            {user.role === "STATION_CHIEF" ? " · votre station" : ""}
-          </p>
+          <span className="premium-eyebrow">MONITORING</span>
+          <h2>Suivi des pointages</h2>
+          <p>Actualisé toutes les 30s · {formatDateTime(data.generatedAt)}</p>
         </div>
         <button
           type="button"
           className="admin-button secondary small"
+          style={{
+            width: "34px",
+            height: "34px",
+            padding: 0,
+            borderRadius: "10px",
+            flexShrink: 0,
+          }}
           disabled={refreshing}
           onClick={() => void load()}
         >
-          <RefreshCw size={15} className={refreshing ? "spin" : undefined} />
-          Rafraîchir
+          <RefreshCw size={16} className={refreshing ? "spin" : undefined} />
         </button>
       </div>
 
-      <div className="supervision-metrics">
-        <button
-          type="button"
-          className="supervision-metric"
-          aria-pressed={filter === "ALL"}
-          onClick={() => setFilter("ALL")}
-        >
-          <strong>{data.rows.length}</strong>
-          <span>Tous</span>
-        </button>
-        <button
-          type="button"
-          className="supervision-metric"
-          aria-pressed={filter === "EXPECTED"}
-          onClick={() => setFilter("EXPECTED")}
-        >
-          <strong>{summary.expected}</strong>
-          <span>Attendus</span>
-        </button>
-        <button
-          type="button"
-          className="supervision-metric supervision-metric--live"
-          aria-pressed={filter === "PRESENT"}
-          onClick={() => setFilter("PRESENT")}
-        >
-          <strong>{summary.present}</strong>
-          <span>À l’heure</span>
-        </button>
-        <button
-          type="button"
-          className="supervision-metric supervision-metric--late"
-          aria-pressed={filter === "LATE"}
-          onClick={() => setFilter("LATE")}
-        >
-          <strong>{summary.late}</strong>
-          <span>Retards</span>
-        </button>
-        <button
-          type="button"
-          className="supervision-metric supervision-metric--alert"
-          aria-pressed={filter === "ABSENT"}
-          onClick={() => setFilter("ABSENT")}
-        >
-          <strong>{summary.absent}</strong>
-          <span>Absences</span>
-        </button>
-        <button
-          type="button"
-          className="supervision-metric"
-          aria-pressed={filter === "JUSTIFIED"}
-          onClick={() => setFilter("JUSTIFIED")}
-        >
-          <strong>{summary.justified}</strong>
-          <span>Justifiées</span>
-        </button>
-        <button
-          type="button"
-          className="supervision-metric"
-          aria-pressed={filter === "CLOSED"}
-          onClick={() => setFilter("CLOSED")}
-        >
-          <strong>{summary.closed}</strong>
-          <span>Fins de service</span>
-        </button>
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          overflowX: "auto",
+          paddingBottom: "12px",
+          margin: "0 4px 8px",
+        }}
+      >
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            className={`admin-button secondary ${filter === f.key ? "active-filter" : ""}`}
+            onClick={() => setFilter(f.key as any)}
+            style={{
+              fontSize: "12.5px",
+              minHeight: "32px",
+              padding: "4px 14px",
+              borderRadius: "20px",
+              whiteSpace: "nowrap",
+              border: filter === f.key ? "none" : "1px solid var(--line)",
+            }}
+          >
+            {f.label}{" "}
+            <span style={{ opacity: 0.6, marginLeft: "4px" }}>
+              ({getCount(f.key)})
+            </span>
+          </button>
+        ))}
       </div>
 
       {!rows.length ? (
-        <div className="admin-empty">
-          <h3>
-            {data.rows.length
-              ? "Aucun pointage pour ce filtre"
-              : "Aucune affectation publiée sur la période"}
-          </h3>
+        <div
+          className="admin-empty"
+          style={{
+            background: "#fff",
+            borderRadius: "16px",
+            border: "1px solid var(--line)",
+          }}
+        >
+          <h3>Aucun pointage pour ce filtre</h3>
         </div>
       ) : (
-        <ResponsiveDataTable
-          rows={rows}
-          columns={columns}
-          rowKey={(row) => row.shiftId}
-          ariaLabel="Suivi des présences"
-          className="ops-table"
-        />
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: "16px",
+            border: "1px solid var(--line)",
+            padding: "4px",
+            overflow: "hidden",
+          }}
+        >
+          <ResponsiveDataTable
+            rows={rows}
+            columns={columns}
+            rowKey={(row: MonitorRow) => row.shiftId}
+            ariaLabel="Suivi des présences"
+            className="ops-table"
+          />
+        </div>
       )}
-    </section>
+    </div>
   );
 }

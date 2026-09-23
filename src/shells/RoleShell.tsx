@@ -28,6 +28,7 @@ export function RoleShell() {
   );
 
   const planning = location.pathname.endsWith("/plannings");
+  const attendance = location.pathname.endsWith("/pointages");
   const leave = location.pathname.endsWith("/conges");
   const account = location.pathname.endsWith("/compte");
   const title =
@@ -39,8 +40,8 @@ export function RoleShell() {
   const homePath = session ? rolePaths[session.user.role] : "/auth/login";
 
   useEffect(() => {
-    document.title = `${account ? "Compte" : leave ? "Congés" : planning ? "Planning" : session?.user.role === "SWAPPER" ? "Pointage" : title} · uSwap`;
-  }, [account, leave, planning, session?.user.role, title]);
+    document.title = `${account ? "Compte" : leave ? "Congés" : planning ? "Planning" : attendance ? "Pointages" : session?.user.role === "SWAPPER" ? "Pointage" : title} · uSwap`;
+  }, [account, attendance, leave, planning, session?.user.role, title]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -68,6 +69,10 @@ export function RoleShell() {
 
   function goLeave(event: React.MouseEvent<HTMLAnchorElement>) {
     interceptNav(event, navigate, `${homePath}/conges`);
+  }
+
+  function goAttendance(event: React.MouseEvent<HTMLAnchorElement>) {
+    interceptNav(event, navigate, `${homePath}/pointages`);
   }
 
   return (
@@ -99,11 +104,25 @@ export function RoleShell() {
           <a
             href={homePath}
             onClick={goHome}
-            aria-current={!account && !planning && !leave ? "page" : undefined}
+            aria-current={
+              !account && !planning && !leave && !attendance
+                ? "page"
+                : undefined
+            }
           >
             {session.user.role === "SWAPPER" ? <Scan /> : <LayoutDashboard />}
             <span>{session.user.role === "SWAPPER" ? "Pointage" : title}</span>
           </a>
+          {session.user.role === "SUPERVISOR" && (
+            <a
+              href={`${homePath}/pointages`}
+              onClick={goAttendance}
+              aria-current={attendance ? "page" : undefined}
+            >
+              <Scan />
+              <span>Pointages</span>
+            </a>
+          )}
           <a
             href={`${homePath}/plannings`}
             onClick={goPlannings}
@@ -120,7 +139,7 @@ export function RoleShell() {
             >
               <CalendarBlank />
               <span>Congés</span>
-          </a>
+            </a>
           )}
           <a
             href={`${homePath}/compte`}
@@ -128,7 +147,9 @@ export function RoleShell() {
             aria-current={account ? "page" : undefined}
           >
             <UserRound />
-            <span>Compte</span>
+            <span>
+              {session.user.role === "SUPERVISOR" ? "Mon compte" : "Compte"}
+            </span>
           </a>
         </nav>
       </aside>
@@ -145,22 +166,26 @@ export function RoleShell() {
                   ? "Congés"
                   : planning
                     ? "Planning"
-                    : session.user.role === "SWAPPER"
-                      ? "Pointage"
-                      : title}
+                    : attendance
+                      ? "Pointages"
+                      : session.user.role === "SWAPPER"
+                        ? "Pointage"
+                        : title}
             </h1>
             <p>
               {account
                 ? "Gérez vos informations personnelles et la sécurité de votre compte."
                 : leave
                   ? "Signalez une absence ou un congé pour un shift à venir."
-                : planning
-                  ? "Consultez les horaires publiés et les affectations de votre périmètre."
-                  : session.user.role === "SUPERVISOR"
-                    ? "Supervisez les présences, les absences et les remplacements du réseau."
-                    : session.user.role === "STATION_CHIEF"
-                      ? "Pilotez les opérations et les pointages de votre station."
-                      : "Retrouvez vos prochains shifts et effectuez vos pointages."}
+                  : planning
+                    ? "Consultez les horaires publiés et les affectations de votre périmètre."
+                    : attendance
+                      ? "Contrôlez les présences, corrigez les pointages et consultez leur historique."
+                      : session.user.role === "SUPERVISOR"
+                        ? "Supervisez les présences, les absences et les remplacements du réseau."
+                        : session.user.role === "STATION_CHIEF"
+                          ? "Pilotez les opérations et les pointages de votre station."
+                          : "Retrouvez vos prochains shifts et effectuez vos pointages."}
             </p>
           </div>
           <div className="admin-topbar__actions">

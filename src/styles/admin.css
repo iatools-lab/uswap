@@ -440,6 +440,52 @@
   flex-direction: column;
 }
 
+@media (min-width: 761px) {
+  .role-workspace:not(.is-sidebar-collapsed) {
+    grid-template-columns: 238px minmax(0, 1fr);
+  }
+
+  .role-workspace .admin-sidebar {
+    padding: 24px 16px 18px;
+  }
+
+  .role-workspace .admin-sidebar .brand {
+    margin-bottom: 30px;
+  }
+
+  .role-workspace .admin-sidebar nav {
+    gap: 7px;
+  }
+
+  .role-workspace .admin-sidebar nav a {
+    min-height: 46px;
+    border-radius: 10px;
+  }
+
+  .role-workspace .admin-topbar {
+    min-height: 76px;
+    padding-inline: clamp(22px, 3vw, 36px);
+  }
+
+  .role-workspace .admin-content {
+    height: calc(100vh - 76px);
+    max-width: 1480px;
+    padding: 24px clamp(22px, 3vw, 38px) 36px;
+  }
+
+  .role-workspace .admin-heading-copy {
+    gap: 4px;
+  }
+
+  .role-workspace .admin-breadcrumb {
+    font-size: 15px;
+  }
+
+  .role-workspace .admin-heading-copy > p {
+    font-size: 12px;
+  }
+}
+
 /* ============================================================
    4. Boutons Système
    ============================================================ */

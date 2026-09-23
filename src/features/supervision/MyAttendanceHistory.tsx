@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { api } from "../../api/auth-api";
 import { LoaderCircle, Clock3 } from "../../ui/icons";
 import { formatDateTime } from "./format";
@@ -26,10 +26,18 @@ function renderAttendanceStatus(row: AttendanceHistoryRow) {
     );
   }
   if (row.isAbsent) {
-    return <span className="attendance-status attendance-status--absent">Absent</span>;
+    return (
+      <span className="attendance-status attendance-status--absent">
+        Absent
+      </span>
+    );
   }
   if (row.checkedOutAt) {
-    return <span className="attendance-status attendance-status--present">Terminé</span>;
+    return (
+      <span className="attendance-status attendance-status--present">
+        Terminé
+      </span>
+    );
   }
   if (row.checkedInAt) {
     return (
@@ -40,7 +48,11 @@ function renderAttendanceStatus(row: AttendanceHistoryRow) {
       </span>
     );
   }
-  return <span className="attendance-status attendance-status--expected">Attendu</span>;
+  return (
+    <span className="attendance-status attendance-status--expected">
+      Attendu
+    </span>
+  );
 }
 
 export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
@@ -55,6 +67,7 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
     if (from) params.set("from", new Date(from).toISOString());
     if (to) params.set("to", new Date(`${to}T23:59:59`).toISOString());
     if (swapperId) params.set("swapperId", swapperId);
+
     setRows(null);
     api<AttendanceHistoryRow[]>(`/attendance/history?${params.toString()}`)
       .then((data) => {
@@ -68,18 +81,30 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
     };
   }, [from, to, swapperId]);
 
+  // Filtrage strict : on ne garde que les shifts ayant eu une interaction (pointage ou absence constatée)
+  const completedRows = useMemo(() => {
+    if (!rows) return null;
+    return rows.filter(
+      (row) =>
+        row.checkedInAt ||
+        row.checkedOutAt ||
+        row.isAbsent ||
+        row.isJustified ||
+        row.corrected,
+    );
+  }, [rows]);
+
   return (
     <section className="admin-card">
       <div className="admin-card-heading">
         <div>
           <h2>Mes pointages</h2>
           <p className="operations-hint">
-            Prises et fins de service. Une correction validée est indiquée, sans
-            le justificatif.
+            Historique de vos prises et fins de service.
           </p>
         </div>
       </div>
-      <div className="supervision-toolbar swapper-attendance-toolbar">
+      <div className="supervision-toolbar">
         <label>
           Du
           <input
@@ -97,24 +122,26 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
           />
         </label>
       </div>
+
       {error && (
         <p className="error-message" role="alert">
           {error}
         </p>
       )}
-      {!rows ? (
+
+      {!completedRows ? (
         <div className="admin-loading" role="status">
           <LoaderCircle className="spin" />
-          Chargement de votre relevé…
+          Chargement de votre historique…
         </div>
-      ) : !rows.length ? (
+      ) : !completedRows.length ? (
         <div className="admin-empty">
           <Clock3 size={36} />
-          <h3>Aucun pointage sur la période</h3>
+          <h3>Aucun pointage effectué sur cette période</h3>
         </div>
       ) : (
         <div className="swapper-attendance-cards-list">
-          {rows.map((row) => (
+          {completedRows.map((row) => (
             <div key={row.shiftId} className="swapper-attendance-card">
               <div className="swapper-attendance-header">
                 <div>
@@ -137,7 +164,9 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
                       : "—"}
                   </strong>
                 </div>
-                <div className="time-separator" aria-hidden="true">→</div>
+                <div className="time-separator" aria-hidden="true">
+                  →
+                </div>
                 <div className="time-block">
                   <small>FIN</small>
                   <strong>
