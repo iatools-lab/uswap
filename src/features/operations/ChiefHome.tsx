@@ -2,6 +2,7 @@ import { dayKey, isInWindow } from "./format";
 import { QrManagement } from "./QrManagement";
 import { ShiftTable } from "./ShiftTable";
 import type { OperationsViewProps } from "./types";
+import { IncidentCenter } from "../incidents/IncidentCenter";
 
 /**
  * Le chef consulte l'exploitation de sa station et génère les QR de service
@@ -80,6 +81,8 @@ export function ChiefHome({ user, data }: OperationsViewProps) {
           </p>
         )}
       </section>
+
+      <IncidentCenter canManage={false} stationId={user.stationId} />
     </>
   );
 }

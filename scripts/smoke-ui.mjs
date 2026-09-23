@@ -285,6 +285,10 @@ await exercise(
       );
     }
     await page.getByRole("heading", { name: "Shifts à remplacer" }).waitFor();
+    await page.getByRole("heading", { name: "Incidents des stations" }).waitFor();
+    await page.getByRole("button", { name: /Zone de circulation à sécuriser/ }).click();
+    await page.getByRole("heading", { name: "Zone de circulation à sécuriser" }).waitFor();
+    await page.getByRole("button", { name: "Fermer", exact: true }).click();
     const replaceButtons = page.getByRole("button", {
       name: "Affecter",
       exact: true,
@@ -390,6 +394,13 @@ await exercise(
       .getByRole("button", { name: /Fermer/ })
       .click();
     await page.getByRole("heading", { name: /Présence du jour/ }).waitFor();
+    await page.locator(".shift-table-clean").first().waitFor();
+    await page.getByRole("heading", { name: "Incidents des stations" }).waitFor();
+    await page.getByRole("button", { name: "Déclarer un incident" }).click();
+    const incidentDialog = page.getByRole("dialog", { name: "Déclarer un incident" });
+    assert.equal(await incidentDialog.getByPlaceholder(/Borne de recharge/).inputValue(), "", "Un nouvel incident doit être vierge");
+    assert.ok(await incidentDialog.getByRole("button", { name: "Transmettre l’incident" }).isDisabled(), "Un incident incomplet doit être bloqué");
+    await incidentDialog.getByRole("button", { name: "Fermer la fenêtre" }).click();
     await page
       .getByRole("heading", { name: /pointages/i })
       .last()

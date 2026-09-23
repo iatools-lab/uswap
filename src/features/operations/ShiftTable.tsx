@@ -34,7 +34,21 @@ export function ShiftTable({
   }
 
   return (
-    <div className="swapper-shifts-cards-list">
+    <>
+    <div className="shift-table-shell">
+      <table className="shift-table-clean">
+        <thead><tr><th>Shift</th><th>Swappeur</th><th>Début</th><th>Fin</th><th>Statut</th>{onPublish && <th><span className="sr-only">Action</span></th>}</tr></thead>
+        <tbody>{shifts.map((shift) => <tr key={shift.id}>
+          <td><strong>{shift.label}</strong><small>{shift.station.name}</small></td>
+          <td>{shift.swapper?.fullName || "Poste vacant"}</td>
+          <td><time>{formatDate(shift.startTime)}</time></td>
+          <td><time>{formatDate(shift.endTime)}</time></td>
+          <td><span className={`attendance-status ${statusClass(shift)}`}>{shiftStatus(shift)}</span></td>
+          {onPublish && <td>{!shift.publishedAt && <button type="button" className="admin-button secondary small" disabled={busy} onClick={() => onPublish(shift.id)}>Publier</button>}</td>}
+        </tr>)}</tbody>
+      </table>
+    </div>
+    <div className="swapper-shifts-cards-list shift-cards-mobile">
       {shifts.map((shift) => {
         const isSwapper = user.role === "SWAPPER";
         return (
@@ -86,6 +100,6 @@ export function ShiftTable({
           </div>
         );
       })}
-    </div>
+    </div></>
   );
 }

@@ -867,6 +867,7 @@ button.ops-callout:hover {
   gap: 12px;
   margin-top: 12px;
 }
+.shift-table-shell{margin-top:12px;overflow:hidden;border:1px solid var(--line,#e2e8f0);border-radius:11px}.shift-table-clean{width:100%;border-collapse:collapse;background:#fff}.shift-table-clean th{padding:10px 14px;border-bottom:1px solid #dfe6ef;background:#f6f8fb;color:#6f7d94;font-size:10px;font-weight:700;letter-spacing:.055em;text-align:left;text-transform:uppercase}.shift-table-clean td{padding:12px 14px;border-bottom:1px solid #edf0f5;color:#283a56;font-size:12px;vertical-align:middle}.shift-table-clean tbody tr:last-child td{border-bottom:0}.shift-table-clean tbody tr{transition:background .14s}.shift-table-clean tbody tr:hover{background:#fafcff}.shift-table-clean td:first-child{display:grid;gap:2px}.shift-table-clean td strong{color:#132441;font-size:13px}.shift-table-clean td small{color:#8390a4;font-size:10px}.shift-table-clean time{font-variant-numeric:tabular-nums}.shift-cards-mobile{display:none}
 
 .swapper-shift-card,
 .swapper-attendance-card {
@@ -986,6 +987,7 @@ button.ops-callout:hover {
 }
 
 @media (max-width: 760px) {
+  .shift-table-shell{display:none}.shift-cards-mobile{display:grid}
   .operations-hero {
     grid-template-columns: 1fr;
   }

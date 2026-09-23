@@ -8,6 +8,7 @@ import {
 } from "../supervision/ReplacementQueue";
 import { formatDate } from "./format";
 import type { OperationsViewProps } from "./types";
+import { IncidentCenter } from "../incidents/IncidentCenter";
 
 export function SupervisorHome({ data }: OperationsViewProps) {
   const navigate = useNavigate();
@@ -144,6 +145,8 @@ export function SupervisorHome({ data }: OperationsViewProps) {
           )}
         </section>
       </div>
+
+      <IncidentCenter canManage />
     </div>
   );
 }

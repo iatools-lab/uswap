@@ -20,18 +20,22 @@ export function QrManagement({ data }: { data: OperationData }) {
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
 
-  const shifts = useMemo(() => {
-    const eligible = data.shifts.filter(
+  const eligibleByKind = useMemo(() => {
+    const select = (requestedKind: Kind) => data.shifts.filter(
       (shift) =>
         shift.publishedAt &&
         shift.station.id &&
         shift.swapper.fullName !== "Poste vacant" &&
         Date.parse(shift.startTime) <= now &&
         Date.parse(shift.endTime) >= now &&
-        (kind === "CHECKIN"
+        (requestedKind === "CHECKIN"
           ? !shift.attendance?.checkedInAt
           : Boolean(shift.attendance?.checkedInAt) && !shift.attendance?.checkedOutAt),
     );
+    return { CHECKIN: select("CHECKIN"), CHECKOUT: select("CHECKOUT") };
+  }, [data.shifts, now]);
+  const shifts = useMemo(() => {
+    const eligible = eligibleByKind[kind];
     const grouped = new Map<
       string,
       (typeof eligible)[number] & { slotKey: string; participantCount: number }
@@ -45,7 +49,7 @@ export function QrManagement({ data }: { data: OperationData }) {
     return Array.from(grouped.values()).sort(
       (a, b) => Date.parse(a.startTime) - Date.parse(b.startTime),
     );
-  }, [data.shifts, kind, now]);
+  }, [eligibleByKind, kind]);
   const target = shifts.find((shift) => shift.slotKey === shiftId) ?? null;
   const remaining = qr ? Math.max(0, Date.parse(qr.expiresAt) - now) : 0;
 
@@ -94,6 +98,19 @@ export function QrManagement({ data }: { data: OperationData }) {
     }
   }
 
+  function openManager() {
+    const freshNow = Date.now();
+    setNow(freshNow);
+    setShiftId("");
+    setQr(null);
+    setError("");
+    // À Bastos, le shift en cours est généralement déjà pointé : on ouvre
+    // directement le type de QR qui possède réellement des candidats.
+    if (!eligibleByKind.CHECKIN.length && eligibleByKind.CHECKOUT.length)
+      setKind("CHECKOUT");
+    setOpen(true);
+  }
+
   return (
     <section className="admin-card ops-qr-launcher">
       <div>
@@ -105,7 +122,7 @@ export function QrManagement({ data }: { data: OperationData }) {
           </p>
         </div>
       </div>
-      <button className="admin-button secondary" type="button" onClick={() => setOpen(true)}>
+      <button className="admin-button secondary" type="button" onClick={openManager}>
         <QrCode size={16} /> Gérer les QR
       </button>
 
@@ -136,9 +153,11 @@ export function QrManagement({ data }: { data: OperationData }) {
               />
             </label>
             {!shifts.length && (
-              <p className="ops-callout ops-callout--muted" role="status">
-                Aucun shift n’est actuellement éligible pour ce type de QR.
-              </p>
+              <div className="ops-callout ops-callout--muted" role="status">
+                <strong>Aucun QR {kind === "CHECKIN" ? "de début" : "de fin"} à générer maintenant.</strong>
+                <span>{kind === "CHECKIN" ? "Les prises de service du créneau actif sont déjà enregistrées." : "Aucune prise de service active n’attend sa clôture."}</span>
+                {eligibleByKind[kind === "CHECKIN" ? "CHECKOUT" : "CHECKIN"].length > 0 && <button type="button" className="text-button" onClick={() => { setKind(kind === "CHECKIN" ? "CHECKOUT" : "CHECKIN"); setShiftId(""); }}>Afficher les QR {kind === "CHECKIN" ? "de fin" : "de début"} disponibles</button>}
+              </div>
             )}
             {target && (
               <div className="ops-qr-target">

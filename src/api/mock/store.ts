@@ -65,6 +65,7 @@ function migrateDb(candidate: unknown): MockDb | null {
     item.id.startsWith("leave-") && !previousLeaves.some((saved) => saved.id === item.id),
   );
   const previousLeaveOperations = previous.leaveSyncOperations ?? [];
+  const previousIncidents = previous.incidents ?? [];
   const migrated = {
     ...seed,
     ...previous,
@@ -76,7 +77,12 @@ function migrateDb(candidate: unknown): MockDb | null {
         !previousLeaveOperations.some((saved) => saved.id === item.id),
       ),
     ],
-    incidents: previous.incidents ?? [],
+    incidents: [
+      ...previousIncidents,
+      ...seed.incidents.filter((item) =>
+        !previousIncidents.some((saved) => saved.id === item.id),
+      ),
+    ],
     notificationPreferences:
       previous.notificationPreferences ?? seed.notificationPreferences,
     scheduledReports: previous.scheduledReports ?? [],
