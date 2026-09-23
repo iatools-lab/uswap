@@ -502,7 +502,14 @@ await exercise(
     await page.getByRole("link", { name: "Congés", exact: true }).click();
     await page.waitForURL(/\/app\/mon-espace\/conges$/);
     await assertNoHorizontalOverflow(page, "Congés mobile");
+    await page.getByRole("heading", { name: "Organisez vos absences sereinement" }).waitFor();
+    await page.getByRole("button", { name: "Nouvelle demande" }).click();
+    await page.getByRole("heading", { name: "Nouvelle demande de congé" }).waitFor();
+    assert.equal(await page.getByLabel("Premier jour").inputValue(), "", "Une nouvelle demande ne doit pas être préremplie");
+    assert.ok(await page.getByRole("button", { name: "Transmettre la demande" }).isDisabled(), "Une demande incomplète doit rester bloquée");
+    await page.getByRole("button", { name: "Fermer la fenêtre" }).click();
     await page.getByRole("heading", { name: "Absence imprévue" }).waitFor();
+    await page.getByText("Signaler une indisponibilité liée à un shift déjà planifié").click();
     await page.getByRole("button", { name: "Signaler", exact: true }).waitFor();
     await page.getByRole("button", { name: "Signaler", exact: true }).click();
     await page.getByRole("heading", { name: "Signaler une absence" }).waitFor();

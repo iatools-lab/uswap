@@ -3,6 +3,7 @@ import { runAutomation } from "./constraints";
 import { attendanceRoutes } from "./handlers/attendance";
 import { authRoutes } from "./handlers/auth";
 import { coverageRoutes } from "./handlers/coverage";
+import { leaveRoutes } from "./handlers/leaves";
 import { planningRoutes } from "./handlers/plannings";
 import { stationRoutes } from "./handlers/stations";
 import { userRoutes } from "./handlers/users";
@@ -22,6 +23,7 @@ const routes: MockRoute[] = [
   ...planningRoutes,
   ...attendanceRoutes,
   ...coverageRoutes,
+  ...leaveRoutes,
 ];
 
 /**
@@ -42,6 +44,9 @@ export async function mockRequest<T>(
   const [rawPath, search = ""] = url.split("?");
   const path = rawPath.replace(/\/+$/, "") || "/";
   const absencesBefore = db.automatedAbsences.length;
+  const pendingLeaveSyncBefore = db.leaveSyncOperations.filter((item) =>
+    ["FAILED", "QUEUED"].includes(item.status),
+  ).length;
   runAutomation(db, now);
   const ctx: MockCtx = {
     db,
@@ -59,7 +64,10 @@ export async function mockRequest<T>(
     const match = route.pattern.exec(path);
     if (!match) continue;
     const result = await route.handler({ ...ctx, params: match.slice(1) });
-    if (method !== "GET" || db.automatedAbsences.length !== absencesBefore)
+    const pendingLeaveSyncAfter = db.leaveSyncOperations.filter((item) =>
+      ["FAILED", "QUEUED"].includes(item.status),
+    ).length;
+    if (method !== "GET" || db.automatedAbsences.length !== absencesBefore || pendingLeaveSyncAfter !== pendingLeaveSyncBefore)
       replaceDb(db);
     return result as T;
   }

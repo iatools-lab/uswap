@@ -60,18 +60,28 @@ function migrateDb(candidate: unknown): MockDb | null {
     return null;
 
   const seed = createSeed(Date.now());
+  const previousLeaves = previous.leaves ?? [];
+  const sprint4DemoLeaves = seed.leaves.filter((item) =>
+    item.id.startsWith("leave-") && !previousLeaves.some((saved) => saved.id === item.id),
+  );
+  const previousLeaveOperations = previous.leaveSyncOperations ?? [];
   const migrated = {
     ...seed,
     ...previous,
     version: DB_VERSION,
     leaveBalances: previous.leaveBalances ?? seed.leaveBalances,
-    leaveSyncOperations: previous.leaveSyncOperations ?? [],
+    leaveSyncOperations: [
+      ...previousLeaveOperations,
+      ...seed.leaveSyncOperations.filter((item) =>
+        !previousLeaveOperations.some((saved) => saved.id === item.id),
+      ),
+    ],
     incidents: previous.incidents ?? [],
     notificationPreferences:
       previous.notificationPreferences ?? seed.notificationPreferences,
     scheduledReports: previous.scheduledReports ?? [],
     offlineOperations: previous.offlineOperations ?? [],
-    leaves: (previous.leaves ?? seed.leaves).map((leave, index) => ({
+    leaves: [...previousLeaves, ...sprint4DemoLeaves].map((leave, index) => ({
       ...leave,
       type: leave.type ?? "OTHER",
       attachmentId: leave.attachmentId ?? null,

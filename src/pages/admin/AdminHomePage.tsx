@@ -2,6 +2,7 @@ import { useEffect, useState, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { PlusIcon } from "@phosphor-icons/react";
 import { UserCreateModal } from "../../features/users/UserCreateModal";
+import { LeaveIntegrationHealth } from "../../features/leaves/LeaveIntegrationHealth";
 import { greetingFor } from "../../utils/greeting";
 import { interceptNav } from "../../app/spaNav";
 import { useSession } from "../../app/session";
@@ -244,6 +245,8 @@ export function AdminHomePage() {
           </div>
         </a>
       </section>
+
+      <LeaveIntegrationHealth />
 
       {!dismissOnboarding && (
         <section

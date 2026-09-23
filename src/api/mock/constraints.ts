@@ -66,6 +66,21 @@ export function hoursInWeek(
  * ne traite chaque affectation qu'une fois et notifie les acteurs concernés.
  */
 export function runAutomation(db: MockDb, now: number): void {
+  // RM-15 — une opération de congé conservée localement est rejouée dès que
+  // sa fenêtre de nouvelle tentative est atteinte. Le service fictif redevient
+  // disponible au rejeu, ce qui rend le comportement déterministe en démo.
+  for (const operation of db.leaveSyncOperations) {
+    if (!["FAILED", "QUEUED"].includes(operation.status)) continue;
+    if (operation.nextAttemptAt && Date.parse(operation.nextAttemptAt) > now) continue;
+    operation.status = "SYNCED";
+    operation.attempts += 1;
+    operation.lastAttemptAt = new Date(now).toISOString();
+    operation.completedAt = new Date(now).toISOString();
+    operation.nextAttemptAt = null;
+    operation.lastError = null;
+    const leave = db.leaves.find((item) => item.id === operation.leaveId);
+    if (leave?.status === "SYNC_FAILED") leave.status = "PENDING";
+  }
   const published = new Set(
     db.plannings.filter((item) => item.status === "PUBLISHED").map((item) => item.id),
   );
