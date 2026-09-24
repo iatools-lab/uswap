@@ -556,8 +556,25 @@ await exercise(
     await page
       .locator('#absence-declaration input[placeholder*="Maladie"]')
       .fill("Indisponibilité médicale");
+    await page.context().setOffline(true);
+    await page.getByText("Mode hors connexion", { exact: true }).waitFor();
     await sendAbsence.click();
-    await page.getByText("Absence déclarée.", { exact: true }).waitFor();
+    await page.getByText(/déclaration mise en file/i).waitFor();
+    await page.waitForFunction(async () => {
+      const request = indexedDB.open("uswap-outbox", 2);
+      const db = await new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+      const tx = db.transaction("mutations", "readonly");
+      const count = tx.objectStore("mutations").count();
+      return await new Promise((resolve) => { count.onsuccess = () => resolve(count.result > 0); });
+    });
+    await page.context().setOffline(false);
+    await page.waitForFunction(async () => {
+      const request = indexedDB.open("uswap-outbox", 2);
+      const db = await new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+      const tx = db.transaction("mutations", "readonly");
+      const count = tx.objectStore("mutations").count();
+      return await new Promise((resolve) => { count.onsuccess = () => resolve(count.result === 0); });
+    });
     await page.getByRole("link", { name: "Planning", exact: true }).click();
     await page.waitForURL(/\/app\/mon-espace\/plannings$/);
     await page

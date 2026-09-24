@@ -355,6 +355,7 @@ function ViewToolbar({
 }
 
 export function Planner({ user }: { user: User }) {
+  const cacheKey = `uswap:planning-cache:${user.id}`;
   const navigate = useNavigate();
   const [planningName, setPlanningName] = useState("");
   const writable = user.role === "ADMIN" || user.role === "SUPERVISOR";
@@ -366,6 +367,7 @@ export function Planner({ user }: { user: User }) {
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
   const [creationMode, setCreationMode] = useState<"manual" | "automatic">("manual");
+  const [offlineCopy, setOfflineCopy] = useState(false);
 
   const [start, setStart] = useState(""),
     [end, setEnd] = useState(""),
@@ -400,10 +402,15 @@ export function Planner({ user }: { user: User }) {
         if (active) {
           setPlans(p);
           setError("");
+          setOfflineCopy(false);
+          if (user.role === "SWAPPER") localStorage.setItem(`${cacheKey}:list`, JSON.stringify(p));
         }
       })
       .catch((e) => {
-        if (active) setError(e.message);
+        if (!active) return;
+        const cached = user.role === "SWAPPER" ? localStorage.getItem(`${cacheKey}:list`) : null;
+        if (cached) { setPlans(JSON.parse(cached) as Planning[]); setOfflineCopy(true); setError(""); }
+        else setError(e.message);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -467,6 +474,7 @@ export function Planner({ user }: { user: User }) {
     try {
       const plan = await api<Planning>("/plannings/" + id);
       setCurrent(plan);
+      if (user.role === "SWAPPER") localStorage.setItem(`${cacheKey}:detail:${id}`, JSON.stringify(plan));
       setOpeningId(null);
       const notices =
         await api<{ id: string; planningId: string }[]>("/plannings/notices");
@@ -477,7 +485,9 @@ export function Planner({ user }: { user: User }) {
       );
     } catch (e) {
       setOpeningId(null);
-      setError((e as Error).message);
+      const cached = user.role === "SWAPPER" ? localStorage.getItem(`${cacheKey}:detail:${id}`) : null;
+      if (cached) { setCurrent(JSON.parse(cached) as Planning); setOfflineCopy(true); setError(""); }
+      else setError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -843,6 +853,7 @@ export function Planner({ user }: { user: User }) {
 
   return (
     <>
+      {offlineCopy && <div className="planner-offline-copy" role="status">Mode hors connexion · dernière version synchronisée du planning</div>}
       <PlanningList
         plans={plans}
         userRole={user.role}

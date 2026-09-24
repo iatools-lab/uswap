@@ -7,6 +7,8 @@ import {
 const DB_NAME = "uswap-outbox";
 const STORE = "mutations";
 const VERSION = 2;
+const CHANGE_EVENT = "uswap:outbox-changed";
+const changed = () => window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
 
 export type QueuedMutation = {
   id: string;
@@ -72,6 +74,7 @@ export async function enqueue(
     attempts: 0,
   };
   await withStore("readwrite", (store) => store.put(mutation));
+  changed();
   return id;
 }
 
@@ -84,6 +87,7 @@ export async function pending(): Promise<QueuedMutation[]> {
 
 async function remove(id: string) {
   await withStore("readwrite", (store) => store.delete(id));
+  changed();
 }
 
 async function bump(mutation: QueuedMutation, error: string) {
@@ -99,6 +103,7 @@ async function bump(mutation: QueuedMutation, error: string) {
       ).toISOString(),
     }),
   );
+  changed();
 }
 
 export async function discard(id: string): Promise<void> {
@@ -178,4 +183,9 @@ export function startOutboxSync(onFlushed?: (sent: number) => void) {
     window.removeEventListener("online", run);
     clearInterval(timer);
   };
+}
+
+export function subscribeOutbox(listener: () => void) {
+  window.addEventListener(CHANGE_EVENT, listener);
+  return () => window.removeEventListener(CHANGE_EVENT, listener);
 }
