@@ -158,6 +158,8 @@ await exercise(
       "La cloche doit rester accolée à l'avatar",
     );
     await page.getByRole("button", { name: /notification/i }).click();
+    await page.getByRole("button", { name: /Toutes/ }).waitFor();
+    await page.getByRole("button", { name: /Non lues/ }).click();
     await page.getByText("Accès à valider", { exact: true }).waitFor();
     await page.keyboard.press("Escape");
     await page
@@ -579,6 +581,10 @@ await exercise(
     await page.getByRole("link", { name: "Compte", exact: true }).click();
     await page.waitForURL(/\/app\/mon-espace\/compte$/);
     await assertNoHorizontalOverflow(page, "Compte mobile");
+    await page.getByRole("button", { name: "Notifications", exact: true }).click();
+    await page.getByRole("heading", { name: "Notifications et canaux" }).waitFor();
+    await page.getByRole("button", { name: "Enregistrer mes préférences" }).click();
+    await page.getByText("Enregistré", { exact: true }).waitFor();
   },
 );
 

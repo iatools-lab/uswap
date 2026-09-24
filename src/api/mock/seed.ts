@@ -973,6 +973,21 @@ export function createSeed(nowMs: number): MockDb {
     300,
   );
   pushNotification(
+    "sw-01",
+    "LEAVE_APPROVED",
+    "Congé approuvé",
+    "Votre demande pour événement familial a été approuvée et votre disponibilité mise à jour.",
+    1440,
+    true,
+  );
+  pushNotification(
+    "us-supervisor",
+    "INCIDENT",
+    "Incident critique pris en charge",
+    "La zone de circulation d’Obobogo a été balisée dans l’attente de l’intervention.",
+    75,
+  );
+  pushNotification(
     "sw-09",
     "ABSENCE",
     "Absence enregistrée",

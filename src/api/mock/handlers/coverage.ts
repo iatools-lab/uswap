@@ -563,4 +563,47 @@ export const coverageRoutes: MockRoute[] = [
       return { ok: true };
     },
   },
+  {
+    method: "PATCH",
+    pattern: /^\/notifications\/read-all$/,
+    handler: (ctx) => {
+      const user = requireUser(ctx.db, ctx.user);
+      for (const item of ctx.db.notifications)
+        if (item.userId === user.id && !item.readAt) item.readAt = isoFromMs(ctx.now);
+      return { ok: true };
+    },
+  },
+  {
+    method: "GET",
+    pattern: /^\/notifications\/preferences$/,
+    handler: (ctx) => {
+      const user = requireUser(ctx.db, ctx.user);
+      const preferences = ctx.db.notificationPreferences.find((item) => item.userId === user.id);
+      if (!preferences) throw new MockHttpError(404, "Préférences de notification introuvables.");
+      return preferences;
+    },
+  },
+  {
+    method: "PATCH",
+    pattern: /^\/notifications\/preferences$/,
+    handler: (ctx) => {
+      const user = requireUser(ctx.db, ctx.user);
+      const preferences = ctx.db.notificationPreferences.find((item) => item.userId === user.id);
+      if (!preferences) throw new MockHttpError(404, "Préférences de notification introuvables.");
+      preferences.emailEnabled = ctx.body.emailEnabled !== false;
+      preferences.pushEnabled = ctx.body.pushEnabled === true;
+      if (ctx.body.categories && typeof ctx.body.categories === "object") {
+        const requested = ctx.body.categories as Record<string, { email?: boolean; push?: boolean }>;
+        for (const category of Object.keys(preferences.categories)) {
+          const next = requested[category];
+          if (next) preferences.categories[category] = {
+            email: preferences.emailEnabled && next.email === true,
+            push: preferences.pushEnabled && next.push === true,
+          };
+        }
+      }
+      preferences.updatedAt = isoFromMs(ctx.now);
+      return preferences;
+    },
+  },
 ];

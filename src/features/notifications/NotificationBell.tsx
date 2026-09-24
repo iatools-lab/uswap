@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
-import { BellIcon } from "@phosphor-icons/react";
+import { BellIcon, CheckCircleIcon, SlidersHorizontalIcon } from "@phosphor-icons/react";
 import { api } from "../../api/auth-api";
 import { formatDateTime } from "../supervision/format";
 
@@ -28,6 +28,7 @@ export function NotificationBell() {
   const location = useLocation();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<"all" | "unread">("all");
   const [placement, setPlacement] = useState<Placement | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -134,13 +135,10 @@ export function NotificationBell() {
   }, []);
 
   const unread = items.filter((item) => !item.readAt);
+  const visibleItems = view === "unread" ? unread : items;
 
   async function markAllRead() {
-    await Promise.all(
-      unread.map((item) =>
-        api(`/notifications/${item.id}/read`, {}, "PATCH").catch(() => {}),
-      ),
-    );
+    await api("/notifications/read-all", {}, "PATCH").catch(() => {});
     setItems((rows) =>
       rows.map((row) => ({
         ...row,
@@ -172,7 +170,11 @@ export function NotificationBell() {
         ? "/app/admin/utilisateurs?status=pending"
         : item.kind.startsWith("PLANNING_")
           ? `${basePath}/plannings`
-          : basePath;
+          : item.kind.includes("LEAVE") && basePath === "/app/mon-espace"
+            ? `${basePath}/conges`
+            : ["CHECKIN", "CORRECTION", "AUTOMATIC_ABSENCE", "ABSENCE_DECLARED"].includes(item.kind) && basePath === "/app/supervision"
+              ? `${basePath}/pointages`
+              : basePath;
     if (destination) {
       setOpen(false);
       navigate(destination);
@@ -216,7 +218,7 @@ export function NotificationBell() {
             }}
           >
           <div className="notification-bell__head">
-            <strong>Notifications</strong>
+            <div><strong>Centre de notifications</strong><small>{unread.length ? `${unread.length} à consulter` : "Vous êtes à jour"}</small></div>
             {!!unread.length && (
               <button
                 type="button"
@@ -227,11 +229,15 @@ export function NotificationBell() {
               </button>
             )}
           </div>
-          {!items.length ? (
-            <p className="notification-bell__empty">Aucune notification.</p>
+          <div className="notification-bell__filters" role="group" aria-label="Filtrer les notifications">
+            <button aria-pressed={view === "all"} onClick={() => setView("all")}>Toutes <span>{items.length}</span></button>
+            <button aria-pressed={view === "unread"} onClick={() => setView("unread")}>Non lues <span>{unread.length}</span></button>
+          </div>
+          {!visibleItems.length ? (
+            <p className="notification-bell__empty">{view === "unread" ? "Aucune notification non lue." : "Aucune notification."}</p>
           ) : (
             <ul className="notification-bell__list">
-              {items.slice(0, 20).map((item) => (
+              {visibleItems.slice(0, 20).map((item) => (
                 <li
                   key={item.id}
                   className={
@@ -260,6 +266,7 @@ export function NotificationBell() {
               ))}
             </ul>
           )}
+          <button type="button" className="notification-bell__preferences" onClick={() => { setOpen(false); const base = location.pathname.startsWith("/app/admin") ? "/app/admin" : location.pathname.startsWith("/app/supervision") ? "/app/supervision" : location.pathname.startsWith("/app/station") ? "/app/station" : "/app/mon-espace"; navigate(`${base}/compte?section=notifications`); }}><SlidersHorizontalIcon /> Gérer mes préférences <CheckCircleIcon /></button>
           </div>,
           document.body,
         )}
