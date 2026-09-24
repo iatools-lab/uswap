@@ -6,6 +6,7 @@ import {
   type ResponsiveColumn,
 } from "../../ui/ResponsiveDataTable";
 import { exportToExcel } from "../../utils/excelExport";
+import { Select } from "../../ui/Select";
 import { toDateInput, formatDateTime } from "./format";
 import type { ShiftChange, SupervisionProps } from "./types";
 
@@ -144,15 +145,18 @@ export function ChangeHistory({ user }: SupervisionProps) {
         </label>
         <label>
           Type
-          <select
+          <Select
             value={type}
-            onChange={(event) => setType(event.target.value)}
-          >
-            <option value="">Tous</option>
-            <option value="REPLACEMENT">Remplacement</option>
-            <option value="PERMUTATION">Permutation</option>
-            <option value="REASSIGNMENT">Réaffectation</option>
-          </select>
+            size="sm"
+            ariaLabel="Type de changement"
+            onChange={(value) => setType(String(value))}
+            options={[
+              { value: "", label: "Tous" },
+              { value: "REPLACEMENT", label: "Remplacement" },
+              { value: "PERMUTATION", label: "Permutation" },
+              { value: "REASSIGNMENT", label: "Réaffectation" },
+            ]}
+          />
         </label>
         <label>
           Station

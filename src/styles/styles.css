@@ -129,7 +129,8 @@ a:focus-visible {
 .field {
   margin-bottom: 23px;
 }
-.form-panel label {
+.form-panel label,
+.form-panel .field-label {
   font-size: 12px;
   font-weight: 500;
   display: block;

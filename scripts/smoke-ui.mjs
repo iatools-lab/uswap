@@ -7,7 +7,8 @@ const failures = [];
 
 async function login(page, email, password) {
   await page.goto(`${baseUrl}/auth/login`, { waitUntil: "domcontentloaded" });
-  await page.locator("#demo-profile").selectOption(email);
+  await page.getByRole("button", { name: "Choisir un profil" }).click();
+  await page.getByRole("option").filter({ hasText: email }).click();
   await page.locator("#password").fill(password);
   await page.getByRole("button", { name: "Se connecter" }).click();
   await page.waitForURL(/\/app\//);
@@ -111,10 +112,24 @@ await exercise(
   async (page) => {
     await page.getByRole("heading", { name: "Rapports périodiques" }).waitFor();
     await page.getByRole("button", { name: "Programmer" }).click();
-    const reportDialog = page.getByRole("dialog", { name: "Programmer un rapport" });
-    assert.equal(await reportDialog.getByPlaceholder(/Synthèse opérationnelle/).inputValue(), "", "Une programmation neuve doit être vierge");
-    assert.ok(await reportDialog.getByRole("button", { name: "Créer la programmation" }).isDisabled());
-    await reportDialog.getByRole("button", { name: "Fermer la fenêtre" }).click();
+    const reportDialog = page.getByRole("dialog", {
+      name: "Programmer un rapport",
+    });
+    assert.equal(
+      await reportDialog
+        .getByPlaceholder(/Synthèse opérationnelle/)
+        .inputValue(),
+      "",
+      "Une programmation neuve doit être vierge",
+    );
+    assert.ok(
+      await reportDialog
+        .getByRole("button", { name: "Créer la programmation" })
+        .isDisabled(),
+    );
+    await reportDialog
+      .getByRole("button", { name: "Fermer la fenêtre" })
+      .click();
     const workspace = page.locator(".admin-workspace");
     await page.getByRole("button", { name: "Masquer la navigation" }).click();
     await page.waitForFunction(
@@ -293,13 +308,24 @@ await exercise(
       );
     }
     await page.getByRole("heading", { name: "Shifts à remplacer" }).waitFor();
-    await page.getByRole("heading", { name: "Tableau de bord du réseau" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Tableau de bord du réseau" })
+      .waitFor();
     const dashboardDownload = page.waitForEvent("download");
     await page.getByRole("button", { name: "Exporter Excel" }).click();
-    assert.match((await dashboardDownload).suggestedFilename(), /rapport-uswap-.*\.xlsx/);
-    await page.getByRole("heading", { name: "Incidents des stations" }).waitFor();
-    await page.getByRole("button", { name: /Zone de circulation à sécuriser/ }).click();
-    await page.getByRole("heading", { name: "Zone de circulation à sécuriser" }).waitFor();
+    assert.match(
+      (await dashboardDownload).suggestedFilename(),
+      /rapport-uswap-.*\.xlsx/,
+    );
+    await page
+      .getByRole("heading", { name: "Incidents des stations" })
+      .waitFor();
+    await page
+      .getByRole("button", { name: /Zone de circulation à sécuriser/ })
+      .click();
+    await page
+      .getByRole("heading", { name: "Zone de circulation à sécuriser" })
+      .waitFor();
     await page.getByRole("button", { name: "Fermer", exact: true }).click();
     const replaceButtons = page.getByRole("button", {
       name: "Affecter",
@@ -407,12 +433,27 @@ await exercise(
       .click();
     await page.getByRole("heading", { name: /Présence du jour/ }).waitFor();
     await page.locator(".shift-table-clean").first().waitFor();
-    await page.getByRole("heading", { name: "Incidents des stations" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Incidents des stations" })
+      .waitFor();
     await page.getByRole("button", { name: "Déclarer un incident" }).click();
-    const incidentDialog = page.getByRole("dialog", { name: "Déclarer un incident" });
-    assert.equal(await incidentDialog.getByPlaceholder(/Borne de recharge/).inputValue(), "", "Un nouvel incident doit être vierge");
-    assert.ok(await incidentDialog.getByRole("button", { name: "Transmettre l’incident" }).isDisabled(), "Un incident incomplet doit être bloqué");
-    await incidentDialog.getByRole("button", { name: "Fermer la fenêtre" }).click();
+    const incidentDialog = page.getByRole("dialog", {
+      name: "Déclarer un incident",
+    });
+    assert.equal(
+      await incidentDialog.getByPlaceholder(/Borne de recharge/).inputValue(),
+      "",
+      "Un nouvel incident doit être vierge",
+    );
+    assert.ok(
+      await incidentDialog
+        .getByRole("button", { name: "Transmettre l’incident" })
+        .isDisabled(),
+      "Un incident incomplet doit être bloqué",
+    );
+    await incidentDialog
+      .getByRole("button", { name: "Fermer la fenêtre" })
+      .click();
     await page
       .getByRole("heading", { name: /pointages/i })
       .last()
@@ -525,14 +566,29 @@ await exercise(
     await page.getByRole("link", { name: "Congés", exact: true }).click();
     await page.waitForURL(/\/app\/mon-espace\/conges$/);
     await assertNoHorizontalOverflow(page, "Congés mobile");
-    await page.getByRole("heading", { name: "Organisez vos absences sereinement" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Organisez vos absences sereinement" })
+      .waitFor();
     await page.getByRole("button", { name: "Nouvelle demande" }).click();
-    await page.getByRole("heading", { name: "Nouvelle demande de congé" }).waitFor();
-    assert.equal(await page.getByLabel("Premier jour").inputValue(), "", "Une nouvelle demande ne doit pas être préremplie");
-    assert.ok(await page.getByRole("button", { name: "Transmettre la demande" }).isDisabled(), "Une demande incomplète doit rester bloquée");
+    await page
+      .getByRole("heading", { name: "Nouvelle demande de congé" })
+      .waitFor();
+    assert.equal(
+      await page.getByLabel("Premier jour").inputValue(),
+      "",
+      "Une nouvelle demande ne doit pas être préremplie",
+    );
+    assert.ok(
+      await page
+        .getByRole("button", { name: "Transmettre la demande" })
+        .isDisabled(),
+      "Une demande incomplète doit rester bloquée",
+    );
     await page.getByRole("button", { name: "Fermer la fenêtre" }).click();
     await page.getByRole("heading", { name: "Absence imprévue" }).waitFor();
-    await page.getByText("Signaler une indisponibilité liée à un shift déjà planifié").click();
+    await page
+      .getByText("Signaler une indisponibilité liée à un shift déjà planifié")
+      .click();
     await page.getByRole("button", { name: "Signaler", exact: true }).waitFor();
     await page.getByRole("button", { name: "Signaler", exact: true }).click();
     await page.getByRole("heading", { name: "Signaler une absence" }).waitFor();
@@ -562,18 +618,28 @@ await exercise(
     await page.getByText(/déclaration mise en file/i).waitFor();
     await page.waitForFunction(async () => {
       const request = indexedDB.open("uswap-outbox", 2);
-      const db = await new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+      const db = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
       const tx = db.transaction("mutations", "readonly");
       const count = tx.objectStore("mutations").count();
-      return await new Promise((resolve) => { count.onsuccess = () => resolve(count.result > 0); });
+      return await new Promise((resolve) => {
+        count.onsuccess = () => resolve(count.result > 0);
+      });
     });
     await page.context().setOffline(false);
     await page.waitForFunction(async () => {
       const request = indexedDB.open("uswap-outbox", 2);
-      const db = await new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+      const db = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
       const tx = db.transaction("mutations", "readonly");
       const count = tx.objectStore("mutations").count();
-      return await new Promise((resolve) => { count.onsuccess = () => resolve(count.result === 0); });
+      return await new Promise((resolve) => {
+        count.onsuccess = () => resolve(count.result === 0);
+      });
     });
     await page.getByRole("link", { name: "Planning", exact: true }).click();
     await page.waitForURL(/\/app\/mon-espace\/plannings$/);
@@ -608,9 +674,15 @@ await exercise(
     await page.getByRole("link", { name: "Compte", exact: true }).click();
     await page.waitForURL(/\/app\/mon-espace\/compte$/);
     await assertNoHorizontalOverflow(page, "Compte mobile");
-    await page.getByRole("button", { name: "Notifications", exact: true }).click();
-    await page.getByRole("heading", { name: "Notifications et canaux" }).waitFor();
-    await page.getByRole("button", { name: "Enregistrer mes préférences" }).click();
+    await page
+      .getByRole("button", { name: "Notifications", exact: true })
+      .click();
+    await page
+      .getByRole("heading", { name: "Notifications et canaux" })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "Enregistrer mes préférences" })
+      .click();
     await page.getByText("Enregistré", { exact: true }).waitFor();
   },
 );
@@ -620,7 +692,9 @@ const migrationPage = await migrationContext.newPage();
 await migrationPage.goto(`${baseUrl}/auth/login`, {
   waitUntil: "domcontentloaded",
 });
-await migrationPage.locator("#demo-profile").waitFor();
+await migrationPage
+  .getByRole("button", { name: "Choisir un profil" })
+  .waitFor();
 await migrationPage.evaluate(() => {
   const current = JSON.parse(
     localStorage.getItem("uswap.mock.db.v10") || "null",
@@ -638,7 +712,9 @@ await migrationPage.evaluate(() => {
   localStorage.removeItem("uswap.mock.db.v10");
 });
 await migrationPage.reload({ waitUntil: "domcontentloaded" });
-await migrationPage.locator("#demo-profile").waitFor();
+await migrationPage
+  .getByRole("button", { name: "Choisir un profil" })
+  .waitFor();
 const migrated = await migrationPage.evaluate(() => {
   const db = JSON.parse(localStorage.getItem("uswap.mock.db.v10") || "null");
   return {
