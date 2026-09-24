@@ -473,7 +473,9 @@ export function Planner({ user }: { user: User }) {
   }, [stationId]);
 
   const selectedStation = stations.find((station) => station.id === stationId);
-  const availableSwappers = stationSwappers;
+  const availableSwappers = stationSwappers.filter(
+    (swapper) => swapper.stationId === stationId,
+  );
 
   async function open(id: string) {
     setBusy(true);

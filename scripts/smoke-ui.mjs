@@ -46,7 +46,7 @@ async function exercise(name, email, password, expectedPath, run) {
 
 async function createPlanning(page, { mode, name, start, end }) {
   const buttonName =
-    mode === "automatic" ? "Générer un planning" : "Nouveau planning";
+    mode === "automatic" ? "Générer automatiquement" : "Créer un brouillon";
   await page.getByRole("button", { name: buttonName, exact: true }).click();
   await page
     .getByRole("heading", {
@@ -73,6 +73,14 @@ async function createPlanning(page, { mode, name, start, end }) {
     .getByText(/swappeurs?$/)
     .first()
     .waitFor();
+  const displayedTeams = await page
+    .locator(".planner-station-team small")
+    .allTextContents();
+  assert.ok(
+    displayedTeams.length > 0 &&
+      displayedTeams.every((entry) => entry.includes("Station Bastos")),
+    "Le résumé doit limiter l’équipe aux swappeurs de la station choisie",
+  );
   const stationSelectorBox = await page
     .locator(".stepper-field-group")
     .first()
@@ -245,7 +253,7 @@ await exercise(
       .getByRole("button", { name: "Tous les plannings", exact: true })
       .click();
     await page
-      .getByRole("button", { name: /Nouveau planning|Créer un planning/ })
+      .getByRole("button", { name: /Créer un brouillon|Créer un planning/ })
       .first()
       .click();
     await page.getByRole("heading", { name: "Créer un planning" }).waitFor();
@@ -388,7 +396,7 @@ await exercise(
     await page.getByRole("link", { name: "Planning", exact: true }).click();
     await page.waitForURL(/\/app\/supervision\/plannings$/);
     await page
-      .getByRole("button", { name: /Nouveau planning|Créer un planning/ })
+      .getByRole("button", { name: /Créer un brouillon|Créer un planning/ })
       .first()
       .click();
     await page.getByRole("heading", { name: "Créer un planning" }).waitFor();
@@ -467,7 +475,7 @@ await exercise(
     assert.equal(
       await page
         .getByRole("button", {
-          name: /Créer un planning|Nouveau planning|Générer un planning/,
+          name: /Créer un planning|Créer un brouillon|Générer automatiquement/,
         })
         .count(),
       0,
@@ -484,7 +492,7 @@ await exercise(
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("link", { name: "Plannings", exact: true }).click();
     await page.waitForURL(/\/app\/admin\/plannings$/);
-    for (const name of ["Générer un planning", "Nouveau planning"]) {
+    for (const name of ["Générer automatiquement", "Créer un brouillon"]) {
       const action = page.getByRole("button", { name, exact: true });
       const box = await action.boundingBox();
       assert.ok(box, `Action mobile absente : ${name}`);
@@ -494,7 +502,7 @@ await exercise(
       );
     }
     await page
-      .getByRole("button", { name: "Nouveau planning", exact: true })
+      .getByRole("button", { name: "Créer un brouillon", exact: true })
       .click();
     await page.getByRole("heading", { name: "Créer un planning" }).waitFor();
     await page.keyboard.press("Escape");
