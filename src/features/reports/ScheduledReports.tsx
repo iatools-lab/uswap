@@ -49,9 +49,9 @@ export function ScheduledReports() {
             <CalendarCheckIcon />
           </span>
           <div>
-            <h3>Rapports périodiques</h3>
+            <h3>Envois automatiques de rapports</h3>
             <p>
-              Automatisez l’envoi des indicateurs aux destinataires autorisés.
+              Choisissez quand transmettre les indicateurs d’activité et à qui.
             </p>
           </div>
         </div>
@@ -60,7 +60,7 @@ export function ScheduledReports() {
           onClick={() => setOpen(true)}
         >
           <PlusIcon />
-          Programmer
+          Créer un envoi
         </button>
       </div>
       {items.length ? (
@@ -92,8 +92,8 @@ export function ScheduledReports() {
         </div>
       ) : (
         <p className="scheduled-empty">
-          Aucun rapport programmé. Les exports manuels restent disponibles dans
-          le tableau de bord superviseur.
+          Aucun envoi automatique. Utilisez « Créer un envoi » pour recevoir
+          régulièrement un fichier Excel ou CSV.
         </p>
       )}
       <ScheduleModal

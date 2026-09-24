@@ -92,6 +92,11 @@
   overflow-y: auto;
 }
 
+.ui-select__menu--portal {
+  position: fixed;
+  z-index: 10000;
+}
+
 .ui-select__option {
   width: 100%;
   text-align: left;

@@ -377,8 +377,11 @@ export function AdminHomePage() {
       <section className="home-section" aria-labelledby="services-title">
         <div className="home-section-heading">
           <div>
-            <h2 id="services-title">Services et automatisations</h2>
-            <p>Surveillez les échanges et les rapports programmés.</p>
+            <h2 id="services-title">Automatisations administratives</h2>
+            <p>
+              Contrôlez la remontée des congés et les rapports envoyés
+              automatiquement.
+            </p>
           </div>
         </div>
         <div className="home-service-stack">

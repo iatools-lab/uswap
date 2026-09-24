@@ -118,8 +118,10 @@ await exercise(
   "AdminUswap",
   "/app/admin",
   async (page) => {
-    await page.getByRole("heading", { name: "Rapports périodiques" }).waitFor();
-    await page.getByRole("button", { name: "Programmer" }).click();
+    await page
+      .getByRole("heading", { name: "Envois automatiques de rapports" })
+      .waitFor();
+    await page.getByRole("button", { name: "Créer un envoi" }).click();
     const reportDialog = page.getByRole("dialog", {
       name: "Programmer un rapport",
     });

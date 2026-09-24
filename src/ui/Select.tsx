@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CaretDownIcon } from "@phosphor-icons/react";
 import "./ui.css";
 
@@ -42,12 +43,23 @@ export function Select({
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const listboxId = useId();
+  const [menuPosition, setMenuPosition] = useState({
+    left: 0,
+    top: 0,
+    width: 0,
+    maxHeight: 220,
+  });
 
   useEffect(() => {
     const handleOutsideClick = (event: globalThis.MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node))
+      if (
+        ref.current &&
+        !ref.current.contains(event.target as Node) &&
+        !menuRef.current?.contains(event.target as Node)
+      )
         setIsOpen(false);
     };
     document.addEventListener("mousedown", handleOutsideClick);
@@ -63,8 +75,50 @@ export function Select({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const updatePosition = () => {
+      const trigger = ref.current?.getBoundingClientRect();
+      if (!trigger) return;
+      const viewportPadding = 12;
+      const availableBelow =
+        window.innerHeight - trigger.bottom - viewportPadding;
+      const availableAbove = trigger.top - viewportPadding;
+      const openAbove = availableBelow < 180 && availableAbove > availableBelow;
+      const maxHeight = Math.max(
+        120,
+        Math.min(260, openAbove ? availableAbove - 6 : availableBelow - 6),
+      );
+      setMenuPosition({
+        left: Math.max(
+          viewportPadding,
+          Math.min(
+            trigger.left,
+            window.innerWidth - trigger.width - viewportPadding,
+          ),
+        ),
+        top: openAbove
+          ? Math.max(
+              viewportPadding,
+              trigger.top - Math.min(220, maxHeight) - 6,
+            )
+          : trigger.bottom + 6,
+        width: trigger.width,
+        maxHeight,
+      });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [isOpen]);
+
   const selectedOption = options.find((option) => option.value === value);
   const selectedIndex = options.findIndex((option) => option.value === value);
+  const portalTarget = ref.current?.closest("dialog") ?? document.body;
 
   function openAt(index: number) {
     const next = Math.max(0, Math.min(options.length - 1, index));
@@ -127,58 +181,67 @@ export function Select({
         />
       </button>
 
-      {isOpen && (
-        <div
-          className="ui-select__menu"
-          id={listboxId}
-          role="listbox"
-          style={menuMinWidth ? { minWidth: menuMinWidth } : undefined}
-        >
-          {options.map((option, index) => (
-            <button
-              key={String(option.value)}
-              type="button"
-              role="option"
-              aria-selected={option.value === value}
-              className={`ui-select__option${option.value === value ? " ui-select__option--selected" : ""}`}
-              ref={(element) => {
-                optionRefs.current[index] = element;
-              }}
-              tabIndex={index === activeIndex ? 0 : -1}
-              onClick={() => choose(index)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  setIsOpen(false);
-                  ref.current
-                    ?.querySelector<HTMLButtonElement>(".ui-select__trigger")
-                    ?.focus();
-                } else if (
-                  event.key === "ArrowDown" ||
-                  event.key === "ArrowUp"
-                ) {
-                  event.preventDefault();
-                  const delta = event.key === "ArrowDown" ? 1 : -1;
-                  const next =
-                    (index + delta + options.length) % options.length;
-                  setActiveIndex(next);
-                  optionRefs.current[next]?.focus();
-                } else if (event.key === "Home" || event.key === "End") {
-                  event.preventDefault();
-                  const next = event.key === "Home" ? 0 : options.length - 1;
-                  setActiveIndex(next);
-                  optionRefs.current[next]?.focus();
-                } else if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  choose(index);
-                }
-              }}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {isOpen &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="ui-select__menu ui-select__menu--portal"
+            id={listboxId}
+            role="listbox"
+            style={{
+              left: menuPosition.left,
+              top: menuPosition.top,
+              width: menuPosition.width,
+              minWidth: menuMinWidth,
+              maxHeight: menuPosition.maxHeight,
+            }}
+          >
+            {options.map((option, index) => (
+              <button
+                key={String(option.value)}
+                type="button"
+                role="option"
+                aria-selected={option.value === value}
+                className={`ui-select__option${option.value === value ? " ui-select__option--selected" : ""}`}
+                ref={(element) => {
+                  optionRefs.current[index] = element;
+                }}
+                tabIndex={index === activeIndex ? 0 : -1}
+                onClick={() => choose(index)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setIsOpen(false);
+                    ref.current
+                      ?.querySelector<HTMLButtonElement>(".ui-select__trigger")
+                      ?.focus();
+                  } else if (
+                    event.key === "ArrowDown" ||
+                    event.key === "ArrowUp"
+                  ) {
+                    event.preventDefault();
+                    const delta = event.key === "ArrowDown" ? 1 : -1;
+                    const next =
+                      (index + delta + options.length) % options.length;
+                    setActiveIndex(next);
+                    optionRefs.current[next]?.focus();
+                  } else if (event.key === "Home" || event.key === "End") {
+                    event.preventDefault();
+                    const next = event.key === "Home" ? 0 : options.length - 1;
+                    setActiveIndex(next);
+                    optionRefs.current[next]?.focus();
+                  } else if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    choose(index);
+                  }
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>,
+          portalTarget,
+        )}
     </div>
   );
 }
