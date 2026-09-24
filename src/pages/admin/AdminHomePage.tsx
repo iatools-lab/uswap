@@ -1,6 +1,6 @@
 import { useEffect, useState, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { PlusIcon } from "@phosphor-icons/react";
+import { CheckIcon, CompassIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
 import { UserCreateModal } from "../../features/users/UserCreateModal";
 import { LeaveIntegrationHealth } from "../../features/leaves/LeaveIntegrationHealth";
 import { ScheduledReports } from "../../features/reports/ScheduledReports";
@@ -17,6 +17,7 @@ import {
   UserRound,
   Users,
 } from "../../ui/icons";
+import "../../styles/admin-home.css";
 
 type Station = { id: string; name: string; isActive: boolean };
 
@@ -154,13 +155,14 @@ export function AdminHomePage() {
         }}
       />
 
-      <div className="home-header">
+      <section className="home-header" aria-labelledby="home-welcome-title">
         <div>
-          <p className="home-welcome">
-            {greetingFor(session.user.fullName)} 👋
-          </p>
+          <span className="home-eyebrow">Vue d’ensemble</span>
+          <h2 id="home-welcome-title" className="home-welcome">
+            {greetingFor(session.user.fullName)}
+          </h2>
           <p className="home-subtitle">
-            Aperçu général et configuration de votre réseau uSwap
+            Les informations essentielles pour piloter votre réseau aujourd’hui.
           </p>
         </div>
         <div className="home-actions">
@@ -179,76 +181,94 @@ export function AdminHomePage() {
             Créer un utilisateur
           </button>
         </div>
-      </div>
-
-      <section className="network-overview" aria-label="Gestion du réseau">
-        <a
-          className="network-card card-accent-navy"
-          {...link("/app/admin/utilisateurs")}
-          aria-label="Gérer les utilisateurs"
-        >
-          <div className="network-card-head">
-            <span className="network-card-label">Utilisateurs</span>
-            <span className="network-icon-wrap navy">
-              <Users size={18} />
-            </span>
-          </div>
-          <div className="network-card-body">
-            <strong className="network-card-value" data-testid="user-count">
-              {counts.all}
-            </strong>
-            <span className="network-badge active">
-              <i className="dot" /> {counts.active} actifs
-            </span>
-          </div>
-        </a>
-
-        <a
-          className="network-card card-accent-blue"
-          {...link("/app/admin/stations?tab=list")}
-          aria-label="Consulter les stations"
-        >
-          <div className="network-card-head">
-            <span className="network-card-label">Stations</span>
-            <span className="network-icon-wrap blue">
-              <Building2 size={18} />
-            </span>
-          </div>
-          <div className="network-card-body">
-            <strong className="network-card-value" data-testid="station-count">
-              {stations?.length || 0}
-            </strong>
-            <span className="network-badge active">
-              <i className="dot" /> {activeStations} actives
-            </span>
-          </div>
-        </a>
-
-        <a
-          className={`network-card ${counts.pending > 0 ? "card-accent-amber warning" : "card-accent-neutral"}`}
-          {...link("/app/admin/utilisateurs?status=pending")}
-        >
-          <div className="network-card-head">
-            <span className="network-card-label">Accès à activer</span>
-            <span
-              className={`network-icon-wrap ${counts.pending > 0 ? "amber" : "neutral"}`}
-            >
-              <UserRound size={18} />
-            </span>
-          </div>
-          <div className="network-card-body">
-            <strong className="network-card-value">{counts.pending}</strong>
-            <span
-              className={`network-badge ${counts.pending > 0 ? "warning" : "neutral"}`}
-            >
-              {counts.pending === 0 ? "À jour" : "Comptes en attente"}
-            </span>
-          </div>
-        </a>
       </section>
 
-      <LeaveIntegrationHealth />
-      <ScheduledReports />
+      <section className="home-section" aria-labelledby="network-title">
+        <div className="home-section-heading">
+          <div>
+            <h2 id="network-title">État du réseau</h2>
+            <p>Comptes, stations et accès nécessitant votre attention.</p>
+          </div>
+          <span className="home-data-status">
+            <i /> Données à jour
+          </span>
+        </div>
+        <div className="network-overview">
+          <a
+            className="network-card card-accent-navy"
+            {...link("/app/admin/utilisateurs")}
+            aria-label="Gérer les utilisateurs"
+          >
+            <div className="network-card-head">
+              <span className="network-card-label">Utilisateurs</span>
+              <span className="network-icon-wrap navy">
+                <Users size={18} />
+              </span>
+            </div>
+            <div className="network-card-body">
+              <strong className="network-card-value" data-testid="user-count">
+                {counts.all}
+              </strong>
+              <span className="network-badge active">
+                <i className="dot" /> {counts.active} actifs
+              </span>
+            </div>
+            <small>Gérer les profils et les rôles</small>
+          </a>
+
+          <a
+            className="network-card card-accent-blue"
+            {...link("/app/admin/stations?tab=list")}
+            aria-label="Consulter les stations"
+          >
+            <div className="network-card-head">
+              <span className="network-card-label">Stations</span>
+              <span className="network-icon-wrap blue">
+                <Building2 size={18} />
+              </span>
+            </div>
+            <div className="network-card-body">
+              <strong
+                className="network-card-value"
+                data-testid="station-count"
+              >
+                {stations?.length || 0}
+              </strong>
+              <span className="network-badge active">
+                <i className="dot" /> {activeStations} actives
+              </span>
+            </div>
+            <small>Configurer les sites et leurs shifts</small>
+          </a>
+
+          <a
+            className={`network-card ${counts.pending > 0 ? "card-accent-amber warning" : "card-accent-neutral"}`}
+            {...link("/app/admin/utilisateurs?status=pending")}
+          >
+            <div className="network-card-head">
+              <span className="network-card-label">Accès à activer</span>
+              <span
+                className={`network-icon-wrap ${counts.pending > 0 ? "amber" : "neutral"}`}
+              >
+                <UserRound size={18} />
+              </span>
+            </div>
+            <div className="network-card-body">
+              <strong className="network-card-value">{counts.pending}</strong>
+              <span
+                className={`network-badge ${counts.pending > 0 ? "warning" : "neutral"}`}
+              >
+                {counts.pending === 0 ? "À jour" : "Comptes en attente"}
+              </span>
+            </div>
+            <small>
+              {counts.pending === 0
+                ? "Aucune validation requise"
+                : "Examiner les demandes d’accès"}
+            </small>
+          </a>
+        </div>
+      </section>
 
       {!dismissOnboarding && (
         <section
@@ -261,16 +281,18 @@ export function AdminHomePage() {
             aria-label="Masquer l'onboarding"
             onClick={() => setDismissOnboarding(true)}
           >
-            ✕
+            <XIcon size={18} weight="bold" />
           </button>
           <div className="onboarding-head">
             <div className="onboarding-title-wrap">
-              <span className="onboarding-spark-icon">✨</span>
+              <span className="onboarding-spark-icon">
+                <CompassIcon size={20} weight="duotone" />
+              </span>
               <div>
-                <h3>Bienvenue sur uSwap 👋</h3>
+                <h3>Configuration du réseau</h3>
                 <p>
-                  Encore quelques étapes pour opérationnaliser complètement
-                  votre réseau.
+                  Finalisez les éléments nécessaires au fonctionnement
+                  quotidien.
                 </p>
               </div>
             </div>
@@ -307,7 +329,9 @@ export function AdminHomePage() {
                   <div className="step-header-line">
                     <span className="step-status-indicator">
                       {step.completed ? (
-                        <span className="check-badge">✓</span>
+                        <span className="check-badge">
+                          <CheckIcon size={12} weight="bold" />
+                        </span>
                       ) : (
                         <span className="radio-badge">{step.id}</span>
                       )}
@@ -350,6 +374,18 @@ export function AdminHomePage() {
         </section>
       )}
 
+      <section className="home-section" aria-labelledby="services-title">
+        <div className="home-section-heading">
+          <div>
+            <h2 id="services-title">Services et automatisations</h2>
+            <p>Surveillez les échanges et les rapports programmés.</p>
+          </div>
+        </div>
+        <div className="home-service-stack">
+          <LeaveIntegrationHealth />
+          <ScheduledReports />
+        </div>
+      </section>
     </div>
   );
 }
