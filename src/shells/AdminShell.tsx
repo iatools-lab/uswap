@@ -26,11 +26,15 @@ const sections = [
 ];
 
 const sectionDescriptions: Record<string, string> = {
-  "/app/admin": "Suivez l’activité du réseau et accédez rapidement aux tâches prioritaires.",
-  "/app/admin/utilisateurs": "Gérez les collaborateurs, leurs rôles, leurs stations et leurs accès.",
-  "/app/admin/stations": "Configurez les stations, leurs règles, leurs shifts et leur localisation.",
+  "/app/admin":
+    "Suivez l’activité du réseau et accédez rapidement aux tâches prioritaires.",
+  "/app/admin/utilisateurs":
+    "Gérez les collaborateurs, leurs rôles, leurs stations et leurs accès.",
+  "/app/admin/stations":
+    "Configurez les stations, leurs règles, leurs shifts et leur localisation.",
   "/app/admin/plannings": "Créez, publiez et ajustez les horaires des équipes.",
-  "/app/admin/compte": "Mettez à jour vos informations et vos préférences de compte.",
+  "/app/admin/compte":
+    "Mettez à jour vos informations et vos préférences de compte.",
 };
 
 export function AdminShell() {
@@ -100,12 +104,17 @@ export function AdminShell() {
   if (!session) return null;
 
   return (
-    <div className={`admin-workspace${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
+    <div
+      className={`admin-workspace${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
+    >
       <a className="admin-skip" href="#admin-main">
         Aller au contenu
       </a>
       <aside className="admin-sidebar">
-        <SidebarToggle collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} />
+        <SidebarToggle
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((value) => !value)}
+        />
         <a
           className="brand"
           {...link("/app/admin")}
@@ -136,14 +145,8 @@ export function AdminShell() {
               );
 
               return (
-                <div key={target} className="admin-nav-group" style={{ display: "grid", gap: "2px" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      position: "relative",
-                    }}
-                  >
+                <div key={target} className="admin-nav-group">
+                  <div className="admin-nav-row">
                     {isStations ? (
                       <button
                         type="button"
@@ -153,37 +156,12 @@ export function AdminShell() {
                           setCurrentSubTab("list");
                           navigate("/app/admin/stations?tab=list");
                         }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "12px",
-                          padding: "11px 14px",
-                          borderRadius: "8px",
-                          color:
-                            isCurrent || stationsActive ? "#fff" : "#c6d2ed",
-                          background:
-                            isCurrent || stationsActive
-                              ? "#ffffff13"
-                              : "transparent",
-                          fontSize: "14px",
-                          minHeight: "44px",
-                          width: "100%",
-                          border: 0,
-                          cursor: "pointer",
-                          textAlign: "left",
-                        }}
                       >
                         <Icon size={19} />
-                        <span style={{ flex: 1 }}>{label}</span>
+                        <span>{label}</span>
                         <CaretDownIcon
                           size={14}
-                          style={{
-                            transform: stationsOpen
-                              ? "rotate(0deg)"
-                              : "rotate(-90deg)",
-                            transition: "transform 0.2s ease",
-                            color: "#c6d2ed",
-                          }}
+                          className={`admin-nav-caret${stationsOpen ? " is-open" : ""}`}
                         />
                       </button>
                     ) : (
@@ -194,7 +172,6 @@ export function AdminShell() {
                           go(e, target);
                         }}
                         aria-current={isCurrent ? "page" : undefined}
-                        style={{ flex: 1 }}
                       >
                         <Icon size={19} />
                         <span>{label}</span>
@@ -204,15 +181,7 @@ export function AdminShell() {
                   </div>
 
                   {isStations && stationsOpen && (
-                    <div
-                      className="admin-station-subnav"
-                      style={{
-                        display: "grid",
-                        gap: "2px",
-                        paddingLeft: "26px",
-                        margin: "2px 0 4px 0",
-                      }}
-                    >
+                    <div className="admin-station-subnav">
                       <a
                         {...link("/app/admin/stations?tab=list", "list")}
                         aria-current={
@@ -220,21 +189,6 @@ export function AdminShell() {
                             ? "page"
                             : undefined
                         }
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px 10px",
-                          minHeight: "32px",
-                          color:
-                            currentSubTab === "list" && stationsActive
-                              ? "#fff"
-                              : "#9aadd3",
-                          background:
-                            currentSubTab === "list" && stationsActive
-                              ? "rgba(255, 255, 255, 0.08)"
-                              : "transparent",
-                          borderRadius: "6px",
-                          textDecoration: "none",
-                        }}
                       >
                         Mes stations
                       </a>
@@ -245,21 +199,6 @@ export function AdminShell() {
                             ? "page"
                             : undefined
                         }
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px 10px",
-                          minHeight: "32px",
-                          color:
-                            currentSubTab === "map" && stationsActive
-                              ? "#fff"
-                              : "#9aadd3",
-                          background:
-                            currentSubTab === "map" && stationsActive
-                              ? "rgba(255, 255, 255, 0.08)"
-                              : "transparent",
-                          borderRadius: "6px",
-                          textDecoration: "none",
-                        }}
                       >
                         Carte des stations
                       </a>

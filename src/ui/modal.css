@@ -1,406 +1,183 @@
-/* ---------------------------------------------------------------
-
-   Modal — mobile-first bottom sheet, centered dialog from 640px up.
-
-   Reuses the app's existing tokens where possible; adjust the
-
-   fallback values below to match your design-system.css variables.
-
------------------------------------------------------------------- */
-
-
-
-.modal-overlay {
-
-  position: fixed;
-
-  inset: 0;
-
-  background: rgba(15, 23, 42, 0.5);
-
-  display: flex;
-
-  align-items: flex-end;
-
-  justify-content: center;
-
-  z-index: 1000;
-
-  padding: 0;
-
-  animation: modal-fade-in 0.18s ease-out;
-
-}
-
-
-
 .modal-panel {
-  background: #ffffff;
-  width: 100%;
-  max-height: min(94dvh, 960px);
-  border-radius: 20px 20px 0 0;
+  width: min(680px, calc(100vw - 40px));
+  max-width: none;
+  max-height: min(92dvh, 960px);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg, 18px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #17233d);
+  box-shadow: var(--shadow-md, 0 20px 56px rgba(18, 36, 75, 0.15));
+  animation: modal-enter 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-panel[open] {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  animation: modal-slide-up 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  outline: none;
 }
-
-
-
-.modal-drag-handle {
-
-  width: 36px;
-
-  height: 4px;
-
-  border-radius: 2px;
-
-  background: #e2e5eb;
-
-  margin: 10px auto 0;
-
-  flex-shrink: 0;
-
-}
-
-
-
-.modal-header {
-
-  display: flex;
-
-  align-items: flex-start;
-
-  justify-content: space-between;
-
-  gap: 12px;
-
-  padding: 18px 20px 14px;
-
-  border-bottom: 1px solid #eef0f3;
-
-  flex-shrink: 0;
-
-}
-
-
-
-.modal-header h2 {
-
-  font-size: 1.05rem;
-
-  font-weight: 600;
-
-  color: #14163a;
-
-  margin: 0;
-
-  line-height: 1.3;
-
-}
-
-
-
-.modal-subtitle {
-
-  font-size: 0.85rem;
-
-  color: #6b7280;
-
-  margin: 2px 0 0;
-
-}
-
-
-
-.modal-close {
-
-  flex-shrink: 0;
-
-  display: flex;
-
-  align-items: center;
-
-  justify-content: center;
-
-  width: 32px;
-
-  height: 32px;
-
-  border-radius: 10px;
-
-  border: none;
-
-  background: #f4f5f7;
-
-  color: #4b5164;
-
-  cursor: pointer;
-
-  transition: background 0.15s ease;
-
-}
-
-
-
-.modal-close:hover {
-
-  background: #e9ebef;
-
-}
-
-
-
-.modal-close:focus-visible {
-
-  outline: 2px solid #1e2a6e;
-
-  outline-offset: 2px;
-
-}
-
-
-
-.modal-body {
-
-  padding: 18px 20px;
-
-  overflow-y: auto;
-  overscroll-behavior: contain;
-
-  flex: 1;
-
-  -webkit-overflow-scrolling: touch;
-
-}
-
-
-
-.modal-footer {
-
-  display: flex;
-
-  gap: 10px;
-
-  padding: 14px 20px;
-
-  padding-bottom: max(14px, env(safe-area-inset-bottom));
-
-  border-top: 1px solid #eef0f3;
-
-  flex-shrink: 0;
-
-}
-
-
-
-.modal-footer button {
-
-  flex: 1;
-
-}
-
-
-
-@keyframes modal-fade-in {
-
-  from { opacity: 0; }
-
-  to { opacity: 1; }
-
-}
-
-
-
-@keyframes modal-slide-up {
-
-  from { transform: translateY(100%); }
-
-  to { transform: translateY(0); }
-
-}
-
-
-
-/* Reduced motion: no slide/fade, just show it */
-
-@media (prefers-reduced-motion: reduce) {
-
-  .modal-overlay,
-
-  .modal-panel {
-
-    animation: none;
-
-  }
-
-}
-
-
-
-/* ---------------------------------------------------------------
-
-   Desktop / tablet: centered dialog instead of a bottom sheet.
-
------------------------------------------------------------------- */
-
-@media (min-width: 640px) {
-
-  .modal-overlay {
-
-    align-items: center;
-
-    padding: 24px;
-
-  }
-
-
-
-  .modal-panel {
-    width: auto;
-    min-width: 440px;
-    max-height: min(94dvh, 960px);
-    border-radius: 16px;
-
-    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
-
-    animation: modal-scale-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-
-  }
-
-
-
-  .modal-drag-handle {
-
-    display: none;
-
-  }
-
-
-
-  .modal-footer {
-
-    padding-bottom: 16px;
-
-  }
-
-
-
-  .modal-footer button {
-
-    flex: 0 0 auto;
-
-  }
-
-
-
-  .modal-footer {
-
-    justify-content: flex-end;
-
-  }
-
-}
-
-
-
-@keyframes modal-scale-in {
-
-  from { transform: scale(0.96) translateY(4px); opacity: 0; }
-
-  to { transform: scale(1) translateY(0); opacity: 1; }
-
-}
-
-/* ---------------------------------------------------------------
-   Consolidation — taille et habillage final du panneau.
-   (Ce bloc final fixe la largeur réelle : il s'applique après les
-   règles génériques ci-dessus et les complète, sans les dupliquer.)
------------------------------------------------------------------- */
-.modal-panel {
-  border: 0;
-  padding: 0;
-  margin: auto;
-  max-width: min(1000px, calc(100vw - 40px));
-  width: 100%;
-  color: #18243e;
-}
-
-.modal-panel.modal-panel--md {
-  max-width: min(680px, calc(100vw - 40px));
-}
-
-.modal-panel.modal-panel--lg {
-  max-width: min(960px, calc(100vw - 40px));
-}
-
-.modal-panel.modal-panel--xl {
-  max-width: min(1240px, calc(100vw - 40px));
-}
-
 .modal-panel:not([open]) {
   display: none;
 }
-
-.modal-panel::backdrop {
-  background: #00133980;
+.modal-panel--lg {
+  width: min(960px, calc(100vw - 40px));
 }
-
+.modal-panel--xl {
+  width: min(1240px, calc(100vw - 40px));
+}
+.modal-panel::backdrop {
+  background: rgba(5, 19, 55, 0.58);
+  backdrop-filter: blur(2px);
+}
+.modal-drag-handle {
+  display: none;
+}
+.modal-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 76px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-border, #dfe6f0);
+}
+.modal-header h2 {
+  margin: 0;
+  color: var(--color-text, #17233d);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.25px;
+}
+.modal-subtitle {
+  margin: 4px 0 0;
+  color: var(--color-text-soft, #66758d);
+  font-size: 13px;
+  line-height: 1.55;
+}
 .modal-close {
+  flex: 0 0 44px;
   width: 44px;
   height: 44px;
-}
-
-.modal-body {
-  min-width: 0;
-}
-
-/* Contenus du planning à l'intérieur d'une modale */
-.modal-panel .planner {
-  font: 14px/1.5 system-ui, sans-serif;
-}
-
-.modal-panel .planner-panel {
-  border: 0;
+  display: grid;
+  place-items: center;
+  margin: -4px -4px -4px 0;
   padding: 0;
-  box-shadow: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 12px);
+  background: #f3f5f9;
+  color: #4c5870;
+  transition:
+    background var(--motion-fast, 150ms ease),
+    color var(--motion-fast, 150ms ease);
 }
-
+.modal-close:hover {
+  background: #e9edf4;
+  color: var(--color-brand, #06247b);
+}
+.modal-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.modal-footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-height: 72px;
+  padding: 14px 24px max(14px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-border, #dfe6f0);
+  background: var(--color-surface, #fff);
+}
+.modal-footer button {
+  min-height: 44px;
+}
 .modal-panel input,
-.modal-panel select {
+.modal-panel select,
+.modal-panel textarea {
   font: inherit;
 }
-
+.modal-panel .planner {
+  font: inherit;
+}
+.modal-panel .planner-panel {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}
 .modal-panel .planner-toolbar h2 {
   font-size: 20px;
 }
-
-/* Grille de semaine adaptée à la largeur d'une modale */
 .modal-panel .planner-week-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
 @media (max-width: 639px) {
   .modal-panel,
-  .modal-panel.modal-panel--md,
-  .modal-panel.modal-panel--lg,
-  .modal-panel.modal-panel--xl {
+  .modal-panel--lg,
+  .modal-panel--xl {
     position: fixed;
     inset: auto 0 0;
+    width: 100%;
+    max-height: 94dvh;
     margin: 0;
-    max-width: 100vw;
-    max-height: 92dvh;
-    width: 100vw;
-    min-width: 0;
-    border-radius: 18px 18px 0 0;
+    border-radius: 20px 20px 0 0;
+    animation-name: modal-sheet-enter;
   }
-
+  .modal-drag-handle {
+    display: block;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 4px;
+    margin: 9px auto 0;
+    border-radius: 999px;
+    background: #d9dee8;
+  }
+  .modal-header {
+    min-height: 68px;
+    padding: 14px 16px;
+  }
+  .modal-body {
+    padding: 20px 16px;
+    scrollbar-gutter: auto;
+  }
+  .modal-footer {
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  }
+  .modal-footer button {
+    flex: 1 1 0;
+  }
   .modal-panel .planner-week-grid {
     grid-template-columns: 1fr;
   }
-
-  .modal-body {
-    padding: 16px;
+}
+@keyframes modal-sheet-enter {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .modal-panel {
+    animation: none;
   }
 }
