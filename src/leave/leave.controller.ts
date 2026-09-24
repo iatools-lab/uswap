@@ -16,11 +16,11 @@ export class LeaveController {
   @Roles(Role.SWAPPER)
   @Post()
   create(@Request() req, @Body() dto: CreateLeaveRequestDto) {
-    return this.leaveService.create(req.user.userId, dto);
+    return this.leaveService.create(req.user.id, dto);
   }
 
   @Get('mine')
   findMine(@Request() req) {
-    return this.leaveService.findMine(req.user.userId);
+    return this.leaveService.findMine(req.user.id);
   }
 }
