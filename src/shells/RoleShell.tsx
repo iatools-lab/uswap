@@ -15,7 +15,9 @@ import {
   Zap,
 } from "../ui/icons";
 import { SidebarToggle } from "./SidebarToggle";
+import { AppTopbar } from "./AppTopbar";
 import "../styles/admin.css";
+import "../styles/shell.css";
 
 export function RoleShell() {
   const { session, busy, warning, error, disconnect, extend } = useSession();
@@ -87,7 +89,12 @@ export function RoleShell() {
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed((value) => !value)}
         />
-        <a className="brand" href={homePath} onClick={goHome}>
+        <a
+          className="brand"
+          href={homePath}
+          onClick={goHome}
+          aria-label={`uSwap, accueil ${roles[session.user.role].toLowerCase()}`}
+        >
           <span className="brand-symbol">
             <Zap weight="fill" />
           </span>
@@ -154,52 +161,50 @@ export function RoleShell() {
         </nav>
       </aside>
       <div className="admin-body">
-        <header className="admin-topbar">
-          <div className="admin-heading-copy">
-            <span className="admin-mobile-brand">
-              uSwap<span>.</span>
-            </span>
-            <h1 ref={headingRef} tabIndex={-1} className="admin-breadcrumb">
-              {account
-                ? session.user.role === "SUPERVISOR"
-                  ? "Mon compte"
-                  : "Compte"
-                : leave
-                  ? "Congés"
-                  : planning
-                    ? "Planning"
-                    : attendance
-                      ? "Pointages"
-                      : session.user.role === "SWAPPER"
-                        ? "Pointage"
-                        : title}
-            </h1>
-            <p>
-              {account
-                ? "Gérez vos informations personnelles et la sécurité de votre compte."
-                : leave
-                  ? "Signalez une absence ou un congé pour un shift à venir."
-                  : planning
-                    ? "Consultez les horaires publiés et les affectations de votre périmètre."
-                    : attendance
-                      ? "Contrôlez les présences, corrigez les pointages et consultez leur historique."
-                      : session.user.role === "SUPERVISOR"
-                        ? "Supervisez les présences, les absences et les remplacements du réseau."
-                        : session.user.role === "STATION_CHIEF"
-                          ? "Pilotez les opérations et les pointages de votre station."
-                          : "Retrouvez vos prochains shifts et effectuez vos pointages."}
-            </p>
-          </div>
-          <div className="admin-topbar__actions">
-            <NotificationBell />
-            <AccountMenu
-              user={session.user}
-              busy={busy}
-              onLogout={disconnect}
-              settingsPath={`${homePath}/compte`}
-            />
-          </div>
-        </header>
+        <AppTopbar
+          title={
+            account
+              ? session.user.role === "SUPERVISOR"
+                ? "Mon compte"
+                : "Compte"
+              : leave
+                ? "Congés"
+                : planning
+                  ? "Planning"
+                  : attendance
+                    ? "Pointages"
+                    : session.user.role === "SWAPPER"
+                      ? "Pointage"
+                      : title
+          }
+          description={
+            account
+              ? "Gérez vos informations personnelles et la sécurité de votre compte."
+              : leave
+                ? "Signalez une absence ou un congé pour un shift à venir."
+                : planning
+                  ? "Consultez les horaires publiés et les affectations de votre périmètre."
+                  : attendance
+                    ? "Contrôlez les présences, corrigez les pointages et consultez leur historique."
+                    : session.user.role === "SUPERVISOR"
+                      ? "Supervisez les présences, les absences et les remplacements du réseau."
+                      : session.user.role === "STATION_CHIEF"
+                        ? "Pilotez les opérations et les pointages de votre station."
+                        : "Retrouvez vos prochains shifts et effectuez vos pointages."
+          }
+          headingRef={headingRef}
+          actions={
+            <>
+              <NotificationBell />
+              <AccountMenu
+                user={session.user}
+                busy={busy}
+                onLogout={disconnect}
+                settingsPath={`${homePath}/compte`}
+              />
+            </>
+          }
+        />
         <main id="role-main" className="admin-content">
           {warning && (
             <div className="session-warning" role="alert">

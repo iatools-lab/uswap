@@ -7,6 +7,7 @@ import { interceptNav } from "../app/spaNav";
 import { RouteFallback } from "../app/RouteFallback";
 import { useSession } from "../app/session";
 import { SidebarToggle } from "./SidebarToggle";
+import { AppTopbar } from "./AppTopbar";
 import {
   Building2,
   Clock3,
@@ -16,6 +17,7 @@ import {
   Zap,
 } from "../ui/icons";
 import "../styles/admin.css";
+import "../styles/shell.css";
 
 const sections = [
   { path: "/app/admin", label: "Accueil", Icon: LayoutDashboard },
@@ -211,26 +213,22 @@ export function AdminShell() {
       </aside>
 
       <div className="admin-body">
-        <header className="admin-topbar">
-          <div className="admin-heading-copy">
-            <span className="admin-mobile-brand">
-              uSwap<span>.</span>
-            </span>
-            <h1 ref={title} tabIndex={-1} className="admin-breadcrumb">
-              {section.label}
-            </h1>
-            <p>{sectionDescriptions[section.path]}</p>
-          </div>
-          <div className="admin-topbar__actions">
-            <NotificationBell />
-            <AccountMenu
-              user={session.user}
-              busy={busy}
-              onLogout={disconnect}
-              settingsPath="/app/admin/compte"
-            />
-          </div>
-        </header>
+        <AppTopbar
+          title={section.label}
+          description={sectionDescriptions[section.path]}
+          headingRef={title}
+          actions={
+            <>
+              <NotificationBell />
+              <AccountMenu
+                user={session.user}
+                busy={busy}
+                onLogout={disconnect}
+                settingsPath="/app/admin/compte"
+              />
+            </>
+          }
+        />
 
         <main id="admin-main" className="admin-content">
           {warning && (
