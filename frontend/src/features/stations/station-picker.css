@@ -1,0 +1,173 @@
+/* ============================================================
+   Sélecteur de station — bouton déclencheur et modal de recherche
+   (remplace les styles inline de StationPicker.tsx)
+   ============================================================ */
+
+.station-picker-trigger {
+  width: 100%;
+  height: 42px;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13.5px;
+  color: #0f172a;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.station-picker-trigger:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.station-picker-trigger:focus-visible {
+  outline: 2px solid var(--navy, #18243e);
+  outline-offset: 1px;
+}
+
+.station-picker-trigger-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  min-width: 0;
+}
+
+.station-picker-trigger-label.has-value {
+  color: inherit;
+}
+
+.station-picker-trigger-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.station-picker-caret {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.station-picker-overlay {
+  z-index: 99999;
+  padding: 24px;
+}
+
+.station-picker-panel {
+  background: #ffffff;
+  max-width: 480px;
+  max-height: 75vh;
+  width: 100%;
+  margin: auto;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
+  color: #18243e;
+}
+
+.station-picker-title {
+  font-size: 16px;
+}
+
+.station-picker-search {
+  padding: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.station-picker-search-field {
+  position: relative;
+}
+
+.station-picker-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+}
+
+.station-picker-search input {
+  width: 100%;
+  height: 40px;
+  padding-left: 36px;
+  padding-right: 14px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  font-size: 13.5px;
+  outline: none;
+}
+
+.station-picker-list {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.station-picker-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 16px;
+  border: none;
+  border-bottom: 1px solid #f1f5f9;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.2s;
+}
+
+.station-picker-option.is-none {
+  align-items: center;
+}
+
+.station-picker-option:hover {
+  background: #f8fafc;
+}
+
+.station-picker-option.is-selected,
+.station-picker-option.is-selected:hover {
+  background: #f0f9ff;
+}
+
+.station-picker-option strong {
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.station-picker-option.is-selected strong {
+  color: #0284c7;
+}
+
+.station-picker-option-none-label {
+  color: #64748b;
+  font-weight: 400;
+}
+
+.station-picker-option-none-label.is-selected {
+  font-weight: 600;
+}
+
+.station-picker-location {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.station-picker-empty {
+  padding: 32px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13.5px;
+}
