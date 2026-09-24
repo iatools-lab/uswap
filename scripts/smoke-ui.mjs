@@ -109,6 +109,12 @@ await exercise(
   "AdminUswap",
   "/app/admin",
   async (page) => {
+    await page.getByRole("heading", { name: "Rapports périodiques" }).waitFor();
+    await page.getByRole("button", { name: "Programmer" }).click();
+    const reportDialog = page.getByRole("dialog", { name: "Programmer un rapport" });
+    assert.equal(await reportDialog.getByPlaceholder(/Synthèse opérationnelle/).inputValue(), "", "Une programmation neuve doit être vierge");
+    assert.ok(await reportDialog.getByRole("button", { name: "Créer la programmation" }).isDisabled());
+    await reportDialog.getByRole("button", { name: "Fermer la fenêtre" }).click();
     const workspace = page.locator(".admin-workspace");
     await page.getByRole("button", { name: "Masquer la navigation" }).click();
     await page.waitForFunction(
@@ -287,6 +293,10 @@ await exercise(
       );
     }
     await page.getByRole("heading", { name: "Shifts à remplacer" }).waitFor();
+    await page.getByRole("heading", { name: "Tableau de bord du réseau" }).waitFor();
+    const dashboardDownload = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Exporter Excel" }).click();
+    assert.match((await dashboardDownload).suggestedFilename(), /rapport-uswap-.*\.xlsx/);
     await page.getByRole("heading", { name: "Incidents des stations" }).waitFor();
     await page.getByRole("button", { name: /Zone de circulation à sécuriser/ }).click();
     await page.getByRole("heading", { name: "Zone de circulation à sécuriser" }).waitFor();

@@ -9,6 +9,7 @@ import {
 import { formatDate } from "./format";
 import type { OperationsViewProps } from "./types";
 import { IncidentCenter } from "../incidents/IncidentCenter";
+import { OperationsDashboard } from "../reports/OperationsDashboard";
 
 export function SupervisorHome({ data }: OperationsViewProps) {
   const navigate = useNavigate();
@@ -63,38 +64,7 @@ export function SupervisorHome({ data }: OperationsViewProps) {
         </div>
       </section>
 
-      <section
-        className="supervisor-summary"
-        aria-label="Synthèse opérationnelle"
-      >
-        <article>
-          <span>Shifts publiés</span>
-          <strong>{published.length}</strong>
-          <small>visibles par les équipes</small>
-        </article>
-        <article>
-          <span>Stations suivies</span>
-          <strong>
-            {
-              new Set(
-                published.map((shift) => shift.station?.id).filter(Boolean),
-              ).size
-            }
-          </strong>
-          <small>dans votre périmètre</small>
-        </article>
-        <article>
-          <span>À venir</span>
-          <strong>
-            {
-              published.filter(
-                (shift) => new Date(shift.startTime) > new Date(),
-              ).length
-            }
-          </strong>
-          <small>services planifiés</small>
-        </article>
-      </section>
+      <OperationsDashboard />
 
       <div className="supervisor-dashboard__grid">
         <div key={queueKey} className="supervisor-dashboard__coverage">

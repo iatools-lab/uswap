@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { PlusIcon } from "@phosphor-icons/react";
 import { UserCreateModal } from "../../features/users/UserCreateModal";
 import { LeaveIntegrationHealth } from "../../features/leaves/LeaveIntegrationHealth";
+import { ScheduledReports } from "../../features/reports/ScheduledReports";
 import { greetingFor } from "../../utils/greeting";
 import { interceptNav } from "../../app/spaNav";
 import { useSession } from "../../app/session";
@@ -247,6 +248,7 @@ export function AdminHomePage() {
       </section>
 
       <LeaveIntegrationHealth />
+      <ScheduledReports />
 
       {!dismissOnboarding && (
         <section

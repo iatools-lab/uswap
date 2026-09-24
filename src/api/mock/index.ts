@@ -5,6 +5,7 @@ import { authRoutes } from "./handlers/auth";
 import { coverageRoutes } from "./handlers/coverage";
 import { leaveRoutes } from "./handlers/leaves";
 import { incidentRoutes } from "./handlers/incidents";
+import { reportRoutes } from "./handlers/reports";
 import { planningRoutes } from "./handlers/plannings";
 import { stationRoutes } from "./handlers/stations";
 import { userRoutes } from "./handlers/users";
@@ -26,6 +27,7 @@ const routes: MockRoute[] = [
   ...coverageRoutes,
   ...leaveRoutes,
   ...incidentRoutes,
+  ...reportRoutes,
 ];
 
 /**
