@@ -1,0 +1,449 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  SUPERVISOR
+  STATION_CHIEF
+  SWAPPER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  UNPAID
+  OTHER
+}
+
+enum PlanningStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum AttendanceStatus {
+  EXPECTED
+  CHECKED_IN
+  CHECKED_OUT
+  ABSENT
+  JUSTIFIED
+}
+
+enum AttendanceQrType {
+  START
+  END
+}
+
+enum ReplacementStatus {
+  OPEN
+  ASSIGNED
+  CANCELLED
+  RESOLVED
+}
+
+enum ShiftChangeType {
+  ASSIGNMENT
+  REASSIGNMENT
+  REPLACEMENT
+  SWAP
+  MANUAL_EDIT
+  TIME_CHANGE
+}
+
+model User {
+  id          String  @id @default(uuid())
+  fullName    String
+  email       String  @unique
+  password    String
+  role        Role
+  phoneNumber String?
+  address     String?
+  isActive    Boolean @default(false)
+
+  stationId String?
+  station   Station? @relation("PrimaryStationUsers", fields: [stationId], references: [id])
+
+  refreshTokens RefreshToken[]
+  tokenVersion  Int            @default(0)
+
+  leaveRequests LeaveRequest[]
+  shifts        Shift[]
+
+  stationScopes UserStationScope[]
+
+  attendances Attendance[]
+
+  attendanceQrsCreated  AttendanceQr[]         @relation("AttendanceQrCreatedBy")
+  attendanceCorrections AttendanceCorrection[] @relation("AttendanceCorrectionBy")
+
+  replacementRequestsCreated ReplacementRequest[] @relation("ReplacementRequestedByUser")
+  replacementAssignments     ReplacementRequest[] @relation("ReplacementAssignedTo")
+  replacementAssignedBy      ReplacementRequest[] @relation("ReplacementAssignedBy")
+  replacementOriginalShifts  ReplacementRequest[] @relation("ReplacementOriginalSwapper")
+
+  shiftChangesMade     ShiftChange[] @relation("ShiftChangeMadeBy")
+  previousShiftChanges ShiftChange[] @relation("PreviousSwapper")
+  newShiftChanges      ShiftChange[] @relation("NewSwapper")
+
+  auditLogs UserAuditLog[] @relation("AuditedUser")
+
+  resetTokenHash    String?
+  resetTokenExpires DateTime?
+
+  invitationTokenHash    String?
+  invitationTokenExpires DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stationId])
+  @@index([role])
+  @@index([isActive])
+}
+
+model RefreshToken {
+  id        String @id @default(uuid())
+  tokenHash String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Station {
+  id       String  @id @default(uuid())
+  name     String  @unique
+  isActive Boolean @default(true)
+
+  location  String?
+  latitude  Float?
+  longitude Float?
+
+  timezone String @default("Africa/Douala")
+
+  contactName  String?
+  contactPhone String?
+
+  latenessToleranceMinutes Int @default(0)
+  minRestHours             Int @default(8)
+  weeklyHoursLimit         Int @default(72)
+
+  checkinQrTtl  Int @default(300)
+  checkoutQrTtl Int @default(300)
+
+  users             User[]             @relation("PrimaryStationUsers")
+  userStationScopes UserStationScope[]
+
+  shifts           Shift[]
+  planningStations PlanningStation[]
+
+  attendances   Attendance[]
+  attendanceQrs AttendanceQr[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model UserStationScope {
+  userId    String
+  stationId String
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  station Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([userId, stationId])
+  @@index([stationId])
+}
+
+model LoginAttempt {
+  id        String   @id @default(uuid())
+  email     String
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([createdAt])
+}
+
+model LeaveRequest {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  startDate DateTime
+  endDate   DateTime
+
+  type   LeaveType
+  reason String?
+
+  status LeaveStatus @default(PENDING)
+
+  externalId   String?
+  lastSyncedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([startDate, endDate])
+  @@index([status])
+}
+
+model Planning {
+  id String @id @default(uuid())
+
+  startDate DateTime
+  endDate   DateTime
+
+  status PlanningStatus @default(DRAFT)
+
+  createdBy String
+
+  shifts   Shift[]
+  stations PlanningStation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([startDate, endDate])
+  @@index([status])
+}
+
+model PlanningStation {
+  planningId String
+  stationId  String
+
+  planning Planning @relation(fields: [planningId], references: [id], onDelete: Cascade)
+  station  Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  @@id([planningId, stationId])
+  @@index([stationId])
+}
+
+model Shift {
+  id String @id @default(uuid())
+
+  stationId String
+  station   Station @relation(fields: [stationId], references: [id])
+
+  swapperId String
+  swapper   User   @relation(fields: [swapperId], references: [id])
+
+  startTime DateTime
+  endTime   DateTime
+
+  planningId String?
+  planning   Planning? @relation(fields: [planningId], references: [id], onDelete: SetNull)
+
+  attendances         Attendance[]
+  attendanceQrs       AttendanceQr[]
+  replacementRequests ReplacementRequest[]
+  shiftChanges        ShiftChange[]
+
+  createdAt DateTime @default(now())
+
+  @@index([stationId, startTime])
+  @@index([swapperId, startTime])
+  @@index([planningId])
+  @@index([startTime, endTime])
+}
+
+model Attendance {
+  id String @id @default(uuid())
+
+  shiftId String
+  shift   Shift  @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  swapperId String
+  swapper   User   @relation(fields: [swapperId], references: [id])
+
+  stationId String
+  station   Station @relation(fields: [stationId], references: [id])
+
+  status AttendanceStatus @default(EXPECTED)
+
+  checkInAt  DateTime?
+  checkOutAt DateTime?
+
+  checkInLatitude  Float?
+  checkInLongitude Float?
+
+  checkOutLatitude  Float?
+  checkOutLongitude Float?
+
+  absenceReason String?
+
+  correctedAt      DateTime?
+  correctedById    String?
+  correctionReason String?
+
+  correctionHistory AttendanceCorrection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shiftId, swapperId])
+  @@index([swapperId, status])
+  @@index([stationId, status])
+  @@index([shiftId])
+}
+
+model AttendanceQr {
+  id String @id @default(uuid())
+
+  stationId String
+  station   Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  shiftId String
+  shift   Shift  @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  type AttendanceQrType
+
+  tokenHash String @unique
+
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdById String
+  createdBy   User   @relation("AttendanceQrCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([shiftId, type])
+  @@index([stationId, expiresAt])
+  @@index([expiresAt])
+}
+
+model AttendanceCorrection {
+  id String @id @default(uuid())
+
+  attendanceId String
+  attendance   Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+
+  correctedById String
+  correctedBy   User   @relation("AttendanceCorrectionBy", fields: [correctedById], references: [id])
+
+  oldStatus AttendanceStatus
+  newStatus AttendanceStatus
+
+  oldCheckInAt DateTime?
+  newCheckInAt DateTime?
+
+  oldCheckOutAt DateTime?
+  newCheckOutAt DateTime?
+
+  reason      String
+  evidenceUrl String?
+
+  createdAt DateTime @default(now())
+
+  @@index([attendanceId])
+  @@index([correctedById])
+}
+
+model ReplacementRequest {
+  id String @id @default(uuid())
+
+  shiftId String
+  shift   Shift  @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  originalSwapperId String
+  originalSwapper   User   @relation("ReplacementOriginalSwapper", fields: [originalSwapperId], references: [id])
+
+  assignedSwapperId String?
+  assignedSwapper   User?   @relation("ReplacementAssignedTo", fields: [assignedSwapperId], references: [id])
+
+  requestedById String
+  requestedBy   User   @relation("ReplacementRequestedByUser", fields: [requestedById], references: [id])
+
+  assignedById String?
+  assignedBy   User?   @relation("ReplacementAssignedBy", fields: [assignedById], references: [id])
+
+  reason String?
+  source String?
+
+  status ReplacementStatus @default(OPEN)
+
+  requestedAt DateTime  @default(now())
+  assignedAt  DateTime?
+  resolvedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shiftId])
+  @@index([originalSwapperId])
+  @@index([assignedSwapperId])
+  @@index([status])
+  @@index([requestedAt])
+}
+
+model ShiftChange {
+  id String @id @default(uuid())
+
+  shiftId String
+  shift   Shift  @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  previousSwapperId String?
+  previousSwapper   User?   @relation("PreviousSwapper", fields: [previousSwapperId], references: [id])
+
+  newSwapperId String?
+  newSwapper   User?   @relation("NewSwapper", fields: [newSwapperId], references: [id])
+
+  changedById String
+  changedBy   User   @relation("ShiftChangeMadeBy", fields: [changedById], references: [id])
+
+  type ShiftChangeType
+
+  reason String?
+
+  oldStartTime DateTime?
+  oldEndTime   DateTime?
+
+  newStartTime DateTime?
+  newEndTime   DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([shiftId])
+  @@index([previousSwapperId])
+  @@index([newSwapperId])
+  @@index([changedById])
+  @@index([createdAt])
+}
+
+model UserAuditLog {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation("AuditedUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  changedBy String
+  changes   Json
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}

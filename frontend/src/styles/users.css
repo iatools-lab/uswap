@@ -1,0 +1,361 @@
+.user-form-card{padding:28px;max-width:1080px}.user-form-card>h2,.user-form-card form>h2{margin:28px 0 22px}.user-form-card fieldset{border:0;padding:0;margin:0;min-width:0}.user-form-card fieldset>h2{margin:32px 0 20px;padding-top:25px;border-top:1px solid var(--line)}.user-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}.user-form-grid label{display:block;min-width:0;color:#354866;font-size:14px;font-weight:500}.user-form-grid label>span{font-weight:400;color:#748097}.user-form-grid input,.user-form-grid select{display:block;width:100%;height:50px;margin-top:9px;border:1px solid #dfe5ef;background:#fafbfd;border-radius:8px;padding:12px;color:#18243e;min-width:0}.user-form-grid .input-wrap{margin-top:9px}.user-form-grid .input-wrap input{border:0;margin:0;background:none}.user-form-grid .wide{grid-column:1/-1}.user-checkbox{display:flex;gap:12px;align-items:center;margin-top:24px;font-size:14px;line-height:1.7}.user-checkbox input{width:20px;height:20px;flex-shrink:0;accent-color:#001a70}.user-form-actions,.user-toolbar{display:flex;flex-wrap:wrap;gap:12px}.user-form-actions{justify-content:flex-end;margin-top:28px;padding-top:24px;border-top:1px solid var(--line)}.import-upload{display:flex;align-items:flex-start;flex-direction:column;gap:18px;padding:28px;border:1px dashed #bfcbdf;border-radius:10px;background:#fafbfd;line-height:1.8;color:#5b6c86}.import-upload .admin-button{position:relative;cursor:pointer}.import-upload input{position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}.import-upload .admin-button:focus-within{outline:3px solid #9eb5e6;outline-offset:3px}.import-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:24px 0}.import-summary>span{display:flex;flex-direction:column;gap:7px;padding:20px;border:1px solid var(--line);border-radius:8px;color:#65748d}.import-summary strong{font-size:30px;color:#001a70;font-weight:600}.admin-workspace .import-filename{margin-top:20px;overflow-wrap:anywhere;font-size:14px}.import-reason{white-space:normal;min-width:200px}.workspace-limit{padding:20px;color:#65748d}.role-workspace .admin-topbar>button{max-width:65%;overflow-wrap:anywhere;text-align:right}.admin-button:disabled{opacity:.55}
+@media(max-width:900px){.user-toolbar{width:100%}.admin-card-heading:has(.user-toolbar){flex-wrap:wrap}}
+@media(max-width:760px){.user-form-card{padding:20px}.user-form-grid{grid-template-columns:1fr;gap:20px}.user-form-grid input,.user-form-grid select{font-size:16px}.user-toolbar .admin-button{flex:1;white-space:normal}.user-form-actions .admin-button{flex:1;white-space:normal}.import-upload{padding:20px}.import-summary{gap:8px}.import-summary>span{padding:14px 10px;font-size:13px}.import-summary strong{font-size:25px}.role-workspace .admin-sidebar nav{grid-template-columns:1fr 1fr}}
+/* ============================================================
+   Utilitaires — remplacement des styles inline de la page Users
+   ============================================================ */
+
+/* Confirmation d'activation / désactivation */
+.directory-confirm {
+  display: grid;
+  gap: 16px;
+}
+
+.directory-confirm p {
+  margin: 0;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.directory-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* Barre d'outils : action de tri */
+.directory-sort {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.directory-sort svg {
+  color: var(--muted);
+}
+
+/* Boutons compacts de la barre d'outils */
+.admin-button.is-compact {
+  height: 36px;
+  min-height: 36px;
+}
+
+.admin-button.primary-cta.is-compact {
+  padding: 0 14px;
+  border-radius: 8px;
+}
+
+/* Panneau de filtres */
+.directory-filter-panel .filter-panel-fields {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.filter-panel-field {
+  display: grid;
+  gap: 4px;
+}
+
+.filter-panel-field > span {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.directory-filter-panel .filter-panel-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Badges et actions du tableau */
+.admin-badge.is-muted {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-actions a.admin-button {
+  text-decoration: none;
+}
+/* ============================================================
+   Page Utilisateurs — vues tableau & grille (aligné sur Stations)
+   ============================================================ */
+
+/* Contrôle segmenté Tableau / Grille */
+.users-directory {
+  /* Empêche la section de se faire compresser dans le flex column
+     de .admin-content (cause de la coupure en bas) : elle prend sa
+     hauteur naturelle et le scroll reste géré par .admin-content. */
+  flex-shrink: 0;
+  min-height: fit-content;
+}
+
+/* Les chips de statut doivent passer à la ligne plutôt que déborder */
+.users-directory .status-chips {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.users-directory .directory-toolbar-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.users-view-toggle {
+  display: flex;
+  background: #edf2f7;
+  padding: 3px;
+  border-radius: 8px;
+  height: 36px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.users-view-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  height: 100%;
+}
+
+.users-view-option.is-selected {
+  background: #fff;
+  color: #0f172a;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Tableau utilisateurs */
+.users-table td,
+.users-table th {
+  vertical-align: middle;
+}
+
+th.users-cell-right,
+td.users-cell-right {
+  text-align: right;
+}
+
+.users-role-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.users-station-name {
+  font-size: 12.5px;
+  color: #334155;
+}
+
+.users-table .row-actions.station-row-actions a.admin-button {
+  text-decoration: none;
+}
+
+/* Grille de cartes */
+.users-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+}
+
+.users-card {
+  gap: 14px;
+}
+
+.admin-avatar-lg {
+  width: 44px;
+  height: 44px;
+  font-size: 15px;
+  border-radius: 12px;
+}
+
+.users-card .station-main-info h2 {
+  overflow-wrap: anywhere;
+}
+
+.users-card .station-location span {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .users-view-toggle {
+    display: none;
+  }
+}
+/* Équilibrage des actions dans les cartes utilisateurs */
+.users-card .station-card-actions {
+  justify-content: space-between;
+}
+
+.users-card .station-card-actions .admin-button {
+  flex: 1 1 auto;
+}
+
+.users-card .station-card-actions .station-toggle-btn {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+}
+/* ============================================================
+   Barre de filtres immersive (statut + rôle + station)
+   ============================================================ */
+
+.users-filterbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  background: linear-gradient(180deg, #fbfcfe 0%, #f4f7fb 100%);
+  border: 1px solid #e4eaf3;
+  border-radius: 12px;
+}
+
+.users-filterbar .status-chips {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.users-filterbar-sep {
+  width: 1px;
+  align-self: stretch;
+  min-height: 26px;
+  background: #dbe3ee;
+  margin: 0 2px;
+}
+
+/* Dropdowns compacts Rôle / Station */
+.users-filter-dropdown {
+  position: relative;
+}
+
+.users-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px;
+  background: #fff;
+  border: 1px solid #dfe5ef;
+  border-radius: 9px;
+  font-size: 12.5px;
+  color: #18243e;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.users-filter-toggle:hover {
+  border-color: #c3cfe0;
+}
+
+.users-filter-toggle > svg:first-child {
+  color: #7c8aa3;
+  flex-shrink: 0;
+}
+
+.users-filter-toggle > span {
+  color: #738097;
+}
+
+.users-filter-toggle strong {
+  font-weight: 600;
+}
+
+.users-filter-toggle .caret {
+  color: #64748b;
+  margin-left: 2px;
+  transition: transform 0.15s ease;
+}
+
+.users-filter-toggle .caret.is-open {
+  transform: rotate(180deg);
+}
+
+.users-filter-toggle.is-active {
+  border-color: #b9c6de;
+  background: #f4f7fe;
+}
+
+.users-filter-toggle.is-active strong {
+  color: var(--navy, #001a70);
+}
+
+.users-filter-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px -6px rgba(15, 23, 42, 0.18);
+  padding: 5px;
+  z-index: 60;
+  display: grid;
+  gap: 2px;
+}
+
+.users-filter-option {
+  width: 100%;
+  text-align: left;
+  padding: 9px 11px;
+  font-size: 12.5px;
+  background: transparent;
+  color: #1e293b;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.users-filter-option:hover {
+  background: #f1f5fb;
+}
+
+.users-filter-option.is-selected {
+  background: #eef3ff;
+  color: var(--navy, #001a70);
+  font-weight: 600;
+}
+
+.users-filter-clear {
+  margin-left: auto;
+  font-size: 12.5px;
+}
+
+@media (max-width: 760px) {
+  .users-filterbar-sep {
+    display: none;
+  }
+
+  .users-filter-dropdown,
+  .users-filter-toggle {
+    flex: 1;
+  }
+}

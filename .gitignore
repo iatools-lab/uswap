@@ -1,0 +1,14 @@
+node_modules/
+dist/
+generated/
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+.agents/
+.claude/
+.cursor/
+.devin/
+.windsurf/
+skills-lock.json
