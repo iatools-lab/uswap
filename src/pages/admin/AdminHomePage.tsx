@@ -189,9 +189,6 @@ export function AdminHomePage() {
             <h2 id="network-title">État du réseau</h2>
             <p>Comptes, stations et accès nécessitant votre attention.</p>
           </div>
-          <span className="home-data-status">
-            <i /> Données à jour
-          </span>
         </div>
         <div className="network-overview">
           <a

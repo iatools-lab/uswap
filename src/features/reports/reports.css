@@ -60,12 +60,6 @@
 .ops-dashboard-filters label:nth-child(3) {
   min-width: 190px;
 }
-.ops-dashboard-filters > span {
-  margin-left: auto;
-  align-self: center;
-  color: #168250;
-  font-size: 10px;
-}
 .ops-dashboard-kpis {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -248,10 +242,6 @@
   .ops-dashboard-filters select {
     width: 100%;
     min-height: 44px;
-  }
-  .ops-dashboard-filters > span {
-    grid-column: 1/-1;
-    margin-left: 0;
   }
   .ops-dashboard-kpis {
     grid-template-columns: 1fr 1fr;

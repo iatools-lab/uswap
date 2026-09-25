@@ -102,7 +102,7 @@ export function OperationsDashboard() {
     });
   }
   return (
-    <section className="ops-dashboard">
+    <section className="ops-dashboard" aria-busy={loading}>
       <div className="ops-dashboard-head">
         <div>
           <span>Analyse opérationnelle</span>
@@ -155,7 +155,6 @@ export function OperationsDashboard() {
             ]}
           />
         </label>
-        <span>{loading ? "Actualisation…" : "Données à jour"}</span>
       </div>
       {data && (
         <>

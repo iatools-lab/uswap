@@ -3204,8 +3204,9 @@
 }
 
 .notification-bell__head strong {
-  font-size: 14px;
-  font-weight: 500;
+  color: #17243c;
+  font-size: 15px;
+  font-weight: 650;
 }
 
 .notification-bell__list {
@@ -3294,14 +3295,6 @@
   }
 }
 
-.notification-bell__head > div {
-  display: grid;
-  gap: 2px;
-}
-.notification-bell__head > div small {
-  color: var(--muted);
-  font-size: 10px;
-}
 .notification-bell__filters {
   display: flex;
   gap: 4px;
@@ -3349,10 +3342,16 @@
   background: #fff;
   color: #405575;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 550;
   cursor: pointer;
 }
+.notification-bell__preferences svg {
+  width: 15px;
+  height: 15px;
+}
+
 .notification-bell__preferences svg:last-child {
   margin-left: auto;
-  color: #168250;
+  color: #7b899e;
 }

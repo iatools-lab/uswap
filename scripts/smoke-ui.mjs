@@ -321,6 +321,22 @@ await exercise(
     await page
       .getByRole("heading", { name: "Tableau de bord du réseau" })
       .waitFor();
+    const upcomingStationButtons = page.getByRole("button", {
+      name: /Voir les prochains shifts de/,
+    });
+    if (await upcomingStationButtons.count()) {
+      await upcomingStationButtons.first().click();
+      const upcomingDialog = page.getByRole("dialog", {
+        name: /Prochains shifts ·/,
+      });
+      await upcomingDialog
+        .getByRole("button", { name: "Ouvrir dans le planning" })
+        .waitFor();
+      await upcomingDialog
+        .getByRole("button", { name: "Fermer", exact: true })
+        .click();
+      await upcomingDialog.waitFor({ state: "detached" });
+    }
     const dashboardDownload = page.waitForEvent("download");
     await page.getByRole("button", { name: "Exporter Excel" }).click();
     assert.match(

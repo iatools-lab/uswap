@@ -67,23 +67,6 @@
   font-size: 11px;
 }
 
-.home-data-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: #267451;
-  font-size: 10px;
-  white-space: nowrap;
-}
-
-.home-data-status i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #27a66d;
-  box-shadow: 0 0 0 4px #e6f6ee;
-}
-
 .admin-home .network-overview {
   gap: 12px;
 }
@@ -191,8 +174,5 @@
 @media (max-width: 420px) {
   .admin-home .home-actions {
     grid-template-columns: 1fr;
-  }
-  .home-data-status {
-    display: none;
   }
 }

@@ -1,7 +1,17 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
-import { BellIcon, CheckCircleIcon, SlidersHorizontalIcon } from "@phosphor-icons/react";
+import {
+  BellIcon,
+  CaretRightIcon,
+  SlidersHorizontalIcon,
+} from "@phosphor-icons/react";
 import { api } from "../../api/auth-api";
 import { formatDateTime } from "../supervision/format";
 
@@ -12,7 +22,12 @@ const VIEWPORT_GAP = 12;
 /** Écart vertical entre le bouton et le panneau. */
 const ANCHOR_OFFSET = 10;
 
-type Placement = { top: number; left: number; width: number; maxHeight: number };
+type Placement = {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+};
 
 type NotificationItem = {
   id: string;
@@ -55,7 +70,10 @@ export function NotificationBell() {
         top: rect.bottom + ANCHOR_OFFSET,
         left: VIEWPORT_GAP,
         width: vw - VIEWPORT_GAP * 2,
-        maxHeight: Math.max(180, vh - rect.bottom - ANCHOR_OFFSET - VIEWPORT_GAP),
+        maxHeight: Math.max(
+          180,
+          vh - rect.bottom - ANCHOR_OFFSET - VIEWPORT_GAP,
+        ),
       });
       return;
     }
@@ -172,7 +190,12 @@ export function NotificationBell() {
           ? `${basePath}/plannings`
           : item.kind.includes("LEAVE") && basePath === "/app/mon-espace"
             ? `${basePath}/conges`
-            : ["CHECKIN", "CORRECTION", "AUTOMATIC_ABSENCE", "ABSENCE_DECLARED"].includes(item.kind) && basePath === "/app/supervision"
+            : [
+                  "CHECKIN",
+                  "CORRECTION",
+                  "AUTOMATIC_ABSENCE",
+                  "ABSENCE_DECLARED",
+                ].includes(item.kind) && basePath === "/app/supervision"
               ? `${basePath}/pointages`
               : basePath;
     if (destination) {
@@ -217,56 +240,91 @@ export function NotificationBell() {
               maxHeight: placement.maxHeight,
             }}
           >
-          <div className="notification-bell__head">
-            <div><strong>Centre de notifications</strong><small>{unread.length ? `${unread.length} à consulter` : "Vous êtes à jour"}</small></div>
-            {!!unread.length && (
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => void markAllRead()}
-              >
-                Tout marquer comme lu
-              </button>
-            )}
-          </div>
-          <div className="notification-bell__filters" role="group" aria-label="Filtrer les notifications">
-            <button aria-pressed={view === "all"} onClick={() => setView("all")}>Toutes <span>{items.length}</span></button>
-            <button aria-pressed={view === "unread"} onClick={() => setView("unread")}>Non lues <span>{unread.length}</span></button>
-          </div>
-          {!visibleItems.length ? (
-            <p className="notification-bell__empty">{view === "unread" ? "Aucune notification non lue." : "Aucune notification."}</p>
-          ) : (
-            <ul className="notification-bell__list">
-              {visibleItems.slice(0, 20).map((item) => (
-                <li
-                  key={item.id}
-                  className={
-                    item.readAt
-                      ? "notification-bell__item"
-                      : "notification-bell__item unread"
-                  }
+            <div className="notification-bell__head">
+              <strong>Centre de notifications</strong>
+              {!!unread.length && (
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => void markAllRead()}
                 >
-                  <strong>{item.title}</strong>
-                  <p>{item.body}</p>
-                  <time>{formatDateTime(item.createdAt)}</time>
-                  <button
-                    type="button"
-                    className="notification-bell__action"
-                    onClick={() => void openNotification(item)}
+                  Tout marquer comme lu
+                </button>
+              )}
+            </div>
+            <div
+              className="notification-bell__filters"
+              role="group"
+              aria-label="Filtrer les notifications"
+            >
+              <button
+                aria-pressed={view === "all"}
+                onClick={() => setView("all")}
+              >
+                Toutes <span>{items.length}</span>
+              </button>
+              <button
+                aria-pressed={view === "unread"}
+                onClick={() => setView("unread")}
+              >
+                Non lues <span>{unread.length}</span>
+              </button>
+            </div>
+            {!visibleItems.length ? (
+              <p className="notification-bell__empty">
+                {view === "unread"
+                  ? "Aucune notification non lue."
+                  : "Aucune notification."}
+              </p>
+            ) : (
+              <ul className="notification-bell__list">
+                {visibleItems.slice(0, 20).map((item) => (
+                  <li
+                    key={item.id}
+                    className={
+                      item.readAt
+                        ? "notification-bell__item"
+                        : "notification-bell__item unread"
+                    }
                   >
-                    {item.kind === "ACCESS_PENDING"
-                      ? "Examiner les comptes"
-                      : item.kind.startsWith("PLANNING_")
-                        ? "Ouvrir le planning"
-                        : location.pathname.startsWith("/app/admin")
-                          ? "Revenir à l’accueil"
-                          : "Ouvrir les opérations"}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <button type="button" className="notification-bell__preferences" onClick={() => { setOpen(false); const base = location.pathname.startsWith("/app/admin") ? "/app/admin" : location.pathname.startsWith("/app/supervision") ? "/app/supervision" : location.pathname.startsWith("/app/station") ? "/app/station" : "/app/mon-espace"; navigate(`${base}/compte?section=notifications`); }}><SlidersHorizontalIcon /> Gérer mes préférences <CheckCircleIcon /></button>
+                    <strong>{item.title}</strong>
+                    <p>{item.body}</p>
+                    <time>{formatDateTime(item.createdAt)}</time>
+                    <button
+                      type="button"
+                      className="notification-bell__action"
+                      onClick={() => void openNotification(item)}
+                    >
+                      {item.kind === "ACCESS_PENDING"
+                        ? "Examiner les comptes"
+                        : item.kind.startsWith("PLANNING_")
+                          ? "Ouvrir le planning"
+                          : location.pathname.startsWith("/app/admin")
+                            ? "Revenir à l’accueil"
+                            : "Ouvrir les opérations"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              type="button"
+              className="notification-bell__preferences"
+              onClick={() => {
+                setOpen(false);
+                const base = location.pathname.startsWith("/app/admin")
+                  ? "/app/admin"
+                  : location.pathname.startsWith("/app/supervision")
+                    ? "/app/supervision"
+                    : location.pathname.startsWith("/app/station")
+                      ? "/app/station"
+                      : "/app/mon-espace";
+                navigate(`${base}/compte?section=notifications`);
+              }}
+            >
+              <SlidersHorizontalIcon size={15} weight="duotone" /> Gérer mes
+              préférences <CaretRightIcon size={15} weight="bold" />
+            </button>
           </div>,
           document.body,
         )}
