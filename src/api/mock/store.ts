@@ -1,5 +1,5 @@
 import { ADMIN_PASSWORD, DB_VERSION, createSeed } from "./seed";
-import type { MockDb } from "./types";
+import type { MockDb, MockIncident, MockUser } from "./types";
 import { assertDbInvariants } from "./invariants";
 
 const STORAGE_KEY = `uswap.mock.db.v${DB_VERSION}`;
@@ -49,6 +49,29 @@ function storage(): Storage | null {
 }
 
 /**
+ * Un incident de démonstration n'est réutilisable que si son déclarant et le
+ * swappeur concerné appartiennent toujours à la station enregistrée. Les
+ * rattachements peuvent avoir changé dans une base locale plus ancienne.
+ */
+function incidentFitsCurrentScope(
+  incident: MockIncident,
+  users: MockUser[],
+  stationIds: Set<string>,
+): boolean {
+  const reporter = users.find((item) => item.id === incident.reporterId);
+  const affectedSwapper = users.find(
+    (item) => item.id === incident.affectedSwapperId,
+  );
+  return Boolean(
+    stationIds.has(incident.stationId) &&
+    reporter?.role === "STATION_CHIEF" &&
+    reporter.stationId === incident.stationId &&
+    affectedSwapper?.role === "SWAPPER" &&
+    affectedSwapper.stationId === incident.stationId,
+  );
+}
+
+/**
  * Met à niveau une base locale sans effacer les plannings et pointages déjà
  * créés. Les nouvelles collections du sprint 4 viennent de la graine, tandis
  * que toutes les collections existantes restent celles de l'utilisateur.
@@ -60,6 +83,8 @@ function migrateDb(candidate: unknown): MockDb | null {
     return null;
 
   const seed = createSeed(Date.now());
+  const currentUsers = previous.users;
+  const currentStations = previous.stations;
   const previousLeaves = previous.leaves ?? [];
   const sprint4DemoLeaves = seed.leaves.filter(
     (item) =>
@@ -67,17 +92,12 @@ function migrateDb(candidate: unknown): MockDb | null {
       !previousLeaves.some((saved) => saved.id === item.id),
   );
   const previousLeaveOperations = previous.leaveSyncOperations ?? [];
-  const chiefStations = new Map(
-    previous.users
-      .filter(
-        (item) => item.role === "STATION_CHIEF" && Boolean(item.stationId),
-      )
-      .map((item) => [item.id, item.stationId]),
+  const currentStationIds = new Set(currentStations.map((item) => item.id));
+  const previousIncidents = (previous.incidents ?? []).filter((incident) =>
+    incidentFitsCurrentScope(incident, currentUsers, currentStationIds),
   );
-  const previousIncidents = (previous.incidents ?? []).filter(
-    (incident) =>
-      Boolean(incident.affectedSwapperId) &&
-      chiefStations.get(incident.reporterId) === incident.stationId,
+  const compatibleSeedIncidents = seed.incidents.filter((incident) =>
+    incidentFitsCurrentScope(incident, currentUsers, currentStationIds),
   );
   const migrated = {
     ...seed,
@@ -93,7 +113,7 @@ function migrateDb(candidate: unknown): MockDb | null {
     ],
     incidents: [
       ...previousIncidents,
-      ...seed.incidents.filter(
+      ...compatibleSeedIncidents.filter(
         (item) => !previousIncidents.some((saved) => saved.id === item.id),
       ),
     ],
@@ -141,8 +161,11 @@ export function loadDb(): MockDb {
       const parsed = JSON.parse(raw) as unknown;
       const migrated = migrateDb(parsed);
       if (migrated) {
+        if (mustRestoreAdmin) restoreAdminAccess(migrated);
+        // Une donnée locale incohérente est détectée pendant la migration,
+        // avant qu'une action comme la connexion ne tente de la valider.
+        assertDbInvariants(migrated);
         db = migrated;
-        if (mustRestoreAdmin) restoreAdminAccess(db);
         saveDb();
         if (sourceKey && sourceKey !== STORAGE_KEY)
           localStorage?.removeItem(sourceKey);

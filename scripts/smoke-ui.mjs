@@ -44,6 +44,53 @@ async function exercise(name, email, password, expectedPath, run) {
   }
 }
 
+async function verifyLegacyIncidentRepair() {
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+  });
+  const page = await context.newPage();
+  await page.goto(`${baseUrl}/auth/login`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Choisir un profil" }).waitFor();
+  await page.evaluate(() => {
+    const key = "uswap.mock.db.v11";
+    const database = JSON.parse(localStorage.getItem(key) || "null");
+    if (!database) throw new Error("Base locale de démonstration absente.");
+    const amina = database.users.find((user) => user.id === "sw-05");
+    if (!amina) throw new Error("Compte de migration introuvable.");
+    // Reproduit une ancienne session dans laquelle le swappeur a été déplacé
+    // alors que l'incident de démonstration restait rattaché à Obobogo.
+    amina.stationId = "st-bastos";
+    localStorage.setItem(key, JSON.stringify(database));
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await login(page, "swappeur@uswap.example.com", "uswap2026");
+  const invalidIncidents = await page.evaluate(() => {
+    const database = JSON.parse(
+      localStorage.getItem("uswap.mock.db.v11") || "null",
+    );
+    return database.incidents.filter((incident) => {
+      const reporter = database.users.find(
+        (user) => user.id === incident.reporterId,
+      );
+      const swapper = database.users.find(
+        (user) => user.id === incident.affectedSwapperId,
+      );
+      return (
+        reporter?.role !== "STATION_CHIEF" ||
+        reporter.stationId !== incident.stationId ||
+        swapper?.role !== "SWAPPER" ||
+        swapper.stationId !== incident.stationId
+      );
+    });
+  });
+  assert.equal(
+    invalidIncidents.length,
+    0,
+    "La migration doit retirer les incidents hors périmètre.",
+  );
+  await context.close();
+}
+
 async function createPlanning(page, { mode, name, start, end }) {
   const buttonName =
     mode === "automatic" ? "Générer automatiquement" : "Créer un brouillon";
@@ -111,6 +158,8 @@ async function createPlanning(page, { mode, name, start, end }) {
     .getByRole("button", { name: "Tous les plannings", exact: true })
     .waitFor();
 }
+
+await verifyLegacyIncidentRepair();
 
 await exercise(
   "administrateur",
