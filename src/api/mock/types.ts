@@ -212,16 +212,11 @@ export type MockIncidentAction = {
 export type MockIncident = {
   id: string;
   stationId: string;
+  affectedSwapperId: string;
   reporterId: string;
   assigneeId: string | null;
   category:
-    | "SAFETY"
-    | "EQUIPMENT"
-    | "BATTERY"
-    | "INFRASTRUCTURE"
-    | "STAFF"
-    | "SYSTEM"
-    | "OTHER";
+    "ATTENDANCE" | "HEALTH" | "SAFETY" | "BEHAVIOR" | "SCHEDULING" | "OTHER";
   severity: IncidentSeverity;
   status: IncidentStatus;
   title: string;

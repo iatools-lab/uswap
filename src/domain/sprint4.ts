@@ -45,6 +45,8 @@ export type IncidentView = {
   id: string;
   stationId: string;
   stationName: string;
+  affectedSwapperId: string;
+  affectedSwapperName: string;
   category: string;
   severity: IncidentSeverity;
   status: IncidentStatus;

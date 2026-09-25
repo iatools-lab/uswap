@@ -6,7 +6,6 @@ import {
   ReplacementDialog,
   ReplacementQueue,
 } from "../supervision/ReplacementQueue";
-import { formatDate } from "./format";
 import type { OperationsViewProps } from "./types";
 import { IncidentCenter } from "../incidents/IncidentCenter";
 import { OperationsDashboard } from "../reports/OperationsDashboard";
@@ -15,7 +14,11 @@ export function SupervisorHome({ data }: OperationsViewProps) {
   const navigate = useNavigate();
   const [replacementShift, setReplacementShift] = useState<string | null>(null);
   const [queueKey, setQueueKey] = useState(0);
-  const published = data.shifts.filter((shift) => shift.publishedAt);
+  const published = data.shifts
+    .filter(
+      (shift) => shift.publishedAt && Date.parse(shift.endTime) >= Date.now(),
+    )
+    .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
   const plannerPath = "/app/supervision/plannings";
   const pointagesPath = "/app/supervision/pointages";
 
@@ -79,7 +82,9 @@ export function SupervisorHome({ data }: OperationsViewProps) {
                 Les affectations publiées les plus proches.
               </p>
             </div>
-            <span className="admin-badge draft">{published.length}</span>
+            <span className="admin-badge draft">
+              {published.length} à venir
+            </span>
           </div>
           {!published.length ? (
             <div className="admin-empty">
@@ -90,25 +95,47 @@ export function SupervisorHome({ data }: OperationsViewProps) {
             <ul className="supervisor-shift-list">
               {published.slice(0, 5).map((shift) => (
                 <li key={shift.id}>
-                  <span className="supervisor-shift-list__date">
-                    <CalendarIcon size={18} />
-                    {formatDate(shift.startTime)}
-                  </span>
-                  <div>
-                    <strong>{shift.station?.name || "Station"}</strong>
-                    <span>
-                      <Clock size={14} />{" "}
-                      {formatDate(
-                        shift.startTime,
-                        shift.station?.timezone,
-                        true,
-                      )}
+                  <button
+                    type="button"
+                    aria-label={`Ouvrir ${shift.label} à ${shift.station?.name || "la station"}`}
+                    onClick={() =>
+                      navigate(
+                        `${plannerPath}?planning=${encodeURIComponent(shift.planningId)}`,
+                      )
+                    }
+                  >
+                    <span className="supervisor-shift-list__date">
+                      <CalendarIcon size={18} />
+                      {new Intl.DateTimeFormat("fr-CM", {
+                        day: "2-digit",
+                        month: "short",
+                        timeZone: shift.station?.timezone || "Africa/Douala",
+                      }).format(new Date(shift.startTime))}
                     </span>
-                    <span>
-                      <MapPin size={14} /> {shift.station?.name || "Sur site"}
-                    </span>
-                  </div>
-                  <CaretRight size={17} aria-hidden="true" />
+                    <div>
+                      <strong>{shift.label}</strong>
+                      <span>
+                        <Clock size={14} />
+                        {new Intl.DateTimeFormat("fr-CM", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          timeZone: shift.station?.timezone || "Africa/Douala",
+                        }).format(new Date(shift.startTime))}
+                        {" – "}
+                        {new Intl.DateTimeFormat("fr-CM", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          timeZone: shift.station?.timezone || "Africa/Douala",
+                        }).format(new Date(shift.endTime))}
+                      </span>
+                      <span>
+                        <MapPin size={14} /> {shift.station?.name || "Sur site"}
+                        {" · "}
+                        {shift.swapper.fullName}
+                      </span>
+                    </div>
+                    <CaretRight size={17} aria-hidden="true" />
+                  </button>
                 </li>
               ))}
             </ul>

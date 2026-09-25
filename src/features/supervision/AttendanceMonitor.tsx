@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/auth-api";
-import { LoaderCircle, RefreshCw } from "../../ui/icons";
+import { LoaderCircle, RefreshCw, Search } from "../../ui/icons";
+import { Select } from "../../ui/Select";
 import {
   ResponsiveDataTable,
   type ResponsiveColumn,
@@ -43,6 +44,8 @@ export function AttendanceMonitor({
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<MonitorRow["status"] | "ALL">("ALL");
+  const [query, setQuery] = useState("");
+  const [stationId, setStationId] = useState("ALL");
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setError("");
@@ -62,11 +65,33 @@ export function AttendanceMonitor({
     return () => clearInterval(timer);
   }, [load]);
 
-  const rows = useMemo(() => {
+  const stations = useMemo(() => {
+    const values = new Map<string, string>();
+    data?.rows.forEach((row) => values.set(row.station.id, row.station.name));
+    return Array.from(values, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name, "fr"),
+    );
+  }, [data]);
+
+  const scopedRows = useMemo(() => {
     if (!data) return [];
-    if (filter === "ALL") return data.rows;
-    return data.rows.filter((row: MonitorRow) => row.status === filter);
-  }, [data, filter]);
+    const needle = query.trim().toLowerCase();
+    return data.rows.filter((row) => {
+      if (stationId !== "ALL" && row.station.id !== stationId) return false;
+      if (!needle) return true;
+      return `${row.swapper.fullName} ${row.station.name} ${row.template || ""}`
+        .toLowerCase()
+        .includes(needle);
+    });
+  }, [data, query, stationId]);
+
+  const rows = useMemo(
+    () =>
+      filter === "ALL"
+        ? scopedRows
+        : scopedRows.filter((row) => row.status === filter),
+    [filter, scopedRows],
+  );
 
   const columns: ResponsiveColumn<MonitorRow>[] = [
     {
@@ -157,14 +182,8 @@ export function AttendanceMonitor({
   }
 
   const getCount = (key: string) => {
-    if (key === "ALL") return data.rows.length;
-    if (key === "EXPECTED") return data.summary.expected;
-    if (key === "PRESENT") return data.summary.present;
-    if (key === "LATE") return data.summary.late;
-    if (key === "ABSENT") return data.summary.absent;
-    if (key === "JUSTIFIED") return data.summary.justified;
-    if (key === "CLOSED") return data.summary.closed;
-    return 0;
+    if (key === "ALL") return scopedRows.length;
+    return scopedRows.filter((row) => row.status === key).length;
   };
 
   return (
@@ -192,34 +211,40 @@ export function AttendanceMonitor({
         </button>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: "8px",
-          overflowX: "auto",
-          paddingBottom: "12px",
-          margin: "0 4px 8px",
-        }}
-      >
+      <div className="attendance-smart-filters">
+        <label className="attendance-smart-search">
+          <Search size={16} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Rechercher un swappeur, un shift…"
+          />
+        </label>
+        <Select
+          size="sm"
+          value={stationId}
+          ariaLabel="Filtrer les pointages par station"
+          width="210px"
+          onChange={(value) => setStationId(String(value))}
+          options={[
+            { value: "ALL", label: "Toutes les stations" },
+            ...stations.map((station) => ({
+              value: station.id,
+              label: station.name,
+            })),
+          ]}
+        />
+      </div>
+
+      <div className="attendance-status-filters" aria-label="Filtrer par état">
         {FILTERS.map((f) => (
           <button
             key={f.key}
             type="button"
             className={`admin-button secondary ${filter === f.key ? "active-filter" : ""}`}
-            onClick={() => setFilter(f.key as any)}
-            style={{
-              fontSize: "12.5px",
-              minHeight: "32px",
-              padding: "4px 14px",
-              borderRadius: "20px",
-              whiteSpace: "nowrap",
-              border: filter === f.key ? "none" : "1px solid var(--line)",
-            }}
+            onClick={() => setFilter(f.key)}
           >
-            {f.label}{" "}
-            <span style={{ opacity: 0.6, marginLeft: "4px" }}>
-              ({getCount(f.key)})
-            </span>
+            {f.label} <span>{getCount(f.key)}</span>
           </button>
         ))}
       </div>

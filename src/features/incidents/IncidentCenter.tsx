@@ -37,6 +37,7 @@ type Data = {
     meanResolutionHours: number;
   };
   stations: Array<{ id: string; name: string }>;
+  swappers: Array<{ id: string; fullName: string; stationId: string | null }>;
 };
 const statusLabels: Record<IncidentStatus, string> = {
   REPORTED: "Signalé",
@@ -53,12 +54,11 @@ const severityLabels: Record<IncidentSeverity, string> = {
   CRITICAL: "Critique",
 };
 const categories = {
-  SAFETY: "Sécurité",
-  EQUIPMENT: "Équipement",
-  BATTERY: "Batterie",
-  INFRASTRUCTURE: "Infrastructure",
-  STAFF: "Personnel",
-  SYSTEM: "Système",
+  ATTENDANCE: "Présence ou ponctualité",
+  HEALTH: "Santé ou malaise",
+  SAFETY: "Sécurité du swappeur",
+  BEHAVIOR: "Comportement",
+  SCHEDULING: "Difficulté liée au planning",
   OTHER: "Autre",
 };
 const nextStatuses: Record<IncidentStatus, IncidentStatus[]> = {
@@ -118,10 +118,10 @@ export function IncidentCenter({
       <div className="incident-heading">
         <div>
           <span className="incident-eyebrow">Pilotage opérationnel</span>
-          <h2>Incidents des stations</h2>
+          <h2>Incidents concernant les swappeurs</h2>
           <p>
-            Signalez un événement, suivez sa prise en charge et conservez une
-            trace claire de sa résolution.
+            Signalez une situation rencontrée par un swappeur, suivez sa prise
+            en charge et conservez une trace claire de sa résolution.
           </p>
         </div>
         <button
@@ -204,6 +204,10 @@ export function IncidentCenter({
               <p>{item.description}</p>
               <dl>
                 <div>
+                  <dt>Swappeur</dt>
+                  <dd>{item.affectedSwapperName}</dd>
+                </div>
+                <div>
                   <dt>Station</dt>
                   <dd>{item.stationName}</dd>
                 </div>
@@ -236,6 +240,7 @@ export function IncidentCenter({
       <IncidentCreate
         open={createOpen}
         stations={data.stations}
+        swappers={data.swappers}
         fixedStationId={stationId}
         onClose={() => setCreateOpen(false)}
         onSaved={() => {
@@ -260,21 +265,24 @@ export function IncidentCenter({
 function IncidentCreate({
   open,
   stations,
+  swappers,
   fixedStationId,
   onClose,
   onSaved,
 }: {
   open: boolean;
   stations: Data["stations"];
+  swappers: Data["swappers"];
   fixedStationId?: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [station, setStation] = useState(fixedStationId ?? "");
+  const [affectedSwapper, setAffectedSwapper] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState<IncidentSeverity>("MEDIUM");
-  const [category, setCategory] = useState("EQUIPMENT");
+  const [category, setCategory] = useState("ATTENDANCE");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function save() {
@@ -283,6 +291,7 @@ function IncidentCreate({
     try {
       await api("/incidents", {
         stationId: station,
+        affectedSwapperId: affectedSwapper,
         title,
         description,
         severity,
@@ -302,7 +311,7 @@ function IncidentCreate({
       onClose={onClose}
       size="lg"
       title="Déclarer un incident"
-      subtitle="Décrivez les faits et leur impact. Le superviseur sera alerté immédiatement."
+      subtitle="Choisissez le swappeur concerné, puis décrivez les faits et leur impact."
       footer={
         <>
           <button className="admin-button secondary" onClick={onClose}>
@@ -313,6 +322,7 @@ function IncidentCreate({
             disabled={
               busy ||
               !station ||
+              !affectedSwapper ||
               title.trim().length < 5 ||
               description.trim().length < 12
             }
@@ -333,7 +343,10 @@ function IncidentCreate({
               value={station}
               placeholder="Sélectionner la station"
               ariaLabel="Station concernée"
-              onChange={(value) => setStation(String(value))}
+              onChange={(value) => {
+                setStation(String(value));
+                setAffectedSwapper("");
+              }}
               options={stations.map((item) => ({
                 value: item.id,
                 label: item.name,
@@ -341,6 +354,24 @@ function IncidentCreate({
             />
           </label>
         )}
+        <label>
+          <span>Swappeur concerné</span>
+          <Select
+            value={affectedSwapper}
+            placeholder={
+              station
+                ? "Sélectionner le swappeur"
+                : "Choisir d’abord la station"
+            }
+            ariaLabel="Swappeur concerné"
+            disabled={!station}
+            onChange={(value) => setAffectedSwapper(String(value))}
+            options={swappers
+              .filter((item) => item.stationId === station)
+              .map((item) => ({ value: item.id, label: item.fullName }))}
+          />
+          <small>Seuls les swappeurs actifs de la station sont proposés.</small>
+        </label>
         <div className="incident-form-row">
           <label>
             <span>Catégorie</span>
@@ -372,7 +403,7 @@ function IncidentCreate({
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ex. Borne de recharge indisponible"
+            placeholder="Ex. Malaise pendant le service"
           />
         </label>
         <label>
@@ -381,7 +412,7 @@ function IncidentCreate({
             rows={5}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Précisez ce qui s’est passé, la zone touchée et les conséquences observées…"
+            placeholder="Précisez ce que le swappeur a rencontré, les conséquences sur son service et les premières mesures prises…"
           />
         </label>
       </div>
@@ -477,6 +508,7 @@ function IncidentDetail({
               {statusLabels[incident.status]}
             </span>
             <p>{incident.description}</p>
+            <strong>{incident.affectedSwapperName}</strong>
             <small>Déclaré par {incident.reporterName}</small>
           </div>
           {canManage && (

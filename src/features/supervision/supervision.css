@@ -606,6 +606,131 @@
   color: var(--ink);
 }
 
+.supervision-origin span {
+  color: #6f7d94;
+}
+
+.coverage-process {
+  margin: 0 16px 8px;
+  padding: 11px 13px;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+  background: #f8faff;
+}
+
+.coverage-process summary {
+  color: #18366f;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.coverage-process ol {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0 2px;
+  padding-left: 20px;
+  color: #65748d;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.attendance-smart-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 4px 10px;
+}
+
+.attendance-smart-search {
+  min-width: 220px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  color: #71809a;
+}
+
+.attendance-smart-search:focus-within {
+  border-color: #8ea5d5;
+  box-shadow: 0 0 0 3px rgba(9, 39, 132, 0.08);
+}
+
+.attendance-smart-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.attendance-status-filters {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  margin: 0 4px 12px;
+  padding-bottom: 2px;
+}
+
+.attendance-status-filters .admin-button {
+  min-height: 34px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.attendance-status-filters .admin-button span {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #edf1f8;
+  color: #53627a;
+  text-align: center;
+}
+
+.attendance-status-filters .active-filter {
+  border-color: var(--navy);
+  background: var(--navy);
+  color: #fff;
+}
+
+.attendance-status-filters .active-filter span {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+@media (max-width: 700px) {
+  .attendance-smart-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .attendance-smart-filters .ui-select {
+    width: 100% !important;
+  }
+
+  .attendance-status-filters {
+    flex-wrap: wrap;
+    overflow: visible;
+    gap: 8px;
+    padding-bottom: 0;
+  }
+
+  .attendance-status-filters .admin-button {
+    min-height: 44px;
+    padding-inline: 11px;
+  }
+}
+
 /* ============================================================
    Refonte moderne des cartes de pointage mobiles (Mes pointages)
    ============================================================ */
@@ -1005,13 +1130,30 @@
 }
 
 .supervisor-shift-list li {
+  display: block;
+  border-top: 1px solid #edf1f6;
+}
+
+.supervisor-shift-list li > button {
+  width: 100%;
   display: grid;
   grid-template-columns: 92px minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   min-height: 78px;
   padding: 12px 0;
-  border-top: 1px solid #edf1f6;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.supervisor-shift-list li > button:hover,
+.supervisor-shift-list li > button:focus-visible {
+  background: #f8faff;
+  outline: none;
 }
 
 .supervisor-shift-list__date {
@@ -1023,7 +1165,7 @@
   font-weight: 650;
 }
 
-.supervisor-shift-list li > div {
+.supervisor-shift-list li > button > div {
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -1037,7 +1179,7 @@
   white-space: nowrap;
 }
 
-.supervisor-shift-list li > div span {
+.supervisor-shift-list li > button > div span {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -1083,7 +1225,7 @@
     display: none;
   }
 
-  .supervisor-shift-list li {
+  .supervisor-shift-list li > button {
     grid-template-columns: 78px minmax(0, 1fr) auto;
     gap: 10px;
   }

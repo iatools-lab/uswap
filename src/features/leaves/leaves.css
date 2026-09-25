@@ -3,6 +3,68 @@
   display: grid;
   gap: 20px;
 }
+
+.leave-process-guide {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid #dfe7f2;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.leave-process-guide > div:first-child > span {
+  color: #ff5a18;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.leave-process-guide h2 {
+  margin: 4px 0;
+  color: #15223c;
+  font-size: 18px;
+}
+
+.leave-process-guide p {
+  margin: 0;
+  color: #75829a;
+  font-size: 12px;
+}
+
+.leave-process-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.leave-process-columns article {
+  padding: 15px 16px;
+  border-radius: 12px;
+  background: #f7f9fd;
+}
+
+.leave-process-columns strong {
+  color: #0b2b78;
+  font-size: 13px;
+}
+
+.leave-process-columns ol {
+  display: grid;
+  gap: 7px;
+  margin: 11px 0 0;
+  padding-left: 19px;
+  color: #62718a;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+@media (max-width: 700px) {
+  .leave-process-columns {
+    grid-template-columns: 1fr;
+  }
+}
 .leave-workspace {
   --leave-navy: #062477;
   --leave-orange: #ff5a18;

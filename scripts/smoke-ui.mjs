@@ -328,13 +328,13 @@ await exercise(
       /rapport-uswap-.*\.xlsx/,
     );
     await page
-      .getByRole("heading", { name: "Incidents des stations" })
+      .getByRole("heading", { name: "Incidents concernant les swappeurs" })
       .waitFor();
     await page
-      .getByRole("button", { name: /Zone de circulation à sécuriser/ })
+      .getByRole("button", { name: /Chute légère pendant la prise de poste/ })
       .click();
     await page
-      .getByRole("heading", { name: "Zone de circulation à sécuriser" })
+      .getByRole("heading", { name: "Chute légère pendant la prise de poste" })
       .waitFor();
     await page.getByRole("button", { name: "Fermer", exact: true }).click();
     const replaceButtons = page.getByRole("button", {
@@ -444,14 +444,14 @@ await exercise(
     await page.getByRole("heading", { name: /Présence du jour/ }).waitFor();
     await page.locator(".shift-table-clean").first().waitFor();
     await page
-      .getByRole("heading", { name: "Incidents des stations" })
+      .getByRole("heading", { name: "Incidents concernant les swappeurs" })
       .waitFor();
     await page.getByRole("button", { name: "Déclarer un incident" }).click();
     const incidentDialog = page.getByRole("dialog", {
       name: "Déclarer un incident",
     });
     assert.equal(
-      await incidentDialog.getByPlaceholder(/Borne de recharge/).inputValue(),
+      await incidentDialog.getByPlaceholder(/Malaise pendant/).inputValue(),
       "",
       "Un nouvel incident doit être vierge",
     );
@@ -545,7 +545,7 @@ await exercise(
     }
     const automatedCheckoutAbsence = await page.evaluate(() => {
       const db = JSON.parse(
-        localStorage.getItem("uswap.mock.db.v10") || "null",
+        localStorage.getItem("uswap.mock.db.v11") || "null",
       );
       if (!db) return false;
       return db.attendance.some(
@@ -707,7 +707,7 @@ await migrationPage
   .waitFor();
 await migrationPage.evaluate(() => {
   const current = JSON.parse(
-    localStorage.getItem("uswap.mock.db.v10") || "null",
+    localStorage.getItem("uswap.mock.db.v11") || "null",
   );
   if (!current) throw new Error("Base v10 absente avant le test de migration");
   current.version = 9;
@@ -718,15 +718,15 @@ await migrationPage.evaluate(() => {
   delete current.notificationPreferences;
   delete current.scheduledReports;
   delete current.offlineOperations;
-  localStorage.setItem("uswap.mock.db.v9", JSON.stringify(current));
-  localStorage.removeItem("uswap.mock.db.v10");
+  localStorage.setItem("uswap.mock.db.v10", JSON.stringify(current));
+  localStorage.removeItem("uswap.mock.db.v11");
 });
 await migrationPage.reload({ waitUntil: "domcontentloaded" });
 await migrationPage
   .getByRole("button", { name: "Choisir un profil" })
   .waitFor();
 const migrated = await migrationPage.evaluate(() => {
-  const db = JSON.parse(localStorage.getItem("uswap.mock.db.v10") || "null");
+  const db = JSON.parse(localStorage.getItem("uswap.mock.db.v11") || "null");
   return {
     version: db?.version,
     planningName: db?.plannings?.[0]?.name,
@@ -735,11 +735,11 @@ const migrated = await migrationPage.evaluate(() => {
       Array.isArray(db?.incidents) &&
       Array.isArray(db?.notificationPreferences) &&
       Array.isArray(db?.scheduledReports),
-    oldKeyRemoved: localStorage.getItem("uswap.mock.db.v9") === null,
+    oldKeyRemoved: localStorage.getItem("uswap.mock.db.v10") === null,
   };
 });
 assert.deepEqual(migrated, {
-  version: 10,
+  version: 11,
   planningName: "Planning conservé par migration",
   hasSprint4Collections: true,
   oldKeyRemoved: true,

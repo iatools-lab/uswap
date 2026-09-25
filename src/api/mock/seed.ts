@@ -170,7 +170,7 @@ export const FICTITIOUS_DOMAIN = "uswap.example.com";
  * referme aussi les sessions en cours (comportement attendu lors d'un
  * changement de schéma, jamais lors d'un simple rechargement).
  */
-export const DB_VERSION = 10;
+export const DB_VERSION = 11;
 
 /** Mot de passe commun aux comptes de démonstration (fictifs). */
 export const DEMO_PASSWORD = "uswap2026";
@@ -742,15 +742,17 @@ export function createSeed(nowMs: number): MockDb {
 
   const incidents: MockIncident[] = [
     {
-      id: "incident-bastos-terminal",
+      id: "incident-bastos-health",
       stationId: "st-bastos",
+      affectedSwapperId: "sw-01",
       reporterId: "us-chief-bastos",
       assigneeId: "us-supervisor",
-      category: "EQUIPMENT",
+      category: "HEALTH",
       severity: "HIGH",
       status: "IN_PROGRESS",
-      title: "Terminal de diagnostic indisponible",
-      description: "Le terminal principal ne démarre plus et ralentit le contrôle des batteries entrantes.",
+      title: "Malaise pendant le service",
+      description:
+        "Léa a signalé un malaise pendant son shift. Elle a été mise au repos et doit confirmer son aptitude avant sa prochaine affectation.",
       attachmentIds: [],
       occurredAt: isoFromMs(nowMs - 7 * 3600000),
       createdAt: isoFromMs(nowMs - 6.5 * 3600000),
@@ -759,20 +761,41 @@ export function createSeed(nowMs: number): MockDb {
       closedAt: null,
       resolution: null,
       actions: [
-        { id: "ia-bastos-2", incidentId: "incident-bastos-terminal", authorId: "us-supervisor", type: "QUALIFIED", fromStatus: "ACKNOWLEDGED", toStatus: "IN_PROGRESS", comment: "Diagnostic à distance terminé, intervention locale planifiée.", createdAt: isoFromMs(nowMs - 2 * 3600000) },
-        { id: "ia-bastos-1", incidentId: "incident-bastos-terminal", authorId: "us-chief-bastos", type: "CREATED", fromStatus: null, toStatus: "REPORTED", comment: "Incident déclaré depuis la station.", createdAt: isoFromMs(nowMs - 6.5 * 3600000) },
+        {
+          id: "ia-bastos-2",
+          incidentId: "incident-bastos-health",
+          authorId: "us-supervisor",
+          type: "QUALIFIED",
+          fromStatus: "ACKNOWLEDGED",
+          toStatus: "IN_PROGRESS",
+          comment:
+            "Le swappeur a été contacté et son prochain service est en cours de réévaluation.",
+          createdAt: isoFromMs(nowMs - 2 * 3600000),
+        },
+        {
+          id: "ia-bastos-1",
+          incidentId: "incident-bastos-health",
+          authorId: "us-chief-bastos",
+          type: "CREATED",
+          fromStatus: null,
+          toStatus: "REPORTED",
+          comment: "Incident déclaré après la mise au repos du swappeur.",
+          createdAt: isoFromMs(nowMs - 6.5 * 3600000),
+        },
       ],
     },
     {
       id: "incident-obobogo-safety",
       stationId: "st-obobogo",
+      affectedSwapperId: "sw-05",
       reporterId: "us-chief-obobogo",
       assigneeId: "us-supervisor",
       category: "SAFETY",
       severity: "CRITICAL",
       status: "ACKNOWLEDGED",
-      title: "Zone de circulation à sécuriser",
-      description: "Un marquage au sol est détérioré près de la zone de manutention et nécessite une intervention rapide.",
+      title: "Chute légère pendant la prise de poste",
+      description:
+        "Amina a glissé à son arrivée en station. Aucun arrêt immédiat n’a été demandé, mais un suivi du swappeur reste nécessaire.",
       attachmentIds: [],
       occurredAt: isoFromMs(nowMs - 3 * 3600000),
       createdAt: isoFromMs(nowMs - 2.5 * 3600000),
@@ -781,30 +804,70 @@ export function createSeed(nowMs: number): MockDb {
       closedAt: null,
       resolution: null,
       actions: [
-        { id: "ia-obobogo-2", incidentId: "incident-obobogo-safety", authorId: "us-supervisor", type: "QUALIFIED", fromStatus: "REPORTED", toStatus: "ACKNOWLEDGED", comment: "Périmètre balisé en attendant la remise en état.", createdAt: isoFromMs(nowMs - 75 * 60000) },
-        { id: "ia-obobogo-1", incidentId: "incident-obobogo-safety", authorId: "us-chief-obobogo", type: "CREATED", fromStatus: null, toStatus: "REPORTED", comment: "Incident déclaré depuis la station.", createdAt: isoFromMs(nowMs - 2.5 * 3600000) },
+        {
+          id: "ia-obobogo-2",
+          incidentId: "incident-obobogo-safety",
+          authorId: "us-supervisor",
+          type: "QUALIFIED",
+          fromStatus: "REPORTED",
+          toStatus: "ACKNOWLEDGED",
+          comment:
+            "Le swappeur a confirmé pouvoir poursuivre son service sous surveillance.",
+          createdAt: isoFromMs(nowMs - 75 * 60000),
+        },
+        {
+          id: "ia-obobogo-1",
+          incidentId: "incident-obobogo-safety",
+          authorId: "us-chief-obobogo",
+          type: "CREATED",
+          fromStatus: null,
+          toStatus: "REPORTED",
+          comment: "Incident déclaré avec le swappeur concerné.",
+          createdAt: isoFromMs(nowMs - 2.5 * 3600000),
+        },
       ],
     },
     {
-      id: "incident-bonapriso-network",
+      id: "incident-bonapriso-attendance",
       stationId: "st-bonapriso",
+      affectedSwapperId: "sw-09",
       reporterId: "us-supervisor",
       assigneeId: "us-supervisor",
-      category: "SYSTEM",
+      category: "ATTENDANCE",
       severity: "MEDIUM",
       status: "CLOSED",
-      title: "Instabilité réseau locale",
-      description: "Des coupures brèves perturbaient la synchronisation des pointages pendant le service du matin.",
+      title: "Retards répétés sur le shift du matin",
+      description:
+        "Carole est arrivée en retard sur plusieurs services consécutifs. Un échange a permis de convenir d’un suivi temporaire.",
       attachmentIds: [],
       occurredAt: isoFromMs(nowMs - 9 * 86400000),
       createdAt: isoFromMs(nowMs - 9 * 86400000),
       updatedAt: isoFromMs(nowMs - 8 * 86400000),
       resolvedAt: isoFromMs(nowMs - 8.4 * 86400000),
       closedAt: isoFromMs(nowMs - 8 * 86400000),
-      resolution: "Routeur redémarré et liaison stabilisée après contrôle.",
+      resolution:
+        "Les horaires ont été rappelés et aucun nouveau retard n’a été constaté pendant la période de suivi.",
       actions: [
-        { id: "ia-bonapriso-2", incidentId: "incident-bonapriso-network", authorId: "us-supervisor", type: "CLOSED", fromStatus: "RESOLVED", toStatus: "CLOSED", comment: "Liaison stable après une journée de surveillance.", createdAt: isoFromMs(nowMs - 8 * 86400000) },
-        { id: "ia-bonapriso-1", incidentId: "incident-bonapriso-network", authorId: "us-supervisor", type: "CREATED", fromStatus: null, toStatus: "REPORTED", comment: "Incident déclaré et transmis au support réseau.", createdAt: isoFromMs(nowMs - 9 * 86400000) },
+        {
+          id: "ia-bonapriso-2",
+          incidentId: "incident-bonapriso-attendance",
+          authorId: "us-supervisor",
+          type: "CLOSED",
+          fromStatus: "RESOLVED",
+          toStatus: "CLOSED",
+          comment: "Suivi terminé sans nouveau retard constaté.",
+          createdAt: isoFromMs(nowMs - 8 * 86400000),
+        },
+        {
+          id: "ia-bonapriso-1",
+          incidentId: "incident-bonapriso-attendance",
+          authorId: "us-supervisor",
+          type: "CREATED",
+          fromStatus: null,
+          toStatus: "REPORTED",
+          comment: "Incident de présence ouvert pour suivi avec le swappeur.",
+          createdAt: isoFromMs(nowMs - 9 * 86400000),
+        },
       ],
     },
   ];

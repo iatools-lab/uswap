@@ -61,11 +61,15 @@ function migrateDb(candidate: unknown): MockDb | null {
 
   const seed = createSeed(Date.now());
   const previousLeaves = previous.leaves ?? [];
-  const sprint4DemoLeaves = seed.leaves.filter((item) =>
-    item.id.startsWith("leave-") && !previousLeaves.some((saved) => saved.id === item.id),
+  const sprint4DemoLeaves = seed.leaves.filter(
+    (item) =>
+      item.id.startsWith("leave-") &&
+      !previousLeaves.some((saved) => saved.id === item.id),
   );
   const previousLeaveOperations = previous.leaveSyncOperations ?? [];
-  const previousIncidents = previous.incidents ?? [];
+  const previousIncidents = (previous.incidents ?? []).filter((incident) =>
+    Boolean(incident.affectedSwapperId),
+  );
   const migrated = {
     ...seed,
     ...previous,
@@ -73,14 +77,15 @@ function migrateDb(candidate: unknown): MockDb | null {
     leaveBalances: previous.leaveBalances ?? seed.leaveBalances,
     leaveSyncOperations: [
       ...previousLeaveOperations,
-      ...seed.leaveSyncOperations.filter((item) =>
-        !previousLeaveOperations.some((saved) => saved.id === item.id),
+      ...seed.leaveSyncOperations.filter(
+        (item) =>
+          !previousLeaveOperations.some((saved) => saved.id === item.id),
       ),
     ],
     incidents: [
       ...previousIncidents,
-      ...seed.incidents.filter((item) =>
-        !previousIncidents.some((saved) => saved.id === item.id),
+      ...seed.incidents.filter(
+        (item) => !previousIncidents.some((saved) => saved.id === item.id),
       ),
     ],
     notificationPreferences:

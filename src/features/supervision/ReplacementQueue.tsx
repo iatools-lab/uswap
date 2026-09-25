@@ -12,10 +12,15 @@ import {
 import "./supervision.css";
 
 const ORIGIN_LABEL: Record<PendingReplacement["origin"], string> = {
-  DECLARATION: "Déclaration du swappeur",
-  AUTOMATIC_ABSENCE: "Absence automatique",
-  APPROVED_LEAVE: "Congé approuvé",
+  DECLARATION: "Signalée par le swappeur",
+  AUTOMATIC_ABSENCE: "Détectée automatiquement",
+  APPROVED_LEAVE: "Déclenchée par un congé approuvé",
 };
+
+const cleanReason = (row: PendingReplacement) =>
+  (row.reason || "Couverture requise")
+    .replace(/^Absence automatique\s*:\s*/i, "")
+    .replace(/^./, (letter) => letter.toUpperCase());
 
 export function ReplacementQueue({
   onSelect,
@@ -72,6 +77,28 @@ export function ReplacementQueue({
         )}
       </div>
 
+      <details className="coverage-process">
+        <summary>Comment cette file fonctionne-t-elle ?</summary>
+        <ol>
+          <li>
+            Une absence est signalée, détectée après un pointage manquant ou
+            issue d’un congé approuvé.
+          </li>
+          <li>
+            Le shift rejoint cette file tant qu’aucun remplaçant compatible
+            n’est confirmé.
+          </li>
+          <li>
+            « Affecter » propose uniquement les swappeurs actifs de la même
+            station et vérifie leurs contraintes.
+          </li>
+          <li>
+            Après confirmation, les deux swappeurs sont notifiés et le shift
+            disparaît de la file.
+          </li>
+        </ol>
+      </details>
+
       {!rows.length ? (
         <div className="admin-empty">
           <h3>Aucun shift à couvrir</h3>
@@ -103,8 +130,8 @@ export function ReplacementQueue({
                   {formatDateTime(row.startTime, row.station.timezone)}
                 </time>
                 <span className="supervision-origin">
-                  {ORIGIN_LABEL[row.origin]}
-                  {row.reason ? ` · ${row.reason}` : ""}
+                  <strong>{ORIGIN_LABEL[row.origin]}</strong>
+                  <span>{cleanReason(row)}</span>
                 </span>
               </div>
               <button
@@ -229,50 +256,50 @@ export function ReplacementDialog({
               })
               .sort((a, b) => Number(b.eligible) - Number(a.eligible))
               .map((candidate) => {
-            const classes = [
-              "supervision-candidate",
-              candidate.id === selected
-                ? "supervision-candidate--selected"
-                : "",
-              candidate.eligible ? "" : "supervision-candidate--blocked",
-            ]
-              .filter(Boolean)
-              .join(" ");
-            return (
-              <label key={candidate.id} className={classes}>
-                <input
-                  type="radio"
-                  name="replacement"
-                  value={candidate.id}
-                  checked={selected === candidate.id}
-                  disabled={!candidate.eligible}
-                  onChange={() => setSelected(candidate.id)}
-                />
-                <span>
-                  <strong>{candidate.fullName}</strong>
-                  <small>{candidate.email}</small>
-                </span>
-                <span>
-                  <span
-                    className={`attendance-status ${
-                      candidate.eligible
-                        ? "attendance-status--present"
-                        : "attendance-status--absent"
-                    }`}
-                  >
-                    {candidate.eligible ? "Disponible" : "Incompatible"}
-                  </span>
-                  {!!candidate.issues.length && (
-                    <ul className="supervision-candidate__issues">
-                      {candidate.issues.map((issue) => (
-                        <li key={issue.code}>{issue.message}</li>
-                      ))}
-                    </ul>
-                  )}
-                </span>
-              </label>
-            );
-            })}
+                const classes = [
+                  "supervision-candidate",
+                  candidate.id === selected
+                    ? "supervision-candidate--selected"
+                    : "",
+                  candidate.eligible ? "" : "supervision-candidate--blocked",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
+                return (
+                  <label key={candidate.id} className={classes}>
+                    <input
+                      type="radio"
+                      name="replacement"
+                      value={candidate.id}
+                      checked={selected === candidate.id}
+                      disabled={!candidate.eligible}
+                      onChange={() => setSelected(candidate.id)}
+                    />
+                    <span>
+                      <strong>{candidate.fullName}</strong>
+                      <small>{candidate.email}</small>
+                    </span>
+                    <span>
+                      <span
+                        className={`attendance-status ${
+                          candidate.eligible
+                            ? "attendance-status--present"
+                            : "attendance-status--absent"
+                        }`}
+                      >
+                        {candidate.eligible ? "Disponible" : "Incompatible"}
+                      </span>
+                      {!!candidate.issues.length && (
+                        <ul className="supervision-candidate__issues">
+                          {candidate.issues.map((issue) => (
+                            <li key={issue.code}>{issue.message}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
           </div>
         </>
       )}
