@@ -42,8 +42,10 @@ export class OperationsService {
   /**
    * A supervisor sees the stations attached to their account.
    * A station chief is restricted to their own station only.
+   *
+   * Public so the workspace module applies the exact same scoping rules.
    */
-  private async resolveAccessibleStationIds(
+  async resolveAccessibleStationIds(
     userId: string,
   ): Promise<{
     unrestricted: boolean;
@@ -99,6 +101,16 @@ export class OperationsService {
       return {
         unrestricted: false,
         stationIds: [...stationIds],
+      };
+    }
+
+    if (user.role === Role.SWAPPER) {
+      // A swapper only ever sees their own shifts; the workspace service
+      // additionally filters on swapperId. Their station (when set) scopes
+      // the header, an empty list means "no station reachable".
+      return {
+        unrestricted: false,
+        stationIds: user.stationId ? [user.stationId] : [],
       };
     }
 

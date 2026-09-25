@@ -711,7 +711,18 @@ status,
 }
 : undefined,
 include: {
-shift: true,
+shift: {
+include: {
+station: {
+select: {
+id: true,
+name: true,
+timezone: true,
+latenessToleranceMinutes: true,
+},
+},
+},
+},
 station: true,
 swapper: {
 select: {
@@ -912,7 +923,18 @@ return this.prisma.attendance.findMany({
     ...(status ? { status } : {}),
   },
   include: {
-    shift: true,
+    shift: {
+      include: {
+        station: {
+          select: {
+            id: true,
+            name: true,
+            timezone: true,
+            latenessToleranceMinutes: true,
+          },
+        },
+      },
+    },
     swapper: {
       select: {
         id: true,
