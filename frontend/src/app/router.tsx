@@ -14,6 +14,9 @@ const AccountAccessPage = lazy(() =>
   import("../pages/AccountAccessPage").then((m) => ({ default: m.AccountAccessPage })),
 );
 const AccountPage = lazy(() => import("../pages/AccountPage").then((m) => ({ default: m.AccountPage })));
+const DashboardPage = lazy(() =>
+  import("../pages/role/DashboardPage").then((m) => ({ default: m.DashboardPage })),
+);
 
 const AdminHomePage = lazy(() =>
   import("../pages/admin/AdminHomePage").then((m) => ({ default: m.AdminHomePage })),
@@ -82,6 +85,7 @@ export function AppRoutes() {
         <Route path="utilisateurs/:id" element={page(<UserDetailPage />)} />
         <Route path="stations" element={page(<StationsPage />)} />
         <Route path="plannings" element={page(<AdminPlannerPage />)} />
+        <Route path="tableau-de-bord" element={page(<DashboardPage />)} />
         <Route path="compte" element={page(<AccountPage />)} />
         <Route path="*" element={<Navigate to={rolePaths.ADMIN} replace />} />
       </Route>
@@ -93,6 +97,7 @@ export function AppRoutes() {
           element={<RequireAuth role={role}>{page(<RoleShell />)}</RequireAuth>}
         >
           <Route index element={page(<OperationsPage />)} />
+          <Route path="tableau-de-bord" element={page(<DashboardPage />)} />
           <Route path="plannings" element={page(<RolePlannerPage />)} />
           <Route path="compte" element={page(<AccountPage />)} />
           <Route path="*" element={<RoleCatchAll role={role} />} />

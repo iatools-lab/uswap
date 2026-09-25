@@ -16,6 +16,8 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { OperationsModule } from './operations/operations.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 import { CorrectionsModule } from './corrections/corrections.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
 imports: [
@@ -33,6 +35,8 @@ AttendanceModule,
 OperationsModule,
 WorkspaceModule,
 CorrectionsModule,
+NotificationsModule,
+DashboardModule,
 
 ],
 controllers: [AppController],

@@ -7,7 +7,7 @@ import { interceptNav } from "../app/spaNav";
 import { RouteFallback } from "../app/RouteFallback";
 import { useSession } from "../app/session";
 import { roles, rolePaths } from "../api/auth-api";
-import { Clock3, LayoutDashboard, UserRound, Zap } from "../ui/icons";
+import { ChartLineUp, Clock3, LayoutDashboard, UserRound, Zap } from "../ui/icons";
 import "../styles/admin.css";
 
 export function RoleShell() {
@@ -19,6 +19,7 @@ export function RoleShell() {
 
   const planning = location.pathname.endsWith("/plannings");
   const account = location.pathname.endsWith("/compte");
+  const dashboard = location.pathname.endsWith("/tableau-de-bord");
   const title =
     session.user.role === "SUPERVISOR"
       ? "Supervision"
@@ -28,8 +29,8 @@ export function RoleShell() {
   const homePath = rolePaths[session.user.role];
 
   useEffect(() => {
-    document.title = `${account ? "Paramètres du compte" : planning ? "Plannings" : title} · uSwap`;
-  }, [account, planning, title]);
+    document.title = `${account ? "Paramètres du compte" : planning ? "Plannings" : dashboard ? "Tableau de bord" : title} · uSwap`;
+  }, [account, planning, dashboard, title]);
 
   function goHome(event: React.MouseEvent<HTMLAnchorElement>) {
     interceptNav(event, navigate, homePath);
@@ -42,6 +43,10 @@ export function RoleShell() {
   function goPlannings(event: React.MouseEvent<HTMLAnchorElement>) {
     if (planning) setPlanningResetKey((n) => n + 1);
     interceptNav(event, navigate, `${homePath}/plannings`);
+  }
+
+  function goDashboard(event: React.MouseEvent<HTMLAnchorElement>) {
+    interceptNav(event, navigate, `${homePath}/tableau-de-bord`);
   }
 
   return (
@@ -67,10 +72,18 @@ export function RoleShell() {
           <a
             href={homePath}
             onClick={goHome}
-            aria-current={!account && !planning ? "page" : undefined}
+            aria-current={!account && !planning && !dashboard ? "page" : undefined}
           >
             <LayoutDashboard />
             {title}
+          </a>
+          <a
+            href={`${homePath}/tableau-de-bord`}
+            onClick={goDashboard}
+            aria-current={dashboard ? "page" : undefined}
+          >
+            <ChartLineUp />
+            Tableau de bord
           </a>
           <a
             href={`${homePath}/plannings`}

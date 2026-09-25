@@ -1,5 +1,6 @@
 import {
   AttendanceStatus,
+  NotificationKind,
   PlanningStatus,
   ReplacementStatus,
   Role,
@@ -15,6 +16,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { SchedulingEngineService } from '../scheduling/scheduling-engine.service';
 import { getDurationInHours } from '../scheduling/scheduling.utils';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export const REPLACEMENT_SOURCE = {
   DECLARATION: 'DECLARATION',
@@ -33,6 +35,7 @@ export class OperationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly schedulingEngine: SchedulingEngineService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ============================================================
@@ -219,11 +222,64 @@ export class OperationsService {
       },
     });
 
+    // Both origins (declared impediment and automatic absence) funnel through
+    // here, so supervision is told exactly once either way.
+    await this.notifySupervisionOfOpenRequest({
+      requestId: created.id,
+      shiftId: params.shiftId,
+      source: params.source,
+      reason: params.reason ?? null,
+      originalSwapperId: params.originalSwapperId,
+    });
+
     return {
       created: true,
       requestId: created.id,
       status: created.status,
     };
+  }
+
+  /**
+   * Tells the supervisors and station chiefs who can act on a newly opened
+   * replacement request.
+   */
+  private async notifySupervisionOfOpenRequest(params: {
+    requestId: string;
+    shiftId: string;
+    source: ReplacementSource;
+    reason: string | null;
+    originalSwapperId: string;
+  }): Promise<void> {
+    const shift = await this.prisma.shift.findUnique({
+      where: { id: params.shiftId },
+      select: {
+        stationId: true,
+        startTime: true,
+        station: { select: { name: true } },
+        swapper: { select: { fullName: true } },
+      },
+    });
+
+    if (!shift) return;
+
+    const isAutomatic =
+      params.source === REPLACEMENT_SOURCE.AUTOMATIC_ABSENCE;
+
+    const when = shift.startTime.toISOString().slice(0, 16).replace('T', ' ');
+
+    await this.notifications.notifyRoles({
+      roles: [Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF],
+      stationIds: [shift.stationId],
+      kind: NotificationKind.REPLACEMENT_REQUESTED,
+      title: isAutomatic
+        ? `Absence constatée — ${shift.station.name}`
+        : `Empêchement déclaré — ${shift.station.name}`,
+      body: isAutomatic
+        ? `Aucun pointage enregistré pour ${shift.swapper.fullName} (${when}). Un remplaçant est nécessaire.`
+        : `${shift.swapper.fullName} ne peut plus assurer le shift du ${when}. Motif : ${params.reason ?? 'non précisé'}.`,
+      link: '/app/supervision/operations',
+      entityId: params.requestId,
+    });
   }
 
   /**
@@ -817,6 +873,18 @@ export class OperationsService {
       };
     });
 
+    // Notifications go out after the transaction commits: a rollback must
+    // never leave a message claiming a change that did not happen.
+    await this.notifyReplacementAssigned({
+      shiftId: shift.id,
+      previousSwapperId: shift.swapperId,
+      newSwapperId: params.swapperId,
+      newSwapperName: result.shift.swapper.fullName,
+      stationId: shift.stationId,
+      startTime: shift.startTime,
+      reason,
+    });
+
     return {
       message: 'Replacement assigned successfully.',
       shiftId: result.shift.id,
@@ -831,5 +899,60 @@ export class OperationsService {
         ? ReplacementStatus.RESOLVED
         : null,
     };
+  }
+
+  /**
+   * Tells the incoming swapper they now work the shift, tells the outgoing
+   * one they are released, and closes the loop with supervision.
+   */
+  private async notifyReplacementAssigned(params: {
+    shiftId: string;
+    previousSwapperId: string;
+    newSwapperId: string;
+    newSwapperName: string;
+    stationId: string;
+    startTime: Date;
+    reason: string;
+  }): Promise<void> {
+    const station = await this.prisma.station.findUnique({
+      where: { id: params.stationId },
+      select: { name: true },
+    });
+
+    const when = params.startTime
+      .toISOString()
+      .slice(0, 16)
+      .replace('T', ' ');
+
+    // The incoming swapper — the most important message of the three.
+    await this.notifications.notify({
+      userId: params.newSwapperId,
+      kind: NotificationKind.REPLACEMENT_ASSIGNED,
+      title: 'Nouveau shift qui vous est affecté',
+      body: `Vous remplacez sur ${station?.name ?? 'la station'} le ${when}. Motif : ${params.reason}.`,
+      link: '/app/supervision/operations',
+      entityId: params.shiftId,
+    });
+
+    // The outgoing swapper is released from the shift.
+    await this.notifications.notify({
+      userId: params.previousSwapperId,
+      kind: NotificationKind.SHIFT_CHANGED,
+      title: 'Vous êtes déchargé de ce shift',
+      body: `${params.newSwapperName} assure désormais le shift du ${when} à ${station?.name ?? 'la station'}.`,
+      link: '/app/supervision/operations',
+      entityId: params.shiftId,
+    });
+
+    // Supervision gets the confirmation.
+    await this.notifications.notifyRoles({
+      roles: [Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF],
+      stationIds: [params.stationId],
+      kind: NotificationKind.SHIFT_CHANGED,
+      title: 'Remplacement effectué',
+      body: `${params.newSwapperName} couvre le shift du ${when} à ${station?.name ?? 'la station'}.`,
+      link: '/app/supervision/operations',
+      entityId: params.shiftId,
+    });
   }
 }

@@ -62,6 +62,14 @@ enum ShiftChangeType {
   TIME_CHANGE
 }
 
+enum NotificationKind {
+  REPLACEMENT_REQUESTED
+  REPLACEMENT_ASSIGNED
+  SHIFT_CHANGED
+  ABSENCE_RECORDED
+  ACCOUNT_ACTIVATED
+}
+
 model User {
   id          String  @id @default(uuid())
   fullName    String
@@ -96,6 +104,8 @@ model User {
   shiftChangesMade     ShiftChange[] @relation("ShiftChangeMadeBy")
   previousShiftChanges ShiftChange[] @relation("PreviousSwapper")
   newShiftChanges      ShiftChange[] @relation("NewSwapper")
+
+  notifications Notification[]
 
   auditLogs UserAuditLog[] @relation("AuditedUser")
 
@@ -445,5 +455,29 @@ model UserAuditLog {
   createdAt DateTime @default(now())
 
   @@index([userId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind  NotificationKind
+  title String
+  body  String
+
+  /// Optional deep-link target, e.g. /app/supervision/operations
+  link String?
+
+  /// Business reference (shift id, replacement request id...) for tracing.
+  entityId String?
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
   @@index([createdAt])
 }

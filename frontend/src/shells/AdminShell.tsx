@@ -6,11 +6,12 @@ import { PlanningInbox } from "../features/inbox/PlanningInbox";
 import { interceptNav } from "../app/spaNav";
 import { RouteFallback } from "../app/RouteFallback";
 import { useSession } from "../app/session";
-import { Building2, Clock3, LayoutDashboard, UserRound, Users, Zap } from "../ui/icons";
+import { Building2, ChartLineUp, Clock3, LayoutDashboard, UserRound, Users, Zap } from "../ui/icons";
 import "../styles/admin.css";
 
 const sections = [
   { path: "/app/admin", label: "Accueil", Icon: LayoutDashboard },
+  { path: "/app/admin/tableau-de-bord", label: "Tableau de bord", Icon: ChartLineUp },
   { path: "/app/admin/utilisateurs", label: "Utilisateurs", Icon: Users },
   { path: "/app/admin/stations", label: "Stations", Icon: Building2 },
   { path: "/app/admin/plannings", label: "Plannings", Icon: Clock3 },

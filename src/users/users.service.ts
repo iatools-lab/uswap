@@ -51,7 +51,7 @@ export class UsersService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
-    const [data, total] = await Promise.all([
+    const [data, total, all, active, pending] = await Promise.all([
       this.prisma.user.findMany({
         where,
         select: SAFE_SELECT,
@@ -60,6 +60,11 @@ export class UsersService {
         take: limit,
       }),
       this.prisma.user.count({ where }),
+      // Counts are computed over the whole directory, not the filtered page,
+      // so the admin home cards stay stable while filters change.
+      this.prisma.user.count(),
+      this.prisma.user.count({ where: { isActive: true } }),
+      this.prisma.user.count({ where: { isActive: false } }),
     ]);
 
     return {
@@ -68,6 +73,12 @@ export class UsersService {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
+      statusCounts: {
+        all,
+        active,
+        pending,
+        inactive: pending,
+      },
     };
   }
 

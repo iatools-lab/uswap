@@ -5,9 +5,10 @@ import { OperationsService } from './operations.service';
 
 import { PrismaModule } from '../prisma/prisma.module';
 import { SchedulingModule } from '../scheduling/scheduling.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [PrismaModule, SchedulingModule],
+  imports: [PrismaModule, SchedulingModule, NotificationsModule],
   controllers: [OperationsController],
   providers: [OperationsService],
   exports: [OperationsService],

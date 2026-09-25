@@ -38,6 +38,14 @@ export class UsersController {
   }
 
   @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @Get('page')
+  findPage(@Query() query: QueryUsersDto) {
+    // Alias kept for the admin home, which reads `statusCounts` from this
+    // route. Same payload as GET /users.
+    return this.usersService.findAll(query);
+  }
+
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
