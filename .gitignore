@@ -6,6 +6,7 @@ generated/
 !.env.example
 *.log
 coverage/
+uploads/
 .agents/
 .claude/
 .cursor/

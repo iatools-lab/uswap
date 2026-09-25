@@ -42,7 +42,11 @@ export class AuthService {
       throw new BadRequestException('Cet e-mail est déjà utilisé');
     }
 
-    if (dto.sendInvite) {
+    // The UI sends `accountStatus`; `sendInvite` is the legacy switch. Both
+    // mean "create an inactive account that must be activated by e-mail".
+    const wantsInvitation = dto.sendInvite || dto.accountStatus === 'PENDING';
+
+    if (wantsInvitation) {
       const placeholderPassword = await bcrypt.hash(
         crypto.randomBytes(32).toString('hex'),
         AuthService.BCRYPT_ROUNDS,

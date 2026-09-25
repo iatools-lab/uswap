@@ -6,6 +6,8 @@ import {
 
 import { PrismaService } from '../prisma/prisma.service';
 
+import { PlanningStatus } from '@prisma/client';
+
 import { SchedulingEngineService } from '../scheduling/scheduling-engine.service';
 
 import { CreateShiftDto } from './dto/create-shift.dto';
@@ -133,6 +135,16 @@ export class ShiftsService {
     return this.prisma.shift.findMany({
       where: {
         swapperId,
+        // Only shifts on a PUBLISHED planning are actionable: they are the
+        // ones shown in the workspace, and the only ones an impediment can
+        // be declared on. Returning draft or orphaned shifts here made the
+        // two screens disagree and produced a 400 on declaration.
+        planning: {
+          status: PlanningStatus.PUBLISHED,
+        },
+        endTime: {
+          gt: new Date(),
+        },
       },
 
       include: {

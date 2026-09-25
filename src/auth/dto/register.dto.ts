@@ -3,6 +3,7 @@ import {
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -66,4 +67,16 @@ export class RegisterDto {
   @IsOptional()
   @IsBoolean()
   sendInvite?: boolean;
+
+  @ApiProperty({
+    required: false,
+    enum: ['ACTIVE', 'PENDING'],
+    default: 'PENDING',
+    description:
+      'Etat initial du compte. ACTIVE exige un mot de passe et rend le compte ' +
+      'immediatement connectable.',
+  })
+  @IsOptional()
+  @IsIn(['ACTIVE', 'PENDING'])
+  accountStatus?: 'ACTIVE' | 'PENDING';
 }
