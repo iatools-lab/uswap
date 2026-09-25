@@ -105,14 +105,8 @@ export const incidentRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/incidents$/,
     handler: ({ db, user, body, now }) => {
-      const actor = requireRole(requireUser(db, user), [
-        "SUPERVISOR",
-        "STATION_CHIEF",
-      ]);
-      const stationId =
-        actor.role === "STATION_CHIEF"
-          ? actor.stationId
-          : String(body.stationId ?? "");
+      const actor = requireRole(requireUser(db, user), ["STATION_CHIEF"]);
+      const stationId = actor.stationId;
       if (!stationId || !db.stations.some((item) => item.id === stationId))
         throw new MockHttpError(400, "Sélectionnez une station valide.");
       const affectedSwapperId = String(body.affectedSwapperId ?? "");

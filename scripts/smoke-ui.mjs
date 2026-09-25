@@ -330,13 +330,31 @@ await exercise(
     await page
       .getByRole("heading", { name: "Incidents concernant les swappeurs" })
       .waitFor();
+    assert.equal(
+      await page.getByRole("button", { name: "Déclarer un incident" }).count(),
+      0,
+      "Le superviseur traite les incidents mais ne les déclare pas",
+    );
     await page
       .getByRole("button", { name: /Chute légère pendant la prise de poste/ })
       .click();
     await page
       .getByRole("heading", { name: "Chute légère pendant la prise de poste" })
       .waitFor();
-    await page.getByRole("button", { name: "Fermer", exact: true }).click();
+    const incidentReview = page.getByRole("dialog", {
+      name: "Chute légère pendant la prise de poste",
+    });
+    await incidentReview
+      .getByRole("button", { name: "Prochaine étape" })
+      .click();
+    await page.getByRole("option", { name: "En traitement" }).click();
+    await incidentReview
+      .getByLabel("Compte rendu")
+      .fill("Suivi opérationnel engagé avec le chef de station.");
+    await incidentReview
+      .getByRole("button", { name: "Enregistrer le suivi" })
+      .click();
+    await incidentReview.waitFor({ state: "detached" });
     const replaceButtons = page.getByRole("button", {
       name: "Affecter",
       exact: true,
@@ -462,8 +480,24 @@ await exercise(
       "Un incident incomplet doit être bloqué",
     );
     await incidentDialog
-      .getByRole("button", { name: "Fermer la fenêtre" })
+      .getByRole("button", { name: "Swappeur concerné" })
       .click();
+    await page.getByRole("option").first().click();
+    await incidentDialog
+      .getByPlaceholder(/Malaise pendant/)
+      .fill("Incident de recette terrain");
+    await incidentDialog
+      .getByPlaceholder(/Précisez ce que le swappeur/)
+      .fill(
+        "Le chef de station documente une situation concernant un swappeur de son équipe.",
+      );
+    await incidentDialog
+      .getByRole("button", { name: "Transmettre l’incident" })
+      .click();
+    await incidentDialog.waitFor({ state: "detached" });
+    await page
+      .getByRole("button", { name: /Incident de recette terrain/ })
+      .waitFor();
     await page
       .getByRole("heading", { name: /pointages/i })
       .last()
@@ -595,6 +629,21 @@ await exercise(
       "Une demande incomplète doit rester bloquée",
     );
     await page.getByRole("button", { name: "Fermer la fenêtre" }).click();
+    const cancelLeave = page
+      .locator(".leave-actions")
+      .getByRole("button", { name: "Annuler", exact: true })
+      .first();
+    if (await cancelLeave.count()) {
+      await cancelLeave.click();
+      const cancelDialog = page.getByRole("dialog", {
+        name: "Annuler cette demande ?",
+      });
+      await cancelDialog.waitFor();
+      await cancelDialog
+        .getByRole("button", { name: "Conserver la demande" })
+        .click();
+      await cancelDialog.waitFor({ state: "detached" });
+    }
     await page.getByRole("heading", { name: "Absence imprévue" }).waitFor();
     await page
       .getByText("Signaler une indisponibilité liée à un shift déjà planifié")
@@ -709,8 +758,8 @@ await migrationPage.evaluate(() => {
   const current = JSON.parse(
     localStorage.getItem("uswap.mock.db.v11") || "null",
   );
-  if (!current) throw new Error("Base v10 absente avant le test de migration");
-  current.version = 9;
+  if (!current) throw new Error("Base v11 absente avant le test de migration");
+  current.version = 10;
   current.plannings[0].name = "Planning conservé par migration";
   delete current.leaveBalances;
   delete current.leaveSyncOperations;

@@ -77,9 +77,11 @@ const date = (value: string) =>
 
 export function IncidentCenter({
   canManage,
+  canReport = false,
   stationId,
 }: {
   canManage: boolean;
+  canReport?: boolean;
   stationId?: string | null;
 }) {
   const [data, setData] = useState<Data | null>(null);
@@ -120,17 +122,20 @@ export function IncidentCenter({
           <span className="incident-eyebrow">Pilotage opérationnel</span>
           <h2>Incidents concernant les swappeurs</h2>
           <p>
-            Signalez une situation rencontrée par un swappeur, suivez sa prise
-            en charge et conservez une trace claire de sa résolution.
+            {canReport
+              ? "Déclarez les situations constatées dans votre station et suivez leur prise en charge."
+              : "Analysez les signalements des stations, documentez les actions menées et clôturez leur traitement."}
           </p>
         </div>
-        <button
-          className="admin-button primary-cta"
-          onClick={() => setCreateOpen(true)}
-        >
-          <PlusIcon />
-          Déclarer un incident
-        </button>
+        {canReport && (
+          <button
+            className="admin-button primary-cta"
+            onClick={() => setCreateOpen(true)}
+          >
+            <PlusIcon />
+            Déclarer un incident
+          </button>
+        )}
       </div>
       <div className="incident-kpis">
         <article>
@@ -237,17 +242,19 @@ export function IncidentCenter({
           </div>
         )}
       </div>
-      <IncidentCreate
-        open={createOpen}
-        stations={data.stations}
-        swappers={data.swappers}
-        fixedStationId={stationId}
-        onClose={() => setCreateOpen(false)}
-        onSaved={() => {
-          setCreateOpen(false);
-          setRevision((v) => v + 1);
-        }}
-      />
+      {canReport && (
+        <IncidentCreate
+          open={createOpen}
+          stations={data.stations}
+          swappers={data.swappers}
+          fixedStationId={stationId}
+          onClose={() => setCreateOpen(false)}
+          onSaved={() => {
+            setCreateOpen(false);
+            setRevision((v) => v + 1);
+          }}
+        />
+      )}
       <IncidentDetail
         key={selected?.id}
         incident={selected}

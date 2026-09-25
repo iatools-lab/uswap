@@ -71,7 +71,17 @@ export function assertDbInvariants(db: MockDb): void {
   }
 
   for (const incident of db.incidents) {
-    if (!stations.has(incident.stationId) || !users.has(incident.reporterId))
+    const reporter = db.users.find((item) => item.id === incident.reporterId);
+    const affectedSwapper = db.users.find(
+      (item) => item.id === incident.affectedSwapperId,
+    );
+    if (
+      !stations.has(incident.stationId) ||
+      reporter?.role !== "STATION_CHIEF" ||
+      reporter.stationId !== incident.stationId ||
+      affectedSwapper?.role !== "SWAPPER" ||
+      affectedSwapper.stationId !== incident.stationId
+    )
       throw new Error(
         `Invariant violé : périmètre d'incident invalide (${incident.id}).`,
       );

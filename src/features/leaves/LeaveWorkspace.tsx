@@ -59,6 +59,9 @@ export function LeaveWorkspace({
   const [editing, setEditing] = useState<LeaveRequestView | null | undefined>(
     undefined,
   );
+  const [cancelTarget, setCancelTarget] = useState<LeaveRequestView | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const balance = data.balance;
@@ -75,7 +78,6 @@ export function LeaveWorkspace({
   );
 
   async function cancel(request: LeaveRequestView) {
-    if (!window.confirm("Annuler cette demande de congé ?")) return;
     setBusy(true);
     setError("");
     try {
@@ -83,6 +85,7 @@ export function LeaveWorkspace({
         request.id,
         createIdempotencyKey("leave-cancel"),
       );
+      setCancelTarget(null);
       onChanged();
     } catch (reason) {
       setError((reason as Error).message);
@@ -218,7 +221,7 @@ export function LeaveWorkspace({
                         <button
                           className="danger"
                           disabled={busy}
-                          onClick={() => void cancel(request)}
+                          onClick={() => setCancelTarget(request)}
                         >
                           <XCircleIcon /> Annuler
                         </button>
@@ -241,6 +244,44 @@ export function LeaveWorkspace({
           onChanged();
         }}
       />
+      <Modal
+        open={Boolean(cancelTarget)}
+        onClose={() => !busy && setCancelTarget(null)}
+        title="Annuler cette demande ?"
+        subtitle={
+          cancelTarget
+            ? `${TYPES[cancelTarget.type]} · du ${displayDate(cancelTarget.startTime)} au ${displayDate(cancelTarget.endTime)}`
+            : undefined
+        }
+        footer={
+          <>
+            <button
+              className="admin-button secondary"
+              disabled={busy}
+              onClick={() => setCancelTarget(null)}
+            >
+              Conserver la demande
+            </button>
+            <button
+              className="admin-button danger"
+              disabled={busy || !cancelTarget}
+              onClick={() => cancelTarget && void cancel(cancelTarget)}
+            >
+              {busy && <SpinnerGapIcon className="spin" />}
+              Confirmer l’annulation
+            </button>
+          </>
+        }
+      >
+        <div className="leave-cancel-confirmation">
+          <WarningCircleIcon aria-hidden="true" />
+          <p>
+            La demande sera marquée comme annulée et votre disponibilité sera
+            resynchronisée avec le planning. Cette action restera visible dans
+            votre historique.
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 }

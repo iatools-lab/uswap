@@ -714,3 +714,26 @@
   font-size: 11px;
   font-weight: 400;
 }
+.leave-cancel-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #f1d5c8;
+  border-radius: 14px;
+  background: #fff8f4;
+  color: #5d3425;
+}
+
+.leave-cancel-confirmation svg {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  color: #d64b22;
+}
+
+.leave-cancel-confirmation p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+}

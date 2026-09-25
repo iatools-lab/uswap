@@ -67,8 +67,17 @@ function migrateDb(candidate: unknown): MockDb | null {
       !previousLeaves.some((saved) => saved.id === item.id),
   );
   const previousLeaveOperations = previous.leaveSyncOperations ?? [];
-  const previousIncidents = (previous.incidents ?? []).filter((incident) =>
-    Boolean(incident.affectedSwapperId),
+  const chiefStations = new Map(
+    previous.users
+      .filter(
+        (item) => item.role === "STATION_CHIEF" && Boolean(item.stationId),
+      )
+      .map((item) => [item.id, item.stationId]),
+  );
+  const previousIncidents = (previous.incidents ?? []).filter(
+    (incident) =>
+      Boolean(incident.affectedSwapperId) &&
+      chiefStations.get(incident.reporterId) === incident.stationId,
   );
   const migrated = {
     ...seed,

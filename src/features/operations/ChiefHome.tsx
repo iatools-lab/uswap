@@ -82,7 +82,7 @@ export function ChiefHome({ user, data }: OperationsViewProps) {
         )}
       </section>
 
-      <IncidentCenter canManage={false} stationId={user.stationId} />
+      <IncidentCenter canManage={false} canReport stationId={user.stationId} />
     </>
   );
 }
