@@ -6,7 +6,7 @@ import type { ShiftChange, SupervisionProps } from "./types";
 
 const TYPE_LABEL: Record<ShiftChange["type"], string> = {
   REPLACEMENT: "Remplacement",
-  PERMUTATION: "Permutation",
+  SWAP: "Permutation",
   REASSIGNMENT: "Réaffectation",
 };
 
@@ -123,7 +123,7 @@ export function ChangeHistory({ user }: SupervisionProps) {
           >
             <option value="">Tous</option>
             <option value="REPLACEMENT">Remplacement</option>
-            <option value="PERMUTATION">Permutation</option>
+            <option value="SWAP">Permutation</option>
             <option value="REASSIGNMENT">Réaffectation</option>
           </select>
         </label>

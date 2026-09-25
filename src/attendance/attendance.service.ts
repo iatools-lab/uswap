@@ -13,10 +13,17 @@ UnauthorizedException,
 import { createHash, randomBytes } from 'crypto';
 
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  OperationsService,
+  REPLACEMENT_SOURCE,
+} from '../operations/operations.service';
 
 @Injectable()
 export class AttendanceService {
-constructor(private readonly prisma: PrismaService) {}
+constructor(
+  private readonly prisma: PrismaService,
+  private readonly operationsService: OperationsService,
+) {}
 
 // ============================================================
 // GENERATE ATTENDANCE QR
@@ -1263,14 +1270,61 @@ for (const shift of completedShifts) {
       },
     });
 
-  updatedCount +=
+  const absentCount =
     expectedResult.count +
     missingCheckoutResult.count;
+
+  // An automatically detected absence must feed the replacement queue,
+  // otherwise no one is asked to cover the shift. A declared impediment
+  // is not an absence, so the two remain distinguishable via `source`.
+  if (absentCount > 0) {
+    await this.openReplacementForAbsence(shift.id);
+  }
+
+  updatedCount += absentCount;
 }
 
 return {
   updatedCount,
 };
 
+}
+
+// ============================================================
+// OPEN A REPLACEMENT REQUEST FOR AN AUTOMATIC ABSENCE
+// ============================================================
+
+private async openReplacementForAbsence(
+  shiftId: string,
+): Promise<void> {
+  const shift =
+    await this.prisma.shift.findUnique({
+      where: {
+        id: shiftId,
+      },
+      select: {
+        id: true,
+        swapperId: true,
+      },
+    });
+
+  if (!shift) {
+    return;
+  }
+
+  try {
+    await this.operationsService.openReplacementRequest({
+      shiftId: shift.id,
+      originalSwapperId: shift.swapperId,
+      requestedById: shift.swapperId,
+      reason:
+        'No check-in was recorded before the shift ended.',
+      source: REPLACEMENT_SOURCE.AUTOMATIC_ABSENCE,
+    });
+  } catch {
+    // The absence itself is already recorded. A failure to open the
+    // replacement request must not roll back or crash the scheduler;
+    // the next run will retry.
+  }
 }
 }

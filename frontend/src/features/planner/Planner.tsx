@@ -180,26 +180,26 @@ startDay === endDay &&
 startMonth === endMonth &&
 startYear === endYear
 ) {
-return Le ${two(startDay)}/${two(startMonth)}/${startYear};
+return `Le ${two(startDay)}/${two(startMonth)}/${startYear}`;
 }
 
 if (startYear === endYear && startMonth === endMonth) {
-return Du ${two(startDay)} au ${two(endDay)}/${two( startMonth, )}/${startYear};
+return `Du ${two(startDay)} au ${two(endDay)}/${two(startMonth)}/${startYear}`;
 }
 
 if (startYear === endYear) {
-return Du ${two(startDay)}/${two(startMonth)} au ${two( endDay, )}/${two(endMonth)}/${endYear};
+return `Du ${two(startDay)}/${two(startMonth)} au ${two(endDay)}/${two(endMonth)}/${endYear}`;
 }
 
-return Du ${two(startDay)}/${two(startMonth)}/${startYear} au ${two( endDay, )}/${two(endMonth)}/${endYear};
+return `Du ${two(startDay)}/${two(startMonth)}/${startYear} au ${two(endDay)}/${two(endMonth)}/${endYear}`;
 }
 
 function normalizeEndDate(value: string) {
-return ${value}T23:59:59.999+01:00;
+return `${value}T23:59:59.999+01:00`;
 }
 
 function normalizeStartDate(value: string) {
-return ${value}T00:00:00.000+01:00;
+return `${value}T00:00:00.000+01:00`;
 }
 
 function createShiftDate(
@@ -207,7 +207,7 @@ date: string,
 time: string,
 isNightEnd: boolean,
 ) {
-const base = new Date(${date}T${time}:00+01:00);
+const base = new Date(`${date}T${time}:00+01:00`);
 
 if (isNightEnd) {
 base.setDate(base.getDate() + 1);
@@ -218,8 +218,8 @@ return base.toISOString();
 
 function getDatesBetween(start: string, end: string) {
 const result: string[] = [];
-const cursor = new Date(${start}T00:00:00Z);
-const last = new Date(${end}T00:00:00Z);
+const cursor = new Date(`${start}T00:00:00Z`);
+const last = new Date(`${end}T00:00:00Z`);
 
 while (cursor <= last) {
 result.push(utcIso(cursor));
@@ -268,7 +268,7 @@ function getDaysForView(
 anchor: string,
 view: ViewScale,
 ) {
-const anchorDate = new Date(${anchor}T00:00:00Z);
+const anchorDate = new Date(`${anchor}T00:00:00Z`);
 
 if (view === "day") {
 return [utcIso(anchorDate)];
@@ -340,7 +340,7 @@ anchor: string,
 view: ViewScale,
 direction: number,
 ) {
-const date = new Date(${anchor}T00:00:00Z);
+const date = new Date(`${anchor}T00:00:00Z`);
 
 if (view === "day") {
 date.setUTCDate(date.getUTCDate() + direction);
@@ -365,7 +365,7 @@ function periodTitle(
 view: ViewScale,
 anchor: string,
 ) {
-const date = new Date(${anchor}T00:00:00Z);
+const date = new Date(`${anchor}T00:00:00Z`);
 
 if (view === "day") {
 return formatLongDate(anchor);
@@ -1082,7 +1082,7 @@ return (
 <Modal
 open
 title={formatLongDate(date)}
-subtitle={${stations.length} station${ stations.length > 1 ? "s" : "" } · ${rows.length} shift${ rows.length > 1 ? "s" : "" }}
+subtitle={`${stations.length} station${stations.length > 1 ? "s" : ""} · ${rows.length} shift${rows.length > 1 ? "s" : ""}`}
 size="xl"
 onClose={onClose}
 >
@@ -1338,7 +1338,7 @@ return () => {
 
 async function refresh() {
 const latest = await api<Planning>(
-/plannings/${planning.id},
+`/plannings/${planning.id}`,
 );
 
 onUpdate(latest);
@@ -1423,7 +1423,7 @@ label: "Tous les postes sont affectés",
 }
 : {
 className: "partial",
-label: ${filledShifts} affectés · ${totalShifts - filledShifts} postes non affectés,
+label: `${filledShifts} affectés · ${totalShifts - filledShifts} postes non affectés`,
 };
 
 return (
@@ -2049,8 +2049,7 @@ user.role === "SUPERVISOR";
 
 const [plans, setPlans] = useState<
 Planning[]
-
-([]);
+>([]);
 const [current, setCurrent] =
 useState<Planning | null>(null);
 const [stations, setStations] =

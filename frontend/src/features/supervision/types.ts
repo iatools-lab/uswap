@@ -1,30 +1,50 @@
 import type { User } from "../../api/auth-api";
 
 export type PendingReplacement = {
+  requestId: string;
   shiftId: string;
-  station: { id: string; name: string; timezone: string };
-  swapper: { id: string; fullName: string };
-  template: string | null;
+  station: {
+    id: string;
+    name: string;
+    timezone: string;
+  };
+  swapper: {
+    id: string;
+    fullName: string;
+  };
+  assignedSwapper?: {
+    id: string;
+    fullName: string;
+  } | null;
   startTime: string;
   endTime: string;
+  status?: "OPEN" | "ASSIGNED" | "CANCELLED" | "RESOLVED";
   urgency: "CRITICAL" | "HIGH" | "NORMAL";
   hoursUntilStart: number;
-  origin: "DECLARATION" | "AUTOMATIC_ABSENCE";
+  origin: "AUTOMATIC_ABSENCE" | "DECLARATION";
   reason: string | null;
   reportedAt: string | null;
+  template?: string | null;
 };
 
 export type Candidate = {
-  id: string;
-  fullName: string;
-  email: string;
-  eligible: boolean;
-  issues: { code: string; message: string }[];
+id: string;
+fullName: string;
+email: string;
+eligible: boolean;
+issues: {
+code: string;
+message: string;
+}[];
 };
 
 export type ShiftChange = {
   id: string;
-  type: "REPLACEMENT" | "PERMUTATION" | "REASSIGNMENT";
+  type:
+    | "REPLACEMENT"
+    | "SWAP"
+    | "REASSIGNMENT";
+  rawType?: string;
   initiator: string;
   station: string;
   outSwapper: string | null;
@@ -35,64 +55,100 @@ export type ShiftChange = {
   createdAt: string;
 };
 
-export type MonitorRow = {
-  shiftId: string;
-  station: { id: string; name: string; timezone: string };
-  swapper: { id: string; fullName: string };
-  template: string | null;
-  startTime: string;
-  endTime: string;
-  status: "PRESENT" | "LATE" | "ABSENT" | "CLOSED" | "EXPECTED";
+export type AttendanceHistoryRow = {
+shiftId: string;
+station: {
+id: string;
+name: string;
+timezone: string;
+};
+plannedStart: string;
+plannedEnd: string;
+plannedHours: number;
+checkedInAt: string | null;
+checkedOutAt: string | null;
+status:
+| "EXPECTED"
+| "CHECKED_IN"
+| "CHECKED_OUT"
+| "ABSENT"
+| "JUSTIFIED";
+isLate: boolean;
+absenceReason: string | null;
+};
+
+export type SupervisionProps = {
+user: User;
+onChanged?: () => void;
+};
+
+export type SupervisorMonitorRow = {
+  id: string;
+  station: {
+    id: string;
+    name: string;
+  };
+  shift: {
+    id: string;
+    startTime: string;
+    endTime: string;
+  };
+  swapper: {
+    id: string;
+    fullName: string;
+  };
+  attendanceId: string | null;
+  status: MonitorStatus;
   checkedInAt: string | null;
   checkedOutAt: string | null;
-  isLate: boolean;
-  toleranceMinutes: number | null;
+};
+
+export type MonitorStatus =
+  | "PRESENT"
+  | "LATE"
+  | "ABSENT"
+  | "CLOSED"
+  | "EXPECTED";
+
+export type MonitorRow = {
+  id: string;
+  shiftId: string;
+  status: MonitorStatus;
+  swapper: {
+    id: string;
+    fullName: string;
+  };
+  station: {
+    id: string;
+    name: string;
+    timezone: string;
+    latenessToleranceMinutes: number;
+  };
+  startTime: string;
+  endTime: string;
+  checkedInAt: string | null;
+  checkedOutAt: string | null;
+  isLate?: boolean;
 };
 
 export type MonitorData = {
   generatedAt: string;
-  stationId: string | null;
-  summary: {
-    expected: number;
-    present: number;
-    late: number;
-    absent: number;
-    closed: number;
-  };
   rows: MonitorRow[];
 };
 
-export type AttendanceHistoryRow = {
-  shiftId: string;
-  station: { id: string; name: string; timezone: string };
-  template: string | null;
-  plannedStart: string;
-  plannedEnd: string;
-  plannedHours: number;
-  checkedInAt: string | null;
-  checkedOutAt: string | null;
-  isLate: boolean;
-  isAbsent: boolean;
-  corrected: boolean;
-  correctedAt: string | null;
-  correctionReason: string | null;
-};
+export const STATUS_LABEL = {
+EXPECTED: "Attendu",
+PRESENT: "À l’heure",
+LATE: "En retard",
+ABSENT: "Absent",
+CLOSED: "Fin de service",
+} as const;
 
-export type SupervisionProps = {
-  user: User;
-  onChanged?: () => void;
-};
-
-export const STATUS_LABEL: Record<MonitorRow["status"], string> = {
-  EXPECTED: "Attendu",
-  PRESENT: "Présent",
-  LATE: "En retard",
-  ABSENT: "Absent",
-  CLOSED: "Fin de service",
-};
-
-export const URGENCY_LABEL: Record<PendingReplacement["urgency"], string> = {
-  CRITICAL: "Critique",
-  HIGH: "Élevée",
-  NORMAL: "Normale",
+export const URGENCY_LABEL: Record<
+PendingReplacement["urgency"],
+string
+> = {
+CRITICAL: "Critique",
+HIGH: "Élevée",
+NORMAL: "Normale",
 };

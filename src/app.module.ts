@@ -13,6 +13,7 @@ import { ShiftsModule } from './shifts/shifts.module';
 import { PlanningModule } from './planning/planning.module';
 import { SchedulingModule } from './scheduling/scheduling.module';
 import { AttendanceModule } from './attendance/attendance.module';
+import { OperationsModule } from './operations/operations.module';
 
 @Module({
 imports: [
@@ -27,6 +28,7 @@ ShiftsModule,
 PlanningModule,
 SchedulingModule,
 AttendanceModule,
+OperationsModule,
 
 ],
 controllers: [AppController],
