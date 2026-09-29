@@ -44,6 +44,20 @@ export function SupervisorHome({ data }: OperationsViewProps) {
   const activeGroup = stationGroups.find(
     (group) => group.key === selectedStation,
   );
+  const now = Date.now();
+  const currentShifts = published.filter(
+    (shift) =>
+      Date.parse(shift.startTime) <= now && now < Date.parse(shift.endTime),
+  );
+  const checkedIn = currentShifts.filter(
+    (shift) => shift.attendance?.checkedInAt,
+  ).length;
+  const upcomingVacancies = data.shifts.filter(
+    (shift) =>
+      shift.publishedAt &&
+      Date.parse(shift.startTime) >= now &&
+      !shift.swapper?.fullName,
+  ).length;
 
   const formatDate = (value: string, timezone?: string) =>
     new Intl.DateTimeFormat("fr-CM", {
@@ -183,6 +197,29 @@ export function SupervisorHome({ data }: OperationsViewProps) {
             Ouvrir le planning
           </a>
         </div>
+      </section>
+
+      <section
+        className="supervisor-live-summary"
+        aria-label="État opérationnel actuel"
+      >
+        <article>
+          <span>Shifts en cours</span>
+          <strong>{currentShifts.length}</strong>
+          <small>services actifs maintenant</small>
+        </article>
+        <article>
+          <span>Pointages reçus</span>
+          <strong>
+            {checkedIn}/{currentShifts.length}
+          </strong>
+          <small>sur les présences attendues</small>
+        </article>
+        <article className={upcomingVacancies ? "is-warning" : ""}>
+          <span>Postes à couvrir</span>
+          <strong>{upcomingVacancies}</strong>
+          <small>sur les prochains shifts publiés</small>
+        </article>
       </section>
 
       <OperationsDashboard />

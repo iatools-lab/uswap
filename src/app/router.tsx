@@ -51,6 +51,11 @@ const AdminPlannerPage = lazy(() =>
     default: m.AdminPlannerPage,
   })),
 );
+const GlobalSettingsPage = lazy(() =>
+  import("../pages/admin/GlobalSettingsPage").then((m) => ({
+    default: m.GlobalSettingsPage,
+  })),
+);
 
 const OperationsPage = lazy(() =>
   import("../pages/role/OperationsPage").then((m) => ({
@@ -135,6 +140,7 @@ export function AppRoutes() {
         <Route path="utilisateurs/:id" element={page(<UserDetailPage />)} />
         <Route path="stations" element={page(<StationsPage />)} />
         <Route path="plannings" element={page(<AdminPlannerPage />)} />
+        <Route path="parametres" element={page(<GlobalSettingsPage />)} />
         <Route path="compte" element={page(<AccountPage />)} />
         <Route path="*" element={<Navigate to={rolePaths.ADMIN} replace />} />
       </Route>

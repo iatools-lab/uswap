@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { CaretDownIcon } from "@phosphor-icons/react";
+import { CaretDownIcon, GearSixIcon } from "@phosphor-icons/react";
 import { AccountMenu } from "../features/account/AccountMenu";
 import { NotificationBell } from "../features/notifications/NotificationBell";
 import { interceptNav } from "../app/spaNav";
@@ -24,6 +24,11 @@ const sections = [
   { path: "/app/admin/utilisateurs", label: "Utilisateurs", Icon: Users },
   { path: "/app/admin/stations", label: "Stations", Icon: Building2 },
   { path: "/app/admin/plannings", label: "Plannings", Icon: Clock3 },
+  {
+    path: "/app/admin/parametres",
+    label: "Paramètres globaux",
+    Icon: GearSixIcon,
+  },
   { path: "/app/admin/compte", label: "Paramètres du compte", Icon: UserRound },
 ];
 
@@ -35,6 +40,8 @@ const sectionDescriptions: Record<string, string> = {
   "/app/admin/stations":
     "Configurez les stations, leurs règles, leurs shifts et leur localisation.",
   "/app/admin/plannings": "Créez, publiez et ajustez les horaires des équipes.",
+  "/app/admin/parametres":
+    "Configurez les règles globales, leur sécurité et leur conservation.",
   "/app/admin/compte":
     "Mettez à jour vos informations et vos préférences de compte.",
 };

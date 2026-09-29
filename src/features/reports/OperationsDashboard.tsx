@@ -10,6 +10,7 @@ import {
 import { api } from "../../api/auth-api";
 import { exportToExcel } from "../../utils/excelExport";
 import { Select } from "../../ui/Select";
+import { Modal } from "../../ui/Modal";
 import "./reports.css";
 
 type Dashboard = {
@@ -24,6 +25,8 @@ type Dashboard = {
     approvedLeaves: number;
     movements: number;
     totalHours: number;
+    futureVacant: number;
+    pastVacant: number;
   };
   attendance: Record<string, number>;
   stationRows: Array<{
@@ -33,6 +36,18 @@ type Dashboard = {
     filled: number;
     coverage: number;
     incidents: number;
+    futureVacant: number;
+    pastVacant: number;
+    risk: "AT_RISK" | "STABLE";
+  }>;
+  swappers: Array<{ id: string; name: string }>;
+  details: Array<{
+    id: string;
+    startTime: string;
+    station: string;
+    swapper: string;
+    status: string;
+    label: string;
   }>;
   hours: Array<{ name: string; station: string; hours: number }>;
   changes: Array<{
@@ -69,20 +84,24 @@ export function OperationsDashboard() {
   const [from, setFrom] = useState(day(-30));
   const [to, setTo] = useState(day(7));
   const [station, setStation] = useState("");
+  const [swapper, setSwapper] = useState("");
+  const [detail, setDetail] = useState<
+    "coverage" | "attendance" | "hours" | "movements" | null
+  >(null);
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let active = true;
     setLoading(true);
     api<Dashboard>(
-      `/reports/dashboard?from=${from}&to=${to}${station ? `&stationId=${station}` : ""}`,
+      `/reports/dashboard?from=${from}&to=${to}${station ? `&stationId=${station}` : ""}${swapper ? `&swapperId=${swapper}` : ""}`,
     )
       .then((v) => active && setData(v))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [from, to, station]);
+  }, [from, to, station, swapper]);
   const totalAttendance = useMemo(
     () =>
       data ? Object.values(data.attendance).reduce((a, b) => a + b, 0) : 0,
@@ -155,42 +174,147 @@ export function OperationsDashboard() {
             ]}
           />
         </label>
+        <label>
+          Swappeur
+          <Select
+            size="sm"
+            value={swapper}
+            ariaLabel="Swappeur du rapport"
+            onChange={(value) => setSwapper(String(value))}
+            options={[
+              { value: "", label: "Tous les swappeurs" },
+              ...(data?.swappers.map((item) => ({
+                value: item.id,
+                label: item.name,
+              })) ?? []),
+            ]}
+          />
+        </label>
       </div>
       {data && (
         <>
+          <Modal
+            open={detail !== null}
+            size="lg"
+            title={
+              detail === "coverage"
+                ? "Détail de la couverture"
+                : detail === "attendance"
+                  ? "Détail de l’assiduité"
+                  : detail === "hours"
+                    ? "Détail de la charge planifiée"
+                    : "Détail des mouvements"
+            }
+            subtitle={`${from} au ${to}`}
+            onClose={() => setDetail(null)}
+          >
+            {detail === "coverage" ? (
+              <div className="kpi-detail-list">
+                {data.stationRows.map((row) => (
+                  <article key={row.id}>
+                    <strong>{row.name}</strong>
+                    <span>
+                      {row.filled}/{row.total} postes couverts
+                    </span>
+                    <span className={row.risk === "AT_RISK" ? "is-risk" : ""}>
+                      {row.futureVacant} futur(s) vacant(s) · {row.pastVacant}{" "}
+                      passé(s)
+                    </span>
+                  </article>
+                ))}
+              </div>
+            ) : detail === "hours" ? (
+              <div className="kpi-detail-list">
+                {data.hours.map((row) => (
+                  <article key={`${row.name}-${row.station}`}>
+                    <strong>{row.name}</strong>
+                    <span>{row.station}</span>
+                    <span>{row.hours} h planifiées</span>
+                  </article>
+                ))}
+              </div>
+            ) : detail === "movements" ? (
+              <div className="kpi-detail-list">
+                {data.changes.map((row, index) => (
+                  <article key={`${row.date}-${index}`}>
+                    <strong>{row.station}</strong>
+                    <span>{new Date(row.date).toLocaleString("fr-FR")}</span>
+                    <span>
+                      {row.from || "Poste vacant"} → {row.to || "Poste vacant"}
+                    </span>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="kpi-detail-list">
+                {data.details.map((row) => (
+                  <article key={row.id}>
+                    <strong>{row.swapper}</strong>
+                    <span>
+                      {row.station} · {row.label}
+                    </span>
+                    <span>
+                      {labels[row.status] || row.status} ·{" "}
+                      {new Date(row.startTime).toLocaleString("fr-FR")}
+                    </span>
+                  </article>
+                ))}
+              </div>
+            )}
+          </Modal>
           <div className="ops-dashboard-kpis">
-            <article>
+            <button
+              type="button"
+              onClick={() => setDetail("coverage")}
+              title="Taux de postes affectés sur tous les postes planifiés. Ouvrir le détail."
+            >
               <GaugeIcon />
               <div>
                 <small>Couverture</small>
                 <strong>{data.kpis.coverageRate}%</strong>
                 <span>{data.kpis.shifts} shifts analysés</span>
+                <em>
+                  {data.kpis.futureVacant} futur(s) · {data.kpis.pastVacant}{" "}
+                  passé(s)
+                </em>
               </div>
-            </article>
-            <article>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDetail("attendance")}
+              title="Part des affectations avec une présence, un retard ou une fin de service enregistrée."
+            >
               <UsersThreeIcon />
               <div>
                 <small>Assiduité</small>
                 <strong>{data.kpis.attendanceRate}%</strong>
                 <span>{data.kpis.absences} absence(s)</span>
               </div>
-            </article>
-            <article>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDetail("hours")}
+              title="Somme des heures prévues pour les swappeurs du périmètre."
+            >
               <ClockIcon />
               <div>
                 <small>Charge planifiée</small>
                 <strong>{Math.round(data.kpis.totalHours)} h</strong>
                 <span>{data.kpis.approvedLeaves} congé(s) approuvé(s)</span>
               </div>
-            </article>
-            <article>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDetail("movements")}
+              title="Remplacements, permutations et réaffectations enregistrés sur la période."
+            >
               <WarningCircleIcon />
               <div>
                 <small>Mouvements</small>
                 <strong>{data.kpis.movements}</strong>
                 <span>{data.kpis.late} retard(s)</span>
               </div>
-            </article>
+            </button>
           </div>
           <div className="ops-dashboard-grid">
             <article className="ops-chart">
@@ -233,6 +357,9 @@ export function OperationsDashboard() {
                       <small>
                         {row.filled}/{row.total} postes · {row.incidents}{" "}
                         incident(s)
+                        {row.futureVacant > 0
+                          ? ` · ${row.futureVacant} à couvrir`
+                          : ""}
                       </small>
                     </span>
                     <div>

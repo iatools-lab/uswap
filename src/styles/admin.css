@@ -3355,3 +3355,28 @@
   margin-left: auto;
   color: #7b899e;
 }
+
+.notification-bell__categories {
+  display: flex;
+  gap: 6px;
+  padding: 0 14px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.notification-bell__categories::-webkit-scrollbar { display: none; }
+.notification-bell__categories button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #dfe6ef;
+  border-radius: 999px;
+  background: #fff;
+  color: #617089;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.notification-bell__categories button[aria-pressed="true"] {
+  border-color: #173b91;
+  background: #eaf0ff;
+  color: #0a2b84;
+}

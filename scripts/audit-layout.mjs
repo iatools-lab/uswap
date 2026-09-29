@@ -15,6 +15,7 @@ const profiles = [
       "/app/admin/stations?tab=list",
       "/app/admin/stations?tab=map",
       "/app/admin/plannings",
+      "/app/admin/parametres",
       "/app/admin/compte",
     ],
   },

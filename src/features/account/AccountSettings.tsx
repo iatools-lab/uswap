@@ -10,6 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, roles, type User } from "../../api/auth-api";
+import { Modal } from "../../ui/Modal";
 
 type Section = "profile" | "notifications" | "security";
 type Preferences = {
@@ -207,6 +208,7 @@ function NotificationPreferences() {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [pushDisclosure, setPushDisclosure] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -231,18 +233,34 @@ function NotificationPreferences() {
     );
 
   async function channel(name: "emailEnabled" | "pushEnabled", value: boolean) {
-    if (name === "pushEnabled" && value && "Notification" in window) {
-      value = (await Notification.requestPermission()) === "granted";
-      if (value)
-        new Notification("Notifications uSwap activées", {
-          body: "Les alertes autorisées pourront apparaître sur cet appareil.",
-          icon: "/icons/app-192.png",
-        });
+    if (name === "pushEnabled" && value) {
+      setPushDisclosure(true);
+      return;
+    }
+    if (name === "pushEnabled" && !value && "serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      const subscription = await registration?.pushManager?.getSubscription();
+      await subscription?.unsubscribe().catch(() => false);
     }
     setPreferences((current) =>
       current ? { ...current, [name]: value } : current,
     );
     setSaved(false);
+  }
+  async function authorizePush() {
+    let granted = true;
+    if ("Notification" in window)
+      granted = (await Notification.requestPermission()) === "granted";
+    setPushDisclosure(false);
+    setPreferences((current) =>
+      current ? { ...current, pushEnabled: granted } : current,
+    );
+    setSaved(false);
+    if (granted && "Notification" in window)
+      new Notification("Notifications uSwap activées", {
+        body: "Les alertes autorisées pourront apparaître sur cet appareil.",
+        icon: "/icons/app-192.png",
+      });
   }
   function category(
     name: string,
@@ -284,6 +302,36 @@ function NotificationPreferences() {
 
   return (
     <section className="settings-panel notification-preferences">
+      <Modal
+        open={pushDisclosure}
+        size="md"
+        title="Activer les notifications sur cet appareil"
+        subtitle="Le navigateur demandera votre autorisation après confirmation."
+        onClose={() => setPushDisclosure(false)}
+        footer={
+          <>
+            <button
+              type="button"
+              className="admin-button secondary"
+              onClick={() => setPushDisclosure(false)}
+            >
+              Plus tard
+            </button>
+            <button
+              type="button"
+              className="admin-button primary-cta"
+              onClick={() => void authorizePush()}
+            >
+              Autoriser les notifications
+            </button>
+          </>
+        }
+      >
+        <p>
+          Vous recevrez uniquement les catégories choisies. Cet appareil peut
+          être révoqué ici à tout moment sans bloquer l’accès à uSwap.
+        </p>
+      </Modal>
       <header className="settings-panel-heading">
         <div>
           <span className="settings-eyebrow">Préférences</span>

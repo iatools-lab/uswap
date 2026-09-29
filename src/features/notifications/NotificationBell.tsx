@@ -43,7 +43,8 @@ export function NotificationBell() {
   const location = useLocation();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<"all" | "unread">("all");
+  const [view, setView] = useState<"all" | "unread" | "read">("all");
+  const [category, setCategory] = useState("ALL");
   const [placement, setPlacement] = useState<Placement | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -153,7 +154,32 @@ export function NotificationBell() {
   }, []);
 
   const unread = items.filter((item) => !item.readAt);
-  const visibleItems = view === "unread" ? unread : items;
+  const categoryOf = (kind: string) =>
+    kind.startsWith("PLANNING_")
+      ? "PLANNING"
+      : kind.includes("LEAVE")
+        ? "LEAVE"
+        : kind.includes("INCIDENT")
+          ? "INCIDENT"
+          : kind.includes("REPORT")
+            ? "REPORT"
+            : kind === "ACCESS_PENDING"
+              ? "ACCESS"
+              : "ATTENDANCE";
+  const categoryLabels: Record<string, string> = {
+    ACCESS: "Accès",
+    PLANNING: "Planning",
+    ATTENDANCE: "Pointage",
+    LEAVE: "Congés",
+    INCIDENT: "Incidents",
+    REPORT: "Rapports",
+  };
+  const categories = [...new Set(items.map((item) => categoryOf(item.kind)))];
+  const visibleItems = items.filter(
+    (item) =>
+      (view === "all" || (view === "unread" ? !item.readAt : item.readAt)) &&
+      (category === "ALL" || categoryOf(item.kind) === category),
+  );
 
   async function markAllRead() {
     await api("/notifications/read-all", {}, "PATCH").catch(() => {});
@@ -269,12 +295,36 @@ export function NotificationBell() {
               >
                 Non lues <span>{unread.length}</span>
               </button>
+              <button
+                aria-pressed={view === "read"}
+                onClick={() => setView("read")}
+              >
+                Lues <span>{items.length - unread.length}</span>
+              </button>
+            </div>
+            <div
+              className="notification-bell__categories"
+              aria-label="Filtrer par catégorie"
+            >
+              <button
+                aria-pressed={category === "ALL"}
+                onClick={() => setCategory("ALL")}
+              >
+                Sans filtre
+              </button>
+              {categories.map((name) => (
+                <button
+                  key={name}
+                  aria-pressed={category === name}
+                  onClick={() => setCategory(name)}
+                >
+                  {categoryLabels[name]}
+                </button>
+              ))}
             </div>
             {!visibleItems.length ? (
               <p className="notification-bell__empty">
-                {view === "unread"
-                  ? "Aucune notification non lue."
-                  : "Aucune notification."}
+                Aucune notification pour ces filtres.
               </p>
             ) : (
               <ul className="notification-bell__list">
