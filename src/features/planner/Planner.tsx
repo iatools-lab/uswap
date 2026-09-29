@@ -41,6 +41,7 @@ type Station = {
   contactName?: string | null;
   contactPhone?: string | null;
   latenessToleranceMinutes?: number;
+  enforceMinRest?: boolean;
   minRestHours?: number;
   weeklyHoursLimit?: number;
   blockPublishingWithVacancies?: boolean;
@@ -735,7 +736,11 @@ export function Planner({ user }: { user: User }) {
                   </div>
                   <div>
                     <dt>Repos minimal</dt>
-                    <dd>{selectedStation.minRestHours ?? 8} h</dd>
+                    <dd>
+                      {selectedStation.enforceMinRest === false
+                        ? "Non contrôlé"
+                        : `${selectedStation.minRestHours ?? 8} h`}
+                    </dd>
                   </div>
                   <div>
                     <dt>Limite hebdomadaire</dt>

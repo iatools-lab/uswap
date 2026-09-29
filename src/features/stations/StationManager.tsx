@@ -43,6 +43,7 @@ export type StationData = {
   contactPhone: string | null;
   isActive: boolean;
   latenessToleranceMinutes: number;
+  enforceMinRest: boolean;
   minRestHours: number;
   weeklyHoursLimit: number;
   blockPublishingWithVacancies: boolean;
@@ -61,6 +62,7 @@ const emptyForm = {
   contactName: "",
   contactPhone: "",
   latenessToleranceMinutes: 0,
+  enforceMinRest: true,
   minRestHours: 8,
   weeklyHoursLimit: 48,
   blockPublishingWithVacancies: false,
@@ -79,6 +81,7 @@ const blankStationForm: typeof emptyForm = {
   contactName: "",
   contactPhone: "",
   latenessToleranceMinutes: "" as unknown as number,
+  enforceMinRest: false,
   minRestHours: "" as unknown as number,
   weeklyHoursLimit: "" as unknown as number,
   blockPublishingWithVacancies: false,
@@ -561,8 +564,10 @@ function StationsMapView({
                 <span>Tolérance / Repos / Max :</span>
                 <strong>
                   {selectedStation?.latenessToleranceMinutes}m /{" "}
-                  {selectedStation?.minRestHours}h /{" "}
-                  {selectedStation?.weeklyHoursLimit}h
+                  {selectedStation?.enforceMinRest === false
+                    ? "repos libre"
+                    : `${selectedStation?.minRestHours}h`}{" "}
+                  / {selectedStation?.weeklyHoursLimit}h
                 </strong>
               </div>
               <div className="summary-row">
@@ -628,6 +633,7 @@ export function StationManager({
             location: station.location || "",
             contactName: station.contactName || "",
             contactPhone: station.contactPhone || "",
+            enforceMinRest: station.enforceMinRest !== false,
           }
         : { ...blankStationForm },
     );
@@ -650,6 +656,7 @@ export function StationManager({
         contactName: form.contactName.trim() || null,
         contactPhone: form.contactPhone.trim() || null,
         latenessToleranceMinutes: Number(form.latenessToleranceMinutes),
+        enforceMinRest: Boolean(form.enforceMinRest),
         minRestHours: Number(form.minRestHours),
         weeklyHoursLimit: Number(form.weeklyHoursLimit),
         blockPublishingWithVacancies: Boolean(
@@ -917,8 +924,9 @@ export function StationManager({
           isValid: () =>
             String(form.latenessToleranceMinutes).trim() !== "" &&
             Number(form.latenessToleranceMinutes) >= 0 &&
-            String(form.minRestHours).trim() !== "" &&
-            Number(form.minRestHours) >= 0 &&
+            (!form.enforceMinRest ||
+              (String(form.minRestHours).trim() !== "" &&
+                Number(form.minRestHours) > 0)) &&
             String(form.weeklyHoursLimit).trim() !== "" &&
             Number(form.weeklyHoursLimit) > 0 &&
             String(form.checkinQrTtl).trim() !== "" &&
@@ -943,12 +951,15 @@ export function StationManager({
                   />
                 </div>
 
-                <div className="stepper-field-group">
+                <div
+                  className={`stepper-field-group${form.enforceMinRest ? "" : " is-disabled"}`}
+                >
                   <label>REPOS MINIMAL (HEURES)</label>
                   <input
                     type="number"
-                    required
-                    min={0}
+                    required={form.enforceMinRest}
+                    disabled={!form.enforceMinRest}
+                    min={1}
                     step={1}
                     value={form?.minRestHours ?? 0}
                     onChange={(e) =>
@@ -1000,6 +1011,21 @@ export function StationManager({
                   />
                 </div>
               </div>
+
+              <label className="station-rule-toggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form?.enforceMinRest)}
+                  onChange={(e) => set("enforceMinRest", e.target.checked)}
+                />
+                <span>
+                  <strong>Contrôler le repos entre deux shifts</strong>
+                  <small>
+                    Lorsqu’elle est active, cette règle bloque une affectation
+                    qui ne respecte pas le repos minimal indiqué.
+                  </small>
+                </span>
+              </label>
 
               <label className="station-rule-toggle">
                 <input
@@ -1067,8 +1093,10 @@ export function StationManager({
                 <div className="summary-row">
                   <span>Repos min. / Limite hebdo :</span>
                   <strong>
-                    {form?.minRestHours ?? 0}h / {form?.weeklyHoursLimit ?? 0}h
-                    max
+                    {form?.enforceMinRest
+                      ? `${form?.minRestHours ?? 0}h minimum`
+                      : "Contrôle désactivé"}{" "}
+                    · {form?.weeklyHoursLimit ?? 0}h max
                   </strong>
                 </div>
                 <div className="summary-row">
@@ -1453,7 +1481,12 @@ export function StationManager({
                             </div>
                           </div>
                         </td>
-                        <td data-label="Ville & adresse">
+                        <td
+                          data-label="Ville & adresse"
+                          title={[s?.city, s?.address || s?.location]
+                            .filter(Boolean)
+                            .join(" — ")}
+                        >
                           <div className="station-cell-city">
                             <strong>{s?.city || "Non spécifiée"}</strong>
                             <span>{s?.address || s?.location || "—"}</span>
@@ -1478,7 +1511,12 @@ export function StationManager({
                           )}
                         </td>
                         <td data-label="Responsable">
-                          <div className="station-cell-contact">
+                          <div
+                            className="station-cell-contact"
+                            title={[s?.contactName, s?.contactPhone]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          >
                             <span>{s?.contactName || "—"}</span>
                             {s?.contactPhone && <span>{s.contactPhone}</span>}
                           </div>
@@ -1488,7 +1526,12 @@ export function StationManager({
                             <code>
                               Tol: {s?.latenessToleranceMinutes ?? 0}m
                             </code>
-                            <code>Repos: {s?.minRestHours ?? 0}h</code>
+                            <code>
+                              Repos:{" "}
+                              {s?.enforceMinRest === false
+                                ? "libre"
+                                : `${s?.minRestHours ?? 0}h`}
+                            </code>
                             <code>Max: {s?.weeklyHoursLimit ?? 0}h</code>
                           </div>
                         </td>
@@ -1605,7 +1648,9 @@ export function StationManager({
                       <div className="rule-chip">
                         <span className="rule-label">Repos min.</span>
                         <strong className="rule-value">
-                          {s?.minRestHours ?? 0} h
+                          {s?.enforceMinRest === false
+                            ? "Non contrôlé"
+                            : `${s?.minRestHours ?? 0} h`}
                         </strong>
                       </div>
                     </div>

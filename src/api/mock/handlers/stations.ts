@@ -1,32 +1,63 @@
 import { nextId, requireRole, requireUser, stationOf } from "../shared";
-import { MockHttpError, type MockRoute, type MockStation, type MockTemplate } from "../types";
+import {
+  MockHttpError,
+  type MockRoute,
+  type MockStation,
+  type MockTemplate,
+} from "../types";
 
-const asText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+const asText = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
 const asNumber = (value: unknown, fallback: number) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-function stationPayload(body: Record<string, unknown>, current?: MockStation): Partial<MockStation> {
+function stationPayload(
+  body: Record<string, unknown>,
+  current?: MockStation,
+): Partial<MockStation> {
   return {
     name: asText(body.name) || current?.name,
     address: asText(body.address) || null,
     city: asText(body.city) || null,
-    latitude: body.latitude === null || body.latitude === "" ? null : asNumber(body.latitude, current?.latitude ?? 0),
-    longitude: body.longitude === null || body.longitude === "" ? null : asNumber(body.longitude, current?.longitude ?? 0),
+    latitude:
+      body.latitude === null || body.latitude === ""
+        ? null
+        : asNumber(body.latitude, current?.latitude ?? 0),
+    longitude:
+      body.longitude === null || body.longitude === ""
+        ? null
+        : asNumber(body.longitude, current?.longitude ?? 0),
     location: asText(body.location) || null,
     timezone: asText(body.timezone) || current?.timezone || "Africa/Douala",
     contactName: asText(body.contactName) || null,
     contactPhone: asText(body.contactPhone) || null,
-    latenessToleranceMinutes: asNumber(body.latenessToleranceMinutes, current?.latenessToleranceMinutes ?? 5),
+    latenessToleranceMinutes: asNumber(
+      body.latenessToleranceMinutes,
+      current?.latenessToleranceMinutes ?? 5,
+    ),
+    enforceMinRest:
+      typeof body.enforceMinRest === "boolean"
+        ? body.enforceMinRest
+        : (current?.enforceMinRest ?? true),
     minRestHours: asNumber(body.minRestHours, current?.minRestHours ?? 8),
-    weeklyHoursLimit: asNumber(body.weeklyHoursLimit, current?.weeklyHoursLimit ?? 48),
+    weeklyHoursLimit: asNumber(
+      body.weeklyHoursLimit,
+      current?.weeklyHoursLimit ?? 48,
+    ),
     blockPublishingWithVacancies:
       typeof body.blockPublishingWithVacancies === "boolean"
         ? body.blockPublishingWithVacancies
-        : current?.blockPublishingWithVacancies ?? false,
-    checkinQrTtl: Math.max(30, asNumber(body.checkinQrTtl, current?.checkinQrTtl ?? 300)),
-    checkoutQrTtl: Math.max(30, asNumber(body.checkoutQrTtl, current?.checkoutQrTtl ?? 300)),
+        : (current?.blockPublishingWithVacancies ?? false),
+    checkinQrTtl: Math.max(
+      30,
+      asNumber(body.checkinQrTtl, current?.checkinQrTtl ?? 300),
+    ),
+    checkoutQrTtl: Math.max(
+      30,
+      asNumber(body.checkoutQrTtl, current?.checkoutQrTtl ?? 300),
+    ),
   };
 }
 
@@ -45,13 +76,16 @@ const shiftBreakError = (
   breakEnd: string | null,
 ) => {
   if (!breakStart && !breakEnd) return "";
-  if (!breakStart || !breakEnd) return "Renseignez le début et la fin de la pause.";
+  if (!breakStart || !breakEnd)
+    return "Renseignez le début et la fin de la pause.";
   const shiftMinutes = slotMinutes(start, end);
   const pauseMinutes = slotMinutes(breakStart, breakEnd);
   if (!pauseMinutes) return "La pause doit avoir une durée supérieure à zéro.";
-  const mins = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
+  const mins = (value: string) =>
+    Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
   const pauseOffset = (mins(breakStart) - mins(start) + 1440) % 1440;
-  return pauseOffset >= shiftMinutes || pauseOffset + pauseMinutes > shiftMinutes
+  return pauseOffset >= shiftMinutes ||
+    pauseOffset + pauseMinutes > shiftMinutes
     ? "La pause doit être entièrement comprise dans les horaires du shift."
     : "";
 };
@@ -75,9 +109,15 @@ export const stationRoutes: MockRoute[] = [
       if (!stationIds.length)
         throw new MockHttpError(400, "Choisissez au moins une station.");
       if (!payload.label || !payload.startTime || !payload.endTime)
-        throw new MockHttpError(400, "Libellé, début et fin du modèle sont obligatoires.");
+        throw new MockHttpError(
+          400,
+          "Libellé, début et fin du modèle sont obligatoires.",
+        );
       if (slotMinutes(payload.startTime, payload.endTime) === 0)
-        throw new MockHttpError(400, "Le créneau doit avoir une durée supérieure à zéro.");
+        throw new MockHttpError(
+          400,
+          "Le créneau doit avoir une durée supérieure à zéro.",
+        );
       const breakError = shiftBreakError(
         payload.startTime,
         payload.endTime,
@@ -132,7 +172,10 @@ export const stationRoutes: MockRoute[] = [
     pattern: /^\/stations$/,
     handler: (ctx) => {
       requireUser(ctx.db, ctx.user);
-      return ctx.db.stations;
+      return ctx.db.stations.map((station) => ({
+        ...station,
+        enforceMinRest: station.enforceMinRest !== false,
+      }));
     },
   },
   {
@@ -141,8 +184,13 @@ export const stationRoutes: MockRoute[] = [
     handler: (ctx) => {
       requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
       const payload = stationPayload(ctx.body);
-      if (!payload.name) throw new MockHttpError(400, "Le nom de la station est obligatoire.");
-      if (ctx.db.stations.some((item) => item.name.toLowerCase() === payload.name!.toLowerCase()))
+      if (!payload.name)
+        throw new MockHttpError(400, "Le nom de la station est obligatoire.");
+      if (
+        ctx.db.stations.some(
+          (item) => item.name.toLowerCase() === payload.name!.toLowerCase(),
+        )
+      )
         throw new MockHttpError(409, "Une station porte déjà ce nom.");
       const created: MockStation = {
         id: nextId("st"),
@@ -157,9 +205,11 @@ export const stationRoutes: MockRoute[] = [
         contactPhone: payload.contactPhone ?? null,
         isActive: true,
         latenessToleranceMinutes: payload.latenessToleranceMinutes ?? 5,
+        enforceMinRest: payload.enforceMinRest ?? true,
         minRestHours: payload.minRestHours ?? 8,
         weeklyHoursLimit: payload.weeklyHoursLimit ?? 48,
-        blockPublishingWithVacancies: payload.blockPublishingWithVacancies ?? false,
+        blockPublishingWithVacancies:
+          payload.blockPublishingWithVacancies ?? false,
         checkinQrTtl: payload.checkinQrTtl ?? 300,
         checkoutQrTtl: payload.checkoutQrTtl ?? 300,
       };
@@ -176,7 +226,9 @@ export const stationRoutes: MockRoute[] = [
       const active = ctx.params[1] === "activate";
       if (!active) {
         const pending = ctx.db.occurrences.filter(
-          (item) => item.stationId === station.id && Date.parse(item.endTime) > Date.now(),
+          (item) =>
+            item.stationId === station.id &&
+            Date.parse(item.endTime) > Date.now(),
         );
         if (pending.length)
           throw new MockHttpError(
@@ -195,11 +247,13 @@ export const stationRoutes: MockRoute[] = [
       requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
       const station = stationOf(ctx.db, ctx.params[0]);
       const payload = stationPayload(ctx.body, station);
-      if (!payload.name) throw new MockHttpError(400, "Le nom de la station est obligatoire.");
+      if (!payload.name)
+        throw new MockHttpError(400, "Le nom de la station est obligatoire.");
       if (
         ctx.db.stations.some(
           (item) =>
-            item.id !== station.id && item.name.toLowerCase() === payload.name!.toLowerCase(),
+            item.id !== station.id &&
+            item.name.toLowerCase() === payload.name!.toLowerCase(),
         )
       )
         throw new MockHttpError(409, "Une autre station porte déjà ce nom.");
@@ -226,9 +280,15 @@ export const stationRoutes: MockRoute[] = [
       const station = stationOf(ctx.db, ctx.params[0]);
       const payload = templatePayload(ctx.body);
       if (!payload.label || !payload.startTime || !payload.endTime)
-        throw new MockHttpError(400, "Libellé, début et fin du modèle sont obligatoires.");
+        throw new MockHttpError(
+          400,
+          "Libellé, début et fin du modèle sont obligatoires.",
+        );
       if (slotMinutes(payload.startTime, payload.endTime) === 0)
-        throw new MockHttpError(400, "Le créneau doit avoir une durée supérieure à zéro.");
+        throw new MockHttpError(
+          400,
+          "Le créneau doit avoir une durée supérieure à zéro.",
+        );
       const breakError = shiftBreakError(
         payload.startTime,
         payload.endTime,
@@ -244,7 +304,10 @@ export const stationRoutes: MockRoute[] = [
             item.endTime === payload.endTime,
         )
       )
-        throw new MockHttpError(409, "Un modèle occupe déjà ce créneau sur cette station.");
+        throw new MockHttpError(
+          409,
+          "Un modèle occupe déjà ce créneau sur cette station.",
+        );
       const base = {
         id: nextId("tpl"),
         stationId: station.id,
@@ -277,7 +340,8 @@ export const stationRoutes: MockRoute[] = [
       const template = ctx.db.templates.find(
         (item) => item.id === ctx.params[1] && item.stationId === ctx.params[0],
       );
-      if (!template) throw new MockHttpError(404, "Modèle de shift introuvable.");
+      if (!template)
+        throw new MockHttpError(404, "Modèle de shift introuvable.");
       return [...template.versions].reverse();
     },
   },
@@ -289,8 +353,12 @@ export const stationRoutes: MockRoute[] = [
       const template = ctx.db.templates.find(
         (item) => item.id === ctx.params[1] && item.stationId === ctx.params[0],
       );
-      if (!template) throw new MockHttpError(404, "Modèle de shift introuvable.");
-      if (typeof ctx.body.revision === "number" && ctx.body.revision !== template.revision)
+      if (!template)
+        throw new MockHttpError(404, "Modèle de shift introuvable.");
+      if (
+        typeof ctx.body.revision === "number" &&
+        ctx.body.revision !== template.revision
+      )
         throw new MockHttpError(
           409,
           "Ce modèle a été modifié entre-temps. Rechargez la liste.",
@@ -299,11 +367,21 @@ export const stationRoutes: MockRoute[] = [
       const nextStart = payload.startTime || template.startTime;
       const nextEnd = payload.endTime || template.endTime;
       const updatesBreak = "breakStart" in ctx.body || "breakEnd" in ctx.body;
-      const nextBreakStart = updatesBreak ? payload.breakStart : template.breakStart;
+      const nextBreakStart = updatesBreak
+        ? payload.breakStart
+        : template.breakStart;
       const nextBreakEnd = updatesBreak ? payload.breakEnd : template.breakEnd;
       if (slotMinutes(nextStart, nextEnd) === 0)
-        throw new MockHttpError(400, "Le créneau doit avoir une durée supérieure à zéro.");
-      const breakError = shiftBreakError(nextStart, nextEnd, nextBreakStart, nextBreakEnd);
+        throw new MockHttpError(
+          400,
+          "Le créneau doit avoir une durée supérieure à zéro.",
+        );
+      const breakError = shiftBreakError(
+        nextStart,
+        nextEnd,
+        nextBreakStart,
+        nextBreakEnd,
+      );
       if (breakError) throw new MockHttpError(400, breakError);
       if (
         ctx.db.templates.some(
@@ -314,7 +392,10 @@ export const stationRoutes: MockRoute[] = [
             item.endTime === nextEnd,
         )
       )
-        throw new MockHttpError(409, "Un modèle occupe déjà ce créneau sur cette station.");
+        throw new MockHttpError(
+          409,
+          "Un modèle occupe déjà ce créneau sur cette station.",
+        );
       template.label = payload.label || template.label;
       template.startTime = nextStart;
       template.endTime = nextEnd;
@@ -322,11 +403,17 @@ export const stationRoutes: MockRoute[] = [
       template.breakStart = nextBreakStart;
       template.breakEnd = nextBreakEnd;
       template.breakMinutes =
-        nextBreakStart && nextBreakEnd ? slotMinutes(nextBreakStart, nextBreakEnd) : 0;
-      if (typeof ctx.body.isActive === "boolean") template.isActive = ctx.body.isActive;
+        nextBreakStart && nextBreakEnd
+          ? slotMinutes(nextBreakStart, nextBreakEnd)
+          : 0;
+      if (typeof ctx.body.isActive === "boolean")
+        template.isActive = ctx.body.isActive;
       template.revision += 1;
       const { versions: _versions, ...snapshot } = template;
-      template.versions.push({ ...snapshot, createdAt: new Date().toISOString() });
+      template.versions.push({
+        ...snapshot,
+        createdAt: new Date().toISOString(),
+      });
       return template;
     },
   },

@@ -24,6 +24,7 @@ export type MockStation = {
   contactPhone: string | null;
   isActive: boolean;
   latenessToleranceMinutes: number;
+  enforceMinRest: boolean;
   minRestHours: number;
   weeklyHoursLimit: number;
   blockPublishingWithVacancies: boolean;

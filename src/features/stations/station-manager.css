@@ -378,12 +378,15 @@
 /* Tableau des stations */
 .station-compact-table {
   table-layout: fixed;
-  white-space: normal;
+  white-space: nowrap;
 }
 
 .station-compact-table th,
 .station-compact-table td {
   padding-inline: 9px !important;
+  height: 62px;
+  overflow: hidden;
+  vertical-align: middle;
 }
 
 .station-compact-table th:nth-child(1) {
@@ -419,6 +422,7 @@
 .station-compact-table .station-cell-contact span {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .station-cell-city {
@@ -468,7 +472,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .station-row-actions .admin-button.secondary {
@@ -499,6 +503,18 @@ th.station-cell-right {
 .station-code-chips {
   margin-top: 0;
   gap: 3px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.station-code-chips code {
+  white-space: nowrap;
+  padding-inline: 5px;
+  font-size: 10.5px;
+}
+
+.stepper-field-group.is-disabled {
+  opacity: 0.55;
 }
 
 td.station-cell-right {
