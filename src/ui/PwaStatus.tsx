@@ -5,6 +5,8 @@ import {
   WifiSlashIcon,
 } from "@phosphor-icons/react";
 import { pending, subscribeOutbox } from "../features/offline/outbox";
+import { useSession } from "../app/session";
+import { useLocation } from "react-router-dom";
 
 type InstallEvent = Event & {
   prompt: () => Promise<void>;
@@ -16,6 +18,8 @@ type InstallEvent = Event & {
  * l'installation de l'application. Enregistre le service worker en production.
  */
 export function PwaStatus() {
+  const { checking, session } = useSession();
+  const location = useLocation();
   const [online, setOnline] = useState(navigator.onLine);
   const [install, setInstall] = useState<InstallEvent | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -83,6 +87,9 @@ export function PwaStatus() {
       removeControllerListener();
     };
   }, []);
+
+  if (checking || !session || location.pathname.startsWith("/auth/"))
+    return null;
 
   if (waitingWorker)
     return (

@@ -650,6 +650,7 @@ a:focus-visible {
   color: #697386;
   min-height: 200px;
 }
+.route-fallback__content{display:grid;justify-items:center;gap:14px;opacity:0;animation:route-fallback-in .18s ease .18s forwards}.route-fallback__brand{color:#071d58;font-size:24px;font-weight:700;letter-spacing:-.04em}.route-fallback__brand>span{color:#ff5b1a}.route-fallback__progress{display:flex;align-items:center;gap:9px;color:#718096;font-size:12px}@keyframes route-fallback-in{to{opacity:1}}
 .route-fallback {
   min-height: 100svh;
 }

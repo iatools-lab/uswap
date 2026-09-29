@@ -54,6 +54,12 @@ export function LoginPage() {
 
   const locked = busy || submitting;
 
+  // La vérification de session se fait avant de monter la mise en page de
+  // connexion : un utilisateur déjà authentifié ne voit donc jamais le
+  // formulaire, même pendant une fraction de seconde au rafraîchissement.
+  if (checking || session)
+    return <RouteFallback label="Ouverture de votre espace…" />;
+
   return (
     <AuthLayout>
       {checking || session ? (
