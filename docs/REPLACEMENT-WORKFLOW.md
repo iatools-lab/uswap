@@ -451,6 +451,24 @@ npm run build
 
 Doit se terminer **exit 0** sans erreur.
 
+### Compilation frontend
+
+```powershell
+cd frontend
+npm run build
+```
+
+Doit se terminer **exit 0** (type-check via `tsc -b` puis bundle Vite).
+
+### Audits reproductibles
+
+Deux scripts vérifient l'intégration sans intervention manuelle :
+
+```powershell
+node scripts/audit-contract.cjs        # 48/48 appels du frontend servis
+node scripts/audit-business-rules.cjs  # les 11 règles métier, sur l'API vivante
+```
+
 ### Routes enregistrées
 
 Démarre le backend puis ouvre `http://127.0.0.1:3000/api-docs`. Les 5 routes doivent
@@ -473,6 +491,10 @@ apparaître sous le tag **operations** :
 Une réponse `401` signifie que le token manque ou a expiré.
 Une réponse `403` est normale pour un rôle sans droits.
 
+> Les routes des tags **workspace**, **corrections**, **notifications** et
+> **dashboard** ont été livrées après `603617f`. Voir
+> [FRONTEND-BACKEND-RECONCILIATION.md](./FRONTEND-BACKEND-RECONCILIATION.md).
+
 ---
 
 ## 8. Erreurs fréquentes
@@ -494,9 +516,8 @@ Une réponse `403` est normale pour un rôle sans droits.
 
 ### Ce qui n'est pas couvert par cette chaîne
 
-- **Notifications** (étape E) : personne n'est prévenu automatiquement. Le superviseur doit
-  consulter la file.
-- **Dashboard** (étape F) : les statistiques ne sont pas encore exposées.
+- **Notifications temps réel** : la cloche (`NotificationBell.tsx`) interroge l'API toutes
+  les 30 secondes. Pas de WebSocket ni de SSE. Voir le rapport de réconciliation.
 - **Nom des endpoints côté frontend** : `ReplacementQueue.tsx` ne lit pas `requestId`
   (il utilise `shiftId` comme clé React). Fonctionnel, mais deux demandes sur un même shift
   produiraient une clé dupliquée — impossible aujourd'hui grâce à l'idempotence.
@@ -506,13 +527,13 @@ Une réponse `403` est normale pour un rôle sans droits.
 - `AUDIT.md` **n'est pas à jour** : il liste comme « à corriger » trois points déjà corrigés
   dans le code (`req.user.userId`, CORS permissif, `RolesGuard` non défensif). Ne pas s'y fier
   comme source de vérité.
-- Le commit `7286c29` contenait de la corruption de syntaxe (backticks arrachés dans
-  `Planner.tsx`, ``` ``` ``` parasites dans `OperationsPage.tsx` et `supervision/types.ts`).
-  Réparée dans `603617f`, mais le frontend ne compilait pas avant.
-- **8 erreurs TypeScript pré-existantes** subsistent hors périmètre : `Planner.tsx` est en
-  `export default` mais importé en named export par `AdminPlannerPage` / `RolePlannerPage`,
-  et `auth-api.ts` utilise `Object.hasOwn` sans `lib: es2022`. Elles bloquent un `tsc`
-  frontend complet (le backend, lui, compile proprement).
+- Le commit `7286c29` contenait de la corruption de syntaxe (**backticks arrachés** des
+  template literals dans `Planner.tsx` et `ui/Modal.tsx`, ``` ``` ``` parasites dans
+  `OperationsPage.tsx` et `supervision/types.ts`). Réparée dans `603617f` puis lors de la
+  réconciliation — mesuré objectivement : 52 backticks dans `HEAD` contre 20 dans l'arbre
+  de travail.
+- `day-roster.css` était **référencé mais absent** du dépôt (supprimé après `9fc77cc`),
+  ce qui cassait le build Vite. Récupéré depuis l'historique git.
 - Les fichiers `attendance.service.ts`, `attendance.controller.ts`,
   `scheduling-engine.service.ts` et `attendance.scheduler.ts` ont une indentation cassée.
   `npm run format` corrige, mais produit un diff volumineux.

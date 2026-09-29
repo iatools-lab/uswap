@@ -21,6 +21,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 export const REPLACEMENT_SOURCE = {
   DECLARATION: 'DECLARATION',
   AUTOMATIC_ABSENCE: 'AUTOMATIC_ABSENCE',
+  /** Opened directly by supervision when covering a shift by hand. */
+  AD_HOC: 'AD_HOC',
 } as const;
 
 export type ReplacementSource =
@@ -753,7 +755,10 @@ export class OperationsService {
       excludeShiftId: shift.id,
     });
 
-    const openRequest =
+    // A supervisor may replace on a shift that never went through the queue
+    // (ad-hoc cover). Record a request so the change is traceable and the
+    // audit trail is complete, rather than silently skipping it.
+    const existingRequest =
       await this.prisma.replacementRequest.findFirst({
         where: {
           shiftId: shift.id,
@@ -770,6 +775,24 @@ export class OperationsService {
           originalSwapperId: true,
         },
       });
+
+    const openRequest =
+      existingRequest ??
+      (await this.prisma.replacementRequest.create({
+        data: {
+          shiftId: shift.id,
+          originalSwapperId: shift.swapperId,
+          requestedById: params.changedById,
+          reason: params.reason?.trim() || null,
+          source: REPLACEMENT_SOURCE.AD_HOC,
+          status: ReplacementStatus.OPEN,
+        },
+        select: {
+          id: true,
+          reason: true,
+          originalSwapperId: true,
+        },
+      }));
 
     const reason =
       params.reason?.trim() ||

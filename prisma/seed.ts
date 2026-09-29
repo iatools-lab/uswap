@@ -309,14 +309,40 @@ async function seedShifts(
     { startHour: 14, endHour: 22 },
   ];
 
+  // The seed must obey the same rules the application enforces. A station
+  // with weeklyHoursLimit=48 cannot hold 7 shifts of 8h (56h), so we stop
+  // assigning days once the limit would be exceeded.
+  const weeklyLimit = STATIONS.find(
+    (s) => s.key === 'douala',
+  )!.weeklyHoursLimit;
+
   let created = 0;
   let skipped = 0;
+  let limitReached = 0;
 
   for (let day = 0; day < 7; day++) {
     const date = addDays(monday, day);
 
     for (let index = 0; index < swappers.length; index++) {
       const swapper = swappers[index];
+
+      // Hours already booked for this swapper in this same week.
+      const booked = await prisma.shift.aggregate({
+        where: {
+          swapperId: swapper.id,
+          startTime: {
+            gte: localTime(monday, 0),
+            lt: localTime(addDays(monday, 7), 0),
+          },
+        },
+        _count: { _all: true },
+      });
+
+      if (booked._count._all * 8 + 8 > weeklyLimit) {
+        limitReached++;
+        continue;
+      }
+
       const slot = slots[(day + index) % slots.length];
 
       const startTime = localTime(date, slot.startHour);
@@ -361,7 +387,9 @@ async function seedShifts(
     }
   }
 
-  console.log(`  shifts    ${created} created, ${skipped} already present`);
+  console.log(
+    `  shifts    ${created} created, ${skipped} already present, ${limitReached} withheld to respect the ${weeklyLimit}h weekly limit`,
+  );
 }
 
 async function main() {

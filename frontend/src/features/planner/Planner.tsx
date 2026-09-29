@@ -1396,10 +1396,19 @@ shift.attendances?.[0]?.status ??
 );
 
 try {
-  await exportToExcel(
+  exportToExcel({
     data,
-    `planning-${planning.id}`,
-  );
+    filename: `planning-${planning.id}`,
+    sheetName: "Planning",
+    columns: [
+      { header: "Station", key: "Station", width: 22 },
+      { header: "Swappeur", key: "Swappeur", width: 24 },
+      { header: "Email", key: "Email", width: 30 },
+      { header: "Début", key: "Début", width: 22 },
+      { header: "Fin", key: "Fin", width: 22 },
+      { header: "Pointage", key: "Pointage", width: 16 },
+    ],
+  });
 } catch (value) {
   setError(
     value instanceof Error

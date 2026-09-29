@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -131,6 +131,86 @@ export class AuthService {
     ]);
 
     return { message: 'Compte activé avec succès. Vous pouvez vous connecter.' };
+  }
+
+  /**
+   * Current profile, used by the session watchdog (/auth/me).
+   */
+  async me(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        role: true,
+        phoneNumber: true,
+        address: true,
+        isActive: true,
+        stationId: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Compte introuvable');
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException(
+        'Compte inactif. Veuillez contacter votre administrateur.',
+      );
+    }
+
+    return { user };
+  }
+
+  /**
+   * Re-issues an invitation for an account that is still inactive.
+   */
+  async resendInvitation(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        isActive: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Utilisateur introuvable');
+    }
+
+    if (user.isActive) {
+      throw new BadRequestException(
+        'Ce compte est deja actif, aucune invitation a renvoyer.',
+      );
+    }
+
+    const invitationToken = this.generateOpaqueToken(32);
+    const invitationTokenHash = this.hashToken(invitationToken);
+    const invitationTokenExpires = new Date(
+      Date.now() + AuthService.INVITATION_TOKEN_TTL_MS,
+    );
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { invitationTokenHash, invitationTokenExpires },
+    });
+
+    const invitationSent = await this.emailService.sendInvitation(
+      user.email,
+      invitationToken,
+    );
+
+    return {
+      message: invitationSent
+        ? 'Invitation renvoyee.'
+        : 'Invitation regeneree, mais le service e-mail n’est pas configure.',
+      invitationSent,
+    };
   }
 
   async login(dto: LoginDto) {

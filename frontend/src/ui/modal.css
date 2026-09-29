@@ -326,6 +326,10 @@
   color: #18243e;
 }
 
+.modal-panel.modal-panel--sm {
+  max-width: min(420px, calc(100vw - 40px));
+}
+
 .modal-panel.modal-panel--md {
   max-width: min(560px, calc(100vw - 40px));
 }
@@ -393,4 +397,7 @@
     padding: 16px;
   }
 }
-
+.modal-panel.modal-panel--xl {
+width: min(1180px, calc(100vw - 32px));
+max-width: 1180px;
+}

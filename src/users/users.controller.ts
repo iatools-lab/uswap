@@ -70,14 +70,44 @@ export class UsersController {
   }
 
   @Roles(Role.ADMIN)
-  @Post(':id/resend-invitation')
-  resendInvitation(@Param('id') id: string) {
+  @Patch(':id/status')
+  setStatus(
+    @Param('id') id: string,
+    @Body() body: { enabled: boolean },
+    @Req() req: { user: { id: string } },
+  ) {
+    // Alias used by UserActions / UsersPage: a single toggle instead of the
+    // deactivate/reactivate pair. Same service methods either way.
+    return body.enabled
+      ? this.usersService.reactivate(id, req.user.id)
+      : this.usersService.deactivate(id, req.user.id);
+  }
+
+  @Roles(Role.ADMIN)
+  @Post(':id/activate')
+  activate(@Param('id') id: string) {
+    // Alias used by UserDetail: re-issues an invitation for a pending account.
     return this.usersService.resendInvitation(id);
   }
 
   @Roles(Role.ADMIN)
+  @Post(':id/resend-invitation')
+  resendInvitation(@Param('id') id: string) {
+    return this.usersService.resendInvitation(id);
+  }
+  @Roles(Role.ADMIN)
   @Get('import/template')
   downloadTemplate(@Res() res: Response) {
+    const csv = this.usersService.generateTemplate();
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="modele_import_utilisateurs.csv"');
+    res.send(csv);
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('imports/template')
+  downloadTemplateAlias(@Res() res: Response) {
+    // Alias: the user-import screen requests /users/imports/template (plural).
     const csv = this.usersService.generateTemplate();
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="modele_import_utilisateurs.csv"');

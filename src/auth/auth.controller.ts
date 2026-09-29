@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { AuthService } from './auth.service';
@@ -33,6 +33,14 @@ export class AuthController {
     return this.authService.activateAccount(dto);
   }
 
+  @Post('activate-account')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Activer un compte invité (alias)' })
+  activateAlias(@Body() dto: ActivateAccountDto) {
+    // Alias: the activation screen posts to /auth/activate-account.
+    return this.authService.activateAccount(dto);
+  }
+
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Connexion utilisateur (génère Access et Refresh Tokens)' })
@@ -53,6 +61,16 @@ export class AuthController {
   @ApiOperation({ summary: 'Verifier le temps restant avant expiration de la session en cours' })
   session(@Req() req: { user: { exp: number } }) {
     return this.authService.getSessionStatus(req.user.exp);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Profil de l'utilisateur connecte" })
+  me(@Req() req: { user: { id: string } }) {
+    // Called by the session watchdog on every visibility change to refresh
+    // the cached role/profile. Returns { user } as the frontend expects.
+    return this.authService.me(req.user.id);
   }
 
   @Post('logout')
@@ -76,5 +94,15 @@ export class AuthController {
   @ApiOperation({ summary: 'Réinitialisation du mot de passe avec le token reçu par e-mail' })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
+  }
+
+  @Post('invitations/:id/resend')
+  @Roles(Role.ADMIN)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Renvoyer l'invitation d'un compte en attente" })
+  resendInvitation(@Param('id') id: string) {
+    return this.authService.resendInvitation(id);
   }
 }

@@ -242,7 +242,7 @@ export type MockCtx = {
   query: URLSearchParams;
   body: Record<string, unknown>;
   file: File | null;
-  method: "GET" | "POST" | "PATCH" | "DELETE";
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   now: number;
   user: MockUser | null;
 };
