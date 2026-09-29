@@ -471,17 +471,29 @@
   background: #fff;
   overflow: hidden;
 }
-.leave-unplanned > summary {
+.leave-unplanned__trigger {
+  display: flex;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
   padding: 16px 20px;
   color: #263a59;
+  font: inherit;
   font-weight: 650;
   cursor: pointer;
+  transition: background 0.16s ease;
 }
-.leave-unplanned > [class] {
+.leave-unplanned__trigger:hover,
+.leave-unplanned__trigger:focus-visible {
+  background: #f8faff;
+}
+.leave-unplanned.is-open .leave-unplanned__trigger {
+  border-bottom: 1px solid #e8edf4;
+  background: #f8faff;
+}
+.leave-unplanned__content {
   padding: 0 20px 20px;
-}
-.leave-unplanned:not([open]) > *:not(summary) {
-  display: none;
 }
 @media (max-width: 950px) {
   .leave-kpis {
@@ -551,7 +563,7 @@
   .leave-section-head {
     padding: 17px;
   }
-  .leave-unplanned > summary {
+  .leave-unplanned__trigger {
     min-height: 44px;
   }
   .leave-status-rail {
@@ -702,14 +714,14 @@
   }
 }
 
-.leave-unplanned > summary span {
+.leave-unplanned__trigger span {
   display: grid;
   gap: 3px;
 }
-.leave-unplanned > summary strong {
+.leave-unplanned__trigger strong {
   font-size: 14px;
 }
-.leave-unplanned > summary small {
+.leave-unplanned__trigger small {
   color: #7a879d;
   font-size: 11px;
   font-weight: 400;

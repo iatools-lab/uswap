@@ -13,6 +13,7 @@ export function SwapperLeavePage() {
   const [leaveData, setLeaveData] = useState<LeaveWorkspaceView | null>(null);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
+  const [absenceOpen, setAbsenceOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -114,8 +115,14 @@ export function SwapperLeavePage() {
           </article>
         </div>
       </section>
-      <details className="leave-unplanned">
-        <summary>
+      <section className={`leave-unplanned${absenceOpen ? " is-open" : ""}`}>
+        <button
+          type="button"
+          className="leave-unplanned__trigger"
+          aria-expanded={absenceOpen}
+          aria-controls="unplanned-absence-panel"
+          onClick={() => setAbsenceOpen((value) => !value)}
+        >
           <span>
             <strong role="heading" aria-level={2}>
               Absence imprévue
@@ -124,13 +131,20 @@ export function SwapperLeavePage() {
               Signaler une indisponibilité liée à un shift déjà planifié
             </small>
           </span>
-        </summary>
-        <SwapperPanel
-          user={session.user}
-          data={data}
-          onChanged={() => setRevision((value) => value + 1)}
-        />
-      </details>
+        </button>
+        {absenceOpen && (
+          <div
+            id="unplanned-absence-panel"
+            className="leave-unplanned__content"
+          >
+            <SwapperPanel
+              user={session.user}
+              data={data}
+              onChanged={() => setRevision((value) => value + 1)}
+            />
+          </div>
+        )}
+      </section>
     </div>
   );
 }
