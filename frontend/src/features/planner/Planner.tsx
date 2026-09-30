@@ -2098,16 +2098,20 @@ try {
 }
 
 async function loadResources() {
-try {
-const [stationResult, userResult] =
-await Promise.all([
-api<Station[]>(
-"/stations",
-),
-api<Swapper[]>(
-"/users?role=SWAPPER",
-),
-]);
+  try {
+    const [stationResult, userResponse] =
+      await Promise.all([
+        api<Station[]>(
+          "/stations",
+        ),
+        api<Swapper[] | { data: Swapper[] }>(
+          "/users?role=SWAPPER&limit=100",
+        ),
+      ]);
+
+    // GET /users answers with a paginated envelope; accept the bare array too
+    // so this keeps working if the route is ever simplified back.
+    const userResult = Array.isArray(userResponse) ? userResponse : userResponse.data || [];
 
   setStations(
     stationResult.filter(

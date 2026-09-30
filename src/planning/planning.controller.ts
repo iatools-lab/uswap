@@ -25,6 +25,20 @@ export class PlanningController {
     return this.planningService.findAll();
   }
 
+  /**
+   * Planning inbox for the signed-in user. Declared before `GET /:id` so
+   * "notices" is never captured as a planning identifier.
+   */
+  @Get('notices')
+  findNotices(@Req() req: { user: { id: string } }) {
+    return this.planningService.findNotices(req.user.id);
+  }
+
+  @Patch('notices/:id/read')
+  readNotice(@Req() req: { user: { id: string } }, @Param('id') id: string) {
+    return this.planningService.readNotice(req.user.id, id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.planningService.findOne(id);

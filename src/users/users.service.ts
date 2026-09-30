@@ -34,15 +34,19 @@ export class UsersService {
   ) {}
 
   async findAll(query: QueryUsersDto) {
+    // `q` is the name the users screen uses; `search` is the historical API
+    // name. Whichever arrives, it filters the same way.
+    const term = query.q ?? query.search;
+
     const where: Prisma.UserWhereInput = {
       ...(query.role ? { role: query.role } : {}),
       ...(query.stationId ? { stationId: query.stationId } : {}),
       ...(query.status ? { isActive: query.status === 'active' } : {}),
-      ...(query.search
+      ...(term
         ? {
             OR: [
-              { fullName: { contains: query.search, mode: 'insensitive' } },
-              { email: { contains: query.search, mode: 'insensitive' } },
+              { fullName: { contains: term, mode: 'insensitive' } },
+              { email: { contains: term, mode: 'insensitive' } },
             ],
           }
         : {}),
@@ -51,11 +55,20 @@ export class UsersService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
+    // The screen sends `sort`; map it to a Prisma order. Anything unknown
+    // falls back to newest-first rather than erroring.
+    const orderBy: Prisma.UserOrderByWithRelationInput =
+      query.sort === 'name'
+        ? { fullName: 'asc' }
+        : query.sort === 'role'
+          ? { role: 'asc' }
+          : { createdAt: 'desc' };
+
     const [data, total, all, active, pending] = await Promise.all([
       this.prisma.user.findMany({
         where,
         select: SAFE_SELECT,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -80,6 +93,25 @@ export class UsersService {
         inactive: pending,
       },
     };
+  }
+
+  /**
+   * Public directory used by the login screen's profile picker. Only active
+   * accounts are listed, and only fields a pre-auth visitor may see — no
+   * phone number, no address, no invitation state.
+   */
+  async findProfiles() {
+    return this.prisma.user.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        role: true,
+        stationId: true,
+      },
+      orderBy: [{ role: 'asc' }, { fullName: 'asc' }],
+    });
   }
 
   async findOne(id: string) {

@@ -4,18 +4,22 @@ import { AbsenceDeclaration } from "./AbsenceDeclaration";
 import { MyAttendanceHistory } from "./MyAttendanceHistory";
 
 export function SwapperPanel({
-  user,
-  data,
-  onChanged,
+user,
+data,
+onChanged,
 }: {
-  user: User;
-  data: OperationData;
-  onChanged: () => void;
+user: User;
+data: OperationData;
+onChanged: () => void;
 }) {
-  return (
-    <>
-      <AbsenceDeclaration shifts={data.shifts} onDeclared={onChanged} />
-      <MyAttendanceHistory swapperId={user.id} />
-    </>
-  );
+return (
+<>
+<AbsenceDeclaration shifts={data.shifts} onDeclared={onChanged} />
+
+  <MyAttendanceHistory
+    swapperId={user.id}
+  />
+</>
+
+);
 }

@@ -1,0 +1,56 @@
+.swapper-calendar { display: none; }
+.swapper-planning-desktop { display: block; }
+
+@media (max-width: 767px) {
+  .swapper-calendar { display: grid; gap: 16px; min-width: 0; }
+  .swapper-planning-desktop { display: none; }
+  .swapper-calendar__header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 12px; align-items: center; }
+  .swapper-calendar__back { width: max-content; min-height: 44px; display: inline-flex; align-items: center; gap: 7px; border: 0; padding: 0; background: transparent; color: var(--navy); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .swapper-calendar__header h2 { grid-column: 1 / -1; margin: 2px 0 0; color: var(--ink); font-size: 21px; line-height: 1.25; }
+  .swapper-calendar__header p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+  .swapper-calendar__surface { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: #fff; box-shadow: 0 8px 24px rgba(16, 38, 78, .06); }
+  .swapper-calendar__nav { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; padding: 12px; border-bottom: 1px solid #edf0f5; }
+  .swapper-calendar__nav strong { text-align: center; color: var(--ink); font-size: 15px; text-transform: capitalize; }
+  .swapper-calendar__nav button { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 11px; background: #fff; color: var(--navy); cursor: pointer; transition: background 160ms ease, transform 160ms ease; }
+  .swapper-calendar__nav button:active { transform: scale(.96); }
+  .swapper-calendar__weekdays, .swapper-calendar__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .swapper-calendar__weekdays { padding: 8px 8px 2px; color: #7d899e; font-size: 10px; font-weight: 700; text-align: center; }
+  .swapper-calendar__weekdays span { padding: 6px 0; }
+  .swapper-calendar__grid { padding: 0 8px 10px; gap: 3px; }
+  .swapper-calendar__day { min-width: 0; min-height: 48px; display: grid; justify-items: center; align-content: center; gap: 5px; border: 1px solid transparent; border-radius: 10px; padding: 4px 2px; background: transparent; color: #56627a; font: inherit; cursor: default; }
+  .swapper-calendar__day.is-outside { opacity: .3; }
+  .swapper-calendar__day.is-today { border-color: #a8b8dc; color: var(--navy); font-weight: 700; }
+  .swapper-calendar__day.has-shift { background: #f7f9fd; color: var(--ink); cursor: pointer; transition: background 160ms ease, transform 160ms ease; }
+  .swapper-calendar__day.has-status-upcoming { background: #f2f3f6; }
+  .swapper-calendar__day.has-status-ongoing { background: #e9f8f1; color: #146b49; }
+  .swapper-calendar__day.has-status-finished { background: #edf3fc; color: #1f559d; }
+  .swapper-calendar__day.has-shift:hover, .swapper-calendar__day.has-shift:focus-visible { background: #eef3fc; outline: 2px solid #9bb0df; outline-offset: 1px; }
+  .swapper-calendar__day.has-shift:active { transform: scale(.96); }
+  .swapper-calendar__number { font-size: 12px; line-height: 1; }
+  .swapper-calendar__markers { width: 100%; min-height: 5px; display: flex; justify-content: center; gap: 2px; }
+  .swapper-calendar__markers i { width: min(12px, 30%); height: 4px; border-radius: 999px; }
+  .swapper-calendar__legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 14px; padding: 12px 14px 14px; border-top: 1px solid #edf0f5; color: #66738a; font-size: 10px; }
+  .swapper-calendar__legend span, .swapper-shift-state { display: inline-flex; align-items: center; gap: 6px; }
+  .swapper-calendar__legend i, .swapper-shift-state i { width: 8px; height: 8px; border-radius: 50%; }
+  .is-upcoming { background-color: #aab2c0; }
+  .is-ongoing { background-color: #23a26d; }
+  .is-finished { background-color: #245ca8; }
+  .swapper-shift-detail-list { display: grid; gap: 12px; }
+  .swapper-shift-detail { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 13px; background: #fff; }
+  .swapper-shift-detail__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .swapper-shift-detail__eyebrow { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .swapper-shift-detail h3 { margin: 3px 0 0; color: var(--ink); font-size: 16px; }
+  .swapper-shift-state { flex: 0 0 auto; min-height: 28px; padding: 5px 9px; border-radius: 999px; background: #f4f6fa; color: #4b5870; font-size: 10px; font-weight: 700; }
+  .swapper-shift-state.is-ongoing { background: #e6f7ef; color: #16734d; }
+  .swapper-shift-state.is-finished { background: #eaf1fb; color: #245ca8; }
+  .swapper-shift-state i.is-upcoming, .swapper-shift-state.is-upcoming i { background: #aab2c0; }
+  .swapper-shift-state.is-ongoing i { background: #23a26d; }
+  .swapper-shift-state.is-finished i { background: #245ca8; }
+  .swapper-shift-detail dl { display: grid; gap: 0; margin: 0; }
+  .swapper-shift-detail dl > div { min-height: 48px; display: grid; grid-template-columns: 94px minmax(0, 1fr); align-items: center; gap: 10px; border-top: 1px solid #edf0f5; }
+  .swapper-shift-detail dt, .swapper-shift-detail dd { margin: 0; min-width: 0; }
+  .swapper-shift-detail dt { display: inline-flex; align-items: center; gap: 6px; color: #7a879b; font-size: 11px; }
+  .swapper-shift-detail dd { color: #27364f; font-size: 12px; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+  .swapper-shift-detail__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .swapper-shift-detail__actions .admin-button { min-width: 0; min-height: 44px; justify-content: center; padding-inline: 10px; font-size: 11px; }
+}

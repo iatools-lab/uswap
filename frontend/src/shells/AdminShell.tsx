@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { CaretDownIcon } from "@phosphor-icons/react";
 import { AccountMenu } from "../features/account/AccountMenu";
 import { PlanningInbox } from "../features/inbox/PlanningInbox";
+import { NotificationBell } from "../features/notifications/NotificationBell";
 import { interceptNav } from "../app/spaNav";
 import { RouteFallback } from "../app/RouteFallback";
 import { useSession } from "../app/session";
@@ -193,6 +194,7 @@ export function AdminShell() {
             <span className="admin-breadcrumb">{section.label}</span>
           </div>
           <PlanningInbox user={session.user} />
+          <NotificationBell />
           <AccountMenu user={session.user} busy={busy} onLogout={disconnect} settingsPath="/app/admin/compte" />
         </header>
 

@@ -41,7 +41,60 @@ return this.stationsService.findAll();
 @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
 @Get(':id')
 findOne(@Param('id') id: string) {
-return this.stationsService.findOne(id);
+  return this.stationsService.findOne(id);
+}
+
+// ============================================================
+// SHIFT TEMPLATES (nested under a station, as the screen calls them)
+// ============================================================
+
+@Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+@Get(':id/shift-templates')
+findTemplates(@Param('id') id: string) {
+  return this.stationsService.findTemplates(id);
+}
+
+@Roles(Role.ADMIN, Role.SUPERVISOR)
+@Post(':id/shift-templates')
+createTemplate(
+  @Param('id') id: string,
+  @Body()
+  body: {
+    label?: string;
+    startTime?: string;
+    endTime?: string;
+    breakStart?: string | null;
+    breakEnd?: string | null;
+  },
+) {
+  return this.stationsService.createTemplate(id, body);
+}
+
+@Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+@Get(':id/shift-templates/:templateId/history')
+findTemplateHistory(
+  @Param('id') id: string,
+  @Param('templateId') templateId: string,
+) {
+  return this.stationsService.findTemplateHistory(id, templateId);
+}
+
+@Roles(Role.ADMIN, Role.SUPERVISOR)
+@Patch(':id/shift-templates/:templateId')
+updateTemplate(
+  @Param('id') id: string,
+  @Param('templateId') templateId: string,
+  @Body()
+  body: {
+    label?: string;
+    startTime?: string;
+    endTime?: string;
+    breakStart?: string | null;
+    breakEnd?: string | null;
+    isActive?: boolean;
+  },
+) {
+  return this.stationsService.updateTemplate(id, templateId, body);
 }
 
 @Roles(Role.ADMIN)

@@ -145,6 +145,11 @@ model Station {
   latitude  Float?
   longitude Float?
 
+  /// Street address and city as captured by the station form. `location` is
+  /// kept for older rows; these are what the station card displays.
+  address String?
+  city    String?
+
   timezone String @default("Africa/Douala")
 
   contactName  String?
@@ -162,6 +167,8 @@ model Station {
 
   shifts           Shift[]
   planningStations PlanningStation[]
+
+  shiftTemplates   ShiftTemplate[]
 
   attendances   Attendance[]
   attendanceQrs AttendanceQr[]
@@ -480,4 +487,55 @@ model Notification {
   @@index([userId, readAt])
   @@index([userId, createdAt])
   @@index([createdAt])
+}
+
+/// Reusable shift pattern for a station (label + window + break). Mirrors the
+/// shape the station screen reads: startTime/endTime/breakStart/breakEnd are
+/// "HH:mm" strings, durations are derived minutes.
+model ShiftTemplate {
+  id        String @id @default(uuid())
+  stationId String
+  station   Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  label     String
+  startTime String
+  endTime   String
+  breakStart String?
+  breakEnd   String?
+
+  breakMinutes    Int @default(0)
+  durationMinutes Int
+  isActive        Boolean @default(true)
+  revision        Int     @default(1)
+
+  versions ShiftTemplateVersion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([stationId, startTime, endTime])
+  @@index([stationId])
+}
+
+/// Immutable snapshot written on every create/update, so the history screen
+/// can show what the template looked like at each revision.
+model ShiftTemplateVersion {
+  id         String @id @default(uuid())
+  templateId String
+  template   ShiftTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  label     String
+  startTime String
+  endTime   String
+  breakStart String?
+  breakEnd   String?
+
+  breakMinutes    Int
+  durationMinutes Int
+  isActive        Boolean
+  revision        Int
+
+  createdAt DateTime @default(now())
+
+  @@index([templateId])
 }

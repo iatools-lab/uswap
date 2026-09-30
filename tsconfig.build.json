@@ -1,4 +1,20 @@
 {
-  "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+"extends": "./tsconfig.json",
+"compilerOptions": {
+"outDir": "./dist"
+},
+"files": [],
+"include": [
+"src/**/*.ts"
+],
+"exclude": [
+"node_modules",
+"frontend",
+"frontend-backup",
+"dylane-temp",
+"dist",
+"test",
+"**/*.spec.ts",
+"**/*.test.ts"
+]
 }

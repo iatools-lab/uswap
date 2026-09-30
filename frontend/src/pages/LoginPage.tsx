@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Eye, EyeOff, LoaderCircle, Mail, X } from "../ui/icons";
 import { useSession } from "../app/session";
-import { mockPeople, roles } from "../api/auth-api";
+import { fetchProfiles, roles, type Profile } from "../api/auth-api";
 import { AuthLayout } from "./AuthLayout";
 import { RouteFallback } from "../app/RouteFallback";
 
@@ -18,6 +18,23 @@ export function LoginPage() {
   const [help, setHelp] = useState<"invite" | null>(null);
   const [capsLock, setCapsLock] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+
+  // Accounts offered by the picker come from the real directory. A failure
+  // (backend down) just hides the picker: typing an e-mail still works.
+  useEffect(() => {
+    let active = true;
+    fetchProfiles()
+      .then((rows) => {
+        if (active) setProfiles(rows);
+      })
+      .catch(() => {
+        if (active) setProfiles([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -61,8 +78,8 @@ export function LoginPage() {
               <label htmlFor="demo-profile">Profil à ouvrir</label>
               <div className="input-wrap">
                 <select id="demo-profile" value={identifier} onChange={(e) => { setIdentifier(e.target.value); setError(""); }} disabled={locked} aria-label="Choisir un profil">
-                  <option value="">Choisir un compte</option>
-                  {mockPeople.map((person) => <option key={person.id} value={person.email}>{roles[person.role]} · {person.fullName}</option>)}
+                  <option value="">{profiles.length ? "Choisir un compte" : "Aucun compte disponible"}</option>
+                  {profiles.map((person) => <option key={person.id} value={person.email}>{roles[person.role]} · {person.fullName}</option>)}
                 </select>
               </div>
             </div>

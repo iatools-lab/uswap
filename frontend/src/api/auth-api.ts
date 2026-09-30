@@ -1,5 +1,5 @@
 import { mockDownload, mockRequest } from "./mock";
-import { DEMO_PASSWORD, FICTITIOUS_DOMAIN, MOCK_LATENCY_MS, delay } from "./mock";
+import { MOCK_LATENCY_MS, delay } from "./mock";
 import { MockHttpError, type MockCtx } from "./mock/types";
 
 export type Role = "ADMIN" | "SUPERVISOR" | "STATION_CHIEF" | "SWAPPER";
@@ -39,46 +39,26 @@ export const rolePaths: Record<Role, string> = {
   SWAPPER: "/app/mon-espace",
 };
 
-export const mockPeople: User[] = [
-  {
-    id: "us-admin",
-    email: `admin@${FICTITIOUS_DOMAIN}`,
-    fullName: "Administrateur uSwap",
-    role: "ADMIN",
-  },
-  {
-    id: "us-supervisor",
-    email: `superviseur@${FICTITIOUS_DOMAIN}`,
-    fullName: "Camille Nola",
-    role: "SUPERVISOR",
-  },
-  {
-    id: "us-chief-bastos",
-    email: `chef@${FICTITIOUS_DOMAIN}`,
-    fullName: "Sam Kotto",
-    role: "STATION_CHIEF",
-    stationId: "st-bastos",
-    stationName: "Station Bastos",
-  },
-  {
-    id: "us-chief-obobogo",
-    email: `chef.obobogo@${FICTITIOUS_DOMAIN}`,
-    fullName: "Ariane Tchana",
-    role: "STATION_CHIEF",
-    stationId: "st-obobogo",
-    stationName: "Obobogo",
-  },
-  {
-    id: "sw-01",
-    email: `swappeur@${FICTITIOUS_DOMAIN}`,
-    fullName: "Léa Meka",
-    role: "SWAPPER",
-    stationId: "st-bastos",
-    stationName: "Station Bastos",
-  },
-];
+export type Profile = {
+  id: string;
+  email: string;
+  fullName: string;
+  role: Role;
+  stationId?: string | null;
+};
 
-export { DEMO_PASSWORD, FICTITIOUS_DOMAIN, MOCK_LATENCY_MS };
+/**
+ * Real accounts the login screen may offer, read from the backend directory.
+ * Returns an empty list on failure so the (optional) picker simply hides
+ * instead of blocking authentication.
+ */
+export async function fetchProfiles(): Promise<Profile[]> {
+  const rows = await api<Profile[]>("/public/profiles");
+
+  return rows.filter((row) =>
+    Object.prototype.hasOwnProperty.call(roles, row.role),
+  );
+}
 
 const configured = (
   import.meta as unknown as {
@@ -122,6 +102,9 @@ const USER_KEY = "uswap-session-user";
 
 let accessToken: string | null = null;
 let generation = 0;
+
+/** Single in-flight refresh shared by concurrent callers. See refresh(). */
+let inFlightRefresh: Promise<Session> | null = null;
 
 function serialize(body: unknown): {
   plain: Record<string, unknown>;
@@ -355,6 +338,22 @@ export function refresh(): Promise<Session> {
     );
   }
 
+  // The refresh token is single-use and rotated server-side. Under React
+  // StrictMode (dev) the boot effect runs twice, so two concurrent calls would
+  // send the same token: the first succeeds, the second is refused as already
+  // used, and the session looks dead. Share one in-flight request instead.
+  if (inFlightRefresh) return inFlightRefresh;
+
+  const started = doRefresh();
+
+  inFlightRefresh = started.finally(() => {
+    inFlightRefresh = null;
+  });
+
+  return inFlightRefresh;
+}
+
+function doRefresh(): Promise<Session> {
   const refreshToken =
     localStorage.getItem(
       REFRESH_TOKEN_KEY,

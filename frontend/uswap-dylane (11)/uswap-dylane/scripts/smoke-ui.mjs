@@ -1,0 +1,866 @@
+import assert from "node:assert/strict";
+import { chromium } from "playwright";
+
+const baseUrl = process.env.BASE_URL || "http://127.0.0.1:5174";
+const browser = await chromium.launch({ headless: true });
+const failures = [];
+
+async function login(page, email, password) {
+  await page.goto(`${baseUrl}/auth/login`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Choisir un profil" }).click();
+  await page.getByRole("option").filter({ hasText: email }).click();
+  await page.locator("#password").fill(password);
+  await page.getByRole("button", { name: "Se connecter" }).click();
+  await page.waitForURL(/\/app\//);
+}
+
+async function assertNoHorizontalOverflow(page, label) {
+  const sizes = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    document: document.documentElement.scrollWidth,
+    body: document.body.scrollWidth,
+  }));
+  assert.ok(
+    Math.max(sizes.document, sizes.body) <= sizes.viewport + 1,
+    `${label} déborde horizontalement (${Math.max(sizes.document, sizes.body)} px pour ${sizes.viewport} px)`,
+  );
+}
+
+async function exercise(name, email, password, expectedPath, run) {
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+  });
+  const page = await context.newPage();
+  page.on("pageerror", (error) => failures.push(`${name}: ${error.message}`));
+  try {
+    await login(page, email, password);
+    assert.match(
+      page.url(),
+      new RegExp(`${expectedPath.replaceAll("/", "\\/")}(?:$|\\/)`),
+    );
+    await run(page);
+  } finally {
+    await context.close();
+  }
+}
+
+async function verifyLegacyIncidentRepair() {
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+  });
+  const page = await context.newPage();
+  await page.goto(`${baseUrl}/auth/login`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Choisir un profil" }).waitFor();
+  await page.evaluate(() => {
+    const key = "uswap.mock.db.v11";
+    const database = JSON.parse(localStorage.getItem(key) || "null");
+    if (!database) throw new Error("Base locale de démonstration absente.");
+    const amina = database.users.find((user) => user.id === "sw-05");
+    if (!amina) throw new Error("Compte de migration introuvable.");
+    // Reproduit une ancienne session dans laquelle le swappeur a été déplacé
+    // alors que l'incident de démonstration restait rattaché à Obobogo.
+    amina.stationId = "st-bastos";
+    localStorage.setItem(key, JSON.stringify(database));
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await login(page, "swappeur@uswap.example.com", "uswap2026");
+  const invalidIncidents = await page.evaluate(() => {
+    const database = JSON.parse(
+      localStorage.getItem("uswap.mock.db.v11") || "null",
+    );
+    return database.incidents.filter((incident) => {
+      const reporter = database.users.find(
+        (user) => user.id === incident.reporterId,
+      );
+      const swapper = database.users.find(
+        (user) => user.id === incident.affectedSwapperId,
+      );
+      return (
+        reporter?.role !== "STATION_CHIEF" ||
+        reporter.stationId !== incident.stationId ||
+        swapper?.role !== "SWAPPER" ||
+        swapper.stationId !== incident.stationId
+      );
+    });
+  });
+  assert.equal(
+    invalidIncidents.length,
+    0,
+    "La migration doit retirer les incidents hors périmètre.",
+  );
+  await context.close();
+}
+
+async function createPlanning(page, { mode, name, start, end }) {
+  const buttonName =
+    mode === "automatic" ? "Générer automatiquement" : "Créer un brouillon";
+  await page.getByRole("button", { name: buttonName, exact: true }).click();
+  await page
+    .getByRole("heading", {
+      name: mode === "automatic" ? "Générer un planning" : "Créer un planning",
+    })
+    .waitFor();
+  await page.locator("#planning-name").fill(name);
+  const dates = page.locator('.stepper-modal input[type="date"]');
+  await dates.nth(0).fill(start);
+  await dates.nth(1).fill(end);
+  await page.getByRole("button", { name: "Suivant", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Sélectionner une station", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Station Bastos/ })
+    .click();
+  await page
+    .getByRole("heading", { name: "Station Bastos", exact: true })
+    .waitFor();
+  await page.getByText("Repos minimal", { exact: true }).waitFor();
+  await page
+    .getByText(/swappeurs?$/)
+    .first()
+    .waitFor();
+  const displayedTeams = await page
+    .locator(".planner-station-team small")
+    .allTextContents();
+  assert.ok(
+    displayedTeams.length > 0 &&
+      displayedTeams.every((entry) => entry.includes("Station Bastos")),
+    "Le résumé doit limiter l’équipe aux swappeurs de la station choisie",
+  );
+  const stationSelectorBox = await page
+    .locator(".stepper-field-group")
+    .first()
+    .boundingBox();
+  const stationSummaryBox = await page
+    .locator(".planner-station-summary")
+    .boundingBox();
+  assert.ok(
+    stationSelectorBox && stationSummaryBox,
+    "Le résumé de station doit être visible",
+  );
+  assert.ok(
+    stationSummaryBox.y - (stationSelectorBox.y + stationSelectorBox.height) <
+      40,
+    "Le résumé de station doit suivre immédiatement le sélecteur",
+  );
+  await page.getByRole("button", { name: "Suivant", exact: true }).click();
+  await page.locator('.planner-options input[type="checkbox"]').first().check();
+  await page.locator('.planner-days input[type="checkbox"]').first().check();
+  await page.getByRole("button", { name: "Suivant", exact: true }).click();
+  await page
+    .getByRole("button", {
+      name: mode === "automatic" ? "Générer et affecter" : "Créer le brouillon",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Tous les plannings", exact: true })
+    .waitFor();
+}
+
+await verifyLegacyIncidentRepair();
+
+await exercise(
+  "administrateur",
+  "admin@uswap.example.com",
+  "AdminUswap",
+  "/app/admin",
+  async (page) => {
+    await page
+      .getByRole("heading", { name: "Envois automatiques de rapports" })
+      .waitFor();
+    await page.getByRole("button", { name: "Créer un envoi" }).click();
+    const reportDialog = page.getByRole("dialog", {
+      name: "Programmer un rapport",
+    });
+    assert.equal(
+      await reportDialog
+        .getByPlaceholder(/Synthèse opérationnelle/)
+        .inputValue(),
+      "",
+      "Une programmation neuve doit être vierge",
+    );
+    assert.ok(
+      await reportDialog
+        .getByRole("button", { name: "Créer la programmation" })
+        .isDisabled(),
+    );
+    await reportDialog
+      .getByRole("button", { name: "Fermer la fenêtre" })
+      .click();
+    const workspace = page.locator(".admin-workspace");
+    await page.getByRole("button", { name: "Masquer la navigation" }).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".admin-sidebar")?.getBoundingClientRect()
+          .width < 90,
+    );
+    assert.ok(
+      await workspace.evaluate((element) =>
+        element.classList.contains("is-sidebar-collapsed"),
+      ),
+      "La navigation doit pouvoir se replier depuis son rail",
+    );
+    await page.getByRole("button", { name: "Afficher la navigation" }).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".admin-sidebar")?.getBoundingClientRect()
+          .width > 200,
+    );
+    assert.ok(
+      !(await workspace.evaluate((element) =>
+        element.classList.contains("is-sidebar-collapsed"),
+      )),
+      "La navigation doit pouvoir être réaffichée",
+    );
+    await page.getByRole("link", { name: "Utilisateurs", exact: true }).click();
+    await page.waitForURL(/\/app\/admin\/utilisateurs$/);
+    assert.equal(
+      await page.locator("h1").count(),
+      1,
+      "Le titre de page ne doit apparaître qu'une fois",
+    );
+    const notificationBox = await page
+      .locator(".notification-bell__trigger")
+      .boundingBox();
+    const accountBox = await page.locator(".account-trigger").boundingBox();
+    assert.ok(
+      notificationBox && accountBox,
+      "Les actions du compte doivent être visibles",
+    );
+    assert.ok(
+      accountBox.x > notificationBox.x,
+      "La cloche doit précéder l'avatar",
+    );
+    assert.ok(
+      accountBox.x - (notificationBox.x + notificationBox.width) < 20,
+      "La cloche doit rester accolée à l'avatar",
+    );
+    await page.getByRole("button", { name: /notification/i }).click();
+    await page.getByRole("button", { name: /Toutes/ }).waitFor();
+    await page.getByRole("button", { name: /Non lues/ }).click();
+    await page.getByText("Accès à valider", { exact: true }).waitFor();
+    await page.keyboard.press("Escape");
+    await page
+      .getByRole("button", { name: "Créer un utilisateur" })
+      .first()
+      .click();
+    await page
+      .getByRole("heading", { name: "Nouveau collaborateur" })
+      .waitFor();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /Fermer/ })
+      .click();
+
+    assert.equal(
+      await page.getByRole("link", { name: "Opérations", exact: true }).count(),
+      0,
+      "L'administrateur ne doit pas disposer de l'espace Opérations",
+    );
+    await page.goto(`${baseUrl}/app/admin/operations`);
+    await page.waitForURL(/\/app\/admin$/);
+
+    await page.getByRole("link", { name: "Plannings", exact: true }).click();
+    await page.waitForURL(/\/app\/admin\/plannings$/);
+    await page
+      .getByRole("link", { name: /Ouvrir le planning/ })
+      .first()
+      .click();
+    await page.locator(".planner-range").first().click();
+    await page
+      .getByRole("button", { name: "Ajouter", exact: true })
+      .first()
+      .click();
+    await page
+      .getByRole("heading", { name: "Ajouter des swappeurs" })
+      .waitFor();
+    await page
+      .getByRole("form", { name: "Affecter un swappeur" })
+      .getByText(/Pause .*60 min/)
+      .waitFor();
+    const assignmentStatus = page.locator(".assignment-status").first();
+    await page
+      .locator('.assignment-table input[type="checkbox"]')
+      .first()
+      .check();
+    assert.equal(
+      await page.getByRole("heading", { name: "Résultat du contrôle" }).count(),
+      0,
+      "La sélection d’un swappeur ne doit pas ouvrir le détail des contraintes",
+    );
+    await assignmentStatus.waitFor();
+    await assignmentStatus.click();
+    await page.getByRole("heading", { name: "Résultat du contrôle" }).waitFor();
+    await page
+      .getByRole("dialog")
+      .last()
+      .getByRole("button", { name: "Fermer", exact: true })
+      .click();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await page
+      .getByRole("button", { name: "Tous les plannings", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: /Créer un brouillon|Créer un planning/ })
+      .first()
+      .click();
+    await page.getByRole("heading", { name: "Créer un planning" }).waitFor();
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: /Stations/ }).click();
+    await page.waitForURL(/\/app\/admin\/stations\?tab=list$/);
+    await page.getByRole("button", { name: "Créer une station" }).click();
+    await page.getByRole("heading", { name: "Nouvelle station" }).waitFor();
+    await page.locator(".map-picker-wrapper .leaflet-container").waitFor();
+    assert.match(
+      (await page
+        .locator(".map-picker-wrapper .leaflet-tile")
+        .first()
+        .getAttribute("src")) || "",
+      /server\.arcgisonline\.com/,
+      "La mini-carte doit utiliser un fond sans clé API",
+    );
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("link", { name: "Plannings", exact: true }).click();
+    await page.waitForURL(/\/app\/admin\/plannings$/);
+    await createPlanning(page, {
+      mode: "manual",
+      name: "Recette manuel",
+      start: "2026-10-05",
+      end: "2026-10-06",
+    });
+    await page
+      .getByRole("button", { name: "Tous les plannings", exact: true })
+      .click();
+    await createPlanning(page, {
+      mode: "automatic",
+      name: "Recette automatique",
+      start: "2026-10-07",
+      end: "2026-10-08",
+    });
+  },
+);
+
+await exercise(
+  "superviseur",
+  "superviseur@uswap.example.com",
+  "uswap2026",
+  "/app/supervision",
+  async (page) => {
+    await page
+      .getByRole("link", { name: "Supervision", exact: true })
+      .waitFor();
+    for (const label of [
+      "Supervision",
+      "Pointages",
+      "Planning",
+      "Mon compte",
+    ]) {
+      assert.equal(
+        await page.getByRole("link", { name: label, exact: true }).count(),
+        1,
+        `Navigation superviseur manquante : ${label}`,
+      );
+    }
+    await page.getByRole("heading", { name: "Shifts à remplacer" }).waitFor();
+    await page
+      .getByRole("heading", { name: "Tableau de bord du réseau" })
+      .waitFor();
+    const upcomingStationButtons = page.getByRole("button", {
+      name: /Voir les prochains shifts de/,
+    });
+    if (await upcomingStationButtons.count()) {
+      await upcomingStationButtons.first().click();
+      const upcomingDialog = page.getByRole("dialog", {
+        name: /Prochains shifts ·/,
+      });
+      await upcomingDialog
+        .getByRole("button", { name: "Ouvrir dans le planning" })
+        .waitFor();
+      await upcomingDialog
+        .getByRole("button", { name: "Fermer", exact: true })
+        .click();
+      await upcomingDialog.waitFor({ state: "detached" });
+    }
+    const dashboardDownload = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Exporter Excel" }).click();
+    assert.match(
+      (await dashboardDownload).suggestedFilename(),
+      /rapport-uswap-.*\.xlsx/,
+    );
+    await page
+      .getByRole("heading", { name: "Incidents concernant les swappeurs" })
+      .waitFor();
+    assert.equal(
+      await page.getByRole("button", { name: "Déclarer un incident" }).count(),
+      0,
+      "Le superviseur traite les incidents mais ne les déclare pas",
+    );
+    await page
+      .getByRole("button", { name: /Chute légère pendant la prise de poste/ })
+      .click();
+    await page
+      .getByRole("heading", { name: "Chute légère pendant la prise de poste" })
+      .waitFor();
+    const incidentReview = page.getByRole("dialog", {
+      name: "Chute légère pendant la prise de poste",
+    });
+    await incidentReview
+      .getByRole("button", { name: "Prochaine étape" })
+      .click();
+    await page.getByRole("option", { name: "En traitement" }).click();
+    await incidentReview
+      .getByLabel("Compte rendu")
+      .fill("Suivi opérationnel engagé avec le chef de station.");
+    await incidentReview
+      .getByRole("button", { name: "Enregistrer le suivi" })
+      .click();
+    await incidentReview.waitFor({ state: "detached" });
+    const replaceButtons = page.getByRole("button", {
+      name: "Affecter",
+      exact: true,
+    });
+    if (await replaceButtons.count()) {
+      await replaceButtons.first().click();
+      await page
+        .getByRole("heading", { name: "Affecter un remplaçant" })
+        .waitFor();
+      await page.getByRole("button", { name: "Fermer" }).click();
+    }
+    await page.getByRole("link", { name: "Pointages", exact: true }).click();
+    await page.waitForURL(/\/app\/supervision\/pointages$/);
+    const correctionButtons = page.getByRole("button", {
+      name: "Corriger",
+      exact: true,
+    });
+    if (await correctionButtons.count()) {
+      await correctionButtons.first().click();
+      const correctionDialog = page.getByRole("dialog", {
+        name: /Corriger le pointage/,
+      });
+      await correctionDialog
+        .getByText(/justificatif si la correction/i)
+        .waitFor();
+      await correctionDialog
+        .getByLabel(/Motif/)
+        .fill("Correction validée lors de la recette");
+      await correctionDialog
+        .getByText("Absence justifiée", { exact: true })
+        .click();
+      await correctionDialog
+        .getByRole("button", { name: "Enregistrer" })
+        .click();
+      await correctionDialog.waitFor({ state: "detached" });
+    }
+    assert.equal(
+      await page.getByRole("button", { name: "Gérer les QR" }).count(),
+      0,
+      "Le superviseur suit les opérations sans générer les QR",
+    );
+    await page.getByRole("tab", { name: "Historique" }).click();
+    await page
+      .getByRole("heading", {
+        name: "Historique des changements d’affectation",
+      })
+      .waitFor();
+    await page.setViewportSize({ width: 375, height: 812 });
+    assert.equal(
+      await page.locator(".admin-sidebar nav > a").count(),
+      4,
+      "Le superviseur doit disposer de quatre onglets mobiles",
+    );
+    assert.ok(
+      (await page.evaluate(() => document.documentElement.scrollWidth)) <= 375,
+      "L’espace superviseur ne doit pas déborder horizontalement sur mobile",
+    );
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole("link", { name: "Planning", exact: true }).click();
+    await page.waitForURL(/\/app\/supervision\/plannings$/);
+    await page
+      .getByRole("button", { name: /Créer un brouillon|Créer un planning/ })
+      .first()
+      .click();
+    await page.getByRole("heading", { name: "Créer un planning" }).waitFor();
+    await page.getByRole("button", { name: "Fermer" }).click();
+
+    await createPlanning(page, {
+      mode: "automatic",
+      name: "Recette superviseur",
+      start: "2026-10-09",
+      end: "2026-10-10",
+    });
+  },
+);
+
+await exercise(
+  "chef de station",
+  "chef@uswap.example.com",
+  "uswap2026",
+  "/app/station",
+  async (page) => {
+    await page.getByRole("button", { name: "Gérer les QR" }).click();
+    await page
+      .getByRole("heading", { name: "Générer un QR de service" })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "Fin de service", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Shift publié pour le QR" }).click();
+    const qrOptions = page.getByRole("option");
+    assert.ok(
+      await qrOptions.count(),
+      "Un shift courant de la station doit permettre de générer un QR",
+    );
+    await qrOptions.first().click();
+    await page.getByRole("button", { name: "Générer le QR de fin" }).click();
+    await page
+      .getByRole("img", { name: "QR temporaire de pointage" })
+      .waitFor();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /Fermer/ })
+      .click();
+    await page.getByRole("heading", { name: /Présence du jour/ }).waitFor();
+    await page.locator(".shift-table-clean").first().waitFor();
+    await page
+      .getByRole("heading", { name: "Incidents concernant les swappeurs" })
+      .waitFor();
+    await page.getByRole("button", { name: "Déclarer un incident" }).click();
+    const incidentDialog = page.getByRole("dialog", {
+      name: "Déclarer un incident",
+    });
+    assert.equal(
+      await incidentDialog.getByPlaceholder(/Malaise pendant/).inputValue(),
+      "",
+      "Un nouvel incident doit être vierge",
+    );
+    assert.ok(
+      await incidentDialog
+        .getByRole("button", { name: "Transmettre l’incident" })
+        .isDisabled(),
+      "Un incident incomplet doit être bloqué",
+    );
+    await incidentDialog
+      .getByRole("button", { name: "Swappeur concerné" })
+      .click();
+    await page.getByRole("option").first().click();
+    await incidentDialog
+      .getByPlaceholder(/Malaise pendant/)
+      .fill("Incident de recette terrain");
+    await incidentDialog
+      .getByPlaceholder(/Précisez ce que le swappeur/)
+      .fill(
+        "Le chef de station documente une situation concernant un swappeur de son équipe.",
+      );
+    await incidentDialog
+      .getByRole("button", { name: "Transmettre l’incident" })
+      .click();
+    await incidentDialog.waitFor({ state: "detached" });
+    await page
+      .getByRole("button", { name: /Incident de recette terrain/ })
+      .waitFor();
+    await page
+      .getByRole("heading", { name: /pointages/i })
+      .last()
+      .waitFor();
+    await page.getByRole("link", { name: "Planning", exact: true }).click();
+    await page.waitForURL(/\/app\/station\/plannings$/);
+    await page
+      .getByText(/Semaine opérationnelle|Du .* au/)
+      .first()
+      .waitFor();
+    assert.equal(
+      await page
+        .getByRole("button", {
+          name: /Créer un planning|Créer un brouillon|Générer automatiquement/,
+        })
+        .count(),
+      0,
+    );
+  },
+);
+
+await exercise(
+  "navigation mobile",
+  "admin@uswap.example.com",
+  "AdminUswap",
+  "/app/admin",
+  async (page) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("link", { name: "Plannings", exact: true }).click();
+    await page.waitForURL(/\/app\/admin\/plannings$/);
+    for (const name of ["Générer automatiquement", "Créer un brouillon"]) {
+      const action = page.getByRole("button", { name, exact: true });
+      const box = await action.boundingBox();
+      assert.ok(box, `Action mobile absente : ${name}`);
+      assert.ok(
+        box.x >= -1 && box.x + box.width <= 391,
+        `Action hors écran : ${name}`,
+      );
+    }
+    await page
+      .getByRole("button", { name: "Créer un brouillon", exact: true })
+      .click();
+    await page.getByRole("heading", { name: "Créer un planning" }).waitFor();
+    await page.keyboard.press("Escape");
+  },
+);
+
+await exercise(
+  "swappeur",
+  "swappeur@uswap.example.com",
+  "uswap2026",
+  "/app/mon-espace",
+  async (page) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page
+      .getByRole("heading", { name: "Historique de pointage" })
+      .waitFor();
+    for (const name of ["Pointage", "Planning", "Congés", "Compte"]) {
+      await page.getByRole("link", { name, exact: true }).waitFor();
+    }
+    await assertNoHorizontalOverflow(page, "Pointage mobile");
+    const punchButton = page.getByRole("button", { name: /Prise de service/ });
+    if (await punchButton.count()) {
+      await punchButton.click();
+      const punchDialog = page.getByRole("dialog", {
+        name: /Scanner le QR/,
+      });
+      await punchDialog.waitFor();
+      await assertNoHorizontalOverflow(page, "Modale de pointage mobile");
+      await punchDialog.getByRole("button", { name: /Fermer/ }).click();
+    }
+    const nextShift = page.locator(".operations-hero");
+    if (await nextShift.count()) {
+      const nextEnd = await nextShift.getAttribute("data-shift-end");
+      assert.ok(
+        nextEnd && Date.parse(nextEnd) >= Date.now(),
+        "La prochaine affectation ne doit pas être un shift déjà terminé",
+      );
+    }
+    const automatedCheckoutAbsence = await page.evaluate(() => {
+      const db = JSON.parse(
+        localStorage.getItem("uswap.mock.db.v11") || "null",
+      );
+      if (!db) return false;
+      return db.attendance.some(
+        (record) =>
+          record.checkedInAt &&
+          !record.checkedOutAt &&
+          record.status === "ABSENT" &&
+          db.absences.some(
+            (absence) =>
+              absence.shiftId === record.shiftId &&
+              /sans pointage de fin/i.test(absence.reason),
+          ),
+      );
+    });
+    assert.ok(
+      automatedCheckoutAbsence,
+      "Un pointage sans fin de service doit produire une absence automatique",
+    );
+    await page
+      .getByRole("heading", { name: "Historique de pointage" })
+      .waitFor();
+    const pointageCards = page.locator(
+      ".responsive-data-table__mobile .responsive-data-card, .swapper-attendance-card, .swapper-shift-card",
+    );
+    if (await pointageCards.count()) {
+      await pointageCards.first().waitFor();
+    }
+    await page.getByRole("link", { name: "Congés", exact: true }).click();
+    await page.waitForURL(/\/app\/mon-espace\/conges$/);
+    await assertNoHorizontalOverflow(page, "Congés mobile");
+    await page
+      .getByRole("heading", { name: "Organisez vos absences sereinement" })
+      .waitFor();
+    await page.getByRole("button", { name: "Nouvelle demande" }).click();
+    await page
+      .getByRole("heading", { name: "Nouvelle demande de congé" })
+      .waitFor();
+    assert.equal(
+      await page.getByLabel("Premier jour").inputValue(),
+      "",
+      "Une nouvelle demande ne doit pas être préremplie",
+    );
+    assert.ok(
+      await page
+        .getByRole("button", { name: "Transmettre la demande" })
+        .isDisabled(),
+      "Une demande incomplète doit rester bloquée",
+    );
+    await page.getByRole("button", { name: "Fermer la fenêtre" }).click();
+    const cancelLeave = page
+      .locator(".leave-actions")
+      .getByRole("button", { name: "Annuler", exact: true })
+      .first();
+    if (await cancelLeave.count()) {
+      await cancelLeave.click();
+      const cancelDialog = page.getByRole("dialog", {
+        name: "Annuler cette demande ?",
+      });
+      await cancelDialog.waitFor();
+      await cancelDialog
+        .getByRole("button", { name: "Conserver la demande" })
+        .click();
+      await cancelDialog.waitFor({ state: "detached" });
+    }
+    await page.getByRole("heading", { name: "Absence imprévue" }).waitFor();
+    await page
+      .getByText("Signaler une indisponibilité liée à un shift déjà planifié")
+      .click();
+    await page.getByRole("button", { name: "Signaler", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Signaler", exact: true }).click();
+    await page.getByRole("heading", { name: "Signaler une absence" }).waitFor();
+    const sendAbsence = page.getByRole("button", {
+      name: "Envoyer",
+      exact: true,
+    });
+    assert.ok(
+      await sendAbsence.isDisabled(),
+      "Une absence vierge ne doit pas pouvoir être envoyée",
+    );
+    await page.getByRole("button", { name: "Shift concerné" }).click();
+    await page.getByRole("option").last().click();
+    await page
+      .locator('#absence-declaration input[type="file"]')
+      .setInputFiles({
+        name: "justificatif.pdf",
+        mimeType: "application/pdf",
+        buffer: Buffer.from("%PDF-1.4\n% justificatif recette uSwap"),
+      });
+    await page
+      .locator('#absence-declaration input[placeholder*="Maladie"]')
+      .fill("Indisponibilité médicale");
+    await page.context().setOffline(true);
+    await page.getByText("Mode hors connexion", { exact: true }).waitFor();
+    await sendAbsence.click();
+    await page.getByText(/déclaration mise en file/i).waitFor();
+    await page.waitForFunction(async () => {
+      const request = indexedDB.open("uswap-outbox", 2);
+      const db = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const tx = db.transaction("mutations", "readonly");
+      const count = tx.objectStore("mutations").count();
+      return await new Promise((resolve) => {
+        count.onsuccess = () => resolve(count.result > 0);
+      });
+    });
+    await page.context().setOffline(false);
+    await page.waitForFunction(async () => {
+      const request = indexedDB.open("uswap-outbox", 2);
+      const db = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const tx = db.transaction("mutations", "readonly");
+      const count = tx.objectStore("mutations").count();
+      return await new Promise((resolve) => {
+        count.onsuccess = () => resolve(count.result === 0);
+      });
+    });
+    await page.getByRole("link", { name: "Planning", exact: true }).click();
+    await page.waitForURL(/\/app\/mon-espace\/plannings$/);
+    await page
+      .getByText(/Semaine opérationnelle|Du .* au/)
+      .first()
+      .waitFor();
+    await assertNoHorizontalOverflow(page, "Planning mobile");
+    await page
+      .getByRole("button", { name: /Ouvrir le planning/ })
+      .first()
+      .click();
+    await page.locator(".swapper-calendar").waitFor();
+    assert.equal(
+      await page.locator(".swapper-planning-desktop").isVisible(),
+      false,
+      "La vue desktop du planning doit être masquée sur mobile",
+    );
+    await page.getByRole("button", { name: "Mois suivant" }).click();
+    await page.getByRole("button", { name: "Mois précédent" }).click();
+    await page.locator(".swapper-calendar__day.has-shift").first().click();
+    const shiftDialog = page.getByRole("dialog").last();
+    await shiftDialog.getByText("Horaires", { exact: true }).first().waitFor();
+    await shiftDialog.locator(".swapper-shift-state").first().waitFor();
+    const absenceShortcut = shiftDialog.getByRole("button", {
+      name: "Signaler une absence",
+    });
+    if (await absenceShortcut.count())
+      assert.ok(await absenceShortcut.first().isVisible());
+    await assertNoHorizontalOverflow(page, "Détail mobile d’un shift");
+    await shiftDialog.getByRole("button", { name: /Fermer/ }).click();
+    await page.getByRole("link", { name: "Compte", exact: true }).click();
+    await page.waitForURL(/\/app\/mon-espace\/compte$/);
+    await assertNoHorizontalOverflow(page, "Compte mobile");
+    await page
+      .getByRole("button", { name: "Notifications", exact: true })
+      .click();
+    await page
+      .getByRole("heading", { name: "Notifications et canaux" })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "Enregistrer mes préférences" })
+      .click();
+    await page.getByText("Enregistré", { exact: true }).waitFor();
+  },
+);
+
+const migrationContext = await browser.newContext();
+const migrationPage = await migrationContext.newPage();
+await migrationPage.goto(`${baseUrl}/auth/login`, {
+  waitUntil: "domcontentloaded",
+});
+await migrationPage
+  .getByRole("button", { name: "Choisir un profil" })
+  .waitFor();
+await migrationPage.evaluate(() => {
+  const current = JSON.parse(
+    localStorage.getItem("uswap.mock.db.v11") || "null",
+  );
+  if (!current) throw new Error("Base v11 absente avant le test de migration");
+  current.version = 10;
+  current.plannings[0].name = "Planning conservé par migration";
+  delete current.leaveBalances;
+  delete current.leaveSyncOperations;
+  delete current.incidents;
+  delete current.notificationPreferences;
+  delete current.scheduledReports;
+  delete current.offlineOperations;
+  localStorage.setItem("uswap.mock.db.v10", JSON.stringify(current));
+  localStorage.removeItem("uswap.mock.db.v11");
+});
+await migrationPage.reload({ waitUntil: "domcontentloaded" });
+await migrationPage
+  .getByRole("button", { name: "Choisir un profil" })
+  .waitFor();
+const migrated = await migrationPage.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem("uswap.mock.db.v11") || "null");
+  return {
+    version: db?.version,
+    planningName: db?.plannings?.[0]?.name,
+    hasSprint4Collections:
+      Array.isArray(db?.leaveBalances) &&
+      Array.isArray(db?.incidents) &&
+      Array.isArray(db?.notificationPreferences) &&
+      Array.isArray(db?.scheduledReports),
+    oldKeyRemoved: localStorage.getItem("uswap.mock.db.v10") === null,
+  };
+});
+assert.deepEqual(migrated, {
+  version: 11,
+  planningName: "Planning conservé par migration",
+  hasSprint4Collections: true,
+  oldKeyRemoved: true,
+});
+await migrationContext.close();
+
+await browser.close();
+if (failures.length)
+  throw new Error(`Erreurs navigateur :\n${failures.join("\n")}`);
+console.log("Smoke UI réussi pour les quatre rôles.");

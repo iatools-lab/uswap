@@ -1,0 +1,220 @@
+import { ADMIN_PASSWORD, DB_VERSION, createSeed } from "./seed";
+import type { MockDb, MockIncident, MockUser } from "./types";
+import { assertDbInvariants } from "./invariants";
+
+const STORAGE_KEY = `uswap.mock.db.v${DB_VERSION}`;
+const LEGACY_STORAGE_KEYS = Array.from(
+  { length: DB_VERSION - 1 },
+  (_, index) => `uswap.mock.db.v${DB_VERSION - 1 - index}`,
+);
+const ADMIN_ACCESS_REPAIR_KEY = `uswap.mock.admin-access-restored.v1`;
+
+/** Latence simulée : rend visibles les états de chargement des écrans. */
+export const MOCK_LATENCY_MS = 150;
+
+let db: MockDb | null = null;
+
+/** Réactive le compte principal sans journaliser le mot de passe en clair. */
+function restoreAdminAccess(current: MockDb): MockDb {
+  const admin = current.users.find(
+    (user) =>
+      user.id === "us-admin" ||
+      user.email.toLowerCase() === "admin@uswap.example.com",
+  );
+  if (!admin) return current;
+  const now = new Date().toISOString();
+  const before = { isActive: admin.isActive, disabledAt: admin.disabledAt };
+  admin.isActive = true;
+  admin.disabledAt = null;
+  admin.password = ADMIN_PASSWORD;
+  admin.invitationStatus = "ACTIVATED";
+  admin.invitationExpiresAt = null;
+  admin.updatedAt = now;
+  admin.audit.push({
+    id: `aud-admin-restored-${Date.now()}`,
+    action: "ACCOUNT_REACTIVATED",
+    createdAt: now,
+    before,
+    after: { isActive: true, disabledAt: null, passwordUpdated: true },
+  });
+  return current;
+}
+
+function storage(): Storage | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Un incident de démonstration n'est réutilisable que si son déclarant et le
+ * swappeur concerné appartiennent toujours à la station enregistrée. Les
+ * rattachements peuvent avoir changé dans une base locale plus ancienne.
+ */
+function incidentFitsCurrentScope(
+  incident: MockIncident,
+  users: MockUser[],
+  stationIds: Set<string>,
+): boolean {
+  const reporter = users.find((item) => item.id === incident.reporterId);
+  const affectedSwapper = users.find(
+    (item) => item.id === incident.affectedSwapperId,
+  );
+  return Boolean(
+    stationIds.has(incident.stationId) &&
+    reporter?.role === "STATION_CHIEF" &&
+    reporter.stationId === incident.stationId &&
+    affectedSwapper?.role === "SWAPPER" &&
+    affectedSwapper.stationId === incident.stationId,
+  );
+}
+
+/**
+ * Met à niveau une base locale sans effacer les plannings et pointages déjà
+ * créés. Les nouvelles collections du sprint 4 viennent de la graine, tandis
+ * que toutes les collections existantes restent celles de l'utilisateur.
+ */
+function migrateDb(candidate: unknown): MockDb | null {
+  if (!candidate || typeof candidate !== "object") return null;
+  const previous = candidate as Partial<MockDb>;
+  if (!Array.isArray(previous.users) || !Array.isArray(previous.stations))
+    return null;
+
+  const seed = createSeed(Date.now());
+  const currentUsers = previous.users;
+  const currentStations = previous.stations;
+  const previousLeaves = previous.leaves ?? [];
+  const sprint4DemoLeaves = seed.leaves.filter(
+    (item) =>
+      item.id.startsWith("leave-") &&
+      !previousLeaves.some((saved) => saved.id === item.id),
+  );
+  const previousLeaveOperations = previous.leaveSyncOperations ?? [];
+  const currentStationIds = new Set(currentStations.map((item) => item.id));
+  const previousIncidents = (previous.incidents ?? []).filter((incident) =>
+    incidentFitsCurrentScope(incident, currentUsers, currentStationIds),
+  );
+  const compatibleSeedIncidents = seed.incidents.filter((incident) =>
+    incidentFitsCurrentScope(incident, currentUsers, currentStationIds),
+  );
+  const migrated = {
+    ...seed,
+    ...previous,
+    version: DB_VERSION,
+    leaveBalances: previous.leaveBalances ?? seed.leaveBalances,
+    leaveSyncOperations: [
+      ...previousLeaveOperations,
+      ...seed.leaveSyncOperations.filter(
+        (item) =>
+          !previousLeaveOperations.some((saved) => saved.id === item.id),
+      ),
+    ],
+    incidents: [
+      ...previousIncidents,
+      ...compatibleSeedIncidents.filter(
+        (item) => !previousIncidents.some((saved) => saved.id === item.id),
+      ),
+    ],
+    notificationPreferences:
+      previous.notificationPreferences ?? seed.notificationPreferences,
+    scheduledReports: previous.scheduledReports ?? [],
+    globalSettings: previous.globalSettings ?? seed.globalSettings,
+    settingsHistory: previous.settingsHistory ?? [],
+    offlineOperations: previous.offlineOperations ?? [],
+    leaves: [...previousLeaves, ...sprint4DemoLeaves].map((leave, index) => ({
+      ...leave,
+      type: leave.type ?? "OTHER",
+      attachmentId: leave.attachmentId ?? null,
+      externalId: leave.externalId ?? null,
+      clientRef: leave.clientRef ?? `leave-migrated-${leave.id ?? index}`,
+      createdAt:
+        leave.createdAt ??
+        seed.leaves[0]?.createdAt ??
+        new Date().toISOString(),
+      updatedAt:
+        leave.updatedAt ??
+        seed.leaves[0]?.updatedAt ??
+        new Date().toISOString(),
+      submittedAt: leave.submittedAt ?? null,
+      decidedAt: leave.decidedAt ?? null,
+      decisionReason: leave.decisionReason ?? null,
+      cancellable: leave.cancellable ?? leave.status === "PENDING",
+      editable: leave.editable ?? leave.status === "PENDING",
+    })),
+  } as MockDb;
+
+  return migrated;
+}
+
+/** Base courante : relue depuis le stockage local, sinon recréée. */
+export function loadDb(): MockDb {
+  if (db) return db;
+  const localStorage = storage();
+  const sourceKey = [STORAGE_KEY, ...LEGACY_STORAGE_KEYS].find((key) =>
+    localStorage?.getItem(key),
+  );
+  const raw = sourceKey ? localStorage?.getItem(sourceKey) : null;
+  const mustRestoreAdmin =
+    localStorage?.getItem(ADMIN_ACCESS_REPAIR_KEY) !== "done";
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      const migrated = migrateDb(parsed);
+      if (migrated) {
+        if (mustRestoreAdmin) restoreAdminAccess(migrated);
+        // Une donnée locale incohérente est détectée pendant la migration,
+        // avant qu'une action comme la connexion ne tente de la valider.
+        assertDbInvariants(migrated);
+        db = migrated;
+        saveDb();
+        if (sourceKey && sourceKey !== STORAGE_KEY)
+          localStorage?.removeItem(sourceKey);
+        if (mustRestoreAdmin)
+          localStorage?.setItem(ADMIN_ACCESS_REPAIR_KEY, "done");
+        return db;
+      }
+    } catch {
+      /* donnée illisible : on repart de la graine */
+    }
+  }
+  // Le jeu initial contient un planning publié cohérent afin que les parcours
+  // QR, pointage, absence et remplacement soient utilisables immédiatement.
+  db = restoreAdminAccess(createSeed(Date.now()));
+  saveDb();
+  localStorage?.setItem(ADMIN_ACCESS_REPAIR_KEY, "done");
+  return db;
+}
+
+export function saveDb(): void {
+  if (!db) return;
+  try {
+    storage()?.setItem(STORAGE_KEY, JSON.stringify(db));
+  } catch {
+    /* quota dépassé ou navigation privée : la maquette reste en mémoire */
+  }
+}
+
+/** Commit atomique d'une transaction simulée. */
+export function replaceDb(next: MockDb): void {
+  assertDbInvariants(next);
+  db = next;
+  saveDb();
+}
+
+/** Réinitialise la maquette (démonstration, recette). */
+export function resetDb(): MockDb {
+  db = restoreAdminAccess(createSeed(Date.now()));
+  saveDb();
+  return db;
+}
+
+export const delay = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+if (typeof window !== "undefined") {
+  (window as unknown as { uswapMock?: { reset: () => MockDb } }).uswapMock = {
+    reset: resetDb,
+  };
+}

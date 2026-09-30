@@ -25,6 +25,17 @@ export class UpdateStationDto {
   @IsString()
   location?: string;
 
+  /** Accepted from the station form; folded into `location` on save. */
+  @ApiProperty({ required: false, example: 'Rue des palmiers' })
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @ApiProperty({ required: false, example: 'Douala' })
+  @IsOptional()
+  @IsString()
+  city?: string;
+
   @ApiProperty({
     required: false,
     example: 4.0511,
