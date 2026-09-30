@@ -80,6 +80,15 @@ export const mockPeople: User[] = [
 
 export { DEMO_PASSWORD, FICTITIOUS_DOMAIN, MOCK_LATENCY_MS };
 
+/** Profils proposés sur l'écran de connexion. En mode démo, la liste reste locale. */
+export async function fetchProfiles(): Promise<User[]> {
+  if (usingMock) return mockPeople;
+
+  // Le backend ne publie pas de répertoire de comptes avant authentification.
+  // Le champ e-mail reste saisissable librement sur l'écran de connexion.
+  return [];
+}
+
 const configured = (
   import.meta as unknown as {
     env: Record<string, string>;
@@ -122,6 +131,7 @@ const USER_KEY = "uswap-session-user";
 
 let accessToken: string | null = null;
 let generation = 0;
+let inFlightRefresh: Promise<Session> | null = null;
 
 function serialize(body: unknown): {
   plain: Record<string, unknown>;
@@ -355,15 +365,10 @@ export function refresh(): Promise<Session> {
     );
   }
 
-  const refreshToken =
-    localStorage.getItem(
-      REFRESH_TOKEN_KEY,
-    );
-
   const savedUser =
     localStorage.getItem(USER_KEY);
 
-  if (!refreshToken || !savedUser) {
+  if (!savedUser) {
     return Promise.reject(
       new ApiError(
         401,
@@ -371,6 +376,10 @@ export function refresh(): Promise<Session> {
       ),
     );
   }
+
+  // Partage le refresh en cours : le backend renouvelle le token, donc deux
+  // appels concurrents pourraient réutiliser le même token à usage unique.
+  if (inFlightRefresh) return inFlightRefresh;
 
   let user: UserIcon;
 
@@ -396,31 +405,28 @@ export function refresh(): Promise<Session> {
     );
   }
 
-  return api<{
-    accessToken: string;
-    refreshToken: string;
-    expiresIn: number;
-  }>(
+  // Le backend conserve le refresh token dans un cookie HttpOnly et le fait
+  // tourner à chaque renouvellement. Il ne doit donc jamais être lu ni envoyé
+  // dans le corps de la requête côté navigateur.
+  const request = api<Session>(
     "/auth/refresh",
-    {
-      refreshToken,
-    },
-  ).then((data) =>
-    remember({
-      user,
-      accessToken:
-        data.accessToken,
-      refreshToken:
-        data.refreshToken,
-      expiresIn:
-        data.expiresIn,
-      sessionExpiresAt:
-        new Date(
-          Date.now() +
-            data.expiresIn * 1000,
-        ).toISOString(),
-    }),
-  );
+    {},
+    "POST",
+  ).then((data) => {
+    const session = remember({
+      ...data,
+      user: data.user ?? user,
+    });
+    if (!data.refreshToken)
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+    return session;
+  });
+
+  inFlightRefresh = request.finally(() => {
+    inFlightRefresh = null;
+  });
+
+  return inFlightRefresh;
 }
 
 export function forgetSession() {
