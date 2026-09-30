@@ -1,98 +1,257 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
-
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ npm install
-```
-
-## Compile and run the project
-
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
-```
-
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+# UpOwa / Uswap
+
+## Présentation
+
+**UpOwa / Uswap** est une application web de gestion et de supervision des swappers au niveau des stations.
+
+L'application permet notamment de gérer :
+
+* les utilisateurs et leurs rôles ;
+* les stations ;
+* les swappers ;
+* les plannings et shifts ;
+* les présences et absences ;
+* le pointage par QR Code START / END ;
+* les remplacements et changements de shifts ;
+* la supervision des opérations.
+
+**Sprint actuel : Sprint 4**
+
+---
+
+## Architecture
+
+Le projet est organisé en trois parties principales :
+
+Frontend React
+↓
+API REST
+↓
+Backend NestJS
+↓
+Prisma
+↓
+PostgreSQL
+
+Le frontend fournit l'interface utilisateur tandis que le backend centralise l'API, l'authentification et la logique métier.
+
+---
+
+## Stack technique
+
+### Frontend
+
+* React **19.3.0**
+* React DOM **19.3.0**
+* Vite **8.0.14**
+* TypeScript **~5.8.3**
+* React Router **7.18.3**
+
+### Backend
+
+* NestJS **^11.0.1**
+* TypeScript **^5.7.3**
+* Prisma Client **^6.19.3**
+* `@prisma/adapter-pg` **^7.10.0**
+* `pg` **^8.23.0**
+* Swagger **^11.4.7**
+* JWT **^12.0.1**
+
+### Environnement
+
+* Node.js **24.15.0**
+* npm **11.12.1**
+* Git + GitHub
+* PostgreSQL
+
+---
+
+## Fonctionnalités principales
+
+### Authentification
+
+Le système utilise JWT et gère quatre rôles :
+
+* `ADMIN`
+* `SUPERVISOR`
+* `STATION_CHIEF`Versions déjà identifiées :
+
+  Node.js 24.15.0
+
+  npm 11.12.1
+
+  React 19.3.0
+
+  React DOM 19.3.0
+
+  Vite 8.0.14
+
+  TypeScript frontend ~5.8.3
+
+  React Router 7.18.3
+
+  NestJS ^11.0.1
+
+  TypeScript backend ^5.7.3
+
+  Prisma Client ^6.19.3
+
+  @prisma/adapter-pg ^7.10.0
+
+  pg ^8.23.0
+
+  Swagger ^11.4.7
+
+  JWT ^12.0.1
+
+  Git + GitHub, dépôt uswap-github, branche danielle
+* `SWAPPER`
+
+### Stations
+
+Gestion des stations avec leurs informations et coordonnées géographiques.
+
+### Planning et shifts
+
+Gestion des périodes de planning et des shifts :
+
+* MORNING : 06:00–14:00
+* AFTERNOON : 14:00–22:00
+* NIGHT : 22:00–06:00
+
+Les règles de planification prennent notamment en compte le repos minimal et la limite hebdomadaire.
+
+### Attendance / QR Code
+
+Le pointage utilise deux QR Codes :
+
+* `START`
+* `END`
+
+La règle actuelle exige les deux scans pour une présence complète.
+
+`START + END` → présence normale
+
+`START` seulement ou `END` seulement → `ABSENT`
+
+---
+
+## API
+
+Le backend expose une API REST documentée avec Swagger.
+
+En développement local :
+
+`http://localhost:3000/api-docs`
+
+---
+
+## Installation
+
+### Backend
+
+npm install
+
+npx prisma generate
+
+npx prisma migrate dev
+
+npm run start
+
+### Frontend
+
+npm install
+
+npm run dev
+
+Le frontend utilise la variable :
+
+`VITE_API_URL=http://localhost:3000`
+
+---
+
+## Git et organisation des branches
+
+Le dépôt GitHub est :
+
+`uswap-github`
+
+### Branches
+
+`danielle`
+→ branche de développement personnelle.
+
+`dylane_v0`
+→ branche intermédiaire commune pour intégrer les travaux de l'équipe.
+
+`main`
+→ branche destinée à la version stable et finale.
+
+### Workflow
+
+`danielle`
+
+↓
+
+Pull Request
+
+↓
+
+`dylane_v0`
+
+↓
+
+Intégration et tests
+
+↓
+
+`main`
+
+↓
+
+Tag de version
+
+---
+
+## Versionnement
+
+Les versions importantes sont identifiées avec des tags Git.
+
+Exemple :
+
+`v1.0.0`
+
+Le tag permet d'identifier précisément le commit correspondant à une version donnée du projet.
+
+---
+
+## Sécurité
+
+Les informations sensibles telles que :
+
+* `DATABASE_URL`
+* `JWT_SECRET`
+* mots de passe
+* autres secrets
+
+ne doivent pas être commités dans Git.
+
+Les variables sensibles doivent être conservées dans les fichiers `.env` locaux.
+
+---
+
+## État actuel
+
+**Sprint : 4**
+
+Le frontend et le backend sont actuellement fonctionnels et continuent d'être intégrés et testés avant la version finale.
+
+**Branche de développement :** `danielle`
+
+**Branche intermédiaire :** `dylane_v0`
+
+**Branche finale :** `main`
+
+**Version finale prévue :** `v1.0.0`
