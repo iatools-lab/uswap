@@ -5,11 +5,12 @@ import {
   shiftBreakError,
   shiftDuration,
 } from "./ShiftTemplates";
-import { api } from "../../api/auth-api";
+import { api, usingMock } from "../../api/auth-api";
 import { exportToExcel } from "../../utils/excelExport";
 import { StepperModal, type StepItem } from "../../ui/StepperModal";
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
+import { loadLeaflet } from "./leafletLoader";
 import {
   Building2,
   MapPin,
@@ -106,15 +107,6 @@ const MAP_TILE_OPTIONS = { tileSize: 256, zoomOffset: 0 };
 const MAP_ATTRIBUTION =
   'Tiles &copy; <a href="https://www.esri.com/">Esri</a> — sources Esri, HERE, Garmin et contributeurs OpenStreetMap';
 
-function ensureLeafletStyles() {
-  if (document.querySelector('link[href*="leaflet.css"]')) return;
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-  link.dataset.uswapLeafletCss = "true";
-  document.head.appendChild(link);
-}
-
 function uswapMapMarker(L: any) {
   return L.divIcon({
     className: "uswap-map-marker",
@@ -148,6 +140,7 @@ function MapLocationPicker({
   const [searchQuery, setSearchQuery] = useState(address);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [mapError, setMapError] = useState("");
 
   const currentLat = Number(latitude) || DEFAULT_LAT;
   const currentLng = Number(longitude) || DEFAULT_LNG;
@@ -157,9 +150,9 @@ function MapLocationPicker({
   }, [address]);
 
   useEffect(() => {
-    ensureLeafletStyles();
-    const startMap = () => {
-      const L = (window as any).L;
+    let disposed = false;
+    let disposeMap: (() => void) | undefined;
+    const startMap = (L: any) => {
       if (!L || !mapContainerRef.current || mapInstanceRef.current) return;
 
       if ((mapContainerRef.current as any)._leaflet_id) {
@@ -207,22 +200,19 @@ function MapLocationPicker({
         map.remove();
       };
     };
-    if ((window as any).L) return startMap();
-    const existing = document.querySelector(
-      "script[data-uswap-leaflet]",
-    ) as HTMLScriptElement | null;
-    if (existing) {
-      existing.addEventListener("load", startMap);
-      return () => existing.removeEventListener("load", startMap);
-    }
-    const script = document.createElement("script");
-    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-    script.async = true;
-    script.dataset.uswapLeaflet = "true";
-    script.onload = startMap;
-    document.head.appendChild(script);
+    void loadLeaflet()
+      .then((L) => {
+        if (!disposed) disposeMap = startMap(L);
+      })
+      .catch((error: Error) => {
+        if (!disposed) setMapError(error.message);
+      });
+
     return () => {
-      script.onload = null;
+      disposed = true;
+      disposeMap?.();
+      mapInstanceRef.current = null;
+      markerRef.current = null;
     };
   }, []);
 
@@ -375,6 +365,11 @@ function MapLocationPicker({
       </div>
 
       <div ref={mapContainerRef} className="map-picker-canvas" />
+      {mapError && (
+        <p className="error-message" role="status">
+          {mapError}
+        </p>
+      )}
 
       <div className="map-picker-coords">
         <div className="map-picker-coords-label">
@@ -404,12 +399,12 @@ function StationsMapView({
   const [selectedStation, setSelectedStation] = useState<StationData | null>(
     null,
   );
+  const [mapError, setMapError] = useState("");
 
   useEffect(() => {
+    let disposed = false;
     let mapInstance: any = null;
-
-    const initGlobalMap = () => {
-      const L = (window as any).L;
+    const initGlobalMap = (L: any) => {
       if (!L || !mapRef.current) return;
 
       if ((mapRef.current as any)._leaflet_id) {
@@ -472,18 +467,16 @@ function StationsMapView({
       }, 250);
     };
 
-    if (!(window as any).L) {
-      ensureLeafletStyles();
-
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      script.onload = () => initGlobalMap();
-      document.head.appendChild(script);
-    } else {
-      initGlobalMap();
-    }
+    void loadLeaflet()
+      .then((L) => {
+        if (!disposed) initGlobalMap(L);
+      })
+      .catch((error: Error) => {
+        if (!disposed) setMapError(error.message);
+      });
 
     return () => {
+      disposed = true;
       if (mapInstance) mapInstance.remove();
     };
   }, [stations]);
@@ -497,6 +490,11 @@ function StationsMapView({
         </p>
       </div>
       <div ref={mapRef} className="stations-map-canvas" />
+      {mapError && (
+        <p className="error-message" role="status">
+          {mapError}
+        </p>
+      )}
 
       <Modal
         open={selectedStation !== null}
@@ -656,12 +654,16 @@ export function StationManager({
         contactName: form.contactName.trim() || null,
         contactPhone: form.contactPhone.trim() || null,
         latenessToleranceMinutes: Number(form.latenessToleranceMinutes),
-        enforceMinRest: Boolean(form.enforceMinRest),
         minRestHours: Number(form.minRestHours),
         weeklyHoursLimit: Number(form.weeklyHoursLimit),
-        blockPublishingWithVacancies: Boolean(
-          form.blockPublishingWithVacancies,
-        ),
+        ...(usingMock
+          ? {
+              enforceMinRest: Boolean(form.enforceMinRest),
+              blockPublishingWithVacancies: Boolean(
+                form.blockPublishingWithVacancies,
+              ),
+            }
+          : {}),
         checkinQrTtl: Number(form.checkinQrTtl),
         checkoutQrTtl: Number(form.checkoutQrTtl),
       };
@@ -729,14 +731,36 @@ export function StationManager({
     setBusy(true);
     setError("");
     try {
-      await api("/shift-templates/apply", {
-        stationIds: sharedShift.stationIds,
+      const payload = {
         label: sharedShift.label.trim(),
         startTime: sharedShift.startTime,
         endTime: sharedShift.endTime,
         breakStart: sharedShift.breakStart || null,
         breakEnd: sharedShift.breakEnd || null,
-      });
+      };
+      if (usingMock) {
+        await api("/shift-templates/apply", {
+          stationIds: sharedShift.stationIds,
+          ...payload,
+        });
+      } else {
+        const remaining: string[] = [];
+        let applied = 0;
+        for (const stationId of sharedShift.stationIds) {
+          try {
+            await api(`/stations/${stationId}/shift-templates`, payload);
+            applied += 1;
+          } catch {
+            remaining.push(stationId);
+          }
+        }
+        if (remaining.length) {
+          setSharedShift({ ...sharedShift, stationIds: remaining });
+          throw new Error(
+            `Modèle appliqué à ${applied} station(s). Les autres n’ont pas pu être enregistrées ; réessayez pour celles-ci.`,
+          );
+        }
+      }
       notify(
         `Modèle appliqué à ${sharedShift.stationIds.length} station${sharedShift.stationIds.length > 1 ? "s" : ""}.`,
         "success",

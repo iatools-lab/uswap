@@ -15,7 +15,7 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import { DownloadSimple, Clock3 } from "../../ui/icons";
-import { api, type User } from "../../api/auth-api";
+import { api, usingMock, type User } from "../../api/auth-api";
 import { notify } from "../../ui/Toast";
 import {
   ShiftConstraints,
@@ -50,6 +50,56 @@ type PlanningSwapper = User & {
   isActive: boolean;
   phoneNumber?: string | null;
 };
+
+async function autoAssignBackendPlanning(
+  planningId: string,
+  candidates: PlanningSwapper[],
+) {
+  const planning = await api<Planning>(`/plannings/${planningId}`);
+  const eligible = candidates.filter((candidate) => candidate.isActive);
+  const assignedPerSwapper = new Map(eligible.map((candidate) => [candidate.id, 0]));
+  let assigned = 0;
+  let vacant = 0;
+
+  for (const occurrence of planning.occurrences.filter((item) => !item.swapper)) {
+    const ordered = [...eligible];
+    for (let index = ordered.length - 1; index > 0; index -= 1) {
+      const target = Math.floor(Math.random() * (index + 1));
+      [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+    }
+    ordered.sort(
+      (left, right) =>
+        (assignedPerSwapper.get(left.id) ?? 0) -
+        (assignedPerSwapper.get(right.id) ?? 0),
+    );
+
+    let placed = false;
+    for (const swapper of ordered) {
+      const check = await api<{ valid: boolean }>(
+        `/plannings/${planningId}/occurrences/${occurrence.id}/validate`,
+        { swapperId: swapper.id, revision: planning.revision },
+      );
+      if (!check.valid) continue;
+
+      await api(
+        `/plannings/${planningId}/occurrences/${occurrence.id}`,
+        { swapperId: swapper.id, revision: planning.revision },
+        "PATCH",
+      );
+      planning.revision += 1;
+      assignedPerSwapper.set(
+        swapper.id,
+        (assignedPerSwapper.get(swapper.id) ?? 0) + 1,
+      );
+      assigned += 1;
+      placed = true;
+      break;
+    }
+    if (!placed) vacant += 1;
+  }
+
+  return { assigned, vacant };
+}
 type Template = {
   id: string;
   label: string;
@@ -518,7 +568,7 @@ export function Planner({ user }: { user: User }) {
     setError("");
     try {
       const p = await api<Planning>("/plannings", {
-        name: planningName.trim(),
+        ...(usingMock ? { name: planningName.trim() } : {}),
         startDate: start + "T00:00:00.000Z",
         endDate: end + "T23:59:59.999Z",
       });
@@ -544,11 +594,19 @@ export function Planner({ user }: { user: User }) {
           ...payload,
           previewHash: previewRes.previewHash,
         });
-        if (creationMode === "automatic")
-          automaticAssignment = await api<{ assigned: number; vacant: number }>(
-            `/plannings/${p.id}/auto-assign`,
-            {},
-          );
+        if (creationMode === "automatic") {
+          automaticAssignment = usingMock
+            ? await api<{ assigned: number; vacant: number }>(
+                `/plannings/${p.id}/auto-assign`,
+                {},
+              )
+            : await autoAssignBackendPlanning(
+                p.id,
+                stationSwappers.filter(
+                  (swapper) => swapper.stationId === stationId,
+                ),
+              );
+        }
       }
 
       const canPublishAutomatically =
