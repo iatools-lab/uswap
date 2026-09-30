@@ -1,6 +1,6 @@
 import { useOutletContext } from "react-router-dom";
 import { useSession } from "../../app/session";
-import Planner from "../../features/planner/Planner";
+import { Planner } from "../../features/planner/Planner";
 
 export function RolePlannerPage() {
   const { session } = useSession();

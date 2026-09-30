@@ -12,6 +12,8 @@ export const formatDate = (
   }).format(new Date(value));
 
 export function shiftStatus(shift: OperationShift) {
+  if (shift.attendance?.status === "ABSENT") return "Absent";
+  if (shift.attendance?.status === "JUSTIFIED") return "Justifié";
   if (shift.attendance?.checkedOutAt) return "Terminé";
   if (shift.attendance)
     return shift.attendance.isLate ? "Présent · en retard" : "Présent";
@@ -19,8 +21,8 @@ export function shiftStatus(shift: OperationShift) {
   return "Brouillon";
 }
 
-export function isOpenShift(shift: OperationShift) {
-  return !shift.attendance?.checkedOutAt;
+export function isOpenShift(shift: OperationShift, now = Date.now()) {
+  return !shift.attendance?.checkedOutAt && Date.parse(shift.endTime) >= now;
 }
 
 export function isInWindow(shift: OperationShift, now = Date.now()) {
@@ -28,13 +30,14 @@ export function isInWindow(shift: OperationShift, now = Date.now()) {
 }
 
 export function pickNextShift(shifts: OperationShift[]) {
-  const open = shifts.filter(isOpenShift);
-  const live = open.find((shift) => isInWindow(shift));
+  const now = Date.now();
+  const open = shifts.filter((shift) => isOpenShift(shift, now));
+  const live = open.find((shift) => isInWindow(shift, now));
   if (live) return live;
   return (
-    [...open].sort(
-      (a, b) => Date.parse(a.startTime) - Date.parse(b.startTime),
-    )[0] || null
+    open
+      .filter((shift) => Date.parse(shift.startTime) > now)
+      .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))[0] || null
   );
 }
 

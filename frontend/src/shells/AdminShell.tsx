@@ -2,21 +2,42 @@ import { Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { CaretDownIcon } from "@phosphor-icons/react";
 import { AccountMenu } from "../features/account/AccountMenu";
-import { PlanningInbox } from "../features/inbox/PlanningInbox";
+import { NotificationBell } from "../features/notifications/NotificationBell";
 import { interceptNav } from "../app/spaNav";
 import { RouteFallback } from "../app/RouteFallback";
 import { useSession } from "../app/session";
-import { Building2, ChartLineUp, Clock3, LayoutDashboard, UserRound, Users, Zap } from "../ui/icons";
+import { SidebarToggle } from "./SidebarToggle";
+import { AppTopbar } from "./AppTopbar";
+import {
+  Building2,
+  Clock3,
+  LayoutDashboard,
+  UserRound,
+  Users,
+  Zap,
+} from "../ui/icons";
 import "../styles/admin.css";
+import "../styles/shell.css";
 
 const sections = [
   { path: "/app/admin", label: "Accueil", Icon: LayoutDashboard },
-  { path: "/app/admin/tableau-de-bord", label: "Tableau de bord", Icon: ChartLineUp },
   { path: "/app/admin/utilisateurs", label: "Utilisateurs", Icon: Users },
   { path: "/app/admin/stations", label: "Stations", Icon: Building2 },
   { path: "/app/admin/plannings", label: "Plannings", Icon: Clock3 },
   { path: "/app/admin/compte", label: "Paramètres du compte", Icon: UserRound },
 ];
+
+const sectionDescriptions: Record<string, string> = {
+  "/app/admin":
+    "Suivez l’activité du réseau et accédez rapidement aux tâches prioritaires.",
+  "/app/admin/utilisateurs":
+    "Gérez les collaborateurs, leurs rôles, leurs stations et leurs accès.",
+  "/app/admin/stations":
+    "Configurez les stations, leurs règles, leurs shifts et leur localisation.",
+  "/app/admin/plannings": "Créez, publiez et ajustez les horaires des équipes.",
+  "/app/admin/compte":
+    "Mettez à jour vos informations et vos préférences de compte.",
+};
 
 export function AdminShell() {
   const { session, busy, warning, error, disconnect, extend } = useSession();
@@ -24,47 +45,83 @@ export function AdminShell() {
   const navigate = useNavigate();
   const title = useRef<HTMLHeadingElement>(null);
   const currentPathOnly = location.pathname;
-  const [stationsOpen, setStationsOpen] = useState(currentPathOnly.startsWith("/app/admin/stations"));
+  const [stationsOpen, setStationsOpen] = useState(
+    currentPathOnly.startsWith("/app/admin/stations"),
+  );
   const [currentSubTab, setCurrentSubTab] = useState<"list" | "map">(() =>
     new URLSearchParams(location.search).get("tab") === "map" ? "map" : "list",
+  );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("uswap:sidebar-collapsed") === "true",
   );
 
   const section =
     sections.find((item) => item.path === currentPathOnly) ||
-    (currentPathOnly.startsWith("/app/admin/utilisateurs") ? sections[1] : sections[0]);
+    sections.find(
+      (item) =>
+        item.path !== "/app/admin" && currentPathOnly.startsWith(item.path),
+    ) ||
+    sections[0];
 
   useEffect(() => {
     setStationsOpen(currentPathOnly.startsWith("/app/admin/stations"));
   }, [currentPathOnly]);
 
   useEffect(() => {
-    setCurrentSubTab(new URLSearchParams(location.search).get("tab") === "map" ? "map" : "list");
+    setCurrentSubTab(
+      new URLSearchParams(location.search).get("tab") === "map"
+        ? "map"
+        : "list",
+    );
   }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    localStorage.setItem("uswap:sidebar-collapsed", String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     document.title = `${section.label} · Administration uSwap`;
   }, [section.label]);
 
-  function go(event: MouseEvent<HTMLAnchorElement>, target: string, subTab?: "list" | "map") {
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+    requestAnimationFrame(() => title.current?.focus());
+  }, [location.pathname, location.search]);
+
+  function go(
+    event: MouseEvent<HTMLAnchorElement>,
+    target: string,
+    subTab?: "list" | "map",
+  ) {
     if (!interceptNav(event, navigate, target)) return;
     if (subTab) setCurrentSubTab(subTab);
-    requestAnimationFrame(() => title.current?.focus());
   }
 
   const link = (target: string, subTab?: "list" | "map") => ({
     href: target,
-    onClick: (event: MouseEvent<HTMLAnchorElement>) => go(event, target, subTab),
+    onClick: (event: MouseEvent<HTMLAnchorElement>) =>
+      go(event, target, subTab),
   });
 
   if (!session) return null;
 
   return (
-    <div className="admin-workspace">
+    <div
+      className={`admin-workspace${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
+    >
       <a className="admin-skip" href="#admin-main">
         Aller au contenu
       </a>
       <aside className="admin-sidebar">
-        <a className="brand" {...link("/app/admin")} aria-label="uSwap, accueil administrateur">
+        <SidebarToggle
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((value) => !value)}
+        />
+        <a
+          className="brand"
+          {...link("/app/admin")}
+          aria-label="uSwap, accueil administrateur"
+        >
           <span className="brand-symbol">
             <Zap fill="currentColor" />
           </span>
@@ -85,44 +142,28 @@ export function AdminShell() {
             .map(({ path: target, label, Icon }) => {
               const isStations = target === "/app/admin/stations";
               const isCurrent = currentPathOnly === target;
-              const stationsActive = currentPathOnly.startsWith("/app/admin/stations");
+              const stationsActive = currentPathOnly.startsWith(
+                "/app/admin/stations",
+              );
 
               return (
-                <div key={target} style={{ display: "grid", gap: "2px" }}>
-                  <div style={{ display: "flex", alignItems: "center", position: "relative" }}>
+                <div key={target} className="admin-nav-group">
+                  <div className="admin-nav-row">
                     {isStations ? (
                       <button
                         type="button"
+                        aria-current={stationsActive ? "page" : undefined}
                         onClick={() => {
                           setStationsOpen(true);
                           setCurrentSubTab("list");
                           navigate("/app/admin/stations?tab=list");
                         }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "12px",
-                          padding: "11px 14px",
-                          borderRadius: "8px",
-                          color: isCurrent || stationsActive ? "#fff" : "#c6d2ed",
-                          background: isCurrent || stationsActive ? "#ffffff13" : "transparent",
-                          fontSize: "14px",
-                          minHeight: "44px",
-                          width: "100%",
-                          border: 0,
-                          cursor: "pointer",
-                          textAlign: "left",
-                        }}
                       >
                         <Icon size={19} />
-                        <span style={{ flex: 1 }}>{label}</span>
+                        <span>{label}</span>
                         <CaretDownIcon
                           size={14}
-                          style={{
-                            transform: stationsOpen ? "rotate(0deg)" : "rotate(-90deg)",
-                            transition: "transform 0.2s ease",
-                            color: "#c6d2ed",
-                          }}
+                          className={`admin-nav-caret${stationsOpen ? " is-open" : ""}`}
                         />
                       </button>
                     ) : (
@@ -133,7 +174,6 @@ export function AdminShell() {
                           go(e, target);
                         }}
                         aria-current={isCurrent ? "page" : undefined}
-                        style={{ flex: 1 }}
                       >
                         <Icon size={19} />
                         <span>{label}</span>
@@ -143,36 +183,24 @@ export function AdminShell() {
                   </div>
 
                   {isStations && stationsOpen && (
-                    <div style={{ display: "grid", gap: "2px", paddingLeft: "26px", margin: "2px 0 4px 0" }}>
+                    <div className="admin-station-subnav">
                       <a
                         {...link("/app/admin/stations?tab=list", "list")}
-                        aria-current={currentSubTab === "list" && stationsActive ? "page" : undefined}
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px 10px",
-                          minHeight: "32px",
-                          color: currentSubTab === "list" && stationsActive ? "#fff" : "#9aadd3",
-                          background:
-                            currentSubTab === "list" && stationsActive ? "rgba(255, 255, 255, 0.08)" : "transparent",
-                          borderRadius: "6px",
-                          textDecoration: "none",
-                        }}
+                        aria-current={
+                          currentSubTab === "list" && stationsActive
+                            ? "page"
+                            : undefined
+                        }
                       >
                         Mes stations
                       </a>
                       <a
                         {...link("/app/admin/stations?tab=map", "map")}
-                        aria-current={currentSubTab === "map" && stationsActive ? "page" : undefined}
-                        style={{
-                          fontSize: "13px",
-                          padding: "6px 10px",
-                          minHeight: "32px",
-                          color: currentSubTab === "map" && stationsActive ? "#fff" : "#9aadd3",
-                          background:
-                            currentSubTab === "map" && stationsActive ? "rgba(255, 255, 255, 0.08)" : "transparent",
-                          borderRadius: "6px",
-                          textDecoration: "none",
-                        }}
+                        aria-current={
+                          currentSubTab === "map" && stationsActive
+                            ? "page"
+                            : undefined
+                        }
                       >
                         Carte des stations
                       </a>
@@ -185,16 +213,22 @@ export function AdminShell() {
       </aside>
 
       <div className="admin-body">
-        <header className="admin-topbar">
-          <div>
-            <span className="admin-mobile-brand">
-              uSwap<span>.</span>
-            </span>
-            <span className="admin-breadcrumb">{section.label}</span>
-          </div>
-          <PlanningInbox user={session.user} />
-          <AccountMenu user={session.user} busy={busy} onLogout={disconnect} settingsPath="/app/admin/compte" />
-        </header>
+        <AppTopbar
+          title={section.label}
+          description={sectionDescriptions[section.path]}
+          headingRef={title}
+          actions={
+            <>
+              <NotificationBell />
+              <AccountMenu
+                user={session.user}
+                busy={busy}
+                onLogout={disconnect}
+                settingsPath="/app/admin/compte"
+              />
+            </>
+          }
+        />
 
         <main id="admin-main" className="admin-content">
           {warning && (
@@ -202,7 +236,11 @@ export function AdminShell() {
               <Clock3 size={18} />
               <div>
                 Votre session va expirer.
-                <button className="text-button" onClick={() => void extend()} disabled={busy}>
+                <button
+                  className="text-button"
+                  onClick={() => void extend()}
+                  disabled={busy}
+                >
                   Prolonger ma session
                 </button>
               </div>
@@ -213,12 +251,6 @@ export function AdminShell() {
               {error}
             </p>
           )}
-          <div className="admin-page-heading">
-            <div>
-              <p className="admin-eyebrow">Bonjour, {session.user.fullName.trim().split(/\s+/)[0]}</p>
-              <h1 ref={title} tabIndex={-1}>{section.label}</h1>
-            </div>
-          </div>
           <Suspense fallback={<RouteFallback label="Chargement de la page…" />}>
             <Outlet />
           </Suspense>

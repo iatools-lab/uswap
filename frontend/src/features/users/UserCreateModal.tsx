@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { StepperModal, type StepItem } from "../../ui/StepperModal";
 import { UserRound, Eye, EyeOff, CheckCheck } from "../../ui/icons";
-import { api, roles, type Role } from "../../api/auth-api";
+import { api, roles } from "../../api/auth-api";
 import { StationPicker } from "../stations/StationPicker";
 import { Select } from "../../ui/Select";
 interface UserCreateModalProps {
@@ -14,6 +14,8 @@ interface UserCreateModalProps {
 export function UserCreateModal({ open, stations, onClose, onCreated }: UserCreateModalProps) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [address, setAddress] = useState("");
   const [role, setRole] = useState<string>("");
   const [stationId, setStationId] = useState("");
 
@@ -24,10 +26,13 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const requiresStation = role === "SWAPPER" || role === "STATION_CHIEF";
 
   const resetForm = () => {
     setFullName("");
     setEmail("");
+    setPhoneNumber("");
+    setAddress("");
     setRole("");
     setStationId("");
     setActivationMethod("link");
@@ -55,6 +60,8 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
       await api("/auth/register", {
         fullName: fullName.trim(),
         email: email.trim().toLowerCase(),
+        phoneNumber: phoneNumber.trim() || null,
+        address: address.trim() || null,
         role,
         accountStatus: isPasswordMode ? "ACTIVE" : "PENDING",
         sendInvite: !isPasswordMode,
@@ -90,6 +97,31 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
             />
           </div>
 
+          <div className="user-form-grid-2">
+            <div className="stepper-field-group">
+              <label htmlFor="phoneNumber">NUMÉRO DE TÉLÉPHONE</label>
+              <input
+                id="phoneNumber"
+                type="tel"
+                autoComplete="tel"
+                placeholder="Ex. +237 6 99 00 00 00"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+              />
+            </div>
+            <div className="stepper-field-group">
+              <label htmlFor="address">ADRESSE</label>
+              <input
+                id="address"
+                type="text"
+                autoComplete="street-address"
+                placeholder="Quartier, ville"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+              />
+            </div>
+          </div>
+
           <div className="stepper-field-group">
             <label htmlFor="email">ADRESSE E-MAIL *</label>
             <input
@@ -107,14 +139,23 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
     {
       id: "role-station",
       label: "Rôle & Station",
-      isValid: () => !!role && Object.keys(roles).includes(role),
+      isValid: () =>
+        !!role &&
+        Object.keys(roles).includes(role) &&
+        (!requiresStation || !!stationId),
       content: (
         <div className="stepper-form-layout">
           <div className="stepper-field-group">
             <label>RÔLE DANS L'ÉCOSYSTÈME *</label>
             <Select
               value={role}
-              onChange={(value) => setRole(String(value))}
+              onChange={(value) => {
+                const nextRole = String(value);
+                setRole(nextRole);
+                if (nextRole !== "SWAPPER" && nextRole !== "STATION_CHIEF") {
+                  setStationId("");
+                }
+              }}
               placeholder="Sélectionner un rôle"
               options={Object.entries(roles).map(([val, label]) => ({
                 label,
@@ -123,14 +164,21 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
             />
           </div>
 
-          <div className="stepper-field-group">
-            <label>STATION RATTACHÉE</label>
-            <StationPicker
-  value={stationId}
-  onChange={setStationId}
-  stations={stations}
-/>
-          </div>
+          {requiresStation && (
+            <div className="stepper-field-group">
+              <label>STATION RATTACHÉE *</label>
+              <StationPicker
+                value={stationId}
+                onChange={setStationId}
+                stations={stations}
+                placeholder="Sélectionner une station"
+                allowEmpty={false}
+              />
+              <span className="field-hint">
+                Ce collaborateur ne verra et ne recevra que les données de cette station.
+              </span>
+            </div>
+          )}
         </div>
       ),
     },
@@ -157,9 +205,19 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
               <strong>{role ? roles[role as keyof typeof roles] : "—"}</strong>
             </div>
             <div className="summary-row">
-              <span>Station :</span>
-              <strong>{stations.find((s) => s.id === stationId)?.name || "Aucune"}</strong>
+              <span>Téléphone :</span>
+              <strong>{phoneNumber || "Non renseigné"}</strong>
             </div>
+            <div className="summary-row">
+              <span>Adresse :</span>
+              <strong>{address || "Non renseignée"}</strong>
+            </div>
+            {requiresStation && (
+              <div className="summary-row">
+                <span>Station :</span>
+                <strong>{stations.find((s) => s.id === stationId)?.name || "Non sélectionnée"}</strong>
+              </div>
+            )}
           </div>
 
           <div className="activation-field">

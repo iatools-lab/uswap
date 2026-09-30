@@ -11,7 +11,7 @@ type ModalProps = {
   children: ReactNode;
   /** Footer actions, e.g. <button>Annuler</button><button>Enregistrer</button> */
   footer?: ReactNode;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "md" | "lg" | "xl";
 };
 
 /**
@@ -38,6 +38,13 @@ export function Modal({
 
     lastFocused.current = document.activeElement as HTMLElement;
     panelRef.current?.showModal();
+    requestAnimationFrame(() => {
+      panelRef.current
+        ?.querySelector<HTMLElement>(
+          '.modal-body [autofocus], .modal-body input:not(:disabled), .modal-body select:not(:disabled), .modal-body textarea:not(:disabled), .modal-body button:not(:disabled), .modal-footer button:not(:disabled), .modal-close',
+        )
+        ?.focus();
+    });
 
     const previousOverflow=document.body.style.overflow;
     document.body.style.overflow = 'hidden';

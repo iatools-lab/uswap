@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { notify } from "../../ui/Toast";
-import { ShiftTemplates } from "./ShiftTemplates";
+import {
+  ShiftTemplates,
+  shiftBreakError,
+  shiftDuration,
+} from "./ShiftTemplates";
 import { api } from "../../api/auth-api";
 import { exportToExcel } from "../../utils/excelExport";
 import { StepperModal, type StepItem } from "../../ui/StepperModal";
 import { Modal } from "../../ui/Modal";
+import { Select } from "../../ui/Select";
 import {
   Building2,
   MapPin,
@@ -22,7 +27,6 @@ import {
   ListIcon,
   SquaresFourIcon,
   CrosshairIcon,
-  XIcon,
 } from "@phosphor-icons/react";
 import "./station-manager.css";
 
@@ -39,8 +43,10 @@ export type StationData = {
   contactPhone: string | null;
   isActive: boolean;
   latenessToleranceMinutes: number;
+  enforceMinRest: boolean;
   minRestHours: number;
   weeklyHoursLimit: number;
+  blockPublishingWithVacancies: boolean;
   checkinQrTtl: number;
   checkoutQrTtl: number;
 };
@@ -56,30 +62,80 @@ const emptyForm = {
   contactName: "",
   contactPhone: "",
   latenessToleranceMinutes: 0,
+  enforceMinRest: true,
   minRestHours: 8,
   weeklyHoursLimit: 48,
+  blockPublishingWithVacancies: false,
   checkinQrTtl: 300,
   checkoutQrTtl: 300,
 };
 
+const blankStationForm: typeof emptyForm = {
+  name: "",
+  address: "",
+  city: "",
+  latitude: "",
+  longitude: "",
+  location: "",
+  timezone: "",
+  contactName: "",
+  contactPhone: "",
+  latenessToleranceMinutes: "" as unknown as number,
+  enforceMinRest: false,
+  minRestHours: "" as unknown as number,
+  weeklyHoursLimit: "" as unknown as number,
+  blockPublishingWithVacancies: false,
+  checkinQrTtl: "" as unknown as number,
+  checkoutQrTtl: "" as unknown as number,
+};
+
+const blankSharedShift = {
+  label: "",
+  startTime: "",
+  endTime: "",
+  breakStart: "",
+  breakEnd: "",
+  stationIds: [] as string[],
+};
+
 const DEFAULT_LAT = 4.051056;
 const DEFAULT_LNG = 9.708533;
-const MAPTILER_API_KEY = "lATZCBmixGdEMf0wgV9O";
-const MAPTILER_TILE_URL = `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${MAPTILER_API_KEY}`;
+const MAP_TILE_URL =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}";
+const MAP_TILE_OPTIONS = { tileSize: 256, zoomOffset: 0 };
+const MAP_ATTRIBUTION =
+  'Tiles &copy; <a href="https://www.esri.com/">Esri</a> — sources Esri, HERE, Garmin et contributeurs OpenStreetMap';
+
+function ensureLeafletStyles() {
+  if (document.querySelector('link[href*="leaflet.css"]')) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+  link.dataset.uswapLeafletCss = "true";
+  document.head.appendChild(link);
+}
+
+function uswapMapMarker(L: any) {
+  return L.divIcon({
+    className: "uswap-map-marker",
+    html: '<span aria-hidden="true"></span>',
+    iconSize: [28, 32],
+    iconAnchor: [14, 30],
+    popupAnchor: [0, -28],
+  });
+}
 
 /* ============================================================
    Sélecteur GPS Bidirectionnel & Suggestions optimisées (Cameroun)
    ============================================================ */
 function MapLocationPicker({
   address,
-  city,
   latitude,
   longitude,
   onSelectLocation,
   onSelectAddress,
 }: {
   address: string;
-  city: string;
   latitude: number | string;
   longitude: number | string;
   onSelectLocation: (lat: number, lng: number) => void;
@@ -101,47 +157,72 @@ function MapLocationPicker({
   }, [address]);
 
   useEffect(() => {
-    const L = (window as any).L;
-    if (!L || !mapContainerRef.current) return;
+    ensureLeafletStyles();
+    const startMap = () => {
+      const L = (window as any).L;
+      if (!L || !mapContainerRef.current || mapInstanceRef.current) return;
 
-    if ((mapContainerRef.current as any)._leaflet_id) {
-      (mapContainerRef.current as any)._leaflet_id = null;
-      mapContainerRef.current.innerHTML = "";
+      if ((mapContainerRef.current as any)._leaflet_id) {
+        (mapContainerRef.current as any)._leaflet_id = null;
+        mapContainerRef.current.innerHTML = "";
+      }
+
+      const map = L.map(mapContainerRef.current).setView(
+        [currentLat, currentLng],
+        15,
+      );
+      mapInstanceRef.current = map;
+
+      L.tileLayer(MAP_TILE_URL, {
+        ...MAP_TILE_OPTIONS,
+        maxZoom: 19,
+        attribution: MAP_ATTRIBUTION,
+      }).addTo(map);
+
+      const marker = L.marker([currentLat, currentLng], {
+        draggable: true,
+        icon: uswapMapMarker(L),
+      }).addTo(map);
+      markerRef.current = marker;
+
+      const timer1 = setTimeout(() => map.invalidateSize(), 150);
+      const timer2 = setTimeout(() => map.invalidateSize(), 500);
+
+      marker.on("dragend", async (e: any) => {
+        const coords = e.target.getLatLng();
+        onSelectLocation(coords.lat, coords.lng);
+        await reverseGeocode(coords.lat, coords.lng);
+      });
+
+      map.on("click", async (e: any) => {
+        const { lat, lng } = e.latlng;
+        marker.setLatLng([lat, lng]);
+        onSelectLocation(lat, lng);
+        await reverseGeocode(lat, lng);
+      });
+
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        map.remove();
+      };
+    };
+    if ((window as any).L) return startMap();
+    const existing = document.querySelector(
+      "script[data-uswap-leaflet]",
+    ) as HTMLScriptElement | null;
+    if (existing) {
+      existing.addEventListener("load", startMap);
+      return () => existing.removeEventListener("load", startMap);
     }
-
-    const map = L.map(mapContainerRef.current).setView([currentLat, currentLng], 15);
-    mapInstanceRef.current = map;
-
-    L.tileLayer(MAPTILER_TILE_URL, {
-      tileSize: 512,
-      zoomOffset: -1,
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map);
-
-    const marker = L.marker([currentLat, currentLng], { draggable: true }).addTo(map);
-    markerRef.current = marker;
-
-    const timer1 = setTimeout(() => map.invalidateSize(), 150);
-    const timer2 = setTimeout(() => map.invalidateSize(), 500);
-
-    marker.on("dragend", async (e: any) => {
-      const coords = e.target.getLatLng();
-      onSelectLocation(coords.lat, coords.lng);
-      await reverseGeocode(coords.lat, coords.lng);
-    });
-
-    map.on("click", async (e: any) => {
-      const { lat, lng } = e.latlng;
-      marker.setLatLng([lat, lng]);
-      onSelectLocation(lat, lng);
-      await reverseGeocode(lat, lng);
-    });
-
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    script.async = true;
+    script.dataset.uswapLeaflet = "true";
+    script.onload = startMap;
+    document.head.appendChild(script);
     return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      map.remove();
+      script.onload = null;
     };
   }, []);
 
@@ -150,7 +231,10 @@ function MapLocationPicker({
       const currentPos = markerRef.current.getLatLng();
       if (currentPos.lat !== currentLat || currentPos.lng !== currentLng) {
         markerRef.current.setLatLng([currentLat, currentLng]);
-        mapInstanceRef.current.setView([currentLat, currentLng], mapInstanceRef.current.getZoom());
+        mapInstanceRef.current.setView(
+          [currentLat, currentLng],
+          mapInstanceRef.current.getZoom(),
+        );
         mapInstanceRef.current.invalidateSize();
       }
     }
@@ -173,17 +257,22 @@ function MapLocationPicker({
       }
     });
 
-    return parts.length > 1 ? parts.join(", ") : (placeName || text);
+    return parts.length > 1 ? parts.join(", ") : placeName || text;
   }
 
   async function reverseGeocode(lat: number, lng: number) {
     try {
-      const res = await fetch(
-        `https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${MAPTILER_API_KEY}&language=fr&types=poi,address&limit=1`
-      );
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=fr`;
+      const res = await fetch(url);
       const data = await res.json();
-      if (data?.features?.length > 0) {
-        const detailedName = formatDetailedAddress(data.features[0]);
+      const feature = data?.display_name
+        ? {
+            place_name: data.display_name,
+            text: data.name || data.display_name,
+          }
+        : null;
+      if (feature) {
+        const detailedName = formatDetailedAddress(feature);
         setSearchQuery(detailedName);
         onSelectAddress(detailedName, lat, lng);
       }
@@ -204,13 +293,17 @@ function MapLocationPicker({
     setIsSearching(true);
     try {
       const queryText = encodeURIComponent(value);
-      const res = await fetch(
-        `https://api.maptiler.com/geocoding/${queryText}.json?key=${MAPTILER_API_KEY}&language=fr&country=cm&types=poi,address&limit=10`
-      );
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${queryText}&countrycodes=cm&limit=10&addressdetails=1&accept-language=fr`;
+      const res = await fetch(url);
       const data = await res.json();
-      if (data?.features) {
-        setSuggestions(data.features);
-      }
+      const features = Array.isArray(data)
+        ? data.map((item: any) => ({
+            text: item.name || item.display_name,
+            place_name: item.display_name,
+            center: [Number(item.lon), Number(item.lat)],
+          }))
+        : [];
+      setSuggestions(features);
     } catch (e) {
       console.error("Erreur de recherche de stations", e);
     } finally {
@@ -289,7 +382,8 @@ function MapLocationPicker({
           <span>Coordonnées GPS capturées :</span>
         </div>
         <strong>
-          {latitude !== "" ? Number(latitude).toFixed(6) : "—"}, {longitude !== "" ? Number(longitude).toFixed(6) : "—"}
+          {latitude !== "" ? Number(latitude).toFixed(6) : "—"},{" "}
+          {longitude !== "" ? Number(longitude).toFixed(6) : "—"}
         </strong>
       </div>
     </div>
@@ -307,7 +401,9 @@ function StationsMapView({
   onEditStation: (s: StationData) => void;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const [selectedStation, setSelectedStation] = useState<StationData | null>(null);
+  const [selectedStation, setSelectedStation] = useState<StationData | null>(
+    null,
+  );
 
   useEffect(() => {
     let mapInstance: any = null;
@@ -321,16 +417,20 @@ function StationsMapView({
         mapRef.current.innerHTML = "";
       }
 
-      mapInstance = L.map(mapRef.current).setView([DEFAULT_LAT, DEFAULT_LNG], 7);
+      mapInstance = L.map(mapRef.current).setView(
+        [DEFAULT_LAT, DEFAULT_LNG],
+        7,
+      );
 
-      L.tileLayer(MAPTILER_TILE_URL, {
-        tileSize: 512,
-        zoomOffset: -1,
+      L.tileLayer(MAP_TILE_URL, {
+        ...MAP_TILE_OPTIONS,
         maxZoom: 18,
-        attribution: '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        attribution: MAP_ATTRIBUTION,
       }).addTo(mapInstance);
 
-      const validStations = (stations || []).filter((s) => s?.latitude != null && s?.longitude != null);
+      const validStations = (stations || []).filter(
+        (s) => s?.latitude != null && s?.longitude != null,
+      );
 
       if (validStations.length > 0) {
         const bounds = L.latLngBounds([]);
@@ -340,8 +440,10 @@ function StationsMapView({
           const lng = Number(s.longitude);
           bounds.extend([lat, lng]);
 
-          const marker = L.marker([lat, lng]).addTo(mapInstance);
-          
+          const marker = L.marker([lat, lng], {
+            icon: uswapMapMarker(L),
+          }).addTo(mapInstance);
+
           marker.bindPopup(`
             <div style="font-family: inherit; padding: 4px; min-width: 160px;">
               <strong id="popup-title-${s?.id}" style="font-size: 14px; color: #0b1e36; cursor: pointer; text-decoration: underline;">${s?.name}</strong><br/>
@@ -371,10 +473,7 @@ function StationsMapView({
     };
 
     if (!(window as any).L) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(link);
+      ensureLeafletStyles();
 
       const script = document.createElement("script");
       script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
@@ -392,88 +491,101 @@ function StationsMapView({
   return (
     <div className="admin-card stations-map-card">
       <div className="stations-map-head">
-        <h3>Cartographie des Stations</h3>
+        <h3>Cartographie des stations</h3>
         <p>
-          Cliquez sur le nom d'une station dans son marqueur pour consulter ses informations.
+          Sélectionnez une station depuis son marqueur pour afficher sa fiche.
         </p>
       </div>
       <div ref={mapRef} className="stations-map-canvas" />
 
-      {selectedStation && (
-        <div className="stepper-overlay" onClick={() => setSelectedStation(null)}>
-          <div className="admin-card stations-map-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="stations-map-panel-head">
-              <div className="stations-map-panel-title">
-                <span className="admin-stat-icon orange">
-                  <Building2 size={18} />
-                </span>
-                <div>
-                  <h3>{selectedStation?.name}</h3>
-                  <span>{selectedStation?.timezone}</span>
-                </div>
-              </div>
+      <Modal
+        open={selectedStation !== null}
+        onClose={() => setSelectedStation(null)}
+        title={selectedStation?.name || "Détail de la station"}
+        subtitle={selectedStation?.timezone}
+        footer={
+          selectedStation ? (
+            <>
               <button
                 type="button"
-                className="stepper-close-btn stations-map-close"
-                onClick={() => setSelectedStation(null)}
-              >
-                <XIcon size={16} />
-              </button>
-            </div>
-
-            <div className="stepper-summary-card stations-map-summary">
-              <div className="summary-row">
-                <span>Ville & Adresse :</span>
-                <strong>{selectedStation?.city || "—"} ({selectedStation?.address || selectedStation?.location || "Non précisée"})</strong>
-              </div>
-              <div className="summary-row">
-                <span>Coordonnées GPS :</span>
-                <strong>
-                  {selectedStation?.latitude != null && selectedStation?.longitude != null
-                    ? `${Number(selectedStation.latitude).toFixed(4)}, ${Number(selectedStation.longitude).toFixed(4)}`
-                    : "Non géolocalisée"}
-                </strong>
-              </div>
-              <div className="summary-row">
-                <span>Responsable :</span>
-                <strong>{selectedStation?.contactName || "—"} {selectedStation?.contactPhone ? `(${selectedStation.contactPhone})` : ""}</strong>
-              </div>
-              <div className="summary-row">
-                <span>Tolérance / Repos / Max :</span>
-                <strong>{selectedStation?.latenessToleranceMinutes}m / {selectedStation?.minRestHours}h / {selectedStation?.weeklyHoursLimit}h</strong>
-              </div>
-              <div className="summary-row">
-                <span>Statut :</span>
-                <strong className={selectedStation?.isActive ? "stations-map-status-active" : "stations-map-status-inactive"}>
-                  {selectedStation?.isActive ? "Active" : "Inactive"}
-                </strong>
-              </div>
-            </div>
-
-            <div className="stations-map-panel-actions">
-              <button
-                type="button"
-                className="admin-button secondary small"
+                className="admin-button secondary"
                 onClick={() => setSelectedStation(null)}
               >
                 Fermer
               </button>
               <button
                 type="button"
-                className="admin-button small"
+                className="admin-button"
                 onClick={() => {
-                  const st = selectedStation;
+                  const station = selectedStation;
                   setSelectedStation(null);
-                  if (st) onEditStation(st);
+                  onEditStation(station);
                 }}
               >
                 <PencilSimpleIcon size={14} />
-                <span>Modifier</span>
+                Modifier la station
               </button>
+            </>
+          ) : undefined
+        }
+      >
+        {selectedStation && (
+          <div className="stations-map-panel-content">
+            <div className="stepper-summary-card stations-map-summary">
+              <div className="summary-row">
+                <span>Ville & Adresse :</span>
+                <strong>
+                  {selectedStation?.city || "—"} (
+                  {selectedStation?.address ||
+                    selectedStation?.location ||
+                    "Non précisée"}
+                  )
+                </strong>
+              </div>
+              <div className="summary-row">
+                <span>Coordonnées GPS :</span>
+                <strong>
+                  {selectedStation?.latitude != null &&
+                  selectedStation?.longitude != null
+                    ? `${Number(selectedStation.latitude).toFixed(4)}, ${Number(selectedStation.longitude).toFixed(4)}`
+                    : "Non géolocalisée"}
+                </strong>
+              </div>
+              <div className="summary-row">
+                <span>Responsable :</span>
+                <strong>
+                  {selectedStation?.contactName || "—"}{" "}
+                  {selectedStation?.contactPhone
+                    ? `(${selectedStation.contactPhone})`
+                    : ""}
+                </strong>
+              </div>
+              <div className="summary-row">
+                <span>Tolérance / Repos / Max :</span>
+                <strong>
+                  {selectedStation?.latenessToleranceMinutes}m /{" "}
+                  {selectedStation?.enforceMinRest === false
+                    ? "repos libre"
+                    : `${selectedStation?.minRestHours}h`}{" "}
+                  / {selectedStation?.weeklyHoursLimit}h
+                </strong>
+              </div>
+              <div className="summary-row">
+                <span>Statut :</span>
+                <strong
+                  className={
+                    selectedStation?.isActive
+                      ? "stations-map-status-active"
+                      : "stations-map-status-inactive"
+                  }
+                >
+                  {selectedStation?.isActive ? "Active" : "Inactive"}
+                </strong>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }
@@ -490,7 +602,9 @@ export function StationManager({
   activeTab: "list" | "map";
   onChanged: () => void;
 }) {
-  const [templateStation, setTemplateStation] = useState<StationData | null>(null);
+  const [templateStation, setTemplateStation] = useState<StationData | null>(
+    null,
+  );
   const [form, setForm] = useState<typeof emptyForm | null>(null);
   const [id, setId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -499,19 +613,9 @@ export function StationManager({
   const [cityFilter, setCityFilter] = useState("ALL");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [confirm, setConfirm] = useState<StationData | null>(null);
-  
-  const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setCityDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  const [sharedShift, setSharedShift] = useState<
+    typeof blankSharedShift | null
+  >(null);
 
   const set = (key: string, value: unknown) =>
     setForm((old) => (old ? { ...old, [key]: value } : old));
@@ -529,8 +633,9 @@ export function StationManager({
             location: station.location || "",
             contactName: station.contactName || "",
             contactPhone: station.contactPhone || "",
+            enforceMinRest: station.enforceMinRest !== false,
           }
-        : emptyForm,
+        : { ...blankStationForm },
     );
     setError("");
   }
@@ -551,8 +656,12 @@ export function StationManager({
         contactName: form.contactName.trim() || null,
         contactPhone: form.contactPhone.trim() || null,
         latenessToleranceMinutes: Number(form.latenessToleranceMinutes),
+        enforceMinRest: Boolean(form.enforceMinRest),
         minRestHours: Number(form.minRestHours),
         weeklyHoursLimit: Number(form.weeklyHoursLimit),
+        blockPublishingWithVacancies: Boolean(
+          form.blockPublishingWithVacancies,
+        ),
         checkinQrTtl: Number(form.checkinQrTtl),
         checkoutQrTtl: Number(form.checkoutQrTtl),
       };
@@ -597,7 +706,56 @@ export function StationManager({
     }
   }
 
-  const cities = Array.from(new Set((stations || []).map((s) => s?.city).filter(Boolean)));
+  async function saveSharedShift() {
+    if (!sharedShift) return;
+    const breakError = shiftBreakError(
+      sharedShift.startTime,
+      sharedShift.endTime,
+      sharedShift.breakStart,
+      sharedShift.breakEnd,
+    );
+    if (
+      !sharedShift.label.trim() ||
+      !shiftDuration(sharedShift.startTime, sharedShift.endTime) ||
+      breakError ||
+      !sharedShift.stationIds.length
+    ) {
+      setError(
+        breakError ||
+          "Renseignez le modèle et choisissez au moins une station.",
+      );
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await api("/shift-templates/apply", {
+        stationIds: sharedShift.stationIds,
+        label: sharedShift.label.trim(),
+        startTime: sharedShift.startTime,
+        endTime: sharedShift.endTime,
+        breakStart: sharedShift.breakStart || null,
+        breakEnd: sharedShift.breakEnd || null,
+      });
+      notify(
+        `Modèle appliqué à ${sharedShift.stationIds.length} station${sharedShift.stationIds.length > 1 ? "s" : ""}.`,
+        "success",
+      );
+      setSharedShift(null);
+      onChanged();
+    } catch (reason) {
+      const message = (reason as Error).message;
+      setError(message);
+      notify(message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const cities = Array.from(
+    new Set((stations || []).map((s) => s?.city).filter(Boolean)),
+  );
+  const activeStations = (stations || []).filter((station) => station.isActive);
 
   const filteredStations = (stations || []).filter((s) => {
     if (!s) return false;
@@ -624,20 +782,55 @@ export function StationManager({
       filename: "stations_uswap",
       sheetName: "Stations",
       columns: [
-        { header: "Nom de la station", key: (s: StationData) => s?.name || "", width: 25 },
-        { header: "Ville", key: (s: StationData) => s?.city || "—", width: 15 },
-        { header: "Adresse", key: (s: StationData) => s?.address || s?.location || "—", width: 30 },
         {
-          header: "Coordonnées GPS",
-          key: (s: StationData) => (s?.latitude != null && s?.longitude != null ? `${s.latitude}, ${s.longitude}` : "—"),
+          header: "Nom de la station",
+          key: (s: StationData) => s?.name || "",
           width: 25,
         },
-        { header: "Contact responsable", key: (s: StationData) => s?.contactName || "—", width: 22 },
-        { header: "Téléphone", key: (s: StationData) => s?.contactPhone || "—", width: 18 },
-        { header: "Tolérance retard (min)", key: (s: StationData) => s?.latenessToleranceMinutes ?? 0, width: 20 },
-        { header: "Repos minimal (h)", key: (s: StationData) => s?.minRestHours ?? 0, width: 18 },
-        { header: "Limite hebdo (h)", key: (s: StationData) => s?.weeklyHoursLimit ?? 0, width: 18 },
-        { header: "Statut", key: (s: StationData) => (s?.isActive ? "Active" : "Inactive"), width: 12 },
+        { header: "Ville", key: (s: StationData) => s?.city || "—", width: 15 },
+        {
+          header: "Adresse",
+          key: (s: StationData) => s?.address || s?.location || "—",
+          width: 30,
+        },
+        {
+          header: "Coordonnées GPS",
+          key: (s: StationData) =>
+            s?.latitude != null && s?.longitude != null
+              ? `${s.latitude}, ${s.longitude}`
+              : "—",
+          width: 25,
+        },
+        {
+          header: "Contact responsable",
+          key: (s: StationData) => s?.contactName || "—",
+          width: 22,
+        },
+        {
+          header: "Téléphone",
+          key: (s: StationData) => s?.contactPhone || "—",
+          width: 18,
+        },
+        {
+          header: "Tolérance retard (min)",
+          key: (s: StationData) => s?.latenessToleranceMinutes ?? 0,
+          width: 20,
+        },
+        {
+          header: "Repos minimal (h)",
+          key: (s: StationData) => s?.minRestHours ?? 0,
+          width: 18,
+        },
+        {
+          header: "Limite hebdo (h)",
+          key: (s: StationData) => s?.weeklyHoursLimit ?? 0,
+          width: 18,
+        },
+        {
+          header: "Statut",
+          key: (s: StationData) => (s?.isActive ? "Active" : "Inactive"),
+          width: 12,
+        },
       ],
     });
     notify("Exportation du fichier Excel réussie.", "success");
@@ -685,7 +878,6 @@ export function StationManager({
 
               <MapLocationPicker
                 address={String(form?.address || "")}
-                city={String(form?.city || "")}
                 latitude={form?.latitude ?? DEFAULT_LAT}
                 longitude={form?.longitude ?? DEFAULT_LNG}
                 onSelectLocation={(lat, lng) => {
@@ -729,6 +921,16 @@ export function StationManager({
         {
           id: "rules",
           label: "Règles & Sécurité",
+          isValid: () =>
+            String(form.latenessToleranceMinutes).trim() !== "" &&
+            Number(form.latenessToleranceMinutes) >= 0 &&
+            (!form.enforceMinRest ||
+              (String(form.minRestHours).trim() !== "" &&
+                Number(form.minRestHours) > 0)) &&
+            String(form.weeklyHoursLimit).trim() !== "" &&
+            Number(form.weeklyHoursLimit) > 0 &&
+            String(form.checkinQrTtl).trim() !== "" &&
+            Number(form.checkinQrTtl) > 0,
           content: (
             <div className="stepper-form-layout">
               <div className="user-form-grid-2">
@@ -740,19 +942,32 @@ export function StationManager({
                     min={0}
                     step={1}
                     value={form?.latenessToleranceMinutes ?? 0}
-                    onChange={(e) => set("latenessToleranceMinutes", Number(e.target.value))}
+                    onChange={(e) =>
+                      set(
+                        "latenessToleranceMinutes",
+                        e.target.value === "" ? "" : Number(e.target.value),
+                      )
+                    }
                   />
                 </div>
 
-                <div className="stepper-field-group">
+                <div
+                  className={`stepper-field-group${form.enforceMinRest ? "" : " is-disabled"}`}
+                >
                   <label>REPOS MINIMAL (HEURES)</label>
                   <input
                     type="number"
-                    required
-                    min={0}
+                    required={form.enforceMinRest}
+                    disabled={!form.enforceMinRest}
+                    min={1}
                     step={1}
                     value={form?.minRestHours ?? 0}
-                    onChange={(e) => set("minRestHours", Number(e.target.value))}
+                    onChange={(e) =>
+                      set(
+                        "minRestHours",
+                        e.target.value === "" ? "" : Number(e.target.value),
+                      )
+                    }
                   />
                 </div>
               </div>
@@ -766,7 +981,12 @@ export function StationManager({
                     min={1}
                     step={1}
                     value={form?.weeklyHoursLimit ?? 0}
-                    onChange={(e) => set("weeklyHoursLimit", Number(e.target.value))}
+                    onChange={(e) =>
+                      set(
+                        "weeklyHoursLimit",
+                        e.target.value === "" ? "" : Number(e.target.value),
+                      )
+                    }
                   />
                 </div>
 
@@ -777,15 +997,52 @@ export function StationManager({
                     required
                     min={1}
                     step={1}
-                    value={(form?.checkinQrTtl ?? 300) / 60}
+                    value={
+                      form?.checkinQrTtl ? Number(form.checkinQrTtl) / 60 : ""
+                    }
                     onChange={(e) => {
-                      const val = Number(e.target.value) * 60;
+                      const val =
+                        e.target.value === ""
+                          ? ""
+                          : Number(e.target.value) * 60;
                       set("checkinQrTtl", val);
                       set("checkoutQrTtl", val);
                     }}
                   />
                 </div>
               </div>
+
+              <label className="station-rule-toggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form?.enforceMinRest)}
+                  onChange={(e) => set("enforceMinRest", e.target.checked)}
+                />
+                <span>
+                  <strong>Contrôler le repos entre deux shifts</strong>
+                  <small>
+                    Lorsqu’elle est active, cette règle bloque une affectation
+                    qui ne respecte pas le repos minimal indiqué.
+                  </small>
+                </span>
+              </label>
+
+              <label className="station-rule-toggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form?.blockPublishingWithVacancies)}
+                  onChange={(e) =>
+                    set("blockPublishingWithVacancies", e.target.checked)
+                  }
+                />
+                <span>
+                  <strong>Exiger une couverture complète</strong>
+                  <small>
+                    La publication sera bloquée tant qu’un poste du planning
+                    reste sans swappeur.
+                  </small>
+                </span>
+              </label>
             </div>
           ),
         },
@@ -794,7 +1051,11 @@ export function StationManager({
           label: "Récapitulatif",
           content: (
             <div className="stepper-form-layout">
-              {error && <p className="error-message" role="alert">{error}</p>}
+              {error && (
+                <p className="error-message" role="alert">
+                  {error}
+                </p>
+              )}
               <div className="stepper-summary-card">
                 <div className="summary-row">
                   <span>Nom de la station :</span>
@@ -802,7 +1063,9 @@ export function StationManager({
                 </div>
                 <div className="summary-row">
                   <span>Ville & Fuseau :</span>
-                  <strong>{form?.city || "—"} ({form?.timezone || "—"})</strong>
+                  <strong>
+                    {form?.city || "—"} ({form?.timezone || "—"})
+                  </strong>
                 </div>
                 <div className="summary-row">
                   <span>Adresse :</span>
@@ -819,7 +1082,8 @@ export function StationManager({
                 <div className="summary-row">
                   <span>Responsable :</span>
                   <strong>
-                    {form?.contactName || "Aucun"} {form?.contactPhone ? `(${form.contactPhone})` : ""}
+                    {form?.contactName || "Aucun"}{" "}
+                    {form?.contactPhone ? `(${form.contactPhone})` : ""}
                   </strong>
                 </div>
                 <div className="summary-row">
@@ -828,11 +1092,25 @@ export function StationManager({
                 </div>
                 <div className="summary-row">
                   <span>Repos min. / Limite hebdo :</span>
-                  <strong>{form?.minRestHours ?? 0}h / {form?.weeklyHoursLimit ?? 0}h max</strong>
+                  <strong>
+                    {form?.enforceMinRest
+                      ? `${form?.minRestHours ?? 0}h minimum`
+                      : "Contrôle désactivé"}{" "}
+                    · {form?.weeklyHoursLimit ?? 0}h max
+                  </strong>
+                </div>
+                <div className="summary-row">
+                  <span>Postes non couverts :</span>
+                  <strong>
+                    {form?.blockPublishingWithVacancies
+                      ? "Publication bloquée"
+                      : "Publication avec avertissement"}
+                  </strong>
                 </div>
               </div>
               <p className="station-summary-note">
-                Vérifiez les informations ci-dessus puis cliquez sur le bouton de validation final pour créer ou mettre à jour la station.
+                Vérifiez les informations ci-dessus puis cliquez sur le bouton
+                de validation final pour créer ou mettre à jour la station.
               </p>
             </div>
           ),
@@ -856,7 +1134,9 @@ export function StationManager({
       <Modal
         open={!!confirm}
         onClose={() => !busy && setConfirm(null)}
-        title={confirm?.isActive ? "Désactiver la station" : "Réactiver la station"}
+        title={
+          confirm?.isActive ? "Désactiver la station" : "Réactiver la station"
+        }
       >
         {confirm && (
           <div className="station-confirm">
@@ -888,24 +1168,203 @@ export function StationManager({
         )}
       </Modal>
 
+      <Modal
+        open={sharedShift !== null}
+        size="lg"
+        onClose={() => !busy && setSharedShift(null)}
+        title="Créer un modèle de shift"
+        subtitle="Définissez le créneau une seule fois, puis choisissez les stations qui pourront l’utiliser."
+      >
+        {sharedShift && (
+          <form
+            className="shared-shift-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveSharedShift();
+            }}
+          >
+            <div className="user-form-grid shift-template-form-grid">
+              <label className="wide">
+                Libellé
+                <input
+                  autoFocus
+                  required
+                  placeholder="Ex. Équipe du matin"
+                  value={sharedShift.label}
+                  onChange={(event) =>
+                    setSharedShift({
+                      ...sharedShift,
+                      label: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Heure de début
+                <input
+                  type="time"
+                  required
+                  value={sharedShift.startTime}
+                  onChange={(event) =>
+                    setSharedShift({
+                      ...sharedShift,
+                      startTime: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Heure de fin
+                <input
+                  type="time"
+                  required
+                  value={sharedShift.endTime}
+                  onChange={(event) =>
+                    setSharedShift({
+                      ...sharedShift,
+                      endTime: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Début de pause
+                <input
+                  type="time"
+                  value={sharedShift.breakStart}
+                  onChange={(event) =>
+                    setSharedShift({
+                      ...sharedShift,
+                      breakStart: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Fin de pause
+                <input
+                  type="time"
+                  value={sharedShift.breakEnd}
+                  onChange={(event) =>
+                    setSharedShift({
+                      ...sharedShift,
+                      breakEnd: event.target.value,
+                    })
+                  }
+                />
+              </label>
+            </div>
+
+            <fieldset className="shared-shift-stations">
+              <div className="shared-shift-stations-head">
+                <div>
+                  <legend>Stations concernées</legend>
+                  <p>
+                    Le modèle restera modifiable séparément dans chaque station.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() =>
+                    setSharedShift({
+                      ...sharedShift,
+                      stationIds:
+                        sharedShift.stationIds.length === activeStations.length
+                          ? []
+                          : activeStations.map((station) => station.id),
+                    })
+                  }
+                >
+                  {sharedShift.stationIds.length === activeStations.length
+                    ? "Tout désélectionner"
+                    : "Tout sélectionner"}
+                </button>
+              </div>
+              <div>
+                {activeStations.map((station) => (
+                  <label key={station.id}>
+                    <input
+                      type="checkbox"
+                      checked={sharedShift.stationIds.includes(station.id)}
+                      onChange={(event) =>
+                        setSharedShift({
+                          ...sharedShift,
+                          stationIds: event.target.checked
+                            ? [...sharedShift.stationIds, station.id]
+                            : sharedShift.stationIds.filter(
+                                (id) => id !== station.id,
+                              ),
+                        })
+                      }
+                    />
+                    <span>
+                      <strong>{station.name}</strong>
+                      <small>
+                        {station.city ||
+                          station.address ||
+                          "Adresse non renseignée"}
+                      </small>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            {error && (
+              <p className="error-message" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="modal-form-actions">
+              <button
+                type="button"
+                className="admin-button secondary"
+                disabled={busy}
+                onClick={() => setSharedShift(null)}
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="admin-button primary-cta"
+                disabled={busy}
+              >
+                Appliquer aux stations
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
       {/* Modal dédié pour ouvrir ShiftTemplates en surimpression */}
       <Modal
         open={templateStation !== null}
+        size="xl"
         onClose={() => setTemplateStation(null)}
-        title={templateStation ? `Modèles de shifts — ${templateStation.name}` : "Modèles de shifts"}
+        title={
+          templateStation
+            ? `Modèles de shifts — ${templateStation.name}`
+            : "Modèles de shifts"
+        }
       >
         <div className="station-templates-modal-body">
           {templateStation && (
             <ShiftTemplates
-              station={(stations || []).find((s) => s?.id === templateStation.id) || templateStation}
-              onBack={() => setTemplateStation(null)}
+              station={
+                (stations || []).find((s) => s?.id === templateStation.id) ||
+                templateStation
+              }
             />
           )}
         </div>
       </Modal>
 
       {activeTab === "map" ? (
-        <StationsMapView stations={stations || []} onEditStation={(s) => edit(s)} />
+        <StationsMapView
+          stations={stations || []}
+          onEditStation={(s) => edit(s)}
+        />
       ) : (
         <>
           <div className="operations-actions stations-toolbar">
@@ -920,40 +1379,21 @@ export function StationManager({
             </div>
 
             {cities.length > 0 && (
-              <div ref={dropdownRef} className="stations-city-filter">
-                <button
-                  type="button"
-                  className="stations-city-toggle"
-                  onClick={() => setCityDropdownOpen(!cityDropdownOpen)}
-                >
-                  <span>Ville :</span>
-                  <strong>
-                    {cityFilter === "ALL" ? "Toutes les villes" : cityFilter}
-                  </strong>
-                  <CaretDownIcon size={14} className={`caret${cityDropdownOpen ? " is-open" : ""}`} />
-                </button>
-
-                {cityDropdownOpen && (
-                  <div className="stations-city-menu">
-                    <button
-                      type="button"
-                      className={`stations-city-option${cityFilter === "ALL" ? " is-selected" : ""}`}
-                      onClick={() => { setCityFilter("ALL"); setCityDropdownOpen(false); }}
-                    >
-                      Toutes les villes
-                    </button>
-                    {cities.map((city) => (
-                      <button
-                        key={city}
-                        type="button"
-                        className={`stations-city-option${cityFilter === city ? " is-selected" : ""}`}
-                        onClick={() => { setCityFilter(city || "ALL"); setCityDropdownOpen(false); }}
-                      >
-                        {city}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div className="stations-city-filter">
+                <Select
+                  size="sm"
+                  value={cityFilter}
+                  ariaLabel="Filtrer les stations par ville"
+                  width="190px"
+                  onChange={(value) => setCityFilter(String(value))}
+                  options={[
+                    { value: "ALL", label: "Toutes les villes" },
+                    ...cities.map((city) => ({
+                      value: city || "",
+                      label: city || "",
+                    })),
+                  ]}
+                />
               </div>
             )}
 
@@ -982,6 +1422,18 @@ export function StationManager({
               <button
                 type="button"
                 className="admin-button secondary small"
+                onClick={() => {
+                  setError("");
+                  setSharedShift({ ...blankSharedShift, stationIds: [] });
+                }}
+              >
+                <Clock3 size={15} />
+                <span>Créer un modèle de shift</span>
+              </button>
+
+              <button
+                type="button"
+                className="admin-button secondary small"
                 onClick={handleExportExcel}
                 disabled={!filteredStations?.length}
               >
@@ -1003,7 +1455,7 @@ export function StationManager({
           {viewMode === "table" ? (
             <div className="admin-card">
               <div className="admin-table-wrap">
-                <table className="admin-table station-compact-table">
+                <table className="admin-table station-compact-table mobile-card-table">
                   <thead>
                     <tr>
                       <th>Station</th>
@@ -1018,7 +1470,7 @@ export function StationManager({
                   <tbody>
                     {filteredStations.map((s) => (
                       <tr key={s?.id}>
-                        <td>
+                        <td data-label="Station">
                           <div className="admin-person">
                             <span className="admin-stat-icon orange station-person-icon">
                               <Building2 size={16} />
@@ -1029,13 +1481,18 @@ export function StationManager({
                             </div>
                           </div>
                         </td>
-                        <td>
+                        <td
+                          data-label="Ville & adresse"
+                          title={[s?.city, s?.address || s?.location]
+                            .filter(Boolean)
+                            .join(" — ")}
+                        >
                           <div className="station-cell-city">
                             <strong>{s?.city || "Non spécifiée"}</strong>
                             <span>{s?.address || s?.location || "—"}</span>
                           </div>
                         </td>
-                        <td>
+                        <td data-label="GPS">
                           {s?.latitude != null && s?.longitude != null ? (
                             <a
                               href={`https://www.google.com/maps?q=${s.latitude},${s.longitude}`}
@@ -1044,39 +1501,57 @@ export function StationManager({
                               className="text-button station-map-link"
                             >
                               <MapPin size={13} />
-                              <span>{Number(s.latitude).toFixed(2)}, {Number(s.longitude).toFixed(2)}</span>
+                              <span>
+                                {Number(s.latitude).toFixed(2)},{" "}
+                                {Number(s.longitude).toFixed(2)}
+                              </span>
                             </a>
                           ) : (
                             <span className="station-gps-empty">—</span>
                           )}
                         </td>
-                        <td>
-                          <div className="station-cell-contact">
+                        <td data-label="Responsable">
+                          <div
+                            className="station-cell-contact"
+                            title={[s?.contactName, s?.contactPhone]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          >
                             <span>{s?.contactName || "—"}</span>
                             {s?.contactPhone && <span>{s.contactPhone}</span>}
                           </div>
                         </td>
-                        <td>
+                        <td data-label="Contraintes">
                           <div className="code-chips station-code-chips">
-                            <code>Tol: {s?.latenessToleranceMinutes ?? 0}m</code>
-                            <code>Repos: {s?.minRestHours ?? 0}h</code>
+                            <code>
+                              Tol: {s?.latenessToleranceMinutes ?? 0}m
+                            </code>
+                            <code>
+                              Repos:{" "}
+                              {s?.enforceMinRest === false
+                                ? "libre"
+                                : `${s?.minRestHours ?? 0}h`}
+                            </code>
                             <code>Max: {s?.weeklyHoursLimit ?? 0}h</code>
                           </div>
                         </td>
-                        <td>
-                          <span className={`admin-badge ${s?.isActive ? "active" : "draft"}`}>
+                        <td data-label="Statut">
+                          <span
+                            className={`admin-badge ${s?.isActive ? "active" : "draft"}`}
+                          >
                             {s?.isActive ? "Active" : "Inactive"}
                           </span>
                         </td>
-                        <td className="station-cell-right">
+                        <td data-label="Actions" className="station-cell-right">
                           <div className="station-row-actions">
                             <button
                               type="button"
                               className="admin-button secondary small"
+                              title="Gérer les modèles de shifts"
                               onClick={() => setTemplateStation(s)}
                             >
                               <Clock3 size={13} />
-                              <span>Modèles de shifts</span>
+                              <span>Shifts</span>
                             </button>
                             <button
                               type="button"
@@ -1108,7 +1583,9 @@ export function StationManager({
                     <span className="admin-stat-icon orange">
                       <Building2 size={22} />
                     </span>
-                    <span className={`admin-badge ${s?.isActive ? "active" : "draft"}`}>
+                    <span
+                      className={`admin-badge ${s?.isActive ? "active" : "draft"}`}
+                    >
                       {s?.isActive ? "Active" : "Inactive"}
                     </span>
                   </div>
@@ -1117,7 +1594,10 @@ export function StationManager({
                     <h2>{s?.name}</h2>
                     <p className="station-location">
                       <MapPin size={15} />
-                      <span>{s?.city ? `${s.city} — ` : ""}{s?.address || s?.location || "Adresse non renseignée"}</span>
+                      <span>
+                        {s?.city ? `${s.city} — ` : ""}
+                        {s?.address || s?.location || "Adresse non renseignée"}
+                      </span>
                     </p>
                   </div>
 
@@ -1151,7 +1631,8 @@ export function StationManager({
                               rel="noreferrer"
                               className="station-rules-map-link"
                             >
-                              {Number(s.latitude).toFixed(4)}, {Number(s.longitude).toFixed(4)} (Ouvrir Maps)
+                              {Number(s.latitude).toFixed(4)},{" "}
+                              {Number(s.longitude).toFixed(4)} (Ouvrir Maps)
                             </a>
                           ) : (
                             "Non configuré"
@@ -1160,11 +1641,17 @@ export function StationManager({
                       </div>
                       <div className="rule-chip">
                         <span className="rule-label">Tolérance retard</span>
-                        <strong className="rule-value">{s?.latenessToleranceMinutes ?? 0} min</strong>
+                        <strong className="rule-value">
+                          {s?.latenessToleranceMinutes ?? 0} min
+                        </strong>
                       </div>
                       <div className="rule-chip">
                         <span className="rule-label">Repos min.</span>
-                        <strong className="rule-value">{s?.minRestHours ?? 0} h</strong>
+                        <strong className="rule-value">
+                          {s?.enforceMinRest === false
+                            ? "Non contrôlé"
+                            : `${s?.minRestHours ?? 0} h`}
+                        </strong>
                       </div>
                     </div>
                   </details>
@@ -1202,7 +1689,11 @@ export function StationManager({
           {!filteredStations?.length && (
             <div className="admin-card admin-empty">
               <Building2 size={32} />
-              <h2>{query ? "Aucune station ne correspond" : "Aucune station enregistrée"}</h2>
+              <h2>
+                {query
+                  ? "Aucune station ne correspond"
+                  : "Aucune station enregistrée"}
+              </h2>
               <p>
                 {query
                   ? "Modifiez vos termes de recherche ou sélectionnez une autre ville."

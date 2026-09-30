@@ -1,5 +1,5 @@
 import { attendanceStatus, constraintReport } from "../constraints";
-import { isoFromMs, stationDayKey } from "../seed";
+import { isoFromMs } from "../seed";
 import {
   durationHours,
   notifyStaff,
@@ -10,14 +10,21 @@ import {
   scopeStationId,
   stationOf,
 } from "../shared";
-import { MockHttpError, type MockCtx, type MockQr, type MockRoute } from "../types";
+import {
+  MockHttpError,
+  type MockCtx,
+  type MockQr,
+  type MockRoute,
+} from "../types";
 
-const asText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+const asText = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 
 function randomToken(): string {
   const bytes = new Uint8Array(32);
-  if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(bytes);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues)
+    crypto.getRandomValues(bytes);
   else
     for (let index = 0; index < bytes.length; index += 1)
       bytes[index] = Math.floor(Math.random() * 256);
@@ -37,7 +44,11 @@ const recordOf = (ctx: MockCtx, shiftId: string) =>
   ctx.db.attendance.find((item) => item.shiftId === shiftId) ?? null;
 
 const publishedPlanningIds = (ctx: MockCtx) =>
-  new Set(ctx.db.plannings.filter((item) => item.status === "PUBLISHED").map((item) => item.id));
+  new Set(
+    ctx.db.plannings
+      .filter((item) => item.status === "PUBLISHED")
+      .map((item) => item.id),
+  );
 
 export const attendanceRoutes: MockRoute[] = [
   {
@@ -51,7 +62,10 @@ export const attendanceRoutes: MockRoute[] = [
 
       if (user.role === "SWAPPER") {
         const shifts = ctx.db.occurrences
-          .filter((item) => item.swapperId === user.id && published.has(item.planningId))
+          .filter(
+            (item) =>
+              item.swapperId === user.id && published.has(item.planningId),
+          )
           .filter((item) => Date.parse(item.endTime) > windowStart)
           .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))
           .slice(0, limit)
@@ -60,14 +74,23 @@ export const attendanceRoutes: MockRoute[] = [
             const station = stationOf(ctx.db, item.stationId);
             return {
               id: item.id,
+              planningId: item.planningId,
+              templateId: item.templateId,
+              label: item.label,
               startTime: item.startTime,
               endTime: item.endTime,
               publishedAt:
-                ctx.db.plannings.find((pl) => pl.id === item.planningId)?.publishedAt ?? null,
-              station: { id: station.id, name: station.name },
+                ctx.db.plannings.find((pl) => pl.id === item.planningId)
+                  ?.publishedAt ?? null,
+              station: {
+                id: station.id,
+                name: station.name,
+                timezone: station.timezone,
+              },
               swapper: { fullName: user.fullName },
               attendance: record?.checkedInAt
                 ? {
+                    status: record.status,
                     checkedInAt: record.checkedInAt,
                     checkedOutAt: record.checkedOutAt,
                     isLate: record.isLate,
@@ -81,7 +104,9 @@ export const attendanceRoutes: MockRoute[] = [
       const stationScope = scopeStationId(user);
       const station = stationScope ? stationOf(ctx.db, stationScope) : null;
       const shifts = ctx.db.occurrences
-        .filter((item) => (stationScope ? item.stationId === stationScope : true))
+        .filter((item) =>
+          stationScope ? item.stationId === stationScope : true,
+        )
         .filter((item) => published.has(item.planningId))
         .filter((item) => Date.parse(item.endTime) > windowStart)
         .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))
@@ -89,19 +114,29 @@ export const attendanceRoutes: MockRoute[] = [
         .map((item) => {
           const target = stationOf(ctx.db, item.stationId);
           const swapper = item.swapperId
-            ? ctx.db.users.find((entry) => entry.id === item.swapperId) ?? null
+            ? (ctx.db.users.find((entry) => entry.id === item.swapperId) ??
+              null)
             : null;
           const record = recordOf(ctx, item.id);
           return {
             id: item.id,
+            planningId: item.planningId,
+            templateId: item.templateId,
+            label: item.label,
             startTime: item.startTime,
             endTime: item.endTime,
             publishedAt:
-              ctx.db.plannings.find((pl) => pl.id === item.planningId)?.publishedAt ?? null,
-            station: { id: target.id, name: target.name },
+              ctx.db.plannings.find((pl) => pl.id === item.planningId)
+                ?.publishedAt ?? null,
+            station: {
+              id: target.id,
+              name: target.name,
+              timezone: target.timezone,
+            },
             swapper: { fullName: swapper?.fullName ?? "Poste vacant" },
             attendance: record?.checkedInAt
               ? {
+                  status: record.status,
                   checkedInAt: record.checkedInAt,
                   checkedOutAt: record.checkedOutAt,
                   isLate: record.isLate,
@@ -134,14 +169,19 @@ export const attendanceRoutes: MockRoute[] = [
       const stationId = asText(ctx.body.stationId);
       const swapperId = asText(ctx.body.swapperId);
       if (!startTime || !endTime || !stationId || !swapperId)
-        throw new MockHttpError(400, "Contrôle incomplet : station, swappeur et créneau requis.");
+        throw new MockHttpError(
+          400,
+          "Contrôle incomplet : station, swappeur et créneau requis.",
+        );
       return constraintReport(ctx.db, {
         stationId,
         swapperId,
         startTime,
         endTime,
         hours:
-          Math.round(((Date.parse(endTime) - Date.parse(startTime)) / 3600000) * 100) / 100,
+          Math.round(
+            ((Date.parse(endTime) - Date.parse(startTime)) / 3600000) * 100,
+          ) / 100,
       });
     },
   },
@@ -150,28 +190,63 @@ export const attendanceRoutes: MockRoute[] = [
     pattern: /^\/attendance\/qr$/,
     handler: (ctx) => {
       const user = requireRole(requireUser(ctx.db, ctx.user), [
-        "ADMIN",
-        "SUPERVISOR",
         "STATION_CHIEF",
       ]);
       const occurrence = occurrenceOf(ctx.db, asText(ctx.body.shiftId));
-      const kind = asText(ctx.body.kind).toUpperCase() === "CHECKOUT" ? "CHECKOUT" : "CHECKIN";
-      const planning = ctx.db.plannings.find((item) => item.id === occurrence.planningId);
+      const requestedStationId = asText(ctx.body.stationId);
+      const kind =
+        asText(ctx.body.kind).toUpperCase() === "CHECKOUT"
+          ? "CHECKOUT"
+          : "CHECKIN";
+      const planning = ctx.db.plannings.find(
+        (item) => item.id === occurrence.planningId,
+      );
       if (planning?.status !== "PUBLISHED")
-        throw new MockHttpError(409, "Ce shift n'est pas publié : aucun QR possible.");
-      if (user.role === "STATION_CHIEF" && occurrence.stationId !== user.stationId)
-        throw new MockHttpError(403, "Ce shift n'appartient pas à votre station.");
+        throw new MockHttpError(
+          409,
+          "Ce shift n'est pas publié : aucun QR possible.",
+        );
+      if (requestedStationId && requestedStationId !== occurrence.stationId)
+        throw new MockHttpError(
+          409,
+          "La station sélectionnée ne correspond pas à ce shift.",
+        );
+      if (!occurrence.swapperId)
+        throw new MockHttpError(
+          409,
+          "Ce poste est vacant : aucun pointage ne peut être généré.",
+        );
+      if (occurrence.stationId !== user.stationId)
+        throw new MockHttpError(
+          403,
+          "Ce shift n'appartient pas à votre station.",
+        );
       const station = stationOf(ctx.db, occurrence.stationId);
-      const ttl = (kind === "CHECKIN" ? station.checkinQrTtl : station.checkoutQrTtl) * 1000;
+      const ttl =
+        (kind === "CHECKIN" ? station.checkinQrTtl : station.checkoutQrTtl) *
+        1000;
       const start = Date.parse(occurrence.startTime);
       const end = Date.parse(occurrence.endTime);
+      if (kind === "CHECKIN" && (ctx.now < start || ctx.now > end))
+        throw new MockHttpError(
+          409,
+          "Le QR de prise de service n’est disponible que pendant le créneau du shift.",
+        );
+      if (kind === "CHECKOUT" && (ctx.now < start || ctx.now > end + ttl))
+        throw new MockHttpError(
+          409,
+          "Le QR de fin n’est pas disponible en dehors de la fenêtre du shift.",
+        );
       if (kind === "CHECKIN" && ctx.now > end)
         throw new MockHttpError(
           409,
           "La fenêtre de prise de service est terminée pour ce shift.",
         );
       if (kind === "CHECKOUT" && ctx.now > start + 86400000)
-        throw new MockHttpError(409, "Ce shift est trop ancien pour une fin de service.");
+        throw new MockHttpError(
+          409,
+          "Ce shift est trop ancien pour une fin de service.",
+        );
       pruneTokens(ctx);
       const active = ctx.db.qrTokens.find(
         (item) =>
@@ -244,19 +319,39 @@ export const attendanceRoutes: MockRoute[] = [
         );
       if (Date.parse(token.expiresAt) < ctx.now)
         throw new MockHttpError(410, "Ce QR a expiré. Demandez-en un nouveau.");
-      const occurrence = occurrenceOf(ctx.db, token.shiftId);
+      const qrOccurrence = occurrenceOf(ctx.db, token.shiftId);
+      const occurrence = ctx.db.occurrences.find(
+        (item) =>
+          item.planningId === qrOccurrence.planningId &&
+          item.stationId === qrOccurrence.stationId &&
+          item.templateId === qrOccurrence.templateId &&
+          item.startTime === qrOccurrence.startTime &&
+          item.endTime === qrOccurrence.endTime &&
+          item.swapperId === user.id,
+      );
+      if (!occurrence)
+        throw new MockHttpError(403, "Ce shift ne vous est pas affecté.");
       if (askedShiftId && askedShiftId !== occurrence.id)
         throw new MockHttpError(
           409,
-          "Ce QR correspond à une autre affectation que celle sélectionnée.",
+          "Ce QR correspond à un autre shift que celui sélectionné.",
         );
-      if (occurrence.swapperId !== user.id)
-        throw new MockHttpError(403, "Ce shift ne vous est pas affecté.");
       if (token.consumedBy.includes(user.id))
-        throw new MockHttpError(409, "Ce QR a déjà été utilisé pour ce service.");
+        throw new MockHttpError(
+          409,
+          "Ce QR a déjà été utilisé pour ce service.",
+        );
       const station = stationOf(ctx.db, occurrence.stationId);
       const tolerance = station.latenessToleranceMinutes;
       const record = recordOf(ctx, occurrence.id);
+      const start = Date.parse(occurrence.startTime);
+      const end = Date.parse(occurrence.endTime);
+
+      if (ctx.now < start || ctx.now > end)
+        throw new MockHttpError(
+          409,
+          "Ce QR est valide, mais ce shift n’est pas dans sa fenêtre de pointage.",
+        );
 
       if (token.kind === "CHECKIN") {
         if (record?.checkedInAt)
@@ -264,7 +359,8 @@ export const attendanceRoutes: MockRoute[] = [
             409,
             "La prise de service est déjà enregistrée pour ce service.",
           );
-        const late = ctx.now > Date.parse(occurrence.startTime) + tolerance * 60000;
+        const late =
+          ctx.now > Date.parse(occurrence.startTime) + tolerance * 60000;
         const created = {
           shiftId: occurrence.id,
           swapperId: user.id,
@@ -285,6 +381,9 @@ export const attendanceRoutes: MockRoute[] = [
               item.origin === "AUTOMATIC_ABSENCE" &&
               item.status === "OPEN"
             ),
+        );
+        ctx.db.automatedAbsences = ctx.db.automatedAbsences.filter(
+          (shiftId) => shiftId !== occurrence.id,
         );
         notifyStaff(
           ctx.db,
@@ -336,18 +435,24 @@ export const attendanceRoutes: MockRoute[] = [
     pattern: /^\/attendance\/monitor$/,
     handler: (ctx) => {
       const user = requireUser(ctx.db, ctx.user);
-      requireRole(user, ["ADMIN", "SUPERVISOR", "STATION_CHIEF"]);
+      requireRole(user, ["SUPERVISOR", "STATION_CHIEF"]);
       const stationScope = scopeStationId(user);
       const rows = publishedShiftsOfDay(ctx.db, ctx.now, stationScope)
         .filter((item) => item.swapperId)
         .map((item) => {
           const station = stationOf(ctx.db, item.stationId);
-          const swapper = ctx.db.users.find((entry) => entry.id === item.swapperId)!;
+          const swapper = ctx.db.users.find(
+            (entry) => entry.id === item.swapperId,
+          )!;
           const record = recordOf(ctx, item.id);
           const status = attendanceStatus(ctx.db, item);
           return {
             shiftId: item.id,
-            station: { id: station.id, name: station.name, timezone: station.timezone },
+            station: {
+              id: station.id,
+              name: station.name,
+              timezone: station.timezone,
+            },
             swapper: { id: swapper.id, fullName: swapper.fullName },
             template: item.label,
             startTime: item.startTime,
@@ -360,7 +465,14 @@ export const attendanceRoutes: MockRoute[] = [
             toleranceMinutes: station.latenessToleranceMinutes,
           };
         });
-      const summary = { expected: 0, present: 0, late: 0, absent: 0, closed: 0, justified: 0 };
+      const summary = {
+        expected: 0,
+        present: 0,
+        late: 0,
+        absent: 0,
+        closed: 0,
+        justified: 0,
+      };
       for (const row of rows) {
         if (row.status === "EXPECTED") summary.expected += 1;
         else if (row.status === "PRESENT") summary.present += 1;
@@ -381,22 +493,27 @@ export const attendanceRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/attendance\/history$/,
     handler: (ctx) => {
-      const user = requireUser(ctx.db, ctx.user);
-      const asked = asText(ctx.query.get("swapperId"));
+      const user = requireRole(requireUser(ctx.db, ctx.user), ["SWAPPER"]);
       const fromValue = asText(ctx.query.get("from"));
       const toValue = asText(ctx.query.get("to"));
       const from = fromValue ? Date.parse(fromValue) : ctx.now - 30 * 86400000;
       const to = toValue ? Date.parse(toValue) : ctx.now + 7 * 86400000;
       const stationScope = scopeStationId(user);
       // US 2040 : un swappeur ne consulte que ses propres pointages.
-      const swapperFilter = user.role === "SWAPPER" ? user.id : asked || null;
+      const swapperFilter = user.id;
       const published = publishedPlanningIds(ctx);
       return ctx.db.occurrences
         .filter((item) => published.has(item.planningId))
-        .filter((item) => (swapperFilter ? item.swapperId === swapperFilter : true))
-        .filter((item) => (stationScope ? item.stationId === stationScope : true))
+        .filter((item) =>
+          swapperFilter ? item.swapperId === swapperFilter : true,
+        )
+        .filter((item) =>
+          stationScope ? item.stationId === stationScope : true,
+        )
         .filter(
-          (item) => Date.parse(item.startTime) >= from && Date.parse(item.startTime) <= to,
+          (item) =>
+            Date.parse(item.startTime) >= from &&
+            Date.parse(item.startTime) <= to,
         )
         .sort((a, b) => Date.parse(b.startTime) - Date.parse(a.startTime))
         .map((item) => {
@@ -405,7 +522,11 @@ export const attendanceRoutes: MockRoute[] = [
           const status = attendanceStatus(ctx.db, item);
           return {
             shiftId: item.id,
-            station: { id: station.id, name: station.name, timezone: station.timezone },
+            station: {
+              id: station.id,
+              name: station.name,
+              timezone: station.timezone,
+            },
             template: item.label,
             plannedStart: item.startTime,
             plannedEnd: item.endTime,
@@ -417,7 +538,7 @@ export const attendanceRoutes: MockRoute[] = [
             isJustified: status === "JUSTIFIED",
             corrected: Boolean(record?.correction),
             correctedAt: record?.correction?.at ?? null,
-            correctionReason: record?.correction?.reason ?? null,
+            correctionReason: null,
           };
         });
     },

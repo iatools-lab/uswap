@@ -1,36 +1,21 @@
 import type { User } from "../../api/auth-api";
 
-export type OperationAttendance = {
-  id: string;
-  status:
-    | "EXPECTED"
-    | "CHECKED_IN"
-    | "CHECKED_OUT"
-    | "ABSENT"
-    | "JUSTIFIED";
-  checkInAt: string | null;
-  checkOutAt: string | null;
-  checkedInAt?: string | null;
-  checkedOutAt?: string | null;
-  isLate: boolean;
-  absenceReason?: string | null;
-};
-
 export type OperationShift = {
   id: string;
+  planningId: string;
+  templateId: string;
+  label: string;
   startTime: string;
   endTime: string;
   publishedAt: string | null;
-  station: {
-    id: string;
-    name: string;
-    timezone?: string;
-    latenessToleranceMinutes?: number;
-  };
-  swapper: {
-    fullName: string;
-  };
-  attendance: OperationAttendance | null;
+  station: { id?: string; name: string; timezone?: string };
+  swapper: { fullName: string };
+  attendance: {
+    status: "PRESENT" | "LATE" | "CLOSED" | "JUSTIFIED" | "ABSENT";
+    checkedInAt: string;
+    checkedOutAt: string | null;
+    isLate: boolean;
+  } | null;
 };
 
 export type OperationData = {
@@ -46,27 +31,22 @@ export type OperationData = {
 
 export type ScanResult = {
   kind: "CHECKIN" | "CHECKOUT";
-  status:
-    | "ON_TIME"
-    | "LATE"
-    | "CLOSED";
-  checkedInAt: string | null;
-  checkedOutAt: string | null;
-  toleranceMinutes: number;
+  status: "PRESENT" | "LATE" | "CLOSED";
+  checkedInAt: string;
+  checkedOutAt?: string | null;
+  toleranceMinutes?: number;
   timezone: string;
 };
 
 export type Qr = {
-  id: string;
   token: string;
-  type: "START" | "END";
-  kind?: "CHECKIN" | "CHECKOUT";
+  kind: string;
   shiftId: string;
-  stationId: string;
-  stationName?: string;
-  timezone?: string;
+  stationName: string;
+  createdAt: string;
   expiresAt: string;
   ttlSeconds: number;
+  timezone: string;
 };
 
 export type OperationsViewProps = {

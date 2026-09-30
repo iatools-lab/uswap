@@ -23,6 +23,10 @@
   line-height: 1.45;
 }
 
+.admin-workspace.is-sidebar-collapsed {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -133,6 +137,68 @@
   color: #fff;
 }
 
+.sidebar-rail-toggle {
+  position: absolute;
+  top: 28px;
+  right: -16px;
+  z-index: 5;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #dce4f1;
+  border-radius: 9px;
+  background: #fff;
+  color: #40516d;
+  box-shadow: 0 5px 16px rgba(15, 35, 82, 0.14);
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.sidebar-rail-toggle:hover,
+.sidebar-rail-toggle:focus-visible {
+  color: var(--navy);
+  border-color: #aebdd3;
+  transform: translateY(-1px);
+}
+
+.admin-workspace,
+.admin-sidebar,
+.admin-sidebar .brand-lockup,
+.admin-sidebar nav a span {
+  transition:
+    grid-template-columns 0.2s ease,
+    padding 0.2s ease,
+    opacity 0.15s ease;
+}
+
+.is-sidebar-collapsed .admin-sidebar {
+  padding-inline: 12px;
+}
+
+.is-sidebar-collapsed .admin-sidebar .brand {
+  justify-content: center;
+  margin-inline: 0;
+}
+
+.is-sidebar-collapsed .admin-sidebar .brand-lockup,
+.is-sidebar-collapsed .admin-sidebar nav a span,
+.is-sidebar-collapsed .admin-sidebar nav button span,
+.is-sidebar-collapsed .admin-sidebar nav button .caret,
+.is-sidebar-collapsed .admin-station-subnav,
+.is-sidebar-collapsed .admin-sidebar nav i {
+  display: none !important;
+}
+
+.is-sidebar-collapsed .admin-sidebar nav a,
+.is-sidebar-collapsed .admin-sidebar nav button {
+  justify-content: center;
+  padding-inline: 10px !important;
+}
+
 .admin-sidebar .brand {
   margin: 0 8px 36px;
   text-decoration: none;
@@ -163,6 +229,80 @@
 .admin-sidebar nav {
   display: grid;
   gap: 6px;
+}
+
+.admin-nav-group {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-nav-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.admin-nav-row > a {
+  flex: 1;
+}
+
+.admin-nav-row > button {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #c6d2ed;
+  text-align: left;
+  font-size: 14px;
+}
+
+.admin-nav-row > button:hover {
+  color: #fff;
+  background: #ffffff0d;
+}
+
+.admin-nav-row > button[aria-current="page"] {
+  color: #fff;
+  background: #ffffff13;
+}
+
+.admin-nav-row > button > span {
+  flex: 1;
+}
+
+.admin-nav-caret {
+  color: #c6d2ed;
+  transform: rotate(-90deg);
+  transition: transform 0.2s ease;
+}
+
+.admin-nav-caret.is-open {
+  transform: rotate(0deg);
+}
+
+.admin-station-subnav {
+  display: grid;
+  gap: 2px;
+  padding-left: 26px;
+  margin: 2px 0 4px;
+}
+
+.admin-sidebar .admin-station-subnav a {
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  color: #9aadd3;
+  font-size: 13px;
+}
+
+.admin-sidebar .admin-station-subnav a[aria-current="page"] {
+  color: #fff;
+  background: #ffffff14;
 }
 
 .admin-sidebar nav a {
@@ -252,7 +392,7 @@
 }
 
 .admin-topbar {
-  height: 60px;
+  min-height: 72px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -261,6 +401,51 @@
   background: #fff;
   gap: 16px;
   flex-shrink: 0;
+}
+
+.sidebar-toggle {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid #e1e7f0;
+  border-radius: 9px;
+  background: #fff;
+  color: #53627a;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.sidebar-toggle:hover {
+  color: var(--navy);
+  border-color: #c8d3e5;
+  background: #f7f9fc;
+}
+
+.admin-heading-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.admin-heading-copy > p {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .admin-breadcrumb {
@@ -323,10 +508,56 @@
   margin: 0 auto;
   padding: 16px 24px 20px;
   flex: 1;
-  height: calc(100vh - 60px);
+  height: calc(100vh - 72px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+}
+
+@media (min-width: 761px) {
+  .role-workspace:not(.is-sidebar-collapsed) {
+    grid-template-columns: 238px minmax(0, 1fr);
+  }
+
+  .role-workspace .admin-sidebar {
+    padding: 24px 16px 18px;
+  }
+
+  .role-workspace .admin-sidebar .brand {
+    margin-bottom: 30px;
+  }
+
+  .role-workspace .admin-sidebar nav {
+    gap: 7px;
+  }
+
+  .role-workspace .admin-sidebar nav a {
+    min-height: 46px;
+    border-radius: 10px;
+  }
+
+  .role-workspace .admin-topbar {
+    min-height: 76px;
+    padding-inline: clamp(22px, 3vw, 36px);
+  }
+
+  .role-workspace .admin-content {
+    height: calc(100vh - 76px);
+    max-width: 1480px;
+    padding: 24px clamp(22px, 3vw, 38px) 36px;
+  }
+
+  .role-workspace .admin-heading-copy {
+    gap: 4px;
+  }
+
+  .role-workspace .admin-breadcrumb {
+    font-size: 15px;
+  }
+
+  .role-workspace .admin-heading-copy > p {
+    font-size: 12px;
+  }
 }
 
 /* ============================================================
@@ -449,8 +680,8 @@
 
 .stepper-modal {
   width: 100%;
-  max-width: 680px;
-  max-height: 85vh;
+  max-width: 1040px;
+  max-height: min(94dvh, 960px);
   background: #ffffff;
   border-radius: 14px;
   overflow: hidden;
@@ -1148,19 +1379,6 @@
   border-color: #94a3b8;
 }
 
-.pending-alert-banner {
-  background: #fffbeb;
-  border: 1px solid #fef08a;
-  border-radius: 10px;
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13px;
-  color: #78350f;
-}
-
 /* ============================================================
    7. Cartes, Tableaux & Badges
    ============================================================ */
@@ -1208,6 +1426,95 @@
 
 .admin-table tr:last-child td {
   border-bottom: 0;
+}
+
+@media (max-width: 767px) {
+  .admin-table-wrap:has(.mobile-card-table) {
+    overflow: visible;
+  }
+
+  .mobile-card-table,
+  .mobile-card-table tbody,
+  .mobile-card-table tr,
+  .mobile-card-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mobile-card-table thead {
+    display: none;
+  }
+
+  .mobile-card-table tbody {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .mobile-card-table tr {
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 3px 12px rgba(19, 44, 85, 0.035);
+  }
+
+  .mobile-card-table td,
+  .mobile-card-table td.users-cell-right,
+  .mobile-card-table td.station-cell-right {
+    min-height: 44px;
+    display: grid;
+    grid-template-columns: minmax(92px, 0.8fr) minmax(0, 1.2fr);
+    align-items: center;
+    gap: 12px;
+    padding: 9px 0 !important;
+    border: 0;
+    border-top: 1px solid #eef1f6;
+    text-align: right;
+    white-space: normal;
+  }
+
+  .mobile-card-table td:first-child {
+    display: block;
+    min-height: 44px;
+    padding-top: 0 !important;
+    border-top: 0;
+    text-align: left;
+  }
+
+  .mobile-card-table td::before {
+    content: attr(data-label);
+    color: #738097;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .mobile-card-table td:first-child::before {
+    display: block;
+    margin-bottom: 7px;
+  }
+
+  .mobile-card-table .row-actions,
+  .mobile-card-table .station-row-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .mobile-card-table button,
+  .mobile-card-table a {
+    min-height: 44px;
+  }
+
+  .mobile-card-table .import-reason {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
 }
 
 .admin-person {
@@ -2129,7 +2436,8 @@
 }
 
 .station-card-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: center;
   gap: 8px;
   padding-top: 10px;
@@ -2138,8 +2446,15 @@
 }
 
 .station-card-actions .admin-button {
-  flex: 1;
+  width: 100%;
+  min-width: 0;
   justify-content: center;
+}
+
+.station-card-actions .station-toggle-btn {
+  grid-column: 1 / -1;
+  min-height: 36px;
+  border: 1px solid currentColor;
 }
 
 .station-toggle-btn {
@@ -2471,6 +2786,16 @@
     overflow-x: hidden;
     padding-bottom: 95px !important;
   }
+  .admin-workspace.is-sidebar-collapsed {
+    display: flex;
+  }
+  .sidebar-toggle,
+  .sidebar-rail-toggle {
+    display: none;
+  }
+  .admin-heading-copy > p {
+    display: none;
+  }
   .admin-body {
     height: auto !important;
     overflow: visible !important;
@@ -2665,6 +2990,47 @@
     padding: 0 !important;
     margin: 0 !important;
   }
+  .admin-sidebar nav > div {
+    min-width: 0;
+  }
+  .admin-sidebar nav > div > div:first-child {
+    display: contents !important;
+  }
+  .admin-sidebar nav > div > div:first-child > button {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 5px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 58px !important;
+    padding: 7px 4px !important;
+    border: 0 !important;
+    border-radius: 10px !important;
+    background: transparent !important;
+    color: #68758f !important;
+    font-size: 10.5px !important;
+    text-align: center !important;
+  }
+  .admin-sidebar nav > div > div:first-child > button svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+  .admin-sidebar nav > div > div:first-child > button > span {
+    flex: 0 1 auto !important;
+  }
+  .admin-sidebar nav > div > div:first-child > button > svg:last-child {
+    display: none !important;
+  }
+  .admin-sidebar nav > div > div:first-child > button[aria-current="page"] {
+    background: #edf2fd !important;
+    color: #001a70 !important;
+    font-weight: 600 !important;
+  }
+  .admin-sidebar nav > div > div:nth-child(2) {
+    display: none !important;
+  }
   .admin-sidebar nav a {
     display: flex !important;
     flex-direction: column !important;
@@ -2784,18 +3150,48 @@
   font-variant-numeric: tabular-nums;
 }
 
+/**
+ * Le panneau est rendu dans un portail (document.body) et positionné en
+ * `fixed` à partir de la position réelle du bouton. Il reste ainsi toujours
+ * entièrement visible, sans jamais être rogné par la barre supérieure ni par
+ * la zone de contenu défilante.
+ */
 .notification-bell__menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 12px);
-  z-index: 50;
-  width: 360px;
-  max-width: calc(100vw - 32px);
+  position: fixed;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: #fff;
-  box-shadow: 0 8px 24px #18243e14;
+  box-shadow: 0 16px 40px #0b1e3640;
   overflow: hidden;
+  animation: notification-panel-in 0.16s ease-out;
+}
+
+@keyframes notification-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-bell__menu {
+    animation: none;
+  }
+}
+
+/*
+ * Sur petit écran, le panneau s'étend d'un bord à l'autre comme une feuille
+ * ancrée sous la barre supérieure : largeur pleine, coins adoucis.
+ */
+.notification-bell__menu.is-sheet {
+  border-radius: 14px;
 }
 
 .notification-bell__head {
@@ -2808,17 +3204,23 @@
 }
 
 .notification-bell__head strong {
-  font-size: 14px;
-  font-weight: 500;
+  color: #17243c;
+  font-size: 15px;
+  font-weight: 650;
 }
 
 .notification-bell__list {
   display: flex;
   flex-direction: column;
-  max-height: 380px;
   margin: 0;
   padding: 0;
+  /* Le plafond de hauteur vient du conteneur : la liste occupe l'espace
+     restant puis défile, en douceur sur les appareils tactiles. */
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   list-style: none;
 }
 
@@ -2856,6 +3258,24 @@
   color: var(--muted);
 }
 
+.notification-bell__action {
+  display: inline-flex;
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary, #092784);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.notification-bell__action:hover,
+.notification-bell__action:focus-visible {
+  text-decoration: underline;
+}
+
 .notification-bell__empty {
   padding: 24px 16px;
   text-align: center;
@@ -2868,4 +3288,70 @@
     width: 38px;
     height: 38px;
   }
+  /* Sur mobile, on plafonne aussi la hauteur d'une ligne pour densifier
+     l'affichage et limiter le défilement. */
+  .notification-bell__item {
+    padding: 12px 14px;
+  }
+}
+
+.notification-bell__filters {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #f8fafc;
+}
+.notification-bell__filters button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #64748b;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.notification-bell__filters button[aria-pressed="true"] {
+  background: #fff;
+  color: #08277d;
+  font-weight: 650;
+  box-shadow: 0 1px 5px #12254f14;
+}
+.notification-bell__filters span {
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: #e8edf5;
+  font-size: 9px;
+}
+.notification-bell__preferences {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: #fff;
+  color: #405575;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.notification-bell__preferences svg {
+  width: 15px;
+  height: 15px;
+}
+
+.notification-bell__preferences svg:last-child {
+  margin-left: auto;
+  color: #7b899e;
 }

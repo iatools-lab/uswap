@@ -1,9 +1,10 @@
 import type { User } from "../../api/auth-api";
-import { Clock3 } from "../../ui/icons";
+import { Clock3, CalendarBlankIcon, MapPinIcon } from "../../ui/icons";
 import type { OperationShift } from "./types";
 import { formatDate, shiftStatus } from "./format";
 
 function statusClass(shift: OperationShift) {
+  if (shift.attendance?.status === "ABSENT") return "attendance-status--absent";
   if (shift.attendance?.checkedOutAt) return "attendance-status--closed";
   if (shift.attendance?.isLate) return "attendance-status--late";
   if (shift.attendance) return "attendance-status--present";
@@ -33,50 +34,72 @@ export function ShiftTable({
   }
 
   return (
-    <div className="admin-table-wrap ops-table">
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Station</th>
-            {user.role !== "SWAPPER" && <th>Swappeur</th>}
-            <th>Début</th>
-            <th>Fin</th>
-            <th>Statut</th>
-            {onPublish && <th>Action</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {shifts.map((shift) => (
-            <tr key={shift.id}>
-              <td>
-                <strong>{shift.station?.name}</strong>
-              </td>
-              {user.role !== "SWAPPER" && <td>{shift.swapper?.fullName}</td>}
-              <td>{formatDate(shift.startTime)}</td>
-              <td>{formatDate(shift.endTime)}</td>
-              <td>
-                <span className={`attendance-status ${statusClass(shift)}`}>
-                  {shiftStatus(shift)}
-                </span>
-              </td>
-              {onPublish && (
-                <td>
-                  {!shift.publishedAt && (
-                    <button
-                      type="button"
-                      className="admin-button secondary small"
-                      disabled={busy}
-                      onClick={() => onPublish(shift.id)}
-                    >
-                      Publier
-                    </button>
-                  )}
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
+    <>
+    <div className="shift-table-shell">
+      <table className="shift-table-clean">
+        <thead><tr><th>Shift</th><th>Swappeur</th><th>Début</th><th>Fin</th><th>Statut</th>{onPublish && <th><span className="sr-only">Action</span></th>}</tr></thead>
+        <tbody>{shifts.map((shift) => <tr key={shift.id}>
+          <td><strong>{shift.label}</strong><small>{shift.station.name}</small></td>
+          <td>{shift.swapper?.fullName || "Poste vacant"}</td>
+          <td><time>{formatDate(shift.startTime)}</time></td>
+          <td><time>{formatDate(shift.endTime)}</time></td>
+          <td><span className={`attendance-status ${statusClass(shift)}`}>{shiftStatus(shift)}</span></td>
+          {onPublish && <td>{!shift.publishedAt && <button type="button" className="admin-button secondary small" disabled={busy} onClick={() => onPublish(shift.id)}>Publier</button>}</td>}
+        </tr>)}</tbody>
       </table>
     </div>
+    <div className="swapper-shifts-cards-list shift-cards-mobile">
+      {shifts.map((shift) => {
+        const isSwapper = user.role === "SWAPPER";
+        return (
+          <div key={shift.id} className="swapper-shift-card">
+            <div className="swapper-shift-header">
+              <div className="swapper-shift-station">
+                <span className="station-name">{shift.station?.name}</span>
+              </div>
+              <span className={`attendance-status ${statusClass(shift)}`}>
+                {shiftStatus(shift)}
+              </span>
+            </div>
+
+            {!isSwapper && shift.swapper && (
+              <div className="swapper-shift-row">
+                <span className="label">Swappeur</span>
+                <span className="value font-semibold">
+                  {shift.swapper.fullName}
+                </span>
+              </div>
+            )}
+
+            <div className="swapper-shift-details">
+              <div className="time-block">
+                <small>DÉBUT</small>
+                <strong>{formatDate(shift.startTime)}</strong>
+              </div>
+              <div className="time-separator" aria-hidden="true">
+                →
+              </div>
+              <div className="time-block">
+                <small>FIN</small>
+                <strong>{formatDate(shift.endTime)}</strong>
+              </div>
+            </div>
+
+            {onPublish && !shift.publishedAt && (
+              <div className="swapper-shift-footer">
+                <button
+                  type="button"
+                  className="admin-button secondary small full-width"
+                  disabled={busy}
+                  onClick={() => onPublish(shift.id)}
+                >
+                  Publier ce shift
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div></>
   );
 }

@@ -1,36 +1,60 @@
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AccountMenu } from "../features/account/AccountMenu";
-import { PlanningInbox } from "../features/inbox/PlanningInbox";
 import { NotificationBell } from "../features/notifications/NotificationBell";
 import { interceptNav } from "../app/spaNav";
 import { RouteFallback } from "../app/RouteFallback";
 import { useSession } from "../app/session";
 import { roles, rolePaths } from "../api/auth-api";
-import { ChartLineUp, Clock3, LayoutDashboard, UserRound, Zap } from "../ui/icons";
+import {
+  CalendarBlank,
+  Clock3,
+  LayoutDashboard,
+  Scan,
+  UserRound,
+  Zap,
+} from "../ui/icons";
+import { SidebarToggle } from "./SidebarToggle";
+import { AppTopbar } from "./AppTopbar";
 import "../styles/admin.css";
+import "../styles/shell.css";
 
 export function RoleShell() {
   const { session, busy, warning, error, disconnect, extend } = useSession();
   const location = useLocation();
   const navigate = useNavigate();
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const [planningResetKey, setPlanningResetKey] = useState(0);
-  if (!session) return null;
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("uswap:sidebar-collapsed") === "true",
+  );
 
   const planning = location.pathname.endsWith("/plannings");
+  const attendance = location.pathname.endsWith("/pointages");
+  const leave = location.pathname.endsWith("/conges");
   const account = location.pathname.endsWith("/compte");
-  const dashboard = location.pathname.endsWith("/tableau-de-bord");
   const title =
-    session.user.role === "SUPERVISOR"
+    session?.user.role === "SUPERVISOR"
       ? "Supervision"
-      : session.user.role === "STATION_CHIEF"
+      : session?.user.role === "STATION_CHIEF"
         ? "Ma station"
         : "Mon espace";
-  const homePath = rolePaths[session.user.role];
+  const homePath = session ? rolePaths[session.user.role] : "/auth/login";
 
   useEffect(() => {
-    document.title = `${account ? "Paramètres du compte" : planning ? "Plannings" : dashboard ? "Tableau de bord" : title} · uSwap`;
-  }, [account, planning, dashboard, title]);
+    document.title = `${account ? (session?.user.role === "SUPERVISOR" ? "Mon compte" : "Compte") : leave ? "Congés" : planning ? "Planning" : attendance ? "Pointages" : session?.user.role === "SWAPPER" ? "Pointage" : title} · uSwap`;
+  }, [account, attendance, leave, planning, session?.user.role, title]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+    requestAnimationFrame(() => headingRef.current?.focus());
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    localStorage.setItem("uswap:sidebar-collapsed", String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  if (!session) return null;
 
   function goHome(event: React.MouseEvent<HTMLAnchorElement>) {
     interceptNav(event, navigate, homePath);
@@ -45,17 +69,32 @@ export function RoleShell() {
     interceptNav(event, navigate, `${homePath}/plannings`);
   }
 
-  function goDashboard(event: React.MouseEvent<HTMLAnchorElement>) {
-    interceptNav(event, navigate, `${homePath}/tableau-de-bord`);
+  function goLeave(event: React.MouseEvent<HTMLAnchorElement>) {
+    interceptNav(event, navigate, `${homePath}/conges`);
+  }
+
+  function goAttendance(event: React.MouseEvent<HTMLAnchorElement>) {
+    interceptNav(event, navigate, `${homePath}/pointages`);
   }
 
   return (
-    <div className="admin-workspace role-workspace">
+    <div
+      className={`admin-workspace role-workspace${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
+    >
       <a className="admin-skip" href="#role-main">
         Aller au contenu
       </a>
       <aside className="admin-sidebar">
-        <a className="brand" href={homePath} onClick={goHome}>
+        <SidebarToggle
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((value) => !value)}
+        />
+        <a
+          className="brand"
+          href={homePath}
+          onClick={goHome}
+          aria-label={`uSwap, accueil ${roles[session.user.role].toLowerCase()}`}
+        >
           <span className="brand-symbol">
             <Zap weight="fill" />
           </span>
@@ -72,52 +111,100 @@ export function RoleShell() {
           <a
             href={homePath}
             onClick={goHome}
-            aria-current={!account && !planning && !dashboard ? "page" : undefined}
+            aria-current={
+              !account && !planning && !leave && !attendance
+                ? "page"
+                : undefined
+            }
           >
-            <LayoutDashboard />
-            {title}
+            {session.user.role === "SWAPPER" ? <Scan /> : <LayoutDashboard />}
+            <span>{session.user.role === "SWAPPER" ? "Pointage" : title}</span>
           </a>
-          <a
-            href={`${homePath}/tableau-de-bord`}
-            onClick={goDashboard}
-            aria-current={dashboard ? "page" : undefined}
-          >
-            <ChartLineUp />
-            Tableau de bord
-          </a>
+          {session.user.role === "SUPERVISOR" && (
+            <a
+              href={`${homePath}/pointages`}
+              onClick={goAttendance}
+              aria-current={attendance ? "page" : undefined}
+            >
+              <Scan />
+              <span>Pointages</span>
+            </a>
+          )}
           <a
             href={`${homePath}/plannings`}
             onClick={goPlannings}
             aria-current={planning ? "page" : undefined}
           >
             <Clock3 />
-            Plannings
+            <span>Planning</span>
           </a>
+          {session.user.role === "SWAPPER" && (
+            <a
+              href={`${homePath}/conges`}
+              onClick={goLeave}
+              aria-current={leave ? "page" : undefined}
+            >
+              <CalendarBlank />
+              <span>Congés</span>
+            </a>
+          )}
           <a
             href={`${homePath}/compte`}
             onClick={goAccount}
             aria-current={account ? "page" : undefined}
           >
             <UserRound />
-            Mon compte
+            <span>
+              {session.user.role === "SUPERVISOR" ? "Mon compte" : "Compte"}
+            </span>
           </a>
         </nav>
       </aside>
       <div className="admin-body">
-        <header className="admin-topbar">
-          <span className="admin-mobile-brand">
-            uSwap<span>.</span>
-          </span>
-          <span className="admin-breadcrumb">{roles[session.user.role]}</span>
-          <PlanningInbox user={session.user} />
-          <NotificationBell />
-          <AccountMenu
-            user={session.user}
-            busy={busy}
-            onLogout={disconnect}
-            settingsPath={`${homePath}/compte`}
-          />
-        </header>
+        <AppTopbar
+          title={
+            account
+              ? session.user.role === "SUPERVISOR"
+                ? "Mon compte"
+                : "Compte"
+              : leave
+                ? "Congés"
+                : planning
+                  ? "Planning"
+                  : attendance
+                    ? "Pointages"
+                    : session.user.role === "SWAPPER"
+                      ? "Pointage"
+                      : title
+          }
+          description={
+            account
+              ? "Gérez vos informations personnelles et la sécurité de votre compte."
+              : leave
+                ? "Signalez une absence ou un congé pour un shift à venir."
+                : planning
+                  ? "Consultez les horaires publiés et les affectations de votre périmètre."
+                  : attendance
+                    ? "Contrôlez les présences, corrigez les pointages et consultez leur historique."
+                    : session.user.role === "SUPERVISOR"
+                      ? "Supervisez les présences, les absences et les remplacements du réseau."
+                      : session.user.role === "STATION_CHIEF"
+                        ? "Pilotez les opérations et les pointages de votre station."
+                        : "Retrouvez vos prochains shifts et effectuez vos pointages."
+          }
+          headingRef={headingRef}
+          actions={
+            <>
+              <NotificationBell />
+              <AccountMenu
+                user={session.user}
+                busy={busy}
+                onLogout={disconnect}
+                settingsPath={`${homePath}/compte`}
+              />
+            </>
+          }
+        />
         <main id="role-main" className="admin-content">
           {warning && (
             <div className="session-warning" role="alert">
@@ -139,20 +226,6 @@ export function RoleShell() {
               {error}
             </p>
           )}
-          <div className="admin-page-heading">
-            <div>
-              <p className="admin-eyebrow">
-                Bonjour, {session.user.fullName.trim().split(/\s+/)[0]}
-              </p>
-              <h1>
-                {account
-                  ? "Paramètres du compte"
-                  : planning
-                    ? "Plannings"
-                    : title}
-              </h1>
-            </div>
-          </div>
           <Suspense fallback={<RouteFallback label="Chargement de la page…" />}>
             <Outlet context={{ planningResetKey }} />
           </Suspense>

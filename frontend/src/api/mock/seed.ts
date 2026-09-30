@@ -3,6 +3,10 @@ import type {
   MockAttendance,
   MockChange,
   MockDb,
+  MockLeave,
+  MockLeaveBalance,
+  MockIncident,
+  MockNotificationPreference,
   MockNotice,
   MockNotification,
   MockOccurrence,
@@ -31,7 +35,8 @@ export function stationIso(dayKey: string, hhmm: string): string {
   const [year, month, day] = dayKey.split("-").map(Number);
   const [hours, minutes] = hhmm.split(":").map(Number);
   return new Date(
-    Date.UTC(year, month - 1, day, hours, minutes) - STATION_OFFSET_MINUTES * 60000,
+    Date.UTC(year, month - 1, day, hours, minutes) -
+      STATION_OFFSET_MINUTES * 60000,
   ).toISOString();
 }
 
@@ -49,7 +54,9 @@ export function weekStartKey(dayKey: string): string {
 }
 
 export function dayKeys(startKey: string, count: number): string[] {
-  return Array.from({ length: count }, (_, index) => addDaysKey(startKey, index));
+  return Array.from({ length: count }, (_, index) =>
+    addDaysKey(startKey, index),
+  );
 }
 
 /** Durée brute d'un créneau « HH:MM » → « HH:MM », en minutes (gère la nuit). */
@@ -85,8 +92,10 @@ const stations: MockStation[] = [
     contactPhone: "+237 6XX 00 00 01",
     isActive: true,
     latenessToleranceMinutes: 5,
+    enforceMinRest: true,
     minRestHours: 8,
     weeklyHoursLimit: 48,
+    blockPublishingWithVacancies: false,
     checkinQrTtl: 300,
     checkoutQrTtl: 300,
   },
@@ -103,8 +112,10 @@ const stations: MockStation[] = [
     contactPhone: "+237 6XX 00 00 02",
     isActive: true,
     latenessToleranceMinutes: 5,
+    enforceMinRest: true,
     minRestHours: 8,
     weeklyHoursLimit: 48,
+    blockPublishingWithVacancies: true,
     checkinQrTtl: 300,
     checkoutQrTtl: 300,
   },
@@ -121,8 +132,10 @@ const stations: MockStation[] = [
     contactPhone: "+237 6XX 00 00 03",
     isActive: true,
     latenessToleranceMinutes: 10,
+    enforceMinRest: true,
     minRestHours: 8,
     weeklyHoursLimit: 48,
+    blockPublishingWithVacancies: false,
     checkinQrTtl: 300,
     checkoutQrTtl: 300,
   },
@@ -139,8 +152,10 @@ const stations: MockStation[] = [
     contactPhone: "+237 6XX 00 00 04",
     isActive: false,
     latenessToleranceMinutes: 5,
+    enforceMinRest: true,
     minRestHours: 8,
     weeklyHoursLimit: 48,
+    blockPublishingWithVacancies: false,
     checkinQrTtl: 300,
     checkoutQrTtl: 300,
   },
@@ -159,10 +174,12 @@ export const FICTITIOUS_DOMAIN = "uswap.example.com";
  * referme aussi les sessions en cours (comportement attendu lors d'un
  * changement de schéma, jamais lors d'un simple rechargement).
  */
-export const DB_VERSION = 2;
+export const DB_VERSION = 11;
 
 /** Mot de passe commun aux comptes de démonstration (fictifs). */
 export const DEMO_PASSWORD = "uswap2026";
+/** Mot de passe dédié au compte administrateur demandé pour la maquette. */
+export const ADMIN_PASSWORD = "AdminUswap";
 
 /* ------------------------------------------------------------------ */
 /* Comptes                                                             */
@@ -224,15 +241,42 @@ const swapperNames: [string, string][] = [
 ];
 
 const stationOfSwapper = (id: string) =>
-  Object.entries(SWAPPER_POOL).find(([, pool]) => pool.includes(id))?.[0] ?? null;
+  Object.entries(SWAPPER_POOL).find(([, pool]) => pool.includes(id))?.[0] ??
+  null;
 
 const swapperEmail = (_fullName: string, index: number) =>
-  index === 0 ? `swappeur@${FICTITIOUS_DOMAIN}` : `swappeur${pad2(index + 1)}@${FICTITIOUS_DOMAIN}`;
+  index === 0
+    ? `swappeur@${FICTITIOUS_DOMAIN}`
+    : `swappeur${pad2(index + 1)}@${FICTITIOUS_DOMAIN}`;
 
 const users: MockUser[] = [
-  user("us-admin", "Administrateur uSwap", `admin@${FICTITIOUS_DOMAIN}`, "ADMIN", null),
-  user("us-supervisor", "Camille Nola", `superviseur@${FICTITIOUS_DOMAIN}`, "SUPERVISOR", null),
-  user("us-chief-bastos", "Sam Kotto", `chef@${FICTITIOUS_DOMAIN}`, "STATION_CHIEF", "st-bastos"),
+  user(
+    "us-admin",
+    "Administrateur uSwap",
+    `admin@${FICTITIOUS_DOMAIN}`,
+    "ADMIN",
+    null,
+    {
+      isActive: true,
+      disabledAt: null,
+      password: ADMIN_PASSWORD,
+      invitationStatus: "ACTIVATED",
+    },
+  ),
+  user(
+    "us-supervisor",
+    "Camille Nola",
+    `superviseur@${FICTITIOUS_DOMAIN}`,
+    "SUPERVISOR",
+    null,
+  ),
+  user(
+    "us-chief-bastos",
+    "Sam Kotto",
+    `chef@${FICTITIOUS_DOMAIN}`,
+    "STATION_CHIEF",
+    "st-bastos",
+  ),
   user(
     "us-chief-obobogo",
     "Ariane Tchana",
@@ -271,9 +315,27 @@ const users: MockUser[] = [
 /* ------------------------------------------------------------------ */
 
 const templateSeeds = [
-  { label: "Matin", start: "06:00", end: "14:00", breakStart: "10:00", breakEnd: "10:30" },
-  { label: "Après-midi", start: "14:00", end: "22:00", breakStart: "18:00", breakEnd: "18:30" },
-  { label: "Nuit", start: "22:00", end: "06:00", breakStart: "02:00", breakEnd: "02:30" },
+  {
+    label: "Matin",
+    start: "06:00",
+    end: "14:00",
+    breakStart: "10:00",
+    breakEnd: "11:00",
+  },
+  {
+    label: "Après-midi",
+    start: "14:00",
+    end: "22:00",
+    breakStart: "18:00",
+    breakEnd: "19:00",
+  },
+  {
+    label: "Nuit",
+    start: "22:00",
+    end: "06:00",
+    breakStart: "02:00",
+    breakEnd: "03:00",
+  },
 ];
 
 function buildTemplates(): MockTemplate[] {
@@ -288,14 +350,19 @@ function buildTemplates(): MockTemplate[] {
         endTime: seed.end,
         breakStart: seed.breakStart,
         breakEnd: seed.breakEnd,
-        breakMinutes: seed.breakStart && seed.breakEnd ? slotMinutes(seed.breakStart, seed.breakEnd) : 0,
+        breakMinutes:
+          seed.breakStart && seed.breakEnd
+            ? slotMinutes(seed.breakStart, seed.breakEnd)
+            : 0,
         durationMinutes: slotMinutes(seed.start, seed.end),
         isActive: true,
         revision: 1,
       };
       list.push({
         ...base,
-        versions: [{ ...base, createdAt: isoFromMs(Date.now() - 30 * 86400000) }],
+        versions: [
+          { ...base, createdAt: isoFromMs(Date.now() - 30 * 86400000) },
+        ],
       });
     });
   }
@@ -307,10 +374,9 @@ function buildTemplates(): MockTemplate[] {
 /* ------------------------------------------------------------------ */
 
 const userById = (list: MockUser[], id: string | null) =>
-  id ? list.find((item) => item.id === id) ?? null : null;
+  id ? (list.find((item) => item.id === id) ?? null) : null;
 
 export function createSeed(nowMs: number): MockDb {
-  const iso = isoFromMs(nowMs);
   const day = stationDayKey(nowMs);
   const weekStart = weekStartKey(day);
   const nextWeekStart = addDaysKey(weekStart, 7);
@@ -320,6 +386,7 @@ export function createSeed(nowMs: number): MockDb {
   const plannings = [
     {
       id: "pl-courant",
+      name: "Semaine opérationnelle",
       startDate: `${weekStart}T00:00:00.000Z`,
       endDate: `${addDaysKey(weekStart, 6)}T23:59:59.999Z`,
       status: "PUBLISHED" as const,
@@ -329,6 +396,7 @@ export function createSeed(nowMs: number): MockDb {
     },
     {
       id: "pl-suivant",
+      name: "Préparation semaine suivante",
       startDate: `${nextWeekStart}T00:00:00.000Z`,
       endDate: `${addDaysKey(nextWeekStart, 6)}T23:59:59.999Z`,
       status: "DRAFT" as const,
@@ -342,7 +410,9 @@ export function createSeed(nowMs: number): MockDb {
 
   /** Un swappeur prend au plus un shift par jour : les données publiées sont cohérentes. */
   const assign = (stationId: string, sequence: number) => {
-    const pool = SWAPPER_POOL[stationId].filter((id) => userById(users, id)?.isActive);
+    const pool = SWAPPER_POOL[stationId].filter(
+      (id) => userById(users, id)?.isActive,
+    );
     if (!pool.length) return null;
     if (sequence % 8 === 5) return null;
     return pool[sequence % pool.length];
@@ -357,9 +427,13 @@ export function createSeed(nowMs: number): MockDb {
     let sequence = 0;
     for (const currentDay of days) {
       for (const station of includeStations) {
-        for (const template of templates.filter((item) => item.stationId === station.id)) {
+        for (const template of templates.filter(
+          (item) => item.stationId === station.id,
+        )) {
           const crossesMidnight = template.startTime >= template.endTime;
-          const endDay = crossesMidnight ? addDaysKey(currentDay, 1) : currentDay;
+          const endDay = crossesMidnight
+            ? addDaysKey(currentDay, 1)
+            : currentDay;
           occurrences.push({
             id: `occ-${planningId.slice(3)}-${sequence}`,
             planningId,
@@ -421,10 +495,13 @@ export function createSeed(nowMs: number): MockDb {
       : currentMinutes >= start || currentMinutes < end;
   };
 
+  const dayStart = Date.parse(`${day}T00:00:00.000Z`);
+  const dayEnd = Date.parse(`${addDaysKey(day, 1)}T00:00:00.000Z`);
   const publishedToday = occurrences.filter(
     (item) =>
       item.planningId === "pl-courant" &&
-      stationDayKey(Date.parse(item.startTime)) === day,
+      Date.parse(item.endTime) > dayStart &&
+      Date.parse(item.startTime) < dayEnd,
   );
   const publishedYesterday = occurrences.filter(
     (item) =>
@@ -439,11 +516,17 @@ export function createSeed(nowMs: number): MockDb {
     const station = stationOf(item.stationId);
     const start = Date.parse(item.startTime);
     const end = Date.parse(item.endTime);
-    if (Date.parse(item.startTime) <= nowMs && coversNow(templateOf(item.templateId))) {
+    if (
+      start <= nowMs &&
+      nowMs < end &&
+      coversNow(templateOf(item.templateId))
+    ) {
       if (item.stationId === "st-obobogo") {
         attendance.push(
           makeAttendance(item, "LATE", {
-            checkedInAt: isoFromMs(start + (station.latenessToleranceMinutes + 9) * 60000),
+            checkedInAt: isoFromMs(
+              start + (station.latenessToleranceMinutes + 9) * 60000,
+            ),
             isLate: true,
           }),
         );
@@ -453,9 +536,13 @@ export function createSeed(nowMs: number): MockDb {
           id: `abs-${item.id}`,
           shiftId: item.id,
           swapperId: item.swapperId,
-          reason: "Absence automatique : aucun pointage après le délai de tolérance.",
+          reason:
+            "Absence automatique : aucun pointage après le délai de tolérance.",
+          attachmentId: null,
           clientRef: null,
-          reportedAt: isoFromMs(start + station.latenessToleranceMinutes * 60000),
+          reportedAt: isoFromMs(
+            start + station.latenessToleranceMinutes * 60000,
+          ),
           origin: "AUTOMATIC_ABSENCE",
           status: "OPEN",
           coveredBy: null,
@@ -495,8 +582,22 @@ export function createSeed(nowMs: number): MockDb {
               authorName: "Camille Nola",
               at: isoFromMs(nowMs - 20 * 3600000),
               before: { status: "ABSENT", checkedInAt: null },
-              after: { status: "JUSTIFIED", checkedInAt: isoFromMs(start + 2 * 60000) },
+              after: {
+                status: "JUSTIFIED",
+                checkedInAt: isoFromMs(start + 2 * 60000),
+              },
             },
+          }),
+        );
+        return;
+      }
+      if (index === 1) {
+        // Cas de recette : prise de service effectuée, mais aucun pointage de
+        // fin. L'automatisation doit le classer absent une fois le shift échu.
+        attendance.push(
+          makeAttendance(item, "PRESENT", {
+            checkedInAt: isoFromMs(start + 1 * 60000),
+            checkedOutAt: null,
           }),
         );
         return;
@@ -525,6 +626,7 @@ export function createSeed(nowMs: number): MockDb {
       shiftId: upcoming[0].id,
       swapperId: upcoming[0].swapperId!,
       reason: "Indisponibilité familiale signalée depuis la PWA.",
+      attachmentId: "att-absence-demo",
       clientRef: "demo-client-ref-1",
       reportedAt: isoFromMs(nowMs - 45 * 60000),
       origin: "DECLARATION",
@@ -532,6 +634,247 @@ export function createSeed(nowMs: number): MockDb {
       coveredBy: null,
     });
   }
+
+  const leaves: MockLeave[] = [
+    {
+      id: "leave-approved-sw02",
+      swapperId: "sw-02",
+      startTime: isoFromMs(nowMs + 20 * 3600000),
+      endTime: isoFromMs(nowMs + 44 * 3600000),
+      type: "ANNUAL",
+      status: "APPROVED",
+      reason: "Congé personnel approuvé",
+      attachmentId: null,
+      externalId: "LV-DEMO-2048",
+      clientRef: "leave-seed-approved-sw02",
+      createdAt: isoFromMs(nowMs - 10 * 86400000),
+      updatedAt: isoFromMs(nowMs - 3 * 86400000),
+      submittedAt: isoFromMs(nowMs - 9 * 86400000),
+      decidedAt: isoFromMs(nowMs - 3 * 86400000),
+      decisionReason: "Demande approuvée par le service RH.",
+      cancellable: false,
+      editable: false,
+    },
+    {
+      id: "leave-pending-sw01",
+      swapperId: "sw-01",
+      startTime: isoFromMs(nowMs + 35 * 86400000),
+      endTime: isoFromMs(nowMs + 39 * 86400000),
+      type: "ANNUAL",
+      status: "PENDING",
+      reason: "Repos annuel planifié avec anticipation",
+      attachmentId: null,
+      externalId: "LV-DEMO-2050",
+      clientRef: "leave-seed-pending-sw01",
+      createdAt: isoFromMs(nowMs - 2 * 86400000),
+      updatedAt: isoFromMs(nowMs - 2 * 86400000),
+      submittedAt: isoFromMs(nowMs - 2 * 86400000),
+      decidedAt: null,
+      decisionReason: null,
+      cancellable: true,
+      editable: true,
+    },
+    {
+      id: "leave-approved-sw01",
+      swapperId: "sw-01",
+      startTime: isoFromMs(nowMs - 55 * 86400000),
+      endTime: isoFromMs(nowMs - 52 * 86400000),
+      type: "FAMILY",
+      status: "APPROVED",
+      reason: "Événement familial validé par le service RH",
+      attachmentId: null,
+      externalId: "LV-DEMO-2049",
+      clientRef: "leave-seed-approved-sw01",
+      createdAt: isoFromMs(nowMs - 70 * 86400000),
+      updatedAt: isoFromMs(nowMs - 63 * 86400000),
+      submittedAt: isoFromMs(nowMs - 69 * 86400000),
+      decidedAt: isoFromMs(nowMs - 63 * 86400000),
+      decisionReason: "Période validée.",
+      cancellable: false,
+      editable: false,
+    },
+    {
+      id: "leave-rejected-sw01",
+      swapperId: "sw-01",
+      startTime: isoFromMs(nowMs - 25 * 86400000),
+      endTime: isoFromMs(nowMs - 23 * 86400000),
+      type: "OTHER",
+      status: "REJECTED",
+      reason: "Demande exceptionnelle hors délai",
+      attachmentId: null,
+      externalId: "LV-DEMO-2051",
+      clientRef: "leave-seed-rejected-sw01",
+      createdAt: isoFromMs(nowMs - 35 * 86400000),
+      updatedAt: isoFromMs(nowMs - 31 * 86400000),
+      submittedAt: isoFromMs(nowMs - 35 * 86400000),
+      decidedAt: isoFromMs(nowMs - 31 * 86400000),
+      decisionReason: "Délai de prévenance insuffisant.",
+      cancellable: false,
+      editable: false,
+    },
+  ];
+
+  const currentYear = new Date(nowMs).getUTCFullYear();
+  const leaveBalances: MockLeaveBalance[] = users
+    .filter((item) => item.role === "SWAPPER")
+    .map((item, index) => ({
+      swapperId: item.id,
+      year: currentYear,
+      entitledDays: 24,
+      usedDays: index % 3 === 0 ? 6 : 4,
+      pendingDays: index % 4 === 0 ? 2 : 0,
+      remainingDays: 24 - (index % 3 === 0 ? 6 : 4),
+      syncedAt: isoFromMs(nowMs - (12 + index) * 60000),
+    }));
+
+  const notificationPreferences: MockNotificationPreference[] = users.map(
+    (item) => ({
+      userId: item.id,
+      internalEnabled: true,
+      emailEnabled: true,
+      pushEnabled: item.role === "SWAPPER",
+      categories: {
+        PLANNING: { email: true, push: true },
+        ATTENDANCE: { email: false, push: true },
+        LEAVE: { email: true, push: true },
+        INCIDENT: { email: item.role !== "SWAPPER", push: true },
+        REPORT: { email: item.role === "ADMIN", push: false },
+      },
+      updatedAt: isoFromMs(nowMs - 7 * 86400000),
+    }),
+  );
+
+  const incidents: MockIncident[] = [
+    {
+      id: "incident-bastos-health",
+      stationId: "st-bastos",
+      affectedSwapperId: "sw-01",
+      reporterId: "us-chief-bastos",
+      assigneeId: "us-supervisor",
+      category: "HEALTH",
+      severity: "HIGH",
+      status: "IN_PROGRESS",
+      title: "Malaise pendant le service",
+      description:
+        "Léa a signalé un malaise pendant son shift. Elle a été mise au repos et doit confirmer son aptitude avant sa prochaine affectation.",
+      attachmentIds: [],
+      occurredAt: isoFromMs(nowMs - 7 * 3600000),
+      createdAt: isoFromMs(nowMs - 6.5 * 3600000),
+      updatedAt: isoFromMs(nowMs - 2 * 3600000),
+      resolvedAt: null,
+      closedAt: null,
+      resolution: null,
+      actions: [
+        {
+          id: "ia-bastos-2",
+          incidentId: "incident-bastos-health",
+          authorId: "us-supervisor",
+          type: "QUALIFIED",
+          fromStatus: "ACKNOWLEDGED",
+          toStatus: "IN_PROGRESS",
+          comment:
+            "Le swappeur a été contacté et son prochain service est en cours de réévaluation.",
+          createdAt: isoFromMs(nowMs - 2 * 3600000),
+        },
+        {
+          id: "ia-bastos-1",
+          incidentId: "incident-bastos-health",
+          authorId: "us-chief-bastos",
+          type: "CREATED",
+          fromStatus: null,
+          toStatus: "REPORTED",
+          comment: "Incident déclaré après la mise au repos du swappeur.",
+          createdAt: isoFromMs(nowMs - 6.5 * 3600000),
+        },
+      ],
+    },
+    {
+      id: "incident-obobogo-safety",
+      stationId: "st-obobogo",
+      affectedSwapperId: "sw-05",
+      reporterId: "us-chief-obobogo",
+      assigneeId: "us-supervisor",
+      category: "SAFETY",
+      severity: "CRITICAL",
+      status: "ACKNOWLEDGED",
+      title: "Chute légère pendant la prise de poste",
+      description:
+        "Amina a glissé à son arrivée en station. Aucun arrêt immédiat n’a été demandé, mais un suivi du swappeur reste nécessaire.",
+      attachmentIds: [],
+      occurredAt: isoFromMs(nowMs - 3 * 3600000),
+      createdAt: isoFromMs(nowMs - 2.5 * 3600000),
+      updatedAt: isoFromMs(nowMs - 75 * 60000),
+      resolvedAt: null,
+      closedAt: null,
+      resolution: null,
+      actions: [
+        {
+          id: "ia-obobogo-2",
+          incidentId: "incident-obobogo-safety",
+          authorId: "us-supervisor",
+          type: "QUALIFIED",
+          fromStatus: "REPORTED",
+          toStatus: "ACKNOWLEDGED",
+          comment:
+            "Le swappeur a confirmé pouvoir poursuivre son service sous surveillance.",
+          createdAt: isoFromMs(nowMs - 75 * 60000),
+        },
+        {
+          id: "ia-obobogo-1",
+          incidentId: "incident-obobogo-safety",
+          authorId: "us-chief-obobogo",
+          type: "CREATED",
+          fromStatus: null,
+          toStatus: "REPORTED",
+          comment: "Incident déclaré avec le swappeur concerné.",
+          createdAt: isoFromMs(nowMs - 2.5 * 3600000),
+        },
+      ],
+    },
+    {
+      id: "incident-bonapriso-attendance",
+      stationId: "st-bastos",
+      affectedSwapperId: "sw-02",
+      reporterId: "us-chief-bastos",
+      assigneeId: "us-supervisor",
+      category: "ATTENDANCE",
+      severity: "MEDIUM",
+      status: "CLOSED",
+      title: "Retards répétés sur les shifts du matin",
+      description:
+        "Jean est arrivé en retard sur plusieurs services consécutifs. Un échange a permis de convenir d’un suivi temporaire.",
+      attachmentIds: [],
+      occurredAt: isoFromMs(nowMs - 9 * 86400000),
+      createdAt: isoFromMs(nowMs - 9 * 86400000),
+      updatedAt: isoFromMs(nowMs - 8 * 86400000),
+      resolvedAt: isoFromMs(nowMs - 8.4 * 86400000),
+      closedAt: isoFromMs(nowMs - 8 * 86400000),
+      resolution:
+        "Les horaires ont été rappelés et aucun nouveau retard n’a été constaté pendant la période de suivi.",
+      actions: [
+        {
+          id: "ia-bonapriso-2",
+          incidentId: "incident-bonapriso-attendance",
+          authorId: "us-supervisor",
+          type: "CLOSED",
+          fromStatus: "RESOLVED",
+          toStatus: "CLOSED",
+          comment: "Suivi terminé sans nouveau retard constaté.",
+          createdAt: isoFromMs(nowMs - 8 * 86400000),
+        },
+        {
+          id: "ia-bonapriso-1",
+          incidentId: "incident-bonapriso-attendance",
+          authorId: "us-supervisor",
+          type: "CREATED",
+          fromStatus: null,
+          toStatus: "REPORTED",
+          comment: "Incident de présence ouvert pour suivi avec le swappeur.",
+          createdAt: isoFromMs(nowMs - 9 * 86400000),
+        },
+      ],
+    },
+  ];
 
   /* Historique des changements d'affectation (US 2046). */
   const changeSeed: {
@@ -558,7 +901,10 @@ export function createSeed(nowMs: number): MockDb {
     },
     {
       type: "PERMUTATION",
-      shiftId: publishedYesterday[3]?.id ?? publishedToday[1]?.id ?? publishedToday[0].id,
+      shiftId:
+        publishedYesterday[3]?.id ??
+        publishedToday[1]?.id ??
+        publishedToday[0].id,
       outSwapper: "Amina Mballa",
       inSwapper: "Serge Bello",
       outSwapperId: "sw-05",
@@ -569,7 +915,10 @@ export function createSeed(nowMs: number): MockDb {
     },
     {
       type: "REASSIGNMENT",
-      shiftId: publishedYesterday[5]?.id ?? publishedToday[2]?.id ?? publishedToday[0].id,
+      shiftId:
+        publishedYesterday[5]?.id ??
+        publishedToday[2]?.id ??
+        publishedToday[0].id,
       outSwapper: "Carole Meka",
       inSwapper: "Yves Ndjock",
       outSwapperId: "sw-09",
@@ -625,6 +974,13 @@ export function createSeed(nowMs: number): MockDb {
     });
   };
 
+  pushNotification(
+    "us-admin",
+    "ACCESS_PENDING",
+    "Accès à valider",
+    "Un compte attend votre activation.",
+    10,
+  );
   pushNotification(
     "us-supervisor",
     "PLANNING_PUBLISHED",
@@ -684,6 +1040,21 @@ export function createSeed(nowMs: number): MockDb {
     300,
   );
   pushNotification(
+    "sw-01",
+    "LEAVE_APPROVED",
+    "Congé approuvé",
+    "Votre demande pour événement familial a été approuvée et votre disponibilité mise à jour.",
+    1440,
+    true,
+  );
+  pushNotification(
+    "us-supervisor",
+    "INCIDENT",
+    "Incident critique pris en charge",
+    "La zone de circulation d’Obobogo a été balisée dans l’attente de l’intervention.",
+    75,
+  );
+  pushNotification(
     "sw-09",
     "ABSENCE",
     "Absence enregistrée",
@@ -714,6 +1085,28 @@ export function createSeed(nowMs: number): MockDb {
     occurrences,
     attendance,
     absences,
+    leaves,
+    leaveBalances,
+    leaveSyncOperations: [
+      {
+        id: "leave-sync-pending-sw01",
+        leaveId: "leave-pending-sw01",
+        userId: "sw-01",
+        action: "CREATE",
+        status: "SYNCED",
+        idempotencyKey: "leave-seed-pending-sw01",
+        attempts: 1,
+        queuedAt: isoFromMs(nowMs - 2 * 86400000),
+        lastAttemptAt: isoFromMs(nowMs - 2 * 86400000),
+        nextAttemptAt: null,
+        completedAt: isoFromMs(nowMs - 2 * 86400000),
+        lastError: null,
+      },
+    ],
+    incidents,
+    notificationPreferences,
+    scheduledReports: [],
+    offlineOperations: [],
     changes,
     notifications,
     notices,
@@ -726,6 +1119,13 @@ export function createSeed(nowMs: number): MockDb {
         size: 184320,
         type: "application/pdf",
         createdAt: isoFromMs(nowMs - 20 * 3600000),
+      },
+      {
+        id: "att-absence-demo",
+        name: "justificatif-indisponibilite.pdf",
+        size: 126976,
+        type: "application/pdf",
+        createdAt: isoFromMs(nowMs - 45 * 60000),
       },
     ],
     automatedAbsences,

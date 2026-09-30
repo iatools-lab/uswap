@@ -99,6 +99,8 @@ export const authRoutes: MockRoute[] = [
       const email = asText(ctx.body.email).toLowerCase();
       const role = asText(ctx.body.role).toUpperCase() as MockUser["role"];
       const stationId = asText(ctx.body.stationId) || null;
+      const phoneNumber = asText(ctx.body.phoneNumber) || null;
+      const address = asText(ctx.body.address) || null;
       const password = typeof ctx.body.password === "string" ? ctx.body.password : "";
       const active = asText(ctx.body.accountStatus).toUpperCase() === "ACTIVE";
       if (!fullName || !email.includes("@"))
@@ -107,6 +109,10 @@ export const authRoutes: MockRoute[] = [
         throw new MockHttpError(400, "Choisissez un rôle valide.");
       if (role !== "SWAPPER" && role !== "STATION_CHIEF" && stationId)
         throw new MockHttpError(400, "Ce rôle ne se rattache pas à une station.");
+      if ((role === "SWAPPER" || role === "STATION_CHIEF") && !stationId)
+        throw new MockHttpError(400, "Sélectionnez la station rattachée à ce collaborateur.");
+      if (stationId && !ctx.db.stations.some((station) => station.id === stationId))
+        throw new MockHttpError(400, "La station sélectionnée est introuvable.");
       if (ctx.db.users.some((item) => item.email.toLowerCase() === email))
         throw new MockHttpError(409, "Un compte utilise déjà cette adresse e-mail.");
       if (active && password.length < 8)
@@ -117,8 +123,8 @@ export const authRoutes: MockRoute[] = [
         fullName,
         email,
         role,
-        phoneNumber: null,
-        address: null,
+        phoneNumber,
+        address,
         stationId: role === "SWAPPER" || role === "STATION_CHIEF" ? stationId : null,
         isActive: active,
         disabledAt: null,
@@ -133,7 +139,7 @@ export const authRoutes: MockRoute[] = [
             action: "CREATED",
             createdAt: now,
             before: {},
-            after: { fullName, email, role, stationId },
+            after: { fullName, email, role, stationId, phoneNumber, address },
           },
         ],
       };

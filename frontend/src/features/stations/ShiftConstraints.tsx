@@ -1,4 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  CheckCircleIcon,
+  InfoIcon,
+  WarningCircleIcon,
+} from '@phosphor-icons/react';
 import { api } from '../../api/auth-api';
 
 export type ConstraintReport = {
@@ -156,16 +161,67 @@ export function useShiftConstraintsAll(
   };
 }
 
+function hours(value: number) {
+  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(value);
+}
+
+function issueText(issue: { code: string; message: string }, report: Report) {
+  const week = report.weeks[0];
+  if (issue.code === 'REST') {
+    const values = issue.message.match(/([\d,.]+) h.*minimum ([\d,.]+) h/i);
+    const actual = values?.[1]?.replace('.', ',') ?? 'moins que prévu';
+    const minimum = values?.[2]?.replace('.', ',') ?? 'le minimum requis';
+    return {
+      title: 'Le temps de repos obligatoire n’est pas respecté.',
+      detail: `Ce shift ne laisserait que ${actual} h de repos avant ou après un autre service. La station exige au moins ${minimum} h. Choisissez un autre swappeur ou décalez l’un des shifts.`,
+    };
+  }
+  if (issue.code === 'OVERLAP') {
+    return {
+      title: 'Ce swappeur travaille déjà sur ce créneau.',
+      detail: `${issue.message} Choisissez un autre swappeur ou modifiez l’horaire du shift.`,
+    };
+  }
+  if (issue.code === 'WEEKLY_LIMIT' && week) {
+    return {
+      title: 'La limite hebdomadaire serait dépassée.',
+      detail: `Avec ce shift, le total atteindrait ${hours(week.projectedHours)} h, soit ${hours(week.projectedHours - week.limitHours)} h de plus que les ${hours(week.limitHours)} h autorisées.`,
+    };
+  }
+  if (issue.code === 'NIGHT') {
+    return {
+      title: 'Ce shift se termine le lendemain.',
+      detail: 'Le prochain service doit laisser assez de repos après la fin de ce shift de nuit.',
+    };
+  }
+  if (issue.code === 'NO_BREAK') {
+    return {
+      title: 'Aucune pause n’est prévue.',
+      detail: 'Ce shift dure au moins 6 h. Ajoutez une pause dans le modèle de shift avant de l’utiliser.',
+    };
+  }
+  if (issue.code === 'NEAR_LIMIT' && week) {
+    return {
+      title: 'La limite hebdomadaire est proche.',
+      detail: `Après cette affectation, il ne restera que ${hours(Math.max(0, week.limitHours - week.projectedHours))} h disponibles cette semaine.`,
+    };
+  }
+  return { title: issue.message, detail: '' };
+}
+
 export function ShiftConstraints({
   state,
+  subjectName,
 }: {
   state: ReturnType<typeof useShiftConstraints>;
+  subjectName?: string;
 }) {
   if (state.pending) {
     return (
-      <p role="status" className="constraint-check">
-        Vérification des disponibilités et des heures…
-      </p>
+      <div role="status" className="constraint-check constraint-check--pending">
+        <span className="constraint-check__spinner" aria-hidden="true" />
+        Vérification du planning et des règles de la station…
+      </div>
     );
   }
 
@@ -182,51 +238,83 @@ export function ShiftConstraints({
 
   const report = state.report;
   if (!report) return null;
+  const uniqueIssues = (issues: { code: string; message: string }[]) =>
+    issues.filter(
+      (issue, index, all) =>
+        all.findIndex((candidate) => candidate.code === issue.code && candidate.message === issue.message) === index,
+    );
+  const errors = uniqueIssues(report.errors);
+  // L'état de la limite est déjà expliqué dans le résumé hebdomadaire.
+  const warnings = uniqueIssues(report.warnings).filter((issue) => issue.code !== 'NEAR_LIMIT');
 
   return (
-    <section className="constraint-check" aria-label="Contrôle de l’affectation" aria-live="polite">
-      <h3>{report.valid ? 'Affectation disponible' : 'Affectation à corriger'}</h3>
-      <p>
-        {report.durationHours} h prévues · {report.stationName}
-      </p>
+    <section
+      className={`constraint-check ${report.valid ? 'is-valid' : 'is-blocked'}`}
+      aria-label="Contrôle de l’affectation"
+      aria-live="polite"
+      role={report.valid ? 'status' : 'alert'}
+    >
+      <header className="constraint-check__header">
+        <span className="constraint-check__icon" aria-hidden="true">
+          {report.valid ? <CheckCircleIcon size={20} weight="fill" /> : <WarningCircleIcon size={20} weight="fill" />}
+        </span>
+        <div>
+          <span className="constraint-check__eyebrow">Résultat du contrôle</span>
+          <h3>
+            {report.valid
+              ? subjectName ? `L’affectation de ${subjectName} est possible.` : 'Cette affectation est possible.'
+              : subjectName ? `L’affectation de ${subjectName} est bloquée.` : 'Cette affectation est bloquée.'}
+          </h3>
+          <p>
+            Le shift ajoute {hours(report.durationHours)} h de travail effectif à {report.stationName}. La pause prévue n’est pas comptée comme du temps travaillé.
+          </p>
+        </div>
+      </header>
 
       <div className="constraint-weeks">
-        {report.weeks.map((week) => (
-          <div key={week.startDate}>
-            <span>
-              Semaine du{' '}
-              {new Date(week.startDate + 'T12:00:00Z').toLocaleDateString('fr-FR', {
-                timeZone: 'UTC',
-              })}
-            </span>
-            <strong>
-              {week.projectedHours} h / {week.limitHours} h
-            </strong>
-            <small>
-              {week.existingHours} h déjà prévues + {week.addedHours} h ajoutées dans cette station
-            </small>
-          </div>
-        ))}
+        {report.weeks.map((week) => {
+          const remaining = week.limitHours - week.projectedHours;
+          const percent = Math.min(100, Math.max(0, (week.projectedHours / week.limitHours) * 100));
+          return (
+            <div key={week.startDate} className={remaining < 0 ? 'is-over' : remaining <= week.limitHours * .1 ? 'is-near' : ''}>
+              <span className="constraint-week__date">
+                Semaine du {new Date(week.startDate + 'T12:00:00Z').toLocaleDateString('fr-FR', { timeZone: 'UTC' })}
+              </span>
+              <p>
+                Cette personne a déjà <strong>{hours(week.existingHours)} h</strong> planifiées. Ce shift ajouterait <strong>{hours(week.addedHours)} h</strong> et porterait son total à <strong>{hours(week.projectedHours)} h sur {hours(week.limitHours)} h</strong>.
+              </p>
+              <span className="constraint-week__bar" aria-hidden="true"><span style={{ width: `${percent}%` }} /></span>
+              <small>
+                {remaining < 0
+                  ? `La limite serait dépassée de ${hours(Math.abs(remaining))} h.`
+                  : `Il resterait ${hours(remaining)} h disponibles cette semaine.`}
+              </small>
+            </div>
+          );
+        })}
       </div>
 
-      {report.warnings && report.warnings.length > 0 && (
-        <ul className="constraint-warnings" role="status">
-          {report.warnings.map((issue, index) => (
-            <li key={index}>{issue.message}</li>
-          ))}
-        </ul>
-      )}
-
-      {report.errors && report.errors.length > 0 && (
-        <ul className="constraint-errors" role="alert">
-          {report.errors.map((issue, index) => (
-            <li key={index}>{issue.message}</li>
-          ))}
-        </ul>
+      {(errors.length > 0 || warnings.length > 0) && (
+        <div className="constraint-issues">
+          {errors.map((issue, index) => {
+            const copy = issueText(issue, report);
+            return <div className="constraint-issue is-error" key={`error-${issue.code}-${index}`}>
+              <WarningCircleIcon size={18} weight="fill" aria-hidden="true" />
+              <div><strong>{copy.title}</strong>{copy.detail && <p>{copy.detail}</p>}</div>
+            </div>;
+          })}
+          {warnings.map((issue, index) => {
+            const copy = issueText(issue, report);
+            return <div className="constraint-issue is-warning" key={`warning-${issue.code}-${index}`}>
+              <InfoIcon size={18} weight="fill" aria-hidden="true" />
+              <div><strong>{copy.title}</strong>{copy.detail && <p>{copy.detail}</p>}</div>
+            </div>;
+          })}
+        </div>
       )}
 
       <p className="constraint-note">
-        Les contraintes sont revérifiées à l’enregistrement et à la publication.
+        Ce contrôle sera refait au moment d’enregistrer puis de publier le planning.
       </p>
     </section>
   );
@@ -260,9 +348,10 @@ export function ShiftConstraintsAll({
       {state.reports.map((item) => (
         <ShiftConstraints
           key={item.name}
+          subjectName={item.name}
           state={{
             ready: item.report.valid,
-            report: { ...item.report, stationName: `${item.report.stationName} · ${item.name}` },
+            report: item.report,
             error: undefined,
             pending: false,
             retry: state.retry,

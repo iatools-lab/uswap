@@ -23,7 +23,10 @@ export type ConstraintReport = {
   warnings: { code: string; message: string }[];
 };
 
-export function attendanceRecord(db: MockDb, shiftId: string): MockAttendance | null {
+export function attendanceRecord(
+  db: MockDb,
+  shiftId: string,
+): MockAttendance | null {
   return db.attendance.find((item) => item.shiftId === shiftId) ?? null;
 }
 
@@ -38,7 +41,8 @@ export function attendanceStatus(
   const record = attendanceRecord(db, occurrence.id);
   if (record) return record.status;
   if (!occurrence.swapperId) return "EXPECTED";
-  if (db.absences.some((item) => item.shiftId === occurrence.id)) return "ABSENT";
+  if (db.absences.some((item) => item.shiftId === occurrence.id))
+    return "ABSENT";
   return "EXPECTED";
 }
 
@@ -51,7 +55,9 @@ export function hoursInWeek(
 ): number {
   const weekEnd = addDaysKey(weekStart, 7);
   const total = db.occurrences
-    .filter((item) => item.swapperId === swapperId && item.id !== ignoreOccurrenceId)
+    .filter(
+      (item) => item.swapperId === swapperId && item.id !== ignoreOccurrenceId,
+    )
     .filter((item) => {
       const key = stationDayKey(Date.parse(item.startTime));
       return key >= weekStart && key < weekEnd;
@@ -61,33 +67,67 @@ export function hoursInWeek(
 }
 
 /**
- * US 2038 — Un traitement automatique classe absent le swappeur sans pointage
- * après la tolérance de la station, une seule fois par affectation, puis
- * notifie le superviseur, le chef de station et le swappeur concerné.
+ * US 2038 — Un traitement automatique classe absent le swappeur qui n'a pas
+ * pointé après la tolérance ou qui n'a pas enregistré sa fin de service. Il
+ * ne traite chaque affectation qu'une fois et notifie les acteurs concernés.
  */
 export function runAutomation(db: MockDb, now: number): void {
+  // RM-15 — une opération de congé conservée localement est rejouée dès que
+  // sa fenêtre de nouvelle tentative est atteinte. Le service fictif redevient
+  // disponible au rejeu, ce qui rend le comportement déterministe en démo.
+  for (const operation of db.leaveSyncOperations) {
+    if (!["FAILED", "QUEUED"].includes(operation.status)) continue;
+    if (operation.nextAttemptAt && Date.parse(operation.nextAttemptAt) > now)
+      continue;
+    operation.status = "SYNCED";
+    operation.attempts += 1;
+    operation.lastAttemptAt = new Date(now).toISOString();
+    operation.completedAt = new Date(now).toISOString();
+    operation.nextAttemptAt = null;
+    operation.lastError = null;
+    const leave = db.leaves.find((item) => item.id === operation.leaveId);
+    if (leave?.status === "SYNC_FAILED") leave.status = "PENDING";
+  }
   const published = new Set(
-    db.plannings.filter((item) => item.status === "PUBLISHED").map((item) => item.id),
+    db.plannings
+      .filter((item) => item.status === "PUBLISHED")
+      .map((item) => item.id),
   );
   for (const occurrence of db.occurrences) {
     if (!published.has(occurrence.planningId)) continue;
     if (!occurrence.swapperId) continue;
-    if (db.automatedAbsences.includes(occurrence.id)) continue;
-    const station = db.stations.find((item) => item.id === occurrence.stationId);
+    const station = db.stations.find(
+      (item) => item.id === occurrence.stationId,
+    );
     if (!station) continue;
     const start = Date.parse(occurrence.startTime);
     const end = Date.parse(occurrence.endTime);
     const tolerance = station.latenessToleranceMinutes * 60000;
-    if (now < start + tolerance || now > end + 2 * 3600000) continue;
-    if (attendanceRecord(db, occurrence.id)) continue;
+    if (now < start + tolerance) continue;
+    const record = attendanceRecord(db, occurrence.id);
+    const missedCheckin = !record;
+    const missedCheckout =
+      now > end && Boolean(record?.checkedInAt) && !record?.checkedOutAt;
+    if (!missedCheckin && !missedCheckout) continue;
+    if (missedCheckout && record) {
+      record.status = "ABSENT";
+      record.justified = false;
+    }
+    if (db.automatedAbsences.includes(occurrence.id)) continue;
     db.automatedAbsences.push(occurrence.id);
+    const reason = missedCheckout
+      ? "Absence automatique : prise de service enregistrée sans pointage de fin."
+      : "Absence automatique : aucun pointage après le délai de tolérance.";
     db.absences.push({
       id: `abs-auto-${occurrence.id}`,
       shiftId: occurrence.id,
       swapperId: occurrence.swapperId,
-      reason: "Absence automatique : aucun pointage après le délai de tolérance.",
+      reason,
+      attachmentId: null,
       clientRef: null,
-      reportedAt: new Date(start + tolerance).toISOString(),
+      reportedAt: new Date(
+        missedCheckout ? end : start + tolerance,
+      ).toISOString(),
       origin: "AUTOMATIC_ABSENCE",
       status: "OPEN",
       coveredBy: null,
@@ -98,7 +138,9 @@ export function runAutomation(db: MockDb, now: number): void {
       occurrence.stationId,
       "AUTOMATIC_ABSENCE",
       "Absence automatique",
-      `${swapper?.fullName ?? "Un swappeur"} n'a pas pointé à ${station.name} (${occurrence.label}).`,
+      missedCheckout
+        ? `${swapper?.fullName ?? "Un swappeur"} n'a pas enregistré sa fin de service à ${station.name} (${occurrence.label}).`
+        : `${swapper?.fullName ?? "Un swappeur"} n'a pas pointé à ${station.name} (${occurrence.label}).`,
       [occurrence.swapperId],
     );
   }
@@ -117,7 +159,8 @@ export function constraintReport(
   },
 ): ConstraintReport {
   const station = stationOf(db, options.stationId);
-  const swapper = db.users.find((item) => item.id === options.swapperId) ?? null;
+  const swapper =
+    db.users.find((item) => item.id === options.swapperId) ?? null;
   const start = Date.parse(options.startTime);
   const end = Date.parse(options.endTime);
   const errors: ConstraintReport["errors"] = [];
@@ -134,11 +177,18 @@ export function constraintReport(
       code: "INVALID_WINDOW",
       message: "La fin du service doit être postérieure à son début.",
     });
-  if (!swapper) errors.push({ code: "SWAPPER_INVALID", message: "Swappeur inconnu." });
+  if (!swapper)
+    errors.push({ code: "SWAPPER_INVALID", message: "Swappeur inconnu." });
   else if (swapper.role !== "SWAPPER")
-    errors.push({ code: "SWAPPER_ROLE", message: "Ce compte n'est pas un swappeur." });
+    errors.push({
+      code: "SWAPPER_ROLE",
+      message: "Ce compte n'est pas un swappeur.",
+    });
   else if (!swapper.isActive)
-    errors.push({ code: "SWAPPER_INACTIVE", message: "Ce swappeur est désactivé." });
+    errors.push({
+      code: "SWAPPER_INACTIVE",
+      message: "Ce swappeur est désactivé.",
+    });
   if (!station.isActive)
     errors.push({
       code: "STATION_CLOSED",
@@ -147,8 +197,22 @@ export function constraintReport(
 
   const others = db.occurrences.filter(
     (item) =>
-      item.swapperId === options.swapperId && item.id !== options.ignoreOccurrenceId,
+      item.swapperId === options.swapperId &&
+      item.id !== options.ignoreOccurrenceId,
   );
+
+  const approvedLeave = db.leaves.find(
+    (leave) =>
+      leave.swapperId === options.swapperId &&
+      leave.status === "APPROVED" &&
+      Date.parse(leave.startTime) < end &&
+      start < Date.parse(leave.endTime),
+  );
+  if (approvedLeave)
+    errors.push({
+      code: "APPROVED_LEAVE",
+      message: `Congé approuvé du ${hour(Date.parse(approvedLeave.startTime))} au ${hour(Date.parse(approvedLeave.endTime))} : ${approvedLeave.reason}.`,
+    });
 
   for (const other of others) {
     const otherStart = Date.parse(other.startTime);
@@ -160,21 +224,34 @@ export function constraintReport(
       });
   }
 
-  const minRest = station.minRestHours * 3600000;
-  for (const other of others) {
-    const otherStart = Date.parse(other.startTime);
-    const otherEnd = Date.parse(other.endTime);
-    const gap = otherStart >= end ? otherStart - end : otherEnd <= start ? start - otherEnd : -1;
-    if (gap >= 0 && gap < minRest)
-      errors.push({
-        code: "REST",
-        message: `Repos insuffisant : ${Math.round((gap / 3600000) * 10) / 10} h entre deux services (minimum ${station.minRestHours} h).`,
-      });
+  if (station.enforceMinRest !== false) {
+    const minRest = station.minRestHours * 3600000;
+    for (const other of others) {
+      const otherStart = Date.parse(other.startTime);
+      const otherEnd = Date.parse(other.endTime);
+      const gap =
+        otherStart >= end
+          ? otherStart - end
+          : otherEnd <= start
+            ? start - otherEnd
+            : -1;
+      if (gap >= 0 && gap < minRest)
+        errors.push({
+          code: "REST",
+          message: `Repos insuffisant : ${Math.round((gap / 3600000) * 10) / 10} h entre deux services (minimum ${station.minRestHours} h).`,
+        });
+    }
   }
 
   const weekStart = weekKeyOf(options.startTime);
-  const existingHours = hoursInWeek(db, options.swapperId, weekStart, options.ignoreOccurrenceId);
-  const projectedHours = Math.round((existingHours + options.hours) * 100) / 100;
+  const existingHours = hoursInWeek(
+    db,
+    options.swapperId,
+    weekStart,
+    options.ignoreOccurrenceId,
+  );
+  const projectedHours =
+    Math.round((existingHours + options.hours) * 100) / 100;
   if (projectedHours > station.weeklyHoursLimit)
     errors.push({
       code: "WEEKLY_LIMIT",
@@ -199,7 +276,8 @@ export function constraintReport(
   if (options.hours >= 6 && (target?.breakMinutes ?? 0) === 0)
     warnings.push({
       code: "NO_BREAK",
-      message: "Service de 6 h ou plus sans pause : complétez le modèle de shift.",
+      message:
+        "Service de 6 h ou plus sans pause : complétez le modèle de shift.",
     });
 
   const weeks: ConstraintReport["weeks"] = [

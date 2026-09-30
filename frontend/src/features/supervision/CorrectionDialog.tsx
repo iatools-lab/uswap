@@ -41,28 +41,29 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
       );
       return;
     }
-    if (!file) {
-      setError("Une pièce justificative est obligatoire.");
-      return;
-    }
     setBusy(true);
     setError("");
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const attachment = await api<{ id: string }>(
-        "/corrections/attachments",
-        form,
-      );
+      let attachmentId: string | null = null;
+      if (file) {
+        const form = new FormData();
+        form.append("file", file);
+        const attachment = await api<{ id: string }>(
+          "/corrections/attachments",
+          form,
+        );
+        attachmentId = attachment.id;
+      }
       await api(
         `/corrections/shifts/${row.shiftId}`,
         {
           reason: reason.trim(),
-          attachmentId: attachment.id,
+          attachmentId,
           checkedInAt: checkedIn ? new Date(checkedIn).toISOString() : null,
           checkedOutAt: checkedOut ? new Date(checkedOut).toISOString() : null,
           isLate,
           isAbsent,
+          isJustified: isAbsent,
         },
         "PATCH",
       );
@@ -109,8 +110,9 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
       }
     >
       <p className="operations-hint">
-        Motif et justificatif obligatoires. L’ancienne valeur reste dans
-        l’audit ; le swappeur et le chef de station sont notifiés.
+        Le motif est obligatoire. Vous pouvez joindre un justificatif si la
+        correction en nécessite un. L’ancienne valeur reste dans l’audit ; le
+        swappeur et le chef de station sont notifiés.
       </p>
 
       {error && (
@@ -147,10 +149,8 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
           />
           <UploadSimple size={22} />
           <span>
-            <strong>
-              {file ? file.name : "Joindre un justificatif"}
-            </strong>
-            <small>PDF ou image · 5 Mo max · obligatoire</small>
+            <strong>{file ? file.name : "Joindre un justificatif"}</strong>
+            <small>PDF ou image · 5 Mo max · facultatif</small>
           </span>
         </label>
 
@@ -193,77 +193,5 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
         </div>
       </fieldset>
     </Modal>
-  );
-}
-
-export function CorrectionHistory({ shiftId }: { shiftId: string }) {
-  const [rows, setRows] = useState<
-    {
-      id: string;
-      reason: string;
-      createdAt: string;
-      previousCheckedIn: string | null;
-      newCheckedIn: string | null;
-      previousIsAbsent: boolean;
-      newIsAbsent: boolean;
-    }[]
-  >([]);
-
-  useEffect(() => {
-    let active = true;
-    api<typeof rows>(`/corrections/shifts/${shiftId}`)
-      .then((data) => {
-        if (active) setRows(data);
-      })
-      .catch(() => {
-        if (active) setRows([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [shiftId]);
-
-  if (!rows.length) return null;
-
-  return (
-    <section className="admin-card">
-      <div className="admin-card-heading">
-        <h2>Historique des corrections</h2>
-      </div>
-      <div className="admin-table-wrap ops-table">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Motif</th>
-              <th>Avant</th>
-              <th>Après</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td>{formatDateTime(row.createdAt)}</td>
-                <td>{row.reason}</td>
-                <td className="supervision-history__before">
-                  {row.previousIsAbsent
-                    ? "Absent"
-                    : row.previousCheckedIn
-                      ? formatDateTime(row.previousCheckedIn)
-                      : "—"}
-                </td>
-                <td className="supervision-history__after">
-                  {row.newIsAbsent
-                    ? "Absent"
-                    : row.newCheckedIn
-                      ? formatDateTime(row.newCheckedIn)
-                      : "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
   );
 }
