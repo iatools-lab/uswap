@@ -1,4 +1,4 @@
-# uSwap — frontend Dylane V0
+# uSwap — frontend
 
 Cette branche contient le frontend seul. L'application est dans `frontend/` ;
 aucun code backend ni schéma de base de données n'est inclus.
