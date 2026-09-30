@@ -21,17 +21,19 @@ export function QrManagement({ data }: { data: OperationData }) {
   const [now, setNow] = useState(Date.now());
 
   const eligibleByKind = useMemo(() => {
-    const select = (requestedKind: Kind) => data.shifts.filter(
-      (shift) =>
-        shift.publishedAt &&
-        shift.station.id &&
-        shift.swapper.fullName !== "Poste vacant" &&
-        Date.parse(shift.startTime) <= now &&
-        Date.parse(shift.endTime) >= now &&
-        (requestedKind === "CHECKIN"
-          ? !shift.attendance?.checkedInAt
-          : Boolean(shift.attendance?.checkedInAt) && !shift.attendance?.checkedOutAt),
-    );
+    const select = (requestedKind: Kind) =>
+      data.shifts.filter(
+        (shift) =>
+          shift.publishedAt &&
+          shift.station.id &&
+          shift.swapper.fullName !== "Poste vacant" &&
+          Date.parse(shift.startTime) <= now &&
+          Date.parse(shift.endTime) >= now &&
+          (requestedKind === "CHECKIN"
+            ? !shift.attendance?.checkedInAt
+            : Boolean(shift.attendance?.checkedInAt) &&
+              !shift.attendance?.checkedOutAt),
+      );
     return { CHECKIN: select("CHECKIN"), CHECKOUT: select("CHECKOUT") };
   }, [data.shifts, now]);
   const shifts = useMemo(() => {
@@ -50,6 +52,23 @@ export function QrManagement({ data }: { data: OperationData }) {
       (a, b) => Date.parse(a.startTime) - Date.parse(b.startTime),
     );
   }, [eligibleByKind, kind]);
+  const nextPublishedShift = useMemo(
+    () =>
+      data.shifts
+        .filter(
+          (shift) =>
+            shift.publishedAt &&
+            shift.station.id &&
+            shift.swapper.fullName !== "Poste vacant" &&
+            Date.parse(shift.startTime) > now &&
+            !shift.attendance?.checkedInAt &&
+            shift.attendance?.status !== "ABSENT" &&
+            shift.attendance?.status !== "JUSTIFIED",
+        )
+        .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))[0] ??
+      null,
+    [data.shifts, now],
+  );
   const target = shifts.find((shift) => shift.slotKey === shiftId) ?? null;
   const remaining = qr ? Math.max(0, Date.parse(qr.expiresAt) - now) : 0;
 
@@ -61,6 +80,12 @@ export function QrManagement({ data }: { data: OperationData }) {
   }, [open, shiftId, kind]);
 
   useEffect(() => {
+    if (!open) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, [open]);
+
+  useEffect(() => {
     if (!qr) return;
     let active = true;
     QRCode.toDataURL(`${location.origin}/app/mon-espace#qr=${qr.token}`, {
@@ -69,7 +94,9 @@ export function QrManagement({ data }: { data: OperationData }) {
       errorCorrectionLevel: "M",
     })
       .then((value) => active && setImage(value))
-      .catch(() => active && setError("Le visuel du QR n’a pas pu être généré."));
+      .catch(
+        () => active && setError("Le visuel du QR n’a pas pu être généré."),
+      );
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => {
       active = false;
@@ -114,15 +141,22 @@ export function QrManagement({ data }: { data: OperationData }) {
   return (
     <section className="admin-card ops-qr-launcher">
       <div>
-        <span className="ops-qr-launcher__icon"><QrCode size={20} /></span>
+        <span className="ops-qr-launcher__icon">
+          <QrCode size={20} />
+        </span>
         <div>
           <h2>QR de prise et fin de service</h2>
           <p className="operations-hint">
-            Générez un code temporaire pour n’importe quel shift publié de votre périmètre.
+            Générez un code temporaire pour n’importe quel shift publié de votre
+            périmètre.
           </p>
         </div>
       </div>
-      <button className="admin-button secondary" type="button" onClick={openManager}>
+      <button
+        className="admin-button secondary"
+        type="button"
+        onClick={openManager}
+      >
         <QrCode size={16} /> Gérer les QR
       </button>
 
@@ -136,8 +170,20 @@ export function QrManagement({ data }: { data: OperationData }) {
         <div className="ops-qr-management">
           <div className="ops-qr-management__form">
             <div className="ops-segment" role="group" aria-label="Type de QR">
-              <button type="button" aria-pressed={kind === "CHECKIN"} onClick={() => setKind("CHECKIN")}>Prise de service</button>
-              <button type="button" aria-pressed={kind === "CHECKOUT"} onClick={() => setKind("CHECKOUT")}>Fin de service</button>
+              <button
+                type="button"
+                aria-pressed={kind === "CHECKIN"}
+                onClick={() => setKind("CHECKIN")}
+              >
+                Prise de service
+              </button>
+              <button
+                type="button"
+                aria-pressed={kind === "CHECKOUT"}
+                onClick={() => setKind("CHECKOUT")}
+              >
+                Fin de service
+              </button>
             </div>
             <label className="ops-field">
               Shift publié
@@ -154,9 +200,42 @@ export function QrManagement({ data }: { data: OperationData }) {
             </label>
             {!shifts.length && (
               <div className="ops-callout ops-callout--muted" role="status">
-                <strong>Aucun QR {kind === "CHECKIN" ? "de début" : "de fin"} à générer maintenant.</strong>
-                <span>{kind === "CHECKIN" ? "Les prises de service du créneau actif sont déjà enregistrées." : "Aucune prise de service active n’attend sa clôture."}</span>
-                {eligibleByKind[kind === "CHECKIN" ? "CHECKOUT" : "CHECKIN"].length > 0 && <button type="button" className="text-button" onClick={() => { setKind(kind === "CHECKIN" ? "CHECKOUT" : "CHECKIN"); setShiftId(""); }}>Afficher les QR {kind === "CHECKIN" ? "de fin" : "de début"} disponibles</button>}
+                <strong>
+                  Aucun QR {kind === "CHECKIN" ? "de début" : "de fin"} à
+                  générer maintenant.
+                </strong>
+                {kind === "CHECKIN" && nextPublishedShift ? (
+                  <span>
+                    Le prochain shift publié commence le{" "}
+                    {formatDate(
+                      nextPublishedShift.startTime,
+                      nextPublishedShift.station.timezone || "Africa/Douala",
+                    )}
+                    . Son QR sera disponible pendant le service; les codes
+                    expirent rapidement et ne peuvent pas être préparés à
+                    l’avance.
+                  </span>
+                ) : (
+                  <span>
+                    {kind === "CHECKIN"
+                      ? "Les prises de service des shifts actifs sont déjà enregistrées ou aucun shift assigné n’a commencé."
+                      : "Aucune prise de service active n’attend sa clôture."}
+                  </span>
+                )}
+                {eligibleByKind[kind === "CHECKIN" ? "CHECKOUT" : "CHECKIN"]
+                  .length > 0 && (
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => {
+                      setKind(kind === "CHECKIN" ? "CHECKOUT" : "CHECKIN");
+                      setShiftId("");
+                    }}
+                  >
+                    Afficher les QR {kind === "CHECKIN" ? "de fin" : "de début"}{" "}
+                    disponibles
+                  </button>
+                )}
               </div>
             )}
             {target && (
@@ -165,27 +244,67 @@ export function QrManagement({ data }: { data: OperationData }) {
                 <span>
                   <strong>{target.station.name}</strong>
                   <small>{target.label}</small>
-                  <small>{formatDate(target.startTime, target.station.timezone || "Africa/Douala")} – {formatDate(target.endTime, target.station.timezone || "Africa/Douala")}</small>
-                  <small>{target.participantCount} swappeur{target.participantCount > 1 ? "s" : ""} concerné{target.participantCount > 1 ? "s" : ""}</small>
+                  <small>
+                    {formatDate(
+                      target.startTime,
+                      target.station.timezone || "Africa/Douala",
+                    )}{" "}
+                    –{" "}
+                    {formatDate(
+                      target.endTime,
+                      target.station.timezone || "Africa/Douala",
+                    )}
+                  </small>
+                  <small>
+                    {target.participantCount} swappeur
+                    {target.participantCount > 1 ? "s" : ""} concerné
+                    {target.participantCount > 1 ? "s" : ""}
+                  </small>
                 </span>
               </div>
             )}
-            {error && <p className="error-message" role="alert">{error}</p>}
-            <button className="admin-button primary-cta" type="button" disabled={!target || busy} onClick={() => void generate()}>
+            {error && (
+              <p className="error-message" role="alert">
+                {error}
+              </p>
+            )}
+            <button
+              className="admin-button primary-cta"
+              type="button"
+              disabled={!target || busy}
+              onClick={() => void generate()}
+            >
               {busy && <LoaderCircle className="spin" size={16} />}
               Générer le QR {kind === "CHECKIN" ? "de début" : "de fin"}
             </button>
           </div>
           <div className="ops-qr-management__poster">
             {!qr ? (
-              <div className="qr-poster__empty"><QrCode size={38} /><p>Le QR apparaîtra ici.</p></div>
+              <div className="qr-poster__empty">
+                <QrCode size={38} />
+                <p>Le QR apparaîtra ici.</p>
+              </div>
             ) : remaining <= 0 ? (
-              <div className="qr-poster__empty"><p>Ce QR a expiré. Générez-en un nouveau.</p></div>
+              <div className="qr-poster__empty">
+                <p>Ce QR a expiré. Générez-en un nouveau.</p>
+              </div>
             ) : (
               <>
-                <span className="admin-badge active">{qr.kind === "CHECKIN" ? "Début" : "Fin"} · {qr.stationName}</span>
-                {image ? <img className="qr-image" src={image} alt="QR temporaire de pointage" /> : <LoaderCircle className="spin" size={30} />}
-                <p>Expire dans <strong>{formatCountdown(remaining)}</strong></p>
+                <span className="admin-badge active">
+                  {qr.kind === "CHECKIN" ? "Début" : "Fin"} · {qr.stationName}
+                </span>
+                {image ? (
+                  <img
+                    className="qr-image"
+                    src={image}
+                    alt="QR temporaire de pointage"
+                  />
+                ) : (
+                  <LoaderCircle className="spin" size={30} />
+                )}
+                <p>
+                  Expire dans <strong>{formatCountdown(remaining)}</strong>
+                </p>
                 <small>Validité configurée : {qr.ttlSeconds} secondes</small>
               </>
             )}

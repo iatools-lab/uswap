@@ -63,13 +63,22 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
 
   useEffect(() => {
     let active = true;
-    const params = new URLSearchParams();
-    if (from) params.set("from", new Date(from).toISOString());
-    if (to) params.set("to", new Date(`${to}T23:59:59`).toISOString());
-    if (swapperId) params.set("swapperId", swapperId);
-
     setRows(null);
-    api<AttendanceHistoryRow[]>(`/attendance/history?${params.toString()}`)
+    setError("");
+
+    const load = async () => {
+      const params = new URLSearchParams();
+      if (from)
+        params.set("from", new Date(`${from}T00:00:00`).toISOString());
+      if (to) params.set("to", new Date(`${to}T23:59:59.999`).toISOString());
+      if (swapperId) params.set("swapperId", swapperId);
+      const query = params.toString();
+      return api<AttendanceHistoryRow[]>(
+        `/attendance/history${query ? `?${query}` : ""}`,
+      );
+    };
+
+    void load()
       .then((data) => {
         if (active) setRows(data);
       })

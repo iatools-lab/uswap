@@ -11,7 +11,85 @@ import {
   parseQrToken,
 } from "./qrToken";
 import { formatDate, isInWindow, isOpenShift, pickNextShift } from "./format";
-import type { OperationsViewProps, ScanResult } from "./types";
+import type { OperationShift, OperationsViewProps, ScanResult } from "./types";
+import type { AttendanceHistoryRow } from "../supervision/types";
+
+function attendanceShiftFromHistory(row: AttendanceHistoryRow): OperationShift {
+  const status: NonNullable<OperationShift["attendance"]>["status"] =
+    row.isJustified
+      ? "JUSTIFIED"
+      : row.isAbsent
+        ? "ABSENT"
+        : row.checkedOutAt
+          ? "CLOSED"
+          : row.isLate
+            ? "LATE"
+            : "PRESENT";
+  return {
+    id: row.shiftId,
+    planningId: "",
+    templateId: row.shiftId,
+    label: row.template || "Service",
+    startTime: row.plannedStart,
+    endTime: row.plannedEnd,
+    publishedAt: "history",
+    station: row.station,
+    swapper: { fullName: "" },
+    attendance:
+      row.checkedInAt ||
+      row.checkedOutAt ||
+      row.isAbsent ||
+      row.isJustified ||
+      row.corrected
+        ? {
+            status,
+            checkedInAt: row.checkedInAt ?? "",
+            checkedOutAt: row.checkedOutAt,
+            isLate: row.isLate,
+          }
+        : null,
+  };
+}
+
+function belongsInHistory(shift: OperationShift, now = Date.now()) {
+  return (
+    Date.parse(shift.endTime) < now ||
+    Boolean(
+      shift.attendance &&
+      (shift.attendance.checkedInAt ||
+        shift.attendance.checkedOutAt ||
+        shift.attendance.status === "ABSENT" ||
+        shift.attendance.status === "JUSTIFIED"),
+    )
+  );
+}
+
+function historyStatusLabel(shift: OperationShift) {
+  if (shift.attendance?.status === "JUSTIFIED") return "Absence justifiée";
+  if (
+    shift.attendance?.status === "ABSENT" ||
+    (!shift.attendance && Date.parse(shift.endTime) < Date.now())
+  )
+    return "Absent";
+  if (shift.attendance?.checkedOutAt) return "Terminé";
+  if (shift.attendance?.isLate) return "En retard";
+  return shift.attendance ? "À l’heure" : "Non pointé";
+}
+
+function historyStatusClass(shift: OperationShift) {
+  if (
+    shift.attendance?.status === "JUSTIFIED" ||
+    shift.attendance?.checkedOutAt
+  )
+    return "attendance-status--closed";
+  if (
+    shift.attendance?.status === "ABSENT" ||
+    (!shift.attendance && Date.parse(shift.endTime) < Date.now())
+  )
+    return "attendance-status--absent";
+  if (shift.attendance?.isLate) return "attendance-status--late";
+  return "attendance-status--present";
+}
 
 export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
   const openShifts = data.shifts.filter(isOpenShift);
@@ -27,6 +105,8 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
   const [token, setToken] = useState(() => captureQrToken());
   const [scanning, setScanning] = useState(false);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyRows, setHistoryRows] = useState<OperationShift[] | null>(null);
+  const [historyError, setHistoryError] = useState("");
   const [historyFilter, setHistoryFilter] = useState<
     "ALL" | "PRESENT" | "LATE" | "ABSENT"
   >("ALL");
@@ -44,10 +124,37 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
     return () => window.removeEventListener("hashchange", receive);
   }, [targetShift]);
 
+  useEffect(() => {
+    let active = true;
+    setHistoryRows(null);
+    setHistoryError("");
+    const load = async () => {
+      const rows = await api<AttendanceHistoryRow[]>("/attendance/history");
+      return rows.map(attendanceShiftFromHistory);
+    };
+    void load()
+      .then((rows) => {
+        if (active) setHistoryRows(rows);
+      })
+      .catch((reason) => {
+        if (active) {
+          setHistoryRows([]);
+          setHistoryError((reason as Error).message);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [user.id, data.shifts]);
+
   // Calcul des KPI détaillés pour le diagramme circulaire
   const kpiStats = useMemo(() => {
-    const evaluatedShifts = data.shifts.filter(
-      (s) => s.attendance || new Date(s.endTime).getTime() < Date.now(),
+    const evaluatedShifts = Array.from(
+      new Map(
+        [...data.shifts, ...(historyRows ?? [])]
+          .filter((shift) => belongsInHistory(shift))
+          .map((shift) => [shift.id, shift]),
+      ).values(),
     );
     const total = evaluatedShifts.length;
 
@@ -90,13 +197,17 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
       absentPct: Math.round((absent / total) * 100),
       presenceRate: Math.round(((onTime + late) / total) * 100),
     };
-  }, [data.shifts]);
+  }, [data.shifts, historyRows]);
 
   const completedShifts = useMemo(() => {
-    return data.shifts.filter(
-      (s) => s.attendance || new Date(s.endTime).getTime() < Date.now(),
+    return Array.from(
+      new Map(
+        [...data.shifts, ...(historyRows ?? [])]
+          .filter((shift) => belongsInHistory(shift))
+          .map((shift) => [shift.id, shift]),
+      ).values(),
     );
-  }, [data.shifts]);
+  }, [data.shifts, historyRows]);
 
   const recentPointages = useMemo(() => {
     return [...completedShifts]
@@ -114,12 +225,14 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
           return (
             s.attendance &&
             !s.attendance.isLate &&
-            s.attendance.status !== "ABSENT"
+            s.attendance.status !== "ABSENT" &&
+            s.attendance.status !== "JUSTIFIED"
           );
         if (historyFilter === "LATE") return s.attendance?.isLate;
         if (historyFilter === "ABSENT")
           return (
             s.attendance?.status === "ABSENT" ||
+            s.attendance?.status === "JUSTIFIED" ||
             (!s.attendance && new Date(s.endTime).getTime() < Date.now())
           );
         return true;
@@ -145,10 +258,20 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
     setBusy(true);
     setError("");
     try {
-      const scan = await api<ScanResult>("/attendance", {
+      // Le même contrat est implémenté par le mock et le backend : le serveur
+      // déduit la station et le type de pointage du jeton QR consommé.
+      const response = await api<
+        Omit<ScanResult, "status"> & {
+          status: "ON_TIME" | "PRESENT" | "LATE" | "CLOSED";
+        }
+      >("/attendance", {
         shiftId: shiftToPunchId,
         token: raw,
       });
+      const scan: ScanResult = {
+        ...response,
+        status: response.status === "ON_TIME" ? "PRESENT" : response.status,
+      };
       setToken("");
       clearQrToken();
       setError("");
@@ -423,7 +546,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
       </section>
 
       {/* --- CARTE UNIQUE UNIFIÉE : Shift Cible & Actions de Service --- */}
-      {targetShift && (
+      {targetShift ? (
         <section className="admin-card operations-unified-card">
           <div className="operations-unified-header">
             <div>
@@ -482,6 +605,25 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
             </button>
           </div>
         </section>
+      ) : (
+        <section
+          className="admin-card operations-unified-card operations-unified-card--empty"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="operations-unified-empty-icon" aria-hidden="true">
+            <Clock3 size={20} />
+          </span>
+          <div>
+            <span className="admin-eyebrow">Pointage</span>
+            <h2>Aucun shift à venir</h2>
+            <p>
+              Les prochains shifts publiés et affectés à votre compte
+              apparaîtront ici. Vos anciens services restent consultables dans
+              l’historique.
+            </p>
+          </div>
+        </section>
       )}
 
       {/* Historique de pointage (Top 5) */}
@@ -506,10 +648,19 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
           )}
         </div>
 
-        {!recentPointages.length ? (
+        {historyError && (
+          <p className="error-message" role="alert">
+            {historyError}
+          </p>
+        )}
+        {historyRows === null ? (
+          <div className="admin-loading" role="status">
+            <Clock3 size={18} /> Chargement de votre historique…
+          </div>
+        ) : !recentPointages.length ? (
           <div className="admin-empty">
             <Clock3 size={36} />
-            <h3>Aucun pointage effectué</h3>
+            <h3>Aucun pointage antérieur sur cette période</h3>
           </div>
         ) : (
           <div className="swapper-shifts-cards-list">
@@ -520,17 +671,9 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
                     <span className="station-name">{shift.station?.name}</span>
                   </div>
                   <span
-                    className={`attendance-status ${shift.attendance?.checkedOutAt ? "attendance-status--closed" : shift.attendance?.status === "ABSENT" || (!shift.attendance && new Date(shift.endTime).getTime() < Date.now()) ? "attendance-status--absent" : "attendance-status--present"}`}
+                    className={`attendance-status ${historyStatusClass(shift)}`}
                   >
-                    {shift.attendance?.checkedOutAt
-                      ? "Terminé"
-                      : shift.attendance?.status === "ABSENT" ||
-                          (!shift.attendance &&
-                            new Date(shift.endTime).getTime() < Date.now())
-                        ? "Absent"
-                        : shift.attendance
-                          ? "En cours"
-                          : "Non pointé"}
+                    {historyStatusLabel(shift)}
                   </span>
                 </div>
                 <div className="swapper-shift-details">
@@ -607,15 +750,9 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
                       </span>
                     </div>
                     <span
-                      className={`attendance-status ${shift.attendance?.status === "ABSENT" || (!shift.attendance && new Date(shift.endTime).getTime() < Date.now()) ? "attendance-status--absent" : "attendance-status--present"}`}
+                      className={`attendance-status ${historyStatusClass(shift)}`}
                     >
-                      {shift.attendance?.status === "ABSENT" ||
-                      (!shift.attendance &&
-                        new Date(shift.endTime).getTime() < Date.now())
-                        ? "Absent"
-                        : shift.attendance?.isLate
-                          ? "En retard"
-                          : "Validé"}
+                      {historyStatusLabel(shift)}
                     </span>
                   </div>
                   <div className="swapper-shift-details">
