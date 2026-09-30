@@ -1,0 +1,14 @@
+{
+  "javascript.validate.enable": false,
+  "typescript.tsserver.maxTsServerMemory": 4096,
+  "files.exclude": {
+    "**/uswap-danielle": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/uswap-danielle/**": true
+  },
+  "search.exclude": {
+    "**/uswap-danielle": true
+  }
+}

@@ -1,0 +1,381 @@
+/* ============================================================
+   Fiche utilisateur — mise en page et panneaux
+   (remplace les styles inline de UserDetail.tsx)
+   ============================================================ */
+
+.user-detail-wrapper {
+  display: grid;
+  gap: 20px;
+  padding-bottom: 40px;
+}
+
+.user-detail-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.user-detail-back {
+  background: transparent;
+  border: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.user-detail-wrapper .error-message {
+  border-radius: 8px;
+}
+
+.user-detail-loading {
+  padding: 60px 0;
+}
+
+.user-detail-loading .spin {
+  color: #3b82f6;
+}
+
+/* Grille principale : formulaire à gauche, panneau latéral à droite */
+.user-detail-layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 20px;
+  align-items: start;
+}
+
+.user-detail-card {
+  padding: 24px;
+  display: grid;
+  gap: 20px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.user-detail-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 14px;
+}
+
+.user-detail-card-head h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.user-detail-card-head span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.user-detail-head-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-detail-head-left > svg,
+.user-detail-head-left .icon {
+  color: #3b82f6;
+  display: flex;
+}
+
+.user-detail-history-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+.user-detail-history-btn svg {
+  color: #3b82f6;
+}
+
+.user-detail-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.user-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.user-detail-field {
+  display: grid;
+  gap: 6px;
+}
+
+.user-detail-field.is-wide {
+  grid-column: span 2;
+}
+
+.user-detail-field > label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.user-detail-field .required {
+  color: #ef4444;
+}
+
+.user-detail-field .optional {
+  font-weight: 400;
+  color: #94a3b8;
+}
+
+.user-detail-field input {
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  padding: 0 14px;
+  font-size: 13px;
+  color: #0f172a;
+  outline: none;
+}
+
+.user-detail-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 16px;
+  margin-top: 4px;
+  min-height: 54px;
+}
+
+.user-detail-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.user-detail-dirty-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.user-detail-dirty-hint::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+}
+
+.user-detail-footer .admin-button {
+  height: 38px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.user-detail-footer .admin-button[type="submit"] {
+  padding: 0 18px;
+}
+
+/* Panneau latéral (accès & sécurité) */
+.user-detail-aside {
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.user-detail-aside-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 12px;
+}
+
+.user-detail-aside-head h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.user-detail-status-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.user-detail-status-box .admin-badge {
+  width: fit-content;
+}
+
+.user-detail-status-box time {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.user-detail-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.user-detail-actions .admin-button {
+  width: 100%;
+  height: 38px;
+  font-size: 13px;
+  justify-content: center;
+}
+
+.user-detail-confirm {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.user-detail-confirm p {
+  margin: 0;
+  font-size: 12px;
+  color: #991b1b;
+  line-height: 1.4;
+}
+
+/* Variante informative (activation manuelle) plutôt qu'avertissement */
+.user-detail-confirm.is-info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.user-detail-confirm.is-info p {
+  color: #1d4ed8;
+}
+
+.user-detail-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.user-detail-confirm .admin-button {
+  height: 30px;
+  font-size: 12px;
+}
+
+/* Historique des modifications */
+.user-detail-history {
+  display: grid;
+  gap: 12px;
+  max-height: 65vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.user-detail-history-empty {
+  font-size: 13px;
+  color: #64748b;
+  text-align: center;
+  padding: 30px 0;
+  margin: 0;
+}
+
+.user-detail-history-entry {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.user-detail-history-entry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.user-detail-history-entry-head span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.user-detail-history-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3b82f6;
+}
+
+.user-detail-history-entry-head time {
+  font-size: 11.5px;
+  color: #64748b;
+  font-family: monospace;
+}
+
+.user-detail-history-changes {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.user-detail-history-change {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: #334155;
+  line-height: 1.4;
+}
+
+.user-detail-history-note {
+  font-size: 12.5px;
+  color: #64748b;
+  margin: 0;
+  font-style: italic;
+}
+
+@media (max-width: 1000px) {
+  .user-detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .user-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .user-detail-field.is-wide {
+    grid-column: span 1;
+  }
+}

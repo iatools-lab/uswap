@@ -1,0 +1,92 @@
+.detail-section {
+  border-top: 1px solid var(--line);
+  margin-top: 28px;
+  padding-top: 24px;
+  display: grid;
+  gap: 18px;
+}
+.detail-section > .admin-badge {
+  justify-self: start;
+}
+.detail-section > p {
+  color: #64738c;
+  line-height: 1.7;
+  font-size: 14px;
+}
+.detail-confirm {
+  padding: 20px;
+  background: #fff6ef;
+  border: 1px solid #f3d4bd;
+  border-radius: 8px;
+  display: grid;
+  gap: 20px;
+}
+.detail-success {
+  margin-top: 20px !important;
+  padding: 16px;
+  background: #eef7f1;
+  color: #276647;
+  border-radius: 8px;
+}
+.audit-item {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+}
+.audit-item summary {
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.audit-item dd {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.admin-person:hover strong {
+  text-decoration: underline;
+}
+.detail-section + .text-button {
+  margin-top: 24px;
+}
+.qr-image {
+  display: block;
+  width: 240px;
+  max-width: 100%;
+  margin: 10px auto;
+}
+.qr-window {
+  text-align: center;
+  line-height: 1.8;
+  color: #53647e;
+}
+.operations-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 20px;
+}
+.station-editor {
+  margin-bottom: 24px;
+}
+.station-editor .user-form-card {
+  max-width: none;
+}
+.station-editor h2 {
+  margin-bottom: 20px;
+}
+.user-toolbar select,
+.operations-actions > select {
+  min-height: 48px;
+  border: 1px solid #dfe5ef;
+  border-radius: 8px;
+  padding: 10px;
+  background: white;
+  max-width: 100%;
+}
+.admin-skip:not(:focus) {
+  clip-path: inset(50%);
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  white-space: nowrap;
+}

@@ -1,0 +1,277 @@
+/* ============================================================================
+   uSwap — composants UI partagés (design system)
+   Source unique de style pour Select et Toast.
+   Aucun style inline n'est nécessaire pour les utiliser.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   Select
+   --------------------------------------------------------------------------- */
+
+.ui-select {
+  position: relative;
+}
+
+.ui-select__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #0f172a;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.ui-select--sm .ui-select__trigger {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  border-color: #dfe5ef;
+}
+
+.ui-select--md .ui-select__trigger {
+  height: 40px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.ui-select--lg .ui-select__trigger {
+  height: 42px;
+  padding: 0 14px;
+  font-size: 13.5px;
+}
+
+.ui-select__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-select__value--placeholder {
+  color: #94a3b8;
+}
+
+.ui-select__caret {
+  color: #64748b;
+  margin-left: 8px;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.ui-select__caret--open {
+  transform: rotate(180deg);
+}
+
+.ui-select__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 100%;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12);
+  padding: 4px;
+  z-index: 50;
+  display: grid;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.ui-select__option {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  background: transparent;
+  color: #0f172a;
+  font-weight: 400;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ui-select--sm .ui-select__option {
+  font-size: 12.5px;
+}
+
+.ui-select--md .ui-select__option {
+  font-size: 13px;
+}
+
+.ui-select--lg .ui-select__option {
+  font-size: 13.5px;
+}
+
+.ui-select__option--selected {
+  background: #f1f5f9;
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+   Toast / notifications
+   --------------------------------------------------------------------------- */
+
+.ui-toast-region {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 100;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.ui-toast {
+  pointer-events: auto;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  max-width: 420px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-left-width: 4px;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12);
+  font-size: 13px;
+  font-weight: 500;
+  color: #0f172a;
+  overflow: hidden;
+  animation: ui-toast-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+.ui-toast.is-leaving {
+  animation: ui-toast-out 0.18s ease-in forwards;
+}
+
+@keyframes ui-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes ui-toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+/* Barre de progression du compte a rebours (mise en pause au survol). */
+.ui-toast__progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 100%;
+  transform-origin: left center;
+  background: currentColor;
+  opacity: 0.35;
+  animation-name: ui-toast-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.ui-toast--success .ui-toast__progress {
+  color: #22c55e;
+}
+
+.ui-toast--error .ui-toast__progress {
+  color: #dc2626;
+}
+
+@keyframes ui-toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-toast,
+  .ui-toast.is-leaving,
+  .ui-toast__progress {
+    animation: none;
+  }
+}
+
+.ui-toast--success {
+  border-left-color: #22c55e;
+}
+
+.ui-toast--error {
+  border-left-color: #dc2626;
+}
+
+.ui-toast--info {
+  border-left-color: #3b82f6;
+}
+
+.ui-toast--info .ui-toast__progress {
+  color: #3b82f6;
+}
+
+.ui-toast__icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ui-toast--success .ui-toast__icon {
+  color: #22c55e;
+}
+
+.ui-toast--error .ui-toast__icon {
+  color: #dc2626;
+}
+
+.ui-toast--info .ui-toast__icon {
+  color: #3b82f6;
+}
+
+.ui-toast__message {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.ui-toast__close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .ui-toast-region {
+    right: 16px;
+    top: 12px;
+  }
+}

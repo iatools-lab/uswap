@@ -1,0 +1,412 @@
+/* ============================================================
+   Supervision E07 — suivi des pointages, remplacements,
+   corrections et historique. Etend le design system uSwap.
+   ============================================================ */
+
+.supervision-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.supervision-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #eaf1f3;
+  border-radius: 12px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.supervision-tabs button {
+  border: 0;
+  background: transparent;
+  border-radius: 9px;
+  min-height: 42px;
+  padding: 8px 16px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.supervision-tabs button[aria-selected="true"] {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 1px 3px #18243e15;
+}
+
+/* --- Metric row: attendus / présents / retards / absents --- */
+.supervision-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 148px), 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.supervision-metric {
+  display: grid;
+  gap: 2px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.supervision-metric:hover {
+  border-color: #a6b5de;
+  background: #f7f9fd;
+}
+
+.supervision-metric[aria-pressed="true"] {
+  border-color: var(--navy);
+  box-shadow: inset 3px 0 0 var(--navy);
+  background: #f4f6fd;
+}
+
+.supervision-metric strong {
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.supervision-metric span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.supervision-metric--live strong {
+  color: var(--live);
+}
+
+.supervision-metric--alert strong {
+  color: var(--draft);
+}
+
+.supervision-metric--late strong {
+  color: #9a6a00;
+}
+
+.supervision-metric__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+/* --- Statut de pointage --- */
+.attendance-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.attendance-status:before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.attendance-status--present {
+  background: var(--live-bg);
+  border-color: var(--live-border);
+  color: var(--live);
+}
+
+.attendance-status--late {
+  background: #fff7e8;
+  border-color: #f0d9a8;
+  color: #9a6a00;
+}
+
+.attendance-status--absent {
+  background: var(--draft-bg);
+  border-color: var(--draft-border);
+  color: var(--draft);
+}
+
+.attendance-status--closed {
+  background: #eef2fb;
+  border-color: #d3deef;
+  color: var(--navy);
+}
+
+.attendance-status--expected {
+  background: #f2f4f8;
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+/* --- Urgence de couverture --- */
+.urgency-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.urgency-flag--critical {
+  background: #fdeaea;
+  color: #b91c1c;
+}
+
+.urgency-flag--high {
+  background: var(--draft-bg);
+  color: var(--draft);
+}
+
+.urgency-flag--normal {
+  background: #eef2fb;
+  color: var(--navy);
+}
+
+/* --- Panneau de correction --- */
+.supervision-dialog {
+  border-left: 4px solid #fd5716;
+  background: #fffdfb;
+}
+
+.supervision-dialog h2 {
+  margin-top: 0;
+}
+
+.supervision-dialog__meta {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #f7f8fb;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.supervision-dialog__meta strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.supervision-required {
+  color: #b91c1c;
+}
+
+.supervision-candidate {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px 16px;
+  align-items: start;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.supervision-candidate--selected {
+  border-color: var(--navy);
+  box-shadow: 0 0 0 2px #001a7014;
+}
+
+.supervision-candidate--blocked {
+  background: #fcfd;
+}
+
+.supervision-candidate input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--navy);
+}
+
+.supervision-candidate strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.supervision-candidate small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.supervision-candidate__issues {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.supervision-candidate__issues li {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--draft);
+}
+
+.supervision-candidate-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.coverage-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 16px 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.coverage-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.coverage-card--critical {
+  border-color: #f3c2c2;
+  background: #fff8f8;
+}
+
+.coverage-card--high {
+  border-color: var(--draft-border);
+  background: #fffdfb;
+}
+
+.coverage-card__meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.coverage-card__meta strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.coverage-card__meta time,
+.coverage-card__meta span:not(.urgency-flag):not(.supervision-origin) {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.coverage-search {
+  margin-bottom: 14px;
+}
+
+.coverage-search input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #cbd9df;
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* --- Historique --- */
+.supervision-history__before {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.supervision-history__after {
+  color: var(--navy);
+  font-weight: 500;
+}
+
+.supervision-toolbar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 14px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.supervision-toolbar label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #344f5e;
+}
+
+.supervision-toolbar input,
+.supervision-toolbar select {
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #cbd9df;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+/* --- Origine d'une absence --- */
+.supervision-origin {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.supervision-origin strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* --- Liste mobile des pointages --- */
+@media (max-width: 760px) {
+  .supervision-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .supervision-metric strong {
+    font-size: 22px;
+  }
+
+  .supervision-candidate {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .supervision-candidate__issues {
+    grid-column: 2;
+  }
+
+  .supervision-toolbar {
+    padding: 16px;
+  }
+
+  .supervision-tabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .coverage-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .coverage-card .admin-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
