@@ -1,0 +1,1917 @@
+/* ============================================================
+   Planning — layout, toolbar, tabs & cards
+   ============================================================ */
+
+.planner {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.planner .text-button {
+  justify-self: start;
+}
+
+/* Bouton retour épuré */
+.planner-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--navy);
+  text-decoration: none;
+}
+
+.planner-back:hover {
+  text-decoration: underline;
+}
+
+/* --- Toolbar: period title + status + primary actions --- */
+.planner-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.planner-toolbar h2 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+
+.planner-muted {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.planner-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Filtre de station intégré à la barre d'action */
+.planner-filter-select {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.planner-filter-select:focus-visible {
+  border-color: var(--navy);
+  box-shadow: 0 0 0 3px rgba(24, 36, 62, 0.1);
+}
+
+/* --- Chrome Bar : Alignement compact en une ligne --- */
+.planner-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #fff;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+/* --- Onglets Période --- */
+.planner-period-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--surface);
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+.planner-period-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.planner-period-tabs button:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 1px;
+}
+
+.planner-period-tabs button[aria-pressed="true"] {
+  background: #fff;
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* --- Nav de Date --- */
+.planner-period-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.planner-step {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.planner-step:hover {
+  background: var(--surface);
+}
+
+.planner-step:focus-visible {
+  outline: 2px solid var(--navy);
+}
+
+/* Picker de Date élégant */
+.planner-period-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.planner-period-picker:hover {
+  background: var(--surface);
+}
+
+.planner-period-picker strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.planner-period-picker input[type="date"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+/* --- Legend --- */
+.planner-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0 0 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.planner-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.planner-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--live);
+}
+
+.planner-legend i.is-draft {
+  background: var(--draft);
+}
+
+/* --- Board & Vues --- */
+.planner-board {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.planner-hint {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+  padding: 0 4px;
+}
+
+/* Year view */
+.planner-year {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.planner-year-month {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  color: inherit;
+  min-height: 104px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.planner-year-month:hover {
+  border-color: var(--navy);
+  background: #fff;
+}
+
+.planner-year-month strong {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--ink);
+}
+
+.planner-year-month span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.planner-year-bar {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: #edf1fb;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.planner-year-bar i {
+  display: block;
+  height: 100%;
+  background: var(--navy);
+  max-width: 100%;
+  transition: width 0.3s ease;
+}
+
+/* --- Refonte de la vue Mois (Style Google Calendar épuré) --- */
+.planner-month {
+  display: grid;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.planner-month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.planner-month-weekdays span {
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.planner-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.planner-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 105px;
+  border-radius: 8px;
+  padding: 6px;
+  background: #fafbfc;
+  border: 1px solid #f1f3f4;
+  transition: background 0.15s ease;
+}
+
+.planner-cell:hover {
+  background: #f8f9fa;
+  border-color: #cbd5e1;
+}
+
+.planner-cell.is-outside {
+  opacity: 0.35;
+  background: transparent;
+}
+
+.planner-cell.is-today,
+.planner-week-day.is-today {
+  background: #f0f4ff;
+  border-color: #d2e3fc;
+  box-shadow: none;
+}
+
+.planner-cell-num {
+  border: 0;
+  background: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  justify-self: start;
+  cursor: pointer;
+  padding: 2px 4px;
+  width: fit-content;
+  border-radius: 4px;
+}
+
+.planner-cell.is-today .planner-cell-num {
+  background: #1a73e8;
+  color: #fff;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.planner-cell-events {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  max-height: 70px;
+}
+
+/* Pastille événement horizontale style Google Agenda */
+.planner-event-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #e8f0fe;
+  border: 0;
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #1967d2;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 0.15s;
+}
+
+.planner-event-chip:hover {
+  opacity: 0.85;
+}
+
+.planner-event-chip.is-draft {
+  background: #fef7e0;
+  color: #b06000;
+}
+
+.planner-event-chip .event-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1a73e8;
+  flex-shrink: 0;
+}
+
+.planner-event-chip.is-draft .event-dot {
+  background: #f9ab00;
+}
+
+.planner-event-chip .event-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Week / day view */
+.planner-week-overview {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.planner-week-overview.is-single {
+  display: flex;
+  justify-content: center;
+}
+
+.planner-week-overview.is-single .planner-week-day {
+  width: 100%;
+  max-width: 320px;
+}
+
+.planner-week-day {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.planner-week-day-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 4px;
+  color: var(--muted);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.planner-week-day-head strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.planner-week-day-head span {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.1;
+}
+
+.planner-range {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--live-bg);
+  color: var(--ink);
+  padding: 10px 12px;
+  font-size: 13px;
+  min-height: 44px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.planner-range:hover {
+  border-color: var(--live);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.planner-range.is-draft {
+  background: var(--draft-bg);
+  border-color: var(--draft-border);
+}
+
+.planner-range.is-draft:hover {
+  border-color: var(--draft);
+}
+
+.planner-range small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.planner-range strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.planner-day-empty {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+  padding: 4px 0;
+  margin: 0;
+}
+
+/* --- Calendar grid & occurrence cards --- */
+.planner-calendar {
+  display: grid;
+  gap: 16px;
+}
+
+.planner-week {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.planner-week-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 14px 16px;
+  min-height: 44px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+}
+
+.planner-week-title span {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.planner-week-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 12px;
+}
+
+.planner-day {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.planner-day > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  color: var(--muted);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.planner-day > header strong {
+  color: var(--ink);
+}
+
+/* Cartes de shift */
+.planner-occurrence-card {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  min-width: 0;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.planner-occurrence-card small {
+  color: var(--muted);
+  margin: 0;
+}
+
+.planner-occurrence-card p {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin: 2px 0 0;
+}
+
+.planner-occurrence-card:not(:disabled):hover {
+  border-color: var(--navy);
+  box-shadow: 0 2px 6px rgba(24, 36, 62, 0.06);
+}
+
+.planner-occurrence-card.planner-vacant-card {
+  background: #ffffff;
+  border-color: var(--line);
+}
+
+/* --- Forms & Modals --- */
+.planner-panel {
+  padding: 24px;
+  display: grid;
+  gap: 20px;
+}
+
+.planner-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.planner label {
+  display: grid;
+  gap: 7px;
+  font-size: 14px;
+  min-width: 0;
+}
+
+.planner input:not([type="checkbox"]),
+.planner select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 9px 12px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.planner input:not([type="checkbox"]):focus,
+.planner select:focus {
+  border-color: var(--navy);
+  box-shadow: 0 0 0 3px rgba(24, 36, 62, 0.1);
+}
+
+.planner-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.planner-options,
+.planner-days {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.planner-options legend,
+.planner-days legend {
+  padding: 0;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.planner-options label,
+.planner-days label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.planner-options label:has(:checked),
+.planner-days label:has(:checked) {
+  border-color: var(--navy);
+  background: #f0f3fb;
+}
+
+.planner input[type="checkbox"] {
+  accent-color: var(--navy);
+  width: 17px;
+  height: 17px;
+}
+
+.planner-preview {
+  display: grid;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.planner-preview-rows {
+  max-height: 340px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.planner-preview-row {
+  padding: 12px 16px;
+  display: grid;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.planner-preview-row:last-child {
+  border-bottom: 0;
+}
+
+.planner-preview .admin-button {
+  justify-self: end;
+}
+
+.planner-contact {
+  display: grid;
+  gap: 5px;
+  overflow-wrap: anywhere;
+}
+
+.planner-contact a {
+  color: var(--navy);
+}
+
+/* --- Roster Modal & Table --- */
+.planner-roster {
+  display: grid;
+  gap: 16px;
+}
+
+.planner-roster-meta {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.planner-roster-table {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.planner-roster-slot {
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.planner-roster-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.planner-roster-action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+/* Bouton icône pour la suppression de poste */
+.planner-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.planner-icon-btn.danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.text-button.danger {
+  color: #dc2626;
+}
+
+.text-button.danger:hover {
+  color: #b91c1c;
+}
+
+/* --- Dialog & Modal Centering --- */
+.dialog-backdrop,
+.modal-overlay,
+.modal-backdrop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+}
+
+dialog[open],
+.modal-panel,
+.modal-card,
+.planner-panel {
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  margin: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+/* --- Correctif z-index critique pour le StationPicker dans les modals --- */
+.station-picker-dropdown, 
+.station-picker-popover,
+.station-picker-menu,
+.station-picker-list {
+  z-index: 1100 !important;
+}
+
+/* --- Empty state --- */
+.planner-empty {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 56px 20px;
+}
+
+.planner-empty h2,
+.planner-empty h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.planner-empty p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  max-width: 36ch;
+}
+
+.planner :is(strong, p, small, span) {
+  overflow-wrap: anywhere;
+}
+
+/* Responsive */
+@media (max-width: 760px) {
+  .planner-chrome {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .planner-period-tabs {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .planner-period-tabs button {
+    flex: 1;
+    justify-content: center;
+  }
+  .planner-period-nav {
+    justify-content: space-between;
+  }
+  .planner-fields {
+    grid-template-columns: 1fr;
+  }
+  .planner-year {
+    grid-template-columns: 1fr 1fr;
+  }
+  .planner-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .planner-filter-select {
+    width: 100%;
+  }
+}
+
+@media (min-width: 768px) {
+  .planner-week-overview {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .planner-week-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .planner-year {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1440px) {
+  .planner-year {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ============================================================
+   Utilitaires — remplacement des styles inline du Planner
+   ============================================================ */
+
+/* Board & filtre station */
+.planner-board {
+  display: grid;
+  gap: 16px;
+}
+
+.planner-station-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #fff;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.planner-station-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.planner-station-filter-label svg {
+  color: var(--info);
+}
+
+.planner-station-filter-label span {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.planner-station-filter-picker {
+  width: 280px;
+  max-width: 100%;
+}
+
+/* Liste mobile des plannings */
+.day-card-body {
+  display: grid;
+  gap: 8px;
+}
+
+.planner-day-empty.is-centered {
+  padding: 12px 0;
+  text-align: center;
+}
+
+.planner-range.mobile-row {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.planner-range.mobile-row small {
+  color: var(--muted);
+}
+
+.planner-range.mobile-row strong {
+  color: var(--ink);
+}
+
+.planner-range-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Stepper : listes de modèles, jours et swappeurs */
+.stepper-field-group .planner-options,
+.stepper-field-group .planner-days {
+  background: #fff;
+  padding: 8px;
+}
+
+.planner-options .checkbox-label {
+  padding: 4px 0;
+}
+
+.planner-days .checkbox-label {
+  display: inline-flex;
+  margin-right: 12px;
+}
+
+.planner-swapper-list {
+  max-height: 200px;
+  overflow-y: auto;
+  background: #fff;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.planner-swapper-list .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.planner-swapper-list .checkbox-label span {
+  overflow-wrap: anywhere;
+}
+
+.stepper-field-group.is-tall {
+  min-height: 260px;
+}
+
+/* Récapitulatif du stepper */
+.planner-publish-toggle {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.planner-publish-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.planner-publish-toggle label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+/* Aperçu des shifts */
+.planner-preview-intro {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.planner-preview-intro p {
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.planner-preview-intro .admin-button {
+  margin-top: 12px;
+}
+
+.planner-preview.is-inline {
+  margin-top: 0;
+}
+
+.planner-preview.is-inline .planner-preview-rows {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+/* Modal jour & roster */
+.planner-day-modal-roster {
+  min-width: 640px;
+  max-width: 100%;
+}
+
+.planner-day-modal-roster .planner-muted.is-centered {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.planner-actions.is-end {
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+/* Feuille epuree des shifts d'une journee (3 colonnes, sans grille). */
+.planner-day-sheet {
+  display: grid;
+  gap: 4px;
+}
+
+.planner-day-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 12px;
+  flex-wrap: wrap;
+}
+
+.planner-day-count {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.planner-day-count strong {
+  font-size: 16px;
+  color: var(--ink, #0b1e36);
+}
+
+.planner-day-coverage {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fff4e5;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.planner-day-coverage.is-complete {
+  background: #e7f6ee;
+  color: #16794a;
+}
+
+.planner-day-station-tag {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: var(--navy, #001a70);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.planner-day-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 40px 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.planner-day-empty-state strong {
+  color: var(--ink, #0b1e36);
+  font-size: 14px;
+}
+
+.planner-day-empty-state p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.planner-day-sheet .planner-muted.is-centered {
+  text-align: center;
+  padding: 32px 0;
+}
+
+.planner-day-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.planner-day-list-head,
+.planner-day-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.2fr) auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.planner-day-list-head {
+  padding: 4px 12px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line, #e6e9f0);
+}
+
+.planner-day-row {
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--line, #eef1f6);
+  border-radius: 10px;
+  transition: background 0.15s ease;
+}
+
+.planner-day-row:last-child {
+  border-bottom: none;
+}
+
+.planner-day-row:hover {
+  background: #f7f9ff;
+}
+
+.planner-day-row.is-vacant {
+  background: #fffdf8;
+}
+
+.planner-day-row.is-vacant:hover {
+  background: #fff8ec;
+}
+
+.planner-day-shift {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.planner-day-shift strong {
+  font-size: 14px;
+  color: var(--ink, #0b1e36);
+}
+
+.planner-day-time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.planner-day-time i {
+  font-style: normal;
+  opacity: 0.5;
+}
+
+.planner-day-swapper {
+  min-width: 0;
+}
+
+.planner-day-swapper-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 14px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: var(--navy, #001a70);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.planner-day-swapper-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 26, 112, 0.1);
+  color: var(--navy, #001a70);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.planner-day-swapper-remove:hover {
+  background: #dc2626;
+  color: #fff;
+}
+
+.planner-day-swapper-remove:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.planner-day-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.planner-day-picker select {
+  padding: 6px 10px;
+  border: 1px solid var(--line, #d7dce8);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 13px;
+  color: var(--ink, #0b1e36);
+  max-width: 180px;
+}
+
+.planner-day-vacant {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #fff4e5;
+  color: #b45309;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.planner-day-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 560px) {
+  .planner-day-list-head {
+    display: none;
+  }
+
+  .planner-day-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .planner-day-actions {
+    justify-content: flex-start;
+  }
+}
+/* ============================================================
+   Planning — clarté, contexte & micro-interactions
+   Ajouts additifs : ils n'altèrent aucun style existant.
+   ============================================================ */
+
+/* --- Bandeau de contexte « vous êtes ici » --- */
+.planner-context {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.planner-context svg {
+  flex-shrink: 0;
+  color: var(--navy);
+}
+
+.planner-context strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.planner-context-count {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Sur petits écrans, la pastille de compte passe sur sa propre ligne. */
+@media (max-width: 560px) {
+  .planner-context-count {
+    margin-left: 23px;
+    white-space: normal;
+  }
+}
+
+/* --- Bandeau d'étape (brouillon / publié) dans l'éditeur --- */
+.planner-stage {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.planner-stage strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.planner-stage.is-draft {
+  background: var(--draft-bg);
+  border-color: var(--draft-border);
+  color: #8a5a2b;
+}
+
+.planner-stage.is-draft strong {
+  color: var(--draft);
+}
+
+.planner-stage.is-published {
+  background: var(--live-bg);
+  border-color: var(--live-border);
+  color: #2c6b49;
+}
+
+.planner-stage.is-published strong {
+  color: var(--live);
+}
+
+/* --- Pastille de couverture dans la toolbar --- */
+.planner-coverage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.planner-coverage-pill i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.planner-coverage-pill.is-full {
+  background: var(--live-bg);
+  border-color: var(--live-border);
+  color: var(--live);
+}
+
+.planner-coverage-pill.is-partial {
+  background: #fdf6e3;
+  border-color: #f2dca6;
+  color: #8a6410;
+}
+
+.planner-coverage-pill.is-empty {
+  background: var(--draft-bg);
+  border-color: var(--draft-border);
+  color: var(--draft);
+}
+
+/* --- Squelette de chargement --- */
+.planner-skeleton {
+  display: grid;
+  gap: 10px;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.planner-skeleton span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.planner-skeleton i {
+  display: block;
+  height: 16px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #eef1f7 25%, #f6f8fc 37%, #eef1f7 63%);
+  background-size: 400% 100%;
+  animation: planner-shimmer 1.4s ease infinite;
+}
+
+.planner-skeleton i:nth-child(3) {
+  width: 70%;
+}
+
+.planner-skeleton i:nth-child(4) {
+  width: 45%;
+}
+
+@keyframes planner-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planner-skeleton i {
+    animation: none;
+  }
+}
+
+/* --- État vide : actions --- */
+.planner-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+/* --- Cartes de shift dans la grille (refonte sobre) --- */
+.planner-occurrence-card {
+  gap: 6px;
+}
+
+.planner-occurrence-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.planner-occurrence-head strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.planner-occurrence-head small {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.planner-occurrence-card.is-empty {
+  border-left: 3px solid var(--draft-border);
+}
+
+.planner-occurrence-card.is-partial {
+  border-left: 3px solid #f2dca6;
+}
+
+.planner-occurrence-card.is-full {
+  border-left: 3px solid var(--live-border);
+}
+
+.planner-occurrence-card:not(.is-full) .planner-occurrence-station {
+  border-color: var(--draft-border);
+  background: var(--draft-bg);
+  color: var(--draft);
+}
+
+.planner-occurrence-station {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.planner-occurrence-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.planner-occurrence-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.planner-occurrence-status.is-full {
+  color: var(--live);
+}
+
+.planner-occurrence-status.is-partial {
+  color: #8a6410;
+}
+
+.planner-occurrence-status.is-empty {
+  color: var(--draft);
+}
+
+/* --- Cartes de jour (vue semaine / jour) : compactes & informatives --- */
+.planner-range.is-full {
+  border-left: 3px solid var(--live-border);
+}
+
+.planner-range.is-partial {
+  border-left: 3px solid #f2dca6;
+}
+
+.planner-range.is-empty {
+  border-left: 3px solid var(--draft-border);
+}
+
+.planner-range-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.planner-range-count strong {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-range-count small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.planner-range-coverage {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* --- Barre de couverture du modal jour --- */
+.planner-day-coverage.is-empty {
+  background: var(--draft-bg);
+  color: var(--draft);
+}
+
+/* --- « Non affecté » sur un planning publié : ton neutre, pas alarmant --- */
+.planner-day-vacant.is-published {
+  background: #f1f3f7;
+  color: var(--muted);
+  border: 1px dashed #cbd5e1;
+}
+
+/* --- Compteur du roster --- */
+.planner-roster-count strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-roster-count {
+  color: var(--muted);
+}
+
+/* --- Légende : pastilles harmonisées --- */
+.planner-legend i.is-filled {
+  background: var(--live);
+}
+
+.planner-legend i.is-vacant {
+  background: var(--draft);
+}
+/* Jour sans aucun shift : ton discret, non alarmant */
+.planner-range-empty {
+  font-size: 12.5px;
+  color: var(--muted);
+  font-style: italic;
+}
+/* ============================================================
+   Cartes de shift — lisibilité du titre (ne pas casser les mots)
+   ============================================================ */
+
+/* Le titre garde des coupures propres (au mot), limité à 2 lignes. */
+.planner-occurrence-head strong {
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: none;
+  line-height: 1.25;
+  font-size: 13.5px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* La plage horaire ne doit jamais se compresser. */
+.planner-occurrence-head small {
+  flex-shrink: 0;
+}
+
+/* Carte de shift : largeur minimale confortable pour éviter l'écrasement. */
+.planner-day .planner-occurrence-card {
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .planner-week-grid .planner-day {
+    min-width: 0;
+  }
+}
+/* ============================================================
+   Audit — bouton de création & chrome (mobile inclus)
+   ============================================================ */
+
+/* Le bouton de création reste compact, y compris en colonne sur mobile. */
+.planner-create-btn {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  /* En colonne (mobile), on centre le bouton au lieu de l'étirer pleine largeur. */
+  .planner-chrome .planner-create-btn {
+    align-self: center;
+    width: auto;
+  }
+}
+/* ============================================================
+   Onglets de vue — libellés adaptatifs (long / court / icône)
+   ============================================================ */
+
+.planner-tab-label-short {
+  display: none;
+}
+
+/* Sous 760px : libellés courts pour que les 4 onglets tiennent au doigt. */
+@media (max-width: 760px) {
+  .planner-tab-label-full {
+    display: none;
+  }
+
+  .planner-tab-label-short {
+    display: inline;
+  }
+
+  .planner-period-tabs button {
+    gap: 4px !important;
+    padding: 8px 2px !important;
+  }
+}
+
+/* Sous 400px : on ne garde que l'icône (accessible via aria-label). */
+@media (max-width: 400px) {
+  .planner-period-tabs button .planner-tab-label-short {
+    display: none;
+  }
+
+  .planner-period-tabs button {
+    gap: 0 !important;
+  }
+}
+/* Jour sans aucun shift : bordure neutre (aucune alerte) */
+.planner-range.is-none {
+  border-left: 3px solid var(--line);
+  background: #fff;
+}
+
+.planner-range.is-none:hover {
+  border-color: var(--line);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+/* ============================================================
+   Modal du jour — une ligne par shift, tous les swappeurs empilés
+   ============================================================ */
+
+/* Compteur de postes couverts sous l'horaire du shift */
+.planner-day-slots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.planner-day-slots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.planner-day-slots.is-full {
+  color: var(--live);
+}
+
+.planner-day-slots.is-partial {
+  color: #8a6410;
+}
+
+.planner-day-slots.is-empty {
+  color: var(--draft);
+}
+
+/* Colonne des swappeurs : empilement vertical des puces */
+.planner-day-swappers {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Menu déroulant « Actions » par shift */
+.planner-day-menu-holder {
+  position: relative;
+}
+
+.planner-day-menu-holder > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  gap: 6px;
+}
+
+.planner-day-menu-holder > summary::-webkit-details-marker {
+  display: none;
+}
+
+.planner-day-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 230px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 26px rgba(24, 36, 62, 0.16);
+  display: grid;
+  gap: 2px;
+}
+
+.planner-day-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.planner-day-menu-item:hover {
+  background: #f0f3fa;
+}
+
+.planner-day-menu-item svg {
+  color: var(--navy);
+  flex-shrink: 0;
+}
+
+/* Sur petits écrans, le menu s'ancre à gauche pour rester visible */
+@media (max-width: 560px) {
+  .planner-day-menu {
+    right: auto;
+    left: 0;
+  }
+}

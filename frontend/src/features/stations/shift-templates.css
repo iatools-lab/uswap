@@ -1,0 +1,402 @@
+/* ============================================================
+   Modèles de shifts — en-tête, cartes, formulaire et historique
+   (remplace les styles inline de ShiftTemplates.tsx)
+   ============================================================ */
+
+.shift-templates {
+  display: grid;
+  gap: 24px;
+  padding-bottom: 40px;
+}
+
+.shift-templates-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.shift-templates-back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+}
+
+.shift-templates-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+}
+
+.shift-templates-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+.shift-templates-create {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  border-radius: 10px;
+  padding: 0 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.shift-templates-notice {
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.shift-templates-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+}
+
+.shift-templates-reload {
+  color: inherit;
+  text-decoration: underline;
+  font-weight: 600;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+/* Formulaire de création / édition */
+.shift-template-form {
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.shift-template-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.shift-template-form-grid > label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.shift-template-form-grid input {
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  padding: 0 14px;
+  font-size: 13px;
+  color: #0f172a;
+  outline: none;
+  font-weight: 400;
+}
+
+.shift-template-duration-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 6px;
+}
+
+.shift-template-duration-box p {
+  margin: 0;
+  font-size: 13px;
+  color: #334155;
+}
+
+.shift-template-duration-box strong {
+  color: #0f172a;
+}
+
+.shift-template-duration-box .template-duration {
+  margin: 0;
+  font-size: 12.5px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shift-template-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.shift-template-form-actions .admin-button {
+  height: 38px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.shift-template-form-actions .admin-button[type="submit"],
+.shift-template-form-actions .admin-button:not(.secondary) {
+  padding: 0 18px;
+}
+
+/* Confirmation d'activation / désactivation */
+.shift-template-confirm {
+  display: grid;
+  gap: 16px;
+}
+
+.shift-template-confirm p {
+  margin: 0;
+  font-size: 14px;
+  color: #0f172a;
+  line-height: 1.5;
+}
+
+.shift-template-confirm .planner-muted {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.shift-template-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.shift-template-confirm-actions .admin-button {
+  height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+  padding: 0 16px;
+}
+
+/* État de chargement et état vide */
+.shift-templates-loading {
+  color: #64748b;
+  font-size: 13.5px;
+}
+
+.shift-templates-empty {
+  padding: 60px 20px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+.shift-templates-empty svg {
+  color: #94a3b8;
+}
+
+.shift-templates-empty h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.shift-templates-empty p {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Grille de cartes */
+.shift-templates-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.shift-template-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  display: grid;
+  gap: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s;
+}
+
+.shift-template-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.shift-template-card-head h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.shift-template-card-head .admin-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.shift-template-card-hours {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 2px 0;
+  letter-spacing: -0.3px;
+}
+
+.shift-template-card-subtitle {
+  font-size: 12.5px;
+  color: #64748b;
+  margin: 0;
+}
+
+.shift-template-break {
+  background: #f8fafc;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #f1f5f9;
+}
+
+.shift-template-break p {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.shift-template-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 12px;
+  margin-top: 2px;
+}
+
+.shift-template-card-actions .admin-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+.shift-template-toggle {
+  background: none;
+  border: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.shift-template-toggle.danger {
+  color: #dc2626;
+}
+
+.shift-template-toggle.success {
+  color: #16a34a;
+}
+
+.shift-template-history-btn {
+  background: none;
+  border: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* Historique */
+.shift-template-history {
+  display: grid;
+  gap: 16px;
+}
+
+.shift-template-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.shift-template-history-list li {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.shift-template-history-list strong {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.shift-template-history-list p {
+  margin: 0;
+  font-size: 12.5px;
+  color: #334155;
+}
+
+.shift-template-history-list time {
+  font-size: 11.5px;
+  color: #94a3b8;
+  font-family: monospace;
+}
+
+.shift-template-history-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.shift-template-history-actions .admin-button {
+  height: 36px;
+  border-radius: 8px;
+  font-size: 13px;
+}
