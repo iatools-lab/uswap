@@ -3297,6 +3297,8 @@
 
 .notification-bell__filters {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--line);
@@ -3330,6 +3332,15 @@
   border-radius: 9px;
   background: #e8edf5;
   font-size: 9px;
+}
+.notification-bell__filters .ui-select {
+  margin-left: auto;
+  flex: 0 1 160px;
+}
+.notification-bell__filters .ui-select__trigger {
+  min-height: 32px;
+  padding-inline: 9px;
+  font-size: 11px;
 }
 .notification-bell__preferences {
   display: flex;
