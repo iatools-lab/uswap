@@ -1,64 +1,257 @@
-# uSwap — Frontend
 
-Cette branche contient l’application web et PWA de uSwap. Elle conserve les
-parcours fictifs pour les démonstrations et reste préparée au raccordement avec
-le backend maintenu séparément par Danielle. Aucun code backend n’est inclus ni
-modifié ici.
+Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+# UpOwa / Uswap
 
-## Démarrer l’application
+## Présentation
 
-```powershell
-cd frontend
-npm ci
+**UpOwa / Uswap** est une application web de gestion et de supervision des swappers au niveau des stations.
+
+L'application permet notamment de gérer :
+
+* les utilisateurs et leurs rôles ;
+* les stations ;
+* les swappers ;
+* les plannings et shifts ;
+* les présences et absences ;
+* le pointage par QR Code START / END ;
+* les remplacements et changements de shifts ;
+* la supervision des opérations.
+
+**Sprint actuel : Sprint 4**
+
+---
+
+## Architecture
+
+Le projet est organisé en trois parties principales :
+
+Frontend React
+↓
+API REST
+↓
+Backend NestJS
+↓
+Prisma
+↓
+PostgreSQL
+
+Le frontend fournit l'interface utilisateur tandis que le backend centralise l'API, l'authentification et la logique métier.
+
+---
+
+## Stack technique
+
+### Frontend
+
+* React **19.3.0**
+* React DOM **19.3.0**
+* Vite **8.0.14**
+* TypeScript **~5.8.3**
+* React Router **7.18.3**
+
+### Backend
+
+* NestJS **^11.0.1**
+* TypeScript **^5.7.3**
+* Prisma Client **^6.19.3**
+* `@prisma/adapter-pg` **^7.10.0**
+* `pg` **^8.23.0**
+* Swagger **^11.4.7**
+* JWT **^12.0.1**
+
+### Environnement
+
+* Node.js **24.15.0**
+* npm **11.12.1**
+* Git + GitHub
+* PostgreSQL
+
+---
+
+## Fonctionnalités principales
+
+### Authentification
+
+Le système utilise JWT et gère quatre rôles :
+
+* `ADMIN`
+* `SUPERVISOR`
+* `STATION_CHIEF`Versions déjà identifiées :
+
+  Node.js 24.15.0
+
+  npm 11.12.1
+
+  React 19.3.0
+
+  React DOM 19.3.0
+
+  Vite 8.0.14
+
+  TypeScript frontend ~5.8.3
+
+  React Router 7.18.3
+
+  NestJS ^11.0.1
+
+  TypeScript backend ^5.7.3
+
+  Prisma Client ^6.19.3
+
+  @prisma/adapter-pg ^7.10.0
+
+  pg ^8.23.0
+
+  Swagger ^11.4.7
+
+  JWT ^12.0.1
+
+  Git + GitHub, dépôt uswap-github, branche danielle
+* `SWAPPER`
+
+### Stations
+
+Gestion des stations avec leurs informations et coordonnées géographiques.
+
+### Planning et shifts
+
+Gestion des périodes de planning et des shifts :
+
+* MORNING : 06:00–14:00
+* AFTERNOON : 14:00–22:00
+* NIGHT : 22:00–06:00
+
+Les règles de planification prennent notamment en compte le repos minimal et la limite hebdomadaire.
+
+### Attendance / QR Code
+
+Le pointage utilise deux QR Codes :
+
+* `START`
+* `END`
+
+La règle actuelle exige les deux scans pour une présence complète.
+
+`START + END` → présence normale
+
+`START` seulement ou `END` seulement → `ABSENT`
+
+---
+
+## API
+
+Le backend expose une API REST documentée avec Swagger.
+
+En développement local :
+
+`http://localhost:3000/api-docs`
+
+---
+
+## Installation
+
+### Backend
+
+npm install
+
+npx prisma generate
+
+npx prisma migrate dev
+
+npm run start
+
+### Frontend
+
+npm install
+
 npm run dev
-```
 
-Sans `VITE_API_URL`, l’application utilise les jeux de données de démonstration.
-Pour lancer les parcours pris en charge par une API locale, créez
-`frontend/.env.local`, renseignez `VITE_API_URL`, puis redémarrez Vite. Le guide
-[`docs/FRONTEND-DYLANE-INTEGRATION.md`](docs/FRONTEND-DYLANE-INTEGRATION.md)
-présente les routes compatibles et les contrats encore attendus.
+Le frontend utilise la variable :
 
-La vérification de production se lance depuis `frontend/` :
+`VITE_API_URL=http://localhost:3000`
 
-```powershell
-npm run build
-```
+---
 
-## Périmètre livré — sprints 1 à 5
+## Git et organisation des branches
 
-- **Sprint 1 — Accès et profils** : connexion, session, espaces selon les rôles
-  et gestion des comptes.
-- **Sprint 2 — Stations et planification** : configuration des stations et des
-  shifts, création, génération, affectation et publication des plannings.
-- **Sprint 3 — Exécution terrain** : pointage par QR, suivi des présences,
-  absences, remplacements et interfaces adaptées aux petits écrans.
-- **Sprint 4 — Exceptions et pilotage** : demandes de congé, incidents liés aux
-  swappeurs, notifications, tableaux de bord et premières fonctions hors
-  connexion.
-- **Sprint 5 — Finition du pilotage** : filtres et navigation des notifications,
-  indicateurs ouvrant leurs détails, séparation des postes vacants passés et
-  futurs, tableau de bord superviseur consolidé, réglages globaux de
-  démonstration et notification de mise à jour de la PWA.
+Le dépôt GitHub est :
 
-Les parcours d’interface du sprint 5 sont utilisables avec les données
-fictives. Les réglages globaux et les rapports programmés n’ont pas encore de
-contrat backend ; les notifications push à distance et certaines opérations
-hors connexion demandent également des services serveur. La compilation valide
-le frontend, pas ces intégrations. Le guide d’intégration distingue les routes
-déjà prises en charge des contrats en attente.
+`uswap-github`
 
-## Versionnage
+### Branches
 
-Une livraison frontend utilise un tag annoté par sprint, par exemple
-`uswap-frontend-s4.1.0` ou `uswap-frontend-s5.1.0` : `s4` ou `s5` identifie le
-sprint, `1` la version de livraison et le dernier chiffre les correctifs
-(`uswap-frontend-s5.1.1`). Chaque version stable est accompagnée d’une Release
-GitHub qui décrit les parcours livrés, les vérifications et les intégrations
-encore nécessaires.
+`danielle`
+→ branche de développement personnelle.
 
-## Organisation
+`dylane_v0`
+→ branche intermédiaire commune pour intégrer les travaux de l'équipe.
 
-L’application et ses dépendances sont dans [`frontend/`](frontend/). Les notes
-de compatibilité API sont dans [`docs/`](docs/). Les URL locales et secrets
-restent dans `.env.local` et ne doivent pas être ajoutés au dépôt.
+`main`
+→ branche destinée à la version stable et finale.
+
+### Workflow
+
+`danielle`
+
+↓
+
+Pull Request
+
+↓
+
+`dylane_v0`
+
+↓
+
+Intégration et tests
+
+↓
+
+`main`
+
+↓
+
+Tag de version
+
+---
+
+## Versionnement
+
+Les versions importantes sont identifiées avec des tags Git.
+
+Exemple :
+
+`v1.0.0`
+
+Le tag permet d'identifier précisément le commit correspondant à une version donnée du projet.
+
+---
+
+## Sécurité
+
+Les informations sensibles telles que :
+
+* `DATABASE_URL`
+* `JWT_SECRET`
+* mots de passe
+* autres secrets
+
+ne doivent pas être commités dans Git.
+
+Les variables sensibles doivent être conservées dans les fichiers `.env` locaux.
+
+---
+
+## État actuel
+
+**Sprint : 4**
+
+Le frontend et le backend sont actuellement fonctionnels et continuent d'être intégrés et testés avant la version finale.
+
+**Branche de développement :** `danielle`
+
+**Branche intermédiaire :** `dylane_v0`
+
+**Branche finale :** `main`
+
+**Version finale prévue :** `v1.0.0`

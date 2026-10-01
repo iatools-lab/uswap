@@ -6,7 +6,7 @@ import {
   PaperclipIcon,
   ShieldCheckIcon,
 } from "@phosphor-icons/react";
-import { api, usingMock } from "../../api/auth-api";
+import { api } from "../../api/auth-api";
 import { notify } from "../../ui/Toast";
 import "../../styles/global-settings.css";
 
@@ -35,7 +35,8 @@ export function GlobalSettingsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
-    if (!usingMock) return;
+    // Le backend raccordé expose GET /admin/settings (reglages + historique),
+    // donc la page charge desormais ses donnees en mode reel comme en demo.
     api<Response>("/admin/settings")
       .then((data) => {
         setForm(data.settings);
@@ -66,17 +67,6 @@ export function GlobalSettingsPage() {
       setBusy(false);
     }
   }
-  if (!usingMock)
-    return (
-      <section className="global-settings__integration" role="status">
-        <h2>Réglages globaux en attente de leur contrat serveur</h2>
-        <p>
-          Cette interface est disponible en mode démonstration. Le backend
-          raccordé ne fournit pas encore les routes de lecture et de mise à jour
-          de ces paramètres.
-        </p>
-      </section>
-    );
   if (!form)
     return (
       <div className="admin-loading">
