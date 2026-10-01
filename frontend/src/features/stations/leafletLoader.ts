@@ -60,7 +60,9 @@ export function loadLeaflet(): Promise<typeof window.L> {
       window.clearTimeout(timer);
       // Allow a later attempt to retry instead of caching the failure forever.
       pending = null;
-      reject(new Error("Impossible de charger la carte. Vérifiez votre connexion."));
+      reject(
+        new Error("Impossible de charger la carte. Vérifiez votre connexion."),
+      );
     };
 
     document.head.appendChild(script);

@@ -1,617 +1,790 @@
-import {
-useEffect,
-useState,
-type FormEvent,
-} from "react";
+import { useEffect, useState, useMemo, type FormEvent } from "react";
 import { notify } from "../../ui/Toast";
 import { api } from "../../api/auth-api";
-import { Select } from "../../ui/Select";
-import {
-CheckCircle,
-LoaderCircle,
-Scan,
-Warning,
-} from "../../ui/icons";
+import { Modal } from "../../ui/Modal";
+import { CheckCircle, Scan, Warning, Clock3 } from "../../ui/icons";
 import { QrScanner } from "./QrScanner";
 import {
-captureQrToken,
-clearQrToken,
-isValidQrToken,
-parseQrToken,
+  captureQrToken,
+  clearQrToken,
+  isValidQrToken,
+  parseQrToken,
 } from "./qrToken";
-import {
-formatDate,
-isInWindow,
-isOpenShift,
-pickNextShift,
-} from "./format";
-import { ShiftTable } from "./ShiftTable";
-import type {
-OperationsViewProps,
-ScanResult,
-} from "./types";
+import { formatDate, isInWindow, isOpenShift, pickNextShift } from "./format";
+import type { OperationShift, OperationsViewProps, ScanResult } from "./types";
+import type { AttendanceHistoryRow } from "../supervision/types";
 
-export function SwapperHome({
-user,
-data,
-onChanged,
-}: OperationsViewProps) {
-const openShifts = data.shifts.filter(
-isOpenShift,
-);
-
-const liveShifts = openShifts.filter(
-isInWindow,
-);
-
-const next = pickNextShift(
-data.shifts,
-);
-
-const [error, setError] = useState("");
-
-const [result, setResult] =
-useState<ScanResult | null>(null);
-
-const [busy, setBusy] = useState(false);
-
-const [token, setToken] = useState(() =>
-captureQrToken(),
-);
-
-const [scanning, setScanning] =
-useState(false);
-
-const [shiftId, setShiftId] = useState(() =>
-openShifts.length === 1
-? openShifts[0].id
-: "",
-);
-
-useEffect(() => {
-const receive = () => {
-const nextToken = captureQrToken();
-
-  if (nextToken) {
-    setToken(nextToken);
-  }
-};
-
-receive();
-
-window.addEventListener(
-  "hashchange",
-  receive,
-);
-
-return () =>
-  window.removeEventListener(
-    "hashchange",
-    receive,
-  );
-
-}, []);
-
-useEffect(() => {
-if (openShifts.length === 1) {
-setShiftId(
-openShifts[0].id,
-);
-}
-}, [
-openShifts.length,
-openShifts[0]?.id,
-]);
-
-const selected = data.shifts.find(
-(shift) =>
-shift.id === shiftId,
-);
-
-const showForm =
-Boolean(token.trim()) ||
-openShifts.length > 0;
-
-const noShiftInWindow =
-liveShifts.length === 0;
-
-const scanned = isValidQrToken(
-parseQrToken(token) ||
-token.trim(),
-);
-
-async function punch(
-e: FormEvent,
-) {
-e.preventDefault();
-
-const raw =
-  parseQrToken(token) ||
-  token.trim();
-
-if (!isValidQrToken(raw)) {
-  setError(
-    "Scannez le QR ou collez le lien fourni par le chef de station.",
-  );
-  return;
+function attendanceShiftFromHistory(row: AttendanceHistoryRow): OperationShift {
+  const status: NonNullable<OperationShift["attendance"]>["status"] =
+    row.isJustified
+      ? "JUSTIFIED"
+      : row.isAbsent
+        ? "ABSENT"
+        : row.checkedOutAt
+          ? "CLOSED"
+          : row.isLate
+            ? "LATE"
+            : "PRESENT";
+  return {
+    id: row.shiftId,
+    planningId: "",
+    templateId: row.shiftId,
+    label: row.template || "Service",
+    startTime: row.plannedStart,
+    endTime: row.plannedEnd,
+    publishedAt: "history",
+    station: row.station,
+    swapper: { fullName: "" },
+    attendance:
+      row.checkedInAt ||
+      row.checkedOutAt ||
+      row.isAbsent ||
+      row.isJustified ||
+      row.corrected
+        ? {
+            status,
+            checkedInAt: row.checkedInAt ?? "",
+            checkedOutAt: row.checkedOutAt,
+            isLate: row.isLate,
+          }
+        : null,
+  };
 }
 
-if (!openShifts.length) {
-  setError(
-    "Aucune affectation ouverte pour votre compte. Le pointage n’est possible que sur une affectation publiée.",
+function belongsInHistory(shift: OperationShift, now = Date.now()) {
+  return (
+    Date.parse(shift.endTime) < now ||
+    Boolean(
+      shift.attendance &&
+      (shift.attendance.checkedInAt ||
+        shift.attendance.checkedOutAt ||
+        shift.attendance.status === "ABSENT" ||
+        shift.attendance.status === "JUSTIFIED"),
+    )
   );
-  return;
 }
 
-if (!shiftId) {
-  setError(
-    "Choisissez l’affectation à pointer.",
-  );
-  return;
+function historyStatusLabel(shift: OperationShift) {
+  if (shift.attendance?.status === "JUSTIFIED") return "Absence justifiée";
+  if (
+    shift.attendance?.status === "ABSENT" ||
+    (!shift.attendance && Date.parse(shift.endTime) < Date.now())
+  )
+    return "Absent";
+  if (shift.attendance?.checkedOutAt) return "Terminé";
+  if (shift.attendance?.isLate) return "En retard";
+  return shift.attendance ? "À l’heure" : "Non pointé";
 }
 
-if (!selected) {
-  setError(
-    "L’affectation sélectionnée est introuvable.",
-  );
-  return;
+function historyStatusClass(shift: OperationShift) {
+  if (
+    shift.attendance?.status === "JUSTIFIED" ||
+    shift.attendance?.checkedOutAt
+  )
+    return "attendance-status--closed";
+  if (
+    shift.attendance?.status === "ABSENT" ||
+    (!shift.attendance && Date.parse(shift.endTime) < Date.now())
+  )
+    return "attendance-status--absent";
+  if (shift.attendance?.isLate) return "attendance-status--late";
+  return "attendance-status--present";
 }
 
-const attendanceStatus =
-  selected.attendance?.status ??
-  "EXPECTED";
+export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
+  const openShifts = data.shifts.filter(isOpenShift);
+  const liveShifts = openShifts.filter((shift) => isInWindow(shift));
+  const next = pickNextShift(data.shifts);
 
-if (
-  attendanceStatus ===
-  "CHECKED_OUT"
-) {
-  setError(
-    "Ce service est déjà terminé.",
-  );
-  return;
-}
+  // Détermination automatique du shift le plus proche (en cours ou prochain)
+  const targetShift = liveShifts[0] || next;
 
-if (
-  attendanceStatus === "ABSENT" ||
-  attendanceStatus === "JUSTIFIED"
-) {
-  setError(
-    "Ce pointage est déjà clôturé et ne peut plus être scanné.",
-  );
-  return;
-}
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<ScanResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [token, setToken] = useState(() => captureQrToken());
+  const [scanning, setScanning] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyRows, setHistoryRows] = useState<OperationShift[] | null>(null);
+  const [historyError, setHistoryError] = useState("");
+  const [historyFilter, setHistoryFilter] = useState<
+    "ALL" | "PRESENT" | "LATE" | "ABSENT"
+  >("ALL");
 
-const action =
-  attendanceStatus ===
-  "CHECKED_IN"
-    ? "CHECKOUT"
-    : "CHECKIN";
-
-setBusy(true);
-setError("");
-
-try {
-  const position =
-    await new Promise<
-      GeolocationPosition | null
-    >((resolve) => {
-      if (!navigator.geolocation) {
-        resolve(null);
-        return;
+  useEffect(() => {
+    const receive = () => {
+      const nextToken = captureQrToken();
+      if (nextToken && targetShift) {
+        setToken(nextToken);
+        void executePunch(nextToken, targetShift.id);
       }
+    };
+    receive();
+    window.addEventListener("hashchange", receive);
+    return () => window.removeEventListener("hashchange", receive);
+  }, [targetShift]);
 
-      navigator.geolocation.getCurrentPosition(
-        (value) =>
-          resolve(value),
-        () => resolve(null),
-        {
-          enableHighAccuracy: true,
-          timeout: 5000,
-          maximumAge: 30000,
-        },
-      );
-    });
+  useEffect(() => {
+    let active = true;
+    setHistoryRows(null);
+    setHistoryError("");
+    const load = async () => {
+      const rows = await api<AttendanceHistoryRow[]>("/attendance/history");
+      return rows.map(attendanceShiftFromHistory);
+    };
+    void load()
+      .then((rows) => {
+        if (active) setHistoryRows(rows);
+      })
+      .catch((reason) => {
+        if (active) {
+          setHistoryRows([]);
+          setHistoryError((reason as Error).message);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [user.id, data.shifts]);
 
-  const location = position
-    ? {
-        latitude:
-          position.coords.latitude,
-        longitude:
-          position.coords.longitude,
+  // Calcul des KPI détaillés pour le diagramme circulaire
+  const kpiStats = useMemo(() => {
+    const evaluatedShifts = Array.from(
+      new Map(
+        [...data.shifts, ...(historyRows ?? [])]
+          .filter((shift) => belongsInHistory(shift))
+          .map((shift) => [shift.id, shift]),
+      ).values(),
+    );
+    const total = evaluatedShifts.length;
+
+    if (total === 0)
+      return {
+        onTime: 0,
+        late: 0,
+        absent: 0,
+        total: 0,
+        onTimePct: 0,
+        latePct: 0,
+        absentPct: 0,
+        presenceRate: 0,
+      };
+
+    let onTime = 0;
+    let late = 0;
+    let absent = 0;
+
+    evaluatedShifts.forEach((s) => {
+      if (
+        s.attendance?.status === "ABSENT" ||
+        (!s.attendance && new Date(s.endTime).getTime() < Date.now())
+      ) {
+        absent++;
+      } else if (s.attendance?.isLate) {
+        late++;
+      } else {
+        onTime++;
       }
-    : {};
-
-  if (action === "CHECKIN") {
-    const response =
-      await api<{
-        message: string;
-        punctuality:
-          | "ON_TIME"
-          | "LATE";
-        attendance: {
-          checkInAt:
-            | string
-            | null;
-          checkOutAt:
-            | string
-            | null;
-        };
-      }>(
-        "/attendance/check-in",
-        {
-          token: raw,
-          shiftId: selected.id,
-          stationId:
-            selected.station.id,
-          ...location,
-        },
-      );
-
-    setResult({
-      kind: "CHECKIN",
-      status:
-        response.punctuality,
-      checkedInAt:
-        response.attendance
-          .checkInAt,
-      checkedOutAt:
-        response.attendance
-          .checkOutAt,
-      toleranceMinutes:
-        selected.station
-          .latenessToleranceMinutes ??
-        0,
-      timezone:
-        selected.station.timezone ||
-        "Africa/Douala",
     });
 
-    notify(
-      response.punctuality ===
-        "LATE"
-        ? "Prise de service enregistrée. Pointage en retard."
-        : "Prise de service enregistrée.",
+    return {
+      onTime,
+      late,
+      absent,
+      total,
+      onTimePct: Math.round((onTime / total) * 100),
+      latePct: Math.round((late / total) * 100),
+      absentPct: Math.round((absent / total) * 100),
+      presenceRate: Math.round(((onTime + late) / total) * 100),
+    };
+  }, [data.shifts, historyRows]);
+
+  const completedShifts = useMemo(() => {
+    return Array.from(
+      new Map(
+        [...data.shifts, ...(historyRows ?? [])]
+          .filter((shift) => belongsInHistory(shift))
+          .map((shift) => [shift.id, shift]),
+      ).values(),
     );
-  } else {
-    const response =
-      await api<{
-        message: string;
-        attendance: {
-          checkInAt:
-            | string
-            | null;
-          checkOutAt:
-            | string
-            | null;
-        };
-      }>(
-        "/attendance/check-out",
-        {
-          token: raw,
-          shiftId: selected.id,
-          stationId:
-            selected.station.id,
-          ...location,
-        },
+  }, [data.shifts, historyRows]);
+
+  const recentPointages = useMemo(() => {
+    return [...completedShifts]
+      .sort(
+        (a, b) =>
+          new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
+      )
+      .slice(0, 5);
+  }, [completedShifts]);
+
+  const filteredModalShifts = useMemo(() => {
+    return completedShifts
+      .filter((s) => {
+        if (historyFilter === "PRESENT")
+          return (
+            s.attendance &&
+            !s.attendance.isLate &&
+            s.attendance.status !== "ABSENT" &&
+            s.attendance.status !== "JUSTIFIED"
+          );
+        if (historyFilter === "LATE") return s.attendance?.isLate;
+        if (historyFilter === "ABSENT")
+          return (
+            s.attendance?.status === "ABSENT" ||
+            s.attendance?.status === "JUSTIFIED" ||
+            (!s.attendance && new Date(s.endTime).getTime() < Date.now())
+          );
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
       );
+  }, [completedShifts, historyFilter]);
 
-    setResult({
-      kind: "CHECKOUT",
-      status: "CLOSED",
-      checkedInAt:
-        response.attendance
-          .checkInAt,
-      checkedOutAt:
-        response.attendance
-          .checkOutAt,
-      toleranceMinutes:
-        selected.station
-          .latenessToleranceMinutes ??
-        0,
-      timezone:
-        selected.station.timezone ||
-        "Africa/Douala",
-    });
-
-    notify(
-      "Fin de service enregistrée.",
-    );
+  async function executePunch(rawToken: string, shiftToPunchId: string) {
+    const raw = parseQrToken(rawToken) || rawToken.trim();
+    if (!isValidQrToken(raw)) {
+      setError(
+        "Scannez le QR ou collez le lien fourni par le chef de station.",
+      );
+      return;
+    }
+    if (!targetShift) {
+      setError("Aucun shift éligible pour le pointage actuellement.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      // Le même contrat est implémenté par le mock et le backend : le serveur
+      // déduit la station et le type de pointage du jeton QR consommé.
+      const response = await api<
+        Omit<ScanResult, "status"> & {
+          status: "ON_TIME" | "PRESENT" | "LATE" | "CLOSED";
+        }
+      >("/attendance", {
+        shiftId: shiftToPunchId,
+        token: raw,
+      });
+      const scan: ScanResult = {
+        ...response,
+        status: response.status === "ON_TIME" ? "PRESENT" : response.status,
+      };
+      setToken("");
+      clearQrToken();
+      setError("");
+      setResult(scan);
+      notify(
+        scan.kind === "CHECKIN"
+          ? scan.status === "LATE"
+            ? "Prise de service enregistrée (En retard)."
+            : "Prise de service enregistrée avec succès."
+          : "Fin de service enregistrée avec succès.",
+      );
+      setScanning(false);
+      onChanged();
+    } catch (err) {
+      setResult(null);
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
-  setToken("");
-  clearQrToken();
-  onChanged();
-} catch (err) {
-  setResult(null);
-  setError(
-    err instanceof Error
-      ? err.message
-      : "Une erreur est survenue pendant le pointage.",
-  );
-} finally {
-  setBusy(false);
-}
+  const handleDirectAction = () => {
+    if (!targetShift) {
+      setError("Aucun shift disponible pour l'action de pointage.");
+      return;
+    }
+    setError("");
+    setScanning(true);
+  };
 
-}
-
-const resultDate =
-result?.kind === "CHECKIN"
-? result.checkedInAt
-: result?.checkedOutAt ||
-result?.checkedInAt;
-
-return (
-<>
-{error && (
-<p className="error-message" role="alert" >
-{error}
-</p>
-)}
-
-  {result && (
-    <p
-      className={`ops-result ${
-        result.status === "LATE"
-          ? "ops-result--late"
-          : "ops-result--ok"
-      }`}
-      role="status"
-    >
-      {result.status === "LATE" ? (
-        <Warning size={22} />
-      ) : (
-        <CheckCircle size={22} />
+  return (
+    <>
+      {result && (
+        <p
+          className={`ops-result ${
+            result.status === "LATE" ? "ops-result--late" : "ops-result--ok"
+          }`}
+          role="status"
+        >
+          {result.status === "LATE" ? (
+            <Warning size={22} />
+          ) : (
+            <CheckCircle size={22} />
+          )}
+          <span>
+            {result.kind === "CHECKIN"
+              ? result.status === "LATE"
+                ? `Prise de service à ${formatDate(result.checkedInAt, result.timezone, true)} · En retard.`
+                : `Prise de service à ${formatDate(result.checkedInAt, result.timezone, true)} · À l’heure.`
+              : `Fin de service à ${formatDate(result.checkedOutAt || result.checkedInAt, result.timezone, true)}.`}
+          </span>
+        </p>
       )}
 
-      <span>
-        {resultDate
-          ? result.kind === "CHECKIN"
-            ? result.status === "LATE"
-              ? `Prise de service à ${formatDate(
-                  resultDate,
-                  result.timezone,
-                  true,
-                )} · En retard (tolérance ${result.toleranceMinutes} min).`
-              : `Prise de service à ${formatDate(
-                  resultDate,
-                  result.timezone,
-                  true,
-                )} · À l’heure.`
-            : `Fin de service à ${formatDate(
-                resultDate,
-                result.timezone,
-                true,
-              )}.`
-          : result.kind === "CHECKIN"
-            ? "Prise de service enregistrée."
-            : "Fin de service enregistrée."}
-      </span>
-    </p>
-  )}
-
-  {next && (
-    <section className="admin-card operations-hero">
-      <p className="admin-eyebrow">
-        Prochaine affectation
-      </p>
-
-      <h2>
-        {next.station?.name}
-      </h2>
-
-      <p>
-        {formatDate(
-          next.startTime,
-        )}{" "}
-        –{" "}
-        {formatDate(
-          next.endTime,
-        )}
-      </p>
-
-      <span
-        className={`attendance-status ${
-          next.attendance
-            ?.checkedOutAt
-            ? "attendance-status--closed"
-            : next.attendance
-              ? next.attendance.isLate
-                ? "attendance-status--late"
-                : "attendance-status--present"
-              : isInWindow(next)
-                ? "attendance-status--present"
-                : "attendance-status--expected"
-        }`}
-      >
-        {next.attendance
-          ?.checkedOutAt
-          ? "Terminé"
-          : next.attendance
-            ? next.attendance.isLate
-              ? "Présent · en retard"
-              : "Début déjà pointé"
-            : isInWindow(next)
-              ? "Créneau en cours"
-              : "Hors créneau"}
-      </span>
-    </section>
-  )}
-
-  {showForm && (
-    <section className="admin-card ops-action-card">
-      <form onSubmit={punch}>
-        <div className="admin-card-heading">
-          <div>
-            <h2>
-              Pointer mon service
-            </h2>
-
-            <p className="operations-hint">
-              Scannez le QR affiché par le chef, choisissez votre shift, puis confirmez.
-            </p>
-          </div>
-        </div>
-
-        {!openShifts.length && (
-          <p
-            className="error-message"
-            role="status"
-          >
-            Aucun shift ouvert pour vous.
-          </p>
-        )}
-
-        {!!openShifts.length &&
-          noShiftInWindow && (
-            <p
-              className="ops-callout ops-callout--warn"
-              role="status"
-            >
-              Aucun de vos shifts n’est dans sa fenêtre actuelle.
-            </p>
-          )}
-
-        {scanned && (
-          <p
-            className="ops-result ops-result--ok"
-            role="status"
-          >
-            <Scan size={18} />
-            QR détecté — choisissez l’affectation puis confirmez.
-          </p>
-        )}
-
-        <fieldset
-          disabled={busy}
-          className="ops-form ops-form--padded"
+      {error && (
+        <p
+          className="error-message"
+          role="alert"
+          style={{ margin: "0 0 16px" }}
         >
-          <div className="user-form-grid">
-            <label>
-              Affectation
+          {error}
+        </p>
+      )}
 
-              {openShifts.length ? (
-                <Select
-                  ariaLabel="Affectation"
-                  value={shiftId}
-                  placeholder="Sélectionner"
-                  onChange={(value) =>
-                    setShiftId(
-                      String(value),
-                    )
-                  }
-                  options={openShifts.map(
-                    (shift) => ({
-                      value: shift.id,
-                      label: `${shift.station?.name} · ${formatDate(
-                        shift.startTime,
-                      )}`,
-                    }),
-                  )}
-                />
-              ) : (
-                <span className="operations-hint">
-                  Aucune affectation ouverte à sélectionner.
-                </span>
-              )}
-            </label>
+      {/* KPI Interactifs & Diagramme Circulaire */}
+      <section className="admin-card" style={{ padding: "20px" }}>
+        <h3
+          style={{
+            margin: "0 0 16px",
+            fontSize: "15px",
+            fontWeight: 600,
+            color: "var(--navy)",
+          }}
+        >
+          Indicateurs de performance
+        </h3>
 
-            <label>
-              Lien ou code QR
-
-              <input
-                required
-                autoComplete="off"
-                value={token || ""}
-                onChange={(e) =>
-                  setToken(
-                    e.target.value,
-                  )
-                }
-                placeholder="Coller le lien, ou scanner ci-dessous"
-              />
-            </label>
-          </div>
-        </fieldset>
-
-        {selected &&
-          !isInWindow(selected) &&
-          !selected.attendance && (
-            <p
-              className="operations-hint ops-form--padded"
-              role="status"
+        {kpiStats.total > 0 ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+            <div
+              style={{
+                position: "relative",
+                width: "110px",
+                height: "110px",
+                borderRadius: "50%",
+                background: `conic-gradient(
+                  #10b981 0% ${kpiStats.onTimePct}%,
+                  #f59e0b ${kpiStats.onTimePct}% ${kpiStats.onTimePct + kpiStats.latePct}%,
+                  #ef4444 ${kpiStats.onTimePct + kpiStats.latePct}% 100%
+                )`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+              }}
             >
-              Ce shift n’est pas dans sa fenêtre (
-              {formatDate(
-                selected.startTime,
-              )}{" "}
-              –{" "}
-              {formatDate(
-                selected.endTime,
-              )}
-              ).
+              <div
+                style={{
+                  width: "82px",
+                  height: "82px",
+                  backgroundColor: "#ffffff",
+                  borderRadius: "50%",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "inset 0 2px 4px rgba(0,0,0,0.04)",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: 800,
+                    color: "var(--navy)",
+                    lineHeight: "1.1",
+                  }}
+                >
+                  {kpiStats.presenceRate}%
+                </span>
+                <span
+                  style={{
+                    fontSize: "9px",
+                    fontWeight: 600,
+                    color: "var(--muted)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  Présence
+                </span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  fontSize: "13px",
+                }}
+              >
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    color: "var(--muted)",
+                    fontWeight: 500,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "50%",
+                      backgroundColor: "#10b981",
+                    }}
+                  />
+                  À l'heure
+                </span>
+                <strong style={{ color: "var(--ink)" }}>
+                  {kpiStats.onTime}{" "}
+                  <span
+                    style={{
+                      color: "var(--muted)",
+                      fontSize: "11px",
+                      marginLeft: "4px",
+                    }}
+                  >
+                    ({kpiStats.onTimePct}%)
+                  </span>
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  fontSize: "13px",
+                }}
+              >
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    color: "var(--muted)",
+                    fontWeight: 500,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "50%",
+                      backgroundColor: "#f59e0b",
+                    }}
+                  />
+                  En retard
+                </span>
+                <strong style={{ color: "var(--ink)" }}>
+                  {kpiStats.late}{" "}
+                  <span
+                    style={{
+                      color: "var(--muted)",
+                      fontSize: "11px",
+                      marginLeft: "4px",
+                    }}
+                  >
+                    ({kpiStats.latePct}%)
+                  </span>
+                </strong>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  fontSize: "13px",
+                }}
+              >
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    color: "var(--muted)",
+                    fontWeight: 500,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "50%",
+                      backgroundColor: "#ef4444",
+                    }}
+                  />
+                  Absent
+                </span>
+                <strong style={{ color: "var(--ink)" }}>
+                  {kpiStats.absent}{" "}
+                  <span
+                    style={{
+                      color: "var(--muted)",
+                      fontSize: "11px",
+                      marginLeft: "4px",
+                    }}
+                  >
+                    ({kpiStats.absentPct}%)
+                  </span>
+                </strong>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p style={{ margin: 0, fontSize: "13px", color: "var(--muted)" }}>
+            Aucune donnée de performance disponible pour le moment.
+          </p>
+        )}
+      </section>
+
+      {/* --- CARTE UNIQUE UNIFIÉE : Shift Cible & Actions de Service --- */}
+      {targetShift ? (
+        <section className="admin-card operations-unified-card">
+          <div className="operations-unified-header">
+            <div>
+              <span className="admin-eyebrow">
+                {isInWindow(targetShift)
+                  ? "Shift en cours (Live)"
+                  : "Prochain shift cible"}
+              </span>
+              <h2>{targetShift.station?.name}</h2>
+              <p className="operations-unified-time">
+                {formatDate(targetShift.startTime)} –{" "}
+                {formatDate(targetShift.endTime)}
+              </p>
+            </div>
+            <span
+              className={`attendance-status ${
+                targetShift.attendance?.checkedOutAt
+                  ? "attendance-status--closed"
+                  : targetShift.attendance
+                    ? targetShift.attendance.isLate
+                      ? "attendance-status--late"
+                      : "attendance-status--present"
+                    : isInWindow(targetShift)
+                      ? "attendance-status--present"
+                      : "attendance-status--expected"
+              }`}
+            >
+              {targetShift.attendance?.checkedOutAt
+                ? "Terminé"
+                : targetShift.attendance
+                  ? targetShift.attendance.isLate
+                    ? "Présent · en retard"
+                    : "Début déjà pointé"
+                  : isInWindow(targetShift)
+                    ? "Créneau en cours"
+                    : "Accessible"}
+            </span>
+          </div>
+
+          <div className="operations-unified-divider" />
+
+          <div className="operations-unified-actions">
+            <button
+              type="button"
+              className="admin-button primary-cta"
+              onClick={handleDirectAction}
+            >
+              <Scan size={18} /> Prise de service
+            </button>
+            <button
+              type="button"
+              className="admin-button secondary"
+              onClick={handleDirectAction}
+            >
+              <CheckCircle size={18} /> Fin de service
+            </button>
+          </div>
+        </section>
+      ) : (
+        <section
+          className="admin-card operations-unified-card operations-unified-card--empty"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="operations-unified-empty-icon" aria-hidden="true">
+            <Clock3 size={20} />
+          </span>
+          <div>
+            <span className="admin-eyebrow">Pointage</span>
+            <h2>Aucun shift à venir</h2>
+            <p>
+              Les prochains shifts publiés et affectés à votre compte
+              apparaîtront ici. Vos anciens services restent consultables dans
+              l’historique.
             </p>
+          </div>
+        </section>
+      )}
+
+      {/* Historique de pointage (Top 5) */}
+      <section className="admin-card">
+        <div
+          className="admin-card-heading"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <h2>Historique de pointage</h2>
+          {completedShifts.length > 5 && (
+            <button
+              type="button"
+              className="admin-button secondary small"
+              onClick={() => setHistoryModalOpen(true)}
+            >
+              Voir plus
+            </button>
           )}
-
-        <div className="user-form-actions planner-actions ops-form--padded">
-          <button
-            type="button"
-            className="admin-button secondary"
-            onClick={() =>
-              setScanning(true)
-            }
-          >
-            <Scan size={16} />
-            Scanner le QR
-          </button>
-
-          <button
-            className="admin-button primary-cta"
-            disabled={
-              busy ||
-              !openShifts.length ||
-              !shiftId
-            }
-          >
-            {busy && (
-              <LoaderCircle
-                className="spin"
-                size={16}
-              />
-            )}
-            Confirmer le pointage
-          </button>
         </div>
-      </form>
-    </section>
-  )}
 
-  <QrScanner
-    open={scanning}
-    onClose={() =>
-      setScanning(false)
-    }
-    onDetected={setToken}
-  />
+        {historyError && (
+          <p className="error-message" role="alert">
+            {historyError}
+          </p>
+        )}
+        {historyRows === null ? (
+          <div className="admin-loading" role="status">
+            <Clock3 size={18} /> Chargement de votre historique…
+          </div>
+        ) : !recentPointages.length ? (
+          <div className="admin-empty">
+            <Clock3 size={36} />
+            <h3>Aucun pointage antérieur sur cette période</h3>
+          </div>
+        ) : (
+          <div className="swapper-shifts-cards-list">
+            {recentPointages.map((shift) => (
+              <div key={shift.id} className="swapper-shift-card">
+                <div className="swapper-shift-header">
+                  <div className="swapper-shift-station">
+                    <span className="station-name">{shift.station?.name}</span>
+                  </div>
+                  <span
+                    className={`attendance-status ${historyStatusClass(shift)}`}
+                  >
+                    {historyStatusLabel(shift)}
+                  </span>
+                </div>
+                <div className="swapper-shift-details">
+                  <div className="time-block">
+                    <small>DÉBUT</small>
+                    <strong>{formatDate(shift.startTime)}</strong>
+                  </div>
+                  <div className="time-separator" aria-hidden="true">
+                    →
+                  </div>
+                  <div className="time-block">
+                    <small>FIN</small>
+                    <strong>{formatDate(shift.endTime)}</strong>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
-  <section className="admin-card">
-    <div className="admin-card-heading">
-      <h2>Mes affectations</h2>
-    </div>
+      {/* Modal "Voir plus" avec Filtre Intelligent */}
+      <Modal
+        open={historyModalOpen}
+        size="lg"
+        title="Historique de pointage complet"
+        subtitle="Retrouvez l'ensemble de vos pointages avec filtres intelligents."
+        onClose={() => setHistoryModalOpen(false)}
+      >
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            marginBottom: "14px",
+            flexWrap: "wrap",
+          }}
+        >
+          {(["ALL", "PRESENT", "LATE", "ABSENT"] as const).map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              className={`admin-button secondary ${historyFilter === filter ? "active-filter" : ""}`}
+              onClick={() => setHistoryFilter(filter)}
+              style={{
+                fontSize: "12px",
+                minHeight: "32px",
+                padding: "4px 10px",
+              }}
+            >
+              {filter === "ALL"
+                ? "Tous"
+                : filter === "PRESENT"
+                  ? "À l'heure"
+                  : filter === "LATE"
+                    ? "En retard"
+                    : "Absences"}
+            </button>
+          ))}
+        </div>
 
-    <ShiftTable
-      user={user}
-      shifts={data.shifts}
-      emptyLabel="Aucune affectation à venir"
-    />
+        <div style={{ maxHeight: "55vh", overflowY: "auto", padding: "4px" }}>
+          {!filteredModalShifts.length ? (
+            <div className="admin-empty">
+              <h3>Aucun résultat pour ce filtre</h3>
+            </div>
+          ) : (
+            <div className="swapper-shifts-cards-list">
+              {filteredModalShifts.map((shift) => (
+                <div key={shift.id} className="swapper-shift-card">
+                  <div className="swapper-shift-header">
+                    <div className="swapper-shift-station">
+                      <span className="station-name">
+                        {shift.station?.name}
+                      </span>
+                    </div>
+                    <span
+                      className={`attendance-status ${historyStatusClass(shift)}`}
+                    >
+                      {historyStatusLabel(shift)}
+                    </span>
+                  </div>
+                  <div className="swapper-shift-details">
+                    <div className="time-block">
+                      <small>DÉBUT</small>
+                      <strong>{formatDate(shift.startTime)}</strong>
+                    </div>
+                    <div className="time-separator" aria-hidden="true">
+                      →
+                    </div>
+                    <div className="time-block">
+                      <small>FIN</small>
+                      <strong>{formatDate(shift.endTime)}</strong>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
 
-    {data.shifts.length ===
-      data.limit && (
-      <p className="workspace-limit">
-        Les {data.limit} prochaines affectations sont affichées.
-      </p>
-    )}
-  </section>
-</>
-
-);
+      {/* Scanner QR direct */}
+      <QrScanner
+        open={scanning}
+        onClose={() => setScanning(false)}
+        onDetected={(detectedToken) => {
+          if (targetShift) {
+            void executePunch(detectedToken, targetShift.id);
+          }
+        }}
+      />
+    </>
+  );
 }

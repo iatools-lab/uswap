@@ -1,0 +1,5 @@
+[33m0df9964[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdanielle[m[33m)[m update du sprint 4 et du README
+[33m7b0870c[m[33m ([m[1;31morigin/danielle[m[33m)[m Revise README with project overview and setup
+[33mb854d13[m fix(integration): align backend with the frontend, notifications, dashboard, green builds
+[33ma434b56[m feat(notifications,dashboard): add notifications and operational dashboard
+[33m018439b[m fix(auth,seed): make login work and seed a complete demo dataset

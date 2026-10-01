@@ -1,0 +1,89 @@
+.admin-heading-copy {
+  min-width: 0;
+}
+
+.admin-heading-text {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.admin-heading-text > p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted, var(--color-text-soft));
+  font-size: 11.5px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-sidebar nav a,
+.admin-nav-row > button {
+  transition:
+    color var(--motion-fast),
+    background-color var(--motion-fast),
+    transform var(--motion-fast);
+}
+
+@media (max-width: 760px) {
+  .admin-topbar {
+    height: auto;
+    min-height: 68px;
+    padding: 8px 14px;
+  }
+
+  .admin-heading-copy {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .admin-mobile-brand {
+    flex: 0 0 auto;
+    font-size: 19px;
+    line-height: 1;
+  }
+
+  .admin-heading-text {
+    gap: 0;
+  }
+
+  .admin-breadcrumb {
+    display: block;
+    max-width: min(42vw, 180px);
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-heading-text > p {
+    display: none;
+  }
+
+  .admin-topbar__actions {
+    gap: 6px;
+  }
+
+  .notification-bell__trigger,
+  .account-trigger {
+    width: 40px;
+    height: 40px;
+  }
+
+  .admin-content {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .admin-sidebar {
+    height: calc(68px + env(safe-area-inset-bottom)) !important;
+    padding-bottom: env(safe-area-inset-bottom) !important;
+  }
+
+  .admin-sidebar nav a,
+  .admin-nav-row > button {
+    min-height: 56px !important;
+  }
+}

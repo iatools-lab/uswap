@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { CloudArrowUpIcon, WifiSlashIcon } from "@phosphor-icons/react";
+import { pending, subscribeOutbox } from "../features/offline/outbox";
 
 type InstallEvent = Event & {
   prompt: () => Promise<void>;
@@ -13,6 +15,7 @@ export function PwaStatus() {
   const [online, setOnline] = useState(navigator.onLine);
   const [install, setInstall] = useState<InstallEvent | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const [queued, setQueued] = useState(0);
 
   useEffect(() => {
     const sync = () => setOnline(navigator.onLine);
@@ -22,11 +25,14 @@ export function PwaStatus() {
       setInstall(event as InstallEvent);
     };
     const installed = () => setInstall(null);
+    const count = () => void pending().then((rows) => setQueued(rows.length));
 
     window.addEventListener("online", sync);
     window.addEventListener("offline", sync);
     window.addEventListener("beforeinstallprompt", available);
     window.addEventListener("appinstalled", installed);
+    const unsubscribe = subscribeOutbox(count);
+    count();
 
     if ("serviceWorker" in navigator && (import.meta as unknown as { env: { PROD: boolean } }).env.PROD) {
       // L'application reste utilisable si l'installation du service worker échoue.
@@ -38,13 +44,15 @@ export function PwaStatus() {
       window.removeEventListener("offline", sync);
       window.removeEventListener("beforeinstallprompt", available);
       window.removeEventListener("appinstalled", installed);
+      unsubscribe();
     };
   }, []);
 
-  if (!online) {
+  if (!online || queued > 0) {
     return (
-      <div className="pwa-status" role="status">
-        Hors connexion · Reconnectez-vous pour enregistrer vos opérations.
+      <div className={`pwa-status pwa-status--sync ${online ? "is-syncing" : "is-offline"}`} role="status">
+        {online ? <CloudArrowUpIcon /> : <WifiSlashIcon />}
+        <span><strong>{online ? "Synchronisation en attente" : "Mode hors connexion"}</strong><small>{queued ? `${queued} opération(s) conservée(s) sur cet appareil` : "Votre dernier planning reste disponible"}</small></span>
       </div>
     );
   }

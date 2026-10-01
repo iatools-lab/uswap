@@ -25,7 +25,7 @@ Aucun écran de Dylane n'a été réécrit pour « corriger » le backend.
 Chaque affirmation de ce rapport a été vérifiée en exécutant l'application, pas en
 lisant le code :
 
-1. **Audit de contrat** — extraction de *tous* les appels API du frontend, puis
+1. **Audit de contrat** — extraction de _tous_ les appels API du frontend, puis
    confrontation à la carte Swagger réelle du backend (route par route, méthode
    par méthode).
 2. **Tests HTTP réels** — l'application NestJS est démarrée sur un port réel et
@@ -46,28 +46,28 @@ node scripts/audit-business-rules.cjs  # les 11 regles metier
 
 ### 3.1 Routes réellement absentes (créées)
 
-| Route | Consommateur | Rôle |
-|---|---|---|
-| `GET /workspace` | `OperationsPage`, `AttendanceMonitor` | Charge l'écran d'opérations, tous rôles |
-| `POST /corrections/attachments` | `CorrectionDialog` | Upload d'un justificatif (PDF/image, 5 Mo) |
-| `PATCH /corrections/shifts/:id` | `CorrectionDialog` | Correction d'un pointage |
-| `GET /corrections/shifts/:id` | `CorrectionHistory` | Historique des corrections |
+| Route                           | Consommateur                          | Rôle                                       |
+| ------------------------------- | ------------------------------------- | ------------------------------------------ |
+| `GET /workspace`                | `OperationsPage`, `AttendanceMonitor` | Charge l'écran d'opérations, tous rôles    |
+| `POST /corrections/attachments` | `CorrectionDialog`                    | Upload d'un justificatif (PDF/image, 5 Mo) |
+| `PATCH /corrections/shifts/:id` | `CorrectionDialog`                    | Correction d'un pointage                   |
+| `GET /corrections/shifts/:id`   | `CorrectionHistory`                   | Historique des corrections                 |
 
 ### 3.2 Désalignements de nommage (alias ajoutés)
 
 La fonctionnalité existait, le nom différait. Plutôt que de modifier le frontend,
 des alias ont été ajoutés côté backend :
 
-| Appel du frontend | Route backend existante | Traitement |
-|---|---|---|
-| `GET /auth/me` | `GET /auth/session` (sémantique différente) | **Nouvelle route** : renvoie `{ user }`, appelée par le veilleur de session |
-| `POST /auth/activate-account` | `POST /auth/activate` | Alias |
-| `POST /auth/invitations/:id/resend` | `POST /users/:id/resend-invitation` | Route équivalente ajoutée |
-| `PATCH /users/:id/status` | `PATCH /users/:id/deactivate` + `/reactivate` | Alias unifié (`{ enabled }`) |
-| `POST /users/:id/activate` | `POST /users/:id/resend-invitation` | Alias |
-| `GET /users/imports/template` | `GET /users/import/template` | Alias (`s` final) |
-| `PATCH /stations/:id/status` | `PATCH /stations/:id/active` | Alias (`{ isActive \| enabled }`) |
-| `GET /attendance/mine` | existait déjà | — |
+| Appel du frontend                   | Route backend existante                       | Traitement                                                                  |
+| ----------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------- |
+| `GET /auth/me`                      | `GET /auth/session` (sémantique différente)   | **Nouvelle route** : renvoie `{ user }`, appelée par le veilleur de session |
+| `POST /auth/activate-account`       | `POST /auth/activate`                         | Alias                                                                       |
+| `POST /auth/invitations/:id/resend` | `POST /users/:id/resend-invitation`           | Route équivalente ajoutée                                                   |
+| `PATCH /users/:id/status`           | `PATCH /users/:id/deactivate` + `/reactivate` | Alias unifié (`{ enabled }`)                                                |
+| `POST /users/:id/activate`          | `POST /users/:id/resend-invitation`           | Alias                                                                       |
+| `GET /users/imports/template`       | `GET /users/import/template`                  | Alias (`s` final)                                                           |
+| `PATCH /stations/:id/status`        | `PATCH /stations/:id/active`                  | Alias (`{ isActive \| enabled }`)                                           |
+| `GET /attendance/mine`              | existait déjà                                 | —                                                                           |
 
 ### 3.3 Résultat
 
@@ -90,12 +90,12 @@ l'onglet** (lignes 195-204). La réponse est utilisée pour rafraîchir le rôle
 cache et **rediriger l'utilisateur** :
 
 ```ts
-api<{ user: User }>("/auth/me")
+api<{ user: User }>('/auth/me')
   .then(({ user }) => {
     setSession((current) => (current ? { ...current, user } : null));
     navigate(qrHomePath(rolePaths[user.role], user.role), { replace: true });
   })
-  .catch(() => clear());   // echec => session effacee
+  .catch(() => clear()); // echec => session effacee
 ```
 
 Sans cette route, l'appel échouait en `404`, donc `catch` → `clear()` →
@@ -111,7 +111,11 @@ La route renvoie maintenant `{ user }` et refuse un compte inactif.
 déclarait pas ce champ, et `main.ts` active `forbidNonWhitelisted` :
 
 ```ts
-new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })
+new ValidationPipe({
+  whitelist: true,
+  forbidNonWhitelisted: true,
+  transform: true,
+});
 ```
 
 Conséquence : **toute création d'utilisateur depuis l'interface était rejetée en
@@ -136,12 +140,12 @@ kind : REPLACEMENT_REQUESTED | REPLACEMENT_ASSIGNED | SHIFT_CHANGED
 
 ### Routes
 
-| Route | Rôle |
-|---|---|
-| `GET /notifications` | 50 max, plus récentes d'abord |
-| `GET /notifications/unread-count` | Badge de la cloche |
-| `PATCH /notifications/:id/read` | Marquer une notification lue |
-| `PATCH /notifications/read-all` | Tout marquer comme lu |
+| Route                             | Rôle                          |
+| --------------------------------- | ----------------------------- |
+| `GET /notifications`              | 50 max, plus récentes d'abord |
+| `GET /notifications/unread-count` | Badge de la cloche            |
+| `PATCH /notifications/:id/read`   | Marquer une notification lue  |
+| `PATCH /notifications/read-all`   | Tout marquer comme lu         |
 
 Toutes les routes sont filtrées sur `req.user.id` : **un utilisateur ne peut lire
 ni marquer que ses propres notifications**.
@@ -153,11 +157,11 @@ métier, aux deux seuls points de passage existants.
 
 **`openReplacementRequest()`** — goulet commun aux deux origines :
 
-| `source` | Déclencheur | Destinataires |
-|---|---|---|
-| `DECLARATION` | Le swappeur signale un empêchement | Superviseurs + chef de station |
+| `source`            | Déclencheur                                  | Destinataires                  |
+| ------------------- | -------------------------------------------- | ------------------------------ |
+| `DECLARATION`       | Le swappeur signale un empêchement           | Superviseurs + chef de station |
 | `AUTOMATIC_ABSENCE` | Le cron détecte qu'un swapper n'a pas scanné | Superviseurs + chef de station |
-| `AD_HOC` | Le superviseur couvre un shift à la main | — |
+| `AD_HOC`            | Le superviseur couvre un shift à la main     | —                              |
 
 Comme c'est le **même** point de passage, supervision est prévenue exactement une
 fois, quelle que soit l'origine.
@@ -187,29 +191,29 @@ remplacement d'être affecté.
 
 Renvoie exactement les indicateurs demandés :
 
-| Indicateur | Détail |
-|---|---|
-| Shifts du jour | total + répartition |
-| Présents | pointage dans la tolérance |
-| En retard | pointage au-delà de `latenessToleranceMinutes` |
-| Absents | sans pointage valide |
-| Terminés | pointage clôturé |
-| Demandes ouvertes | `ReplacementRequest` OPEN/ASSIGNED |
-| Heures hebdo | consommées vs `weeklyHoursLimit` de la station |
-| Effectifs | swappeurs actifs / total (supervision seulement) |
-| Timeline | liste chronologique des shifts |
+| Indicateur        | Détail                                           |
+| ----------------- | ------------------------------------------------ |
+| Shifts du jour    | total + répartition                              |
+| Présents          | pointage dans la tolérance                       |
+| En retard         | pointage au-delà de `latenessToleranceMinutes`   |
+| Absents           | sans pointage valide                             |
+| Terminés          | pointage clôturé                                 |
+| Demandes ouvertes | `ReplacementRequest` OPEN/ASSIGNED               |
+| Heures hebdo      | consommées vs `weeklyHoursLimit` de la station   |
+| Effectifs         | swappeurs actifs / total (supervision seulement) |
+| Timeline          | liste chronologique des shifts                   |
 
 ### Périmètre
 
 Le calcul réutilise `OperationsService.resolveAccessibleStationIds()`, donc **la
 même règle de portée que partout ailleurs** :
 
-| Rôle | Périmètre |
-|---|---|
-| `ADMIN` | Toutes les stations |
-| `SUPERVISOR` | Station principale + `UserStationScope` |
-| `STATION_CHIEF` | Sa station uniquement |
-| `SWAPPER` | Ses propres shifts ; pas de bloc effectifs |
+| Rôle            | Périmètre                                  |
+| --------------- | ------------------------------------------ |
+| `ADMIN`         | Toutes les stations                        |
+| `SUPERVISOR`    | Station principale + `UserStationScope`    |
+| `STATION_CHIEF` | Sa station uniquement                      |
+| `SWAPPER`       | Ses propres shifts ; pas de bloc effectifs |
 
 Le calcul du statut « aujourd'hui » se fait en **heure locale de Douala (UTC+1)**,
 pas en UTC brut — sinon une journée opérationnelle serait décalée d'une heure à
@@ -264,15 +268,15 @@ git show 9fc77cc:src/features/planner/day-roster.css > frontend/src/features/pla
 
 ### 8.4 Corrections de typage (minimales)
 
-| Fichier | Problème | Correction |
-|---|---|---|
-| `api/auth-api.ts` | `method` limité à `PATCH \| DELETE` | Élargi à `POST \| PUT \| PATCH \| DELETE` |
-| `api/mock/types.ts` | `MockCtx.method` sans `PUT` | Aligné |
-| `ui/Modal.tsx` | `size` limité à `md \| lg` | Élargi à `sm \| md \| lg \| xl` |
-| `ui/modal.css` | `.modal-panel--sm` absent | Ajouté (420 px) |
-| `AdminPlannerPage.tsx` | `import { Planner }` | `import Planner` (export par défaut) |
-| `RolePlannerPage.tsx` | idem | idem |
-| `Planner.tsx` | `exportToExcel` appelé en positionnel | Converti en objet `{ data, filename, columns }` |
+| Fichier                | Problème                              | Correction                                      |
+| ---------------------- | ------------------------------------- | ----------------------------------------------- |
+| `api/auth-api.ts`      | `method` limité à `PATCH \| DELETE`   | Élargi à `POST \| PUT \| PATCH \| DELETE`       |
+| `api/mock/types.ts`    | `MockCtx.method` sans `PUT`           | Aligné                                          |
+| `ui/Modal.tsx`         | `size` limité à `md \| lg`            | Élargi à `sm \| md \| lg \| xl`                 |
+| `ui/modal.css`         | `.modal-panel--sm` absent             | Ajouté (420 px)                                 |
+| `AdminPlannerPage.tsx` | `import { Planner }`                  | `import Planner` (export par défaut)            |
+| `RolePlannerPage.tsx`  | idem                                  | idem                                            |
+| `Planner.tsx`          | `exportToExcel` appelé en positionnel | Converti en objet `{ data, filename, columns }` |
 
 ### 8.5 Résultat
 
@@ -288,19 +292,19 @@ Frontend : npm run build   -> exit 0 (built in 21.57s)
 
 Les 11 règles du cahier des charges, testées contre l'API vivante.
 
-| # | Règle | Vérification | Résultat |
-|---|---|---|---|
-| 1 | Shift = exactement 8 h | 7 h refusé, 9 h refusé, 8 h accepté | ✅ |
-| 2 | Pas de chevauchement | Shift qui chevauche refusé | ✅ |
-| 3 | Un seul créneau par jour | 2ᵉ shift le même jour refusé | ✅ |
-| 4 | Repos minimum = paramètre station | 6 h de repos refusé (`minRestHours=8`) | ✅ |
-| 5 | Limite hebdo = paramètre station | Swapper à 48 h/48 h ne peut plus prendre 8 h | ✅ |
-| 6 | Congé approuvé bloque le shift | Shift pendant congé refusé | ✅ |
-| 7 | START + END obligatoires | QR END généré, check-out sans check-in refusé | ✅ |
-| 8 | END sans START → ABSENT | Statut basculé en `ABSENT` en base | ✅ |
-| 9 | Aucun scan → ABSENT | Le cron marque les `EXPECTED` dépassés | ✅ |
-| 10 | Empêchement ≠ justification d'absence | `ReplacementRequest` créée, **aucune** écriture d'`Attendance` | ✅ |
-| 11 | Historique dans `ShiftChange` | `type=REPLACEMENT`, les deux swappers + auteur | ✅ |
+| #   | Règle                                 | Vérification                                                   | Résultat |
+| --- | ------------------------------------- | -------------------------------------------------------------- | -------- |
+| 1   | Shift = exactement 8 h                | 7 h refusé, 9 h refusé, 8 h accepté                            | ✅       |
+| 2   | Pas de chevauchement                  | Shift qui chevauche refusé                                     | ✅       |
+| 3   | Un seul créneau par jour              | 2ᵉ shift le même jour refusé                                   | ✅       |
+| 4   | Repos minimum = paramètre station     | 6 h de repos refusé (`minRestHours=8`)                         | ✅       |
+| 5   | Limite hebdo = paramètre station      | Swapper à 48 h/48 h ne peut plus prendre 8 h                   | ✅       |
+| 6   | Congé approuvé bloque le shift        | Shift pendant congé refusé                                     | ✅       |
+| 7   | START + END obligatoires              | QR END généré, check-out sans check-in refusé                  | ✅       |
+| 8   | END sans START → ABSENT               | Statut basculé en `ABSENT` en base                             | ✅       |
+| 9   | Aucun scan → ABSENT                   | Le cron marque les `EXPECTED` dépassés                         | ✅       |
+| 10  | Empêchement ≠ justification d'absence | `ReplacementRequest` créée, **aucune** écriture d'`Attendance` | ✅       |
+| 11  | Historique dans `ShiftChange`         | `type=REPLACEMENT`, les deux swappers + auteur                 | ✅       |
 
 **Point d'architecture** : les règles ne peuvent pas diverger entre le planning et
 le remplacement, car les deux passent par **le même moteur** —
@@ -368,15 +372,15 @@ Ouvrir **`http://127.0.0.1:5173`** (pas `localhost` : voir la note CORS).
 
 Mot de passe unique : `Uswap2026!Demo`
 
-| Rôle | E-mail |
-|---|---|
-| `ADMIN` | `admin@upowa.org` |
-| `SUPERVISOR` | `superviseur@upowa.org` |
-| `STATION_CHIEF` | `chef@upowa.org` |
-| `SWAPPER` | `awa.nkolo@upowa.org` |
-| `SWAPPER` | `jean.dupont@upowa.org` |
-| `SWAPPER` | `paul.mbarga@upowa.org` |
-| `SWAPPER` | `sylvie.eyenga@upowa.org` |
+| Rôle            | E-mail                    |
+| --------------- | ------------------------- |
+| `ADMIN`         | `admin@upowa.org`         |
+| `SUPERVISOR`    | `superviseur@upowa.org`   |
+| `STATION_CHIEF` | `chef@upowa.org`          |
+| `SWAPPER`       | `awa.nkolo@upowa.org`     |
+| `SWAPPER`       | `jean.dupont@upowa.org`   |
+| `SWAPPER`       | `paul.mbarga@upowa.org`   |
+| `SWAPPER`       | `sylvie.eyenga@upowa.org` |
 
 Le seed place le planning sur la **semaine suivante**, afin que la démo dispose
 toujours de shifts à venir quel que soit le jour où elle est lancée.

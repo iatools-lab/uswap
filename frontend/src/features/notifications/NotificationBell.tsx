@@ -1,7 +1,33 @@
-import { useEffect, useRef, useState } from "react";
-import { BellIcon } from "@phosphor-icons/react";
-import { api } from "../../api/auth-api";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  BellIcon,
+  CaretRightIcon,
+  SlidersHorizontalIcon,
+} from "@phosphor-icons/react";
+import { api, usingMock } from "../../api/auth-api";
 import { formatDateTime } from "../supervision/format";
+
+/** En dessous de cette largeur, le panneau devient une feuille ancrée en bas. */
+const SHEET_MAX_WIDTH = 620;
+/** Marge minimale conservée entre le panneau et les bords de la fenêtre. */
+const VIEWPORT_GAP = 12;
+/** Écart vertical entre le bouton et le panneau. */
+const ANCHOR_OFFSET = 10;
+
+type Placement = {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+};
 
 type NotificationItem = {
   id: string;
@@ -13,9 +39,76 @@ type NotificationItem = {
 };
 
 export function NotificationBell() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<"all" | "unread">("all");
+  const [placement, setPlacement] = useState<Placement | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const sheet = useRef(false);
+
+  /**
+   * Le panneau est rendu dans un portail et positionné d'après la position
+   * réelle du bouton à l'écran : il ne peut donc jamais être rogné par un
+   * conteneur parent (barre supérieure, zone de contenu…) et reste toujours
+   * entièrement visible, quel que soit la taille de l'écran.
+   */
+  const place = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Petit écran : panneau en feuille fixée en bas, pleine largeur.
+    if (vw <= SHEET_MAX_WIDTH) {
+      sheet.current = true;
+      setPlacement({
+        top: rect.bottom + ANCHOR_OFFSET,
+        left: VIEWPORT_GAP,
+        width: vw - VIEWPORT_GAP * 2,
+        maxHeight: Math.max(
+          180,
+          vh - rect.bottom - ANCHOR_OFFSET - VIEWPORT_GAP,
+        ),
+      });
+      return;
+    }
+
+    // Grand écran : panneau ancré au bouton, aligné à droite, borné au viewport.
+    sheet.current = false;
+    const width = Math.min(360, vw - VIEWPORT_GAP * 2);
+    const left = Math.min(
+      Math.max(VIEWPORT_GAP, rect.right - width),
+      vw - width - VIEWPORT_GAP,
+    );
+    setPlacement({
+      top: rect.bottom + ANCHOR_OFFSET,
+      left,
+      width,
+      maxHeight: Math.max(200, vh - rect.bottom - ANCHOR_OFFSET - VIEWPORT_GAP),
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlacement(null);
+      return;
+    }
+    place();
+    const onScrollOrResize = () => place();
+    window.addEventListener("resize", onScrollOrResize);
+    // Le défilement se propage depuis la zone de contenu : on écoute en capture
+    // pour repositionner le panneau même lorsque l'événement vient d'un enfant.
+    window.addEventListener("scroll", onScrollOrResize, true);
+    return () => {
+      window.removeEventListener("resize", onScrollOrResize);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+    };
+  }, [open, place]);
 
   useEffect(() => {
     let active = true;
@@ -39,33 +132,102 @@ export function NotificationBell() {
 
   useEffect(() => {
     const close = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node))
+      const target = event.target as Node;
+      if (ref.current?.contains(target)) return;
+      // Le panneau vit dans un portail : il faut tester les deux racines.
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
         setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", escape);
+    };
   }, []);
 
   const unread = items.filter((item) => !item.readAt);
+  const visibleItems = view === "unread" ? unread : items;
 
   async function markAllRead() {
-    await Promise.all(
-      unread.map((item) =>
-        api(`/notifications/${item.id}/read`, {}, "PATCH").catch(() => {}),
+    const pending = unread;
+    if (usingMock) {
+      await api("/notifications/read-all", {}, "PATCH").catch(() => {});
+      const readAt = new Date().toISOString();
+      setItems((rows) =>
+        rows.map((row) => ({ ...row, readAt: row.readAt ?? readAt })),
+      );
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      pending.map((item) =>
+        api(`/notifications/${item.id}/read`, {}, "PATCH"),
       ),
     );
-    setItems((rows) =>
-      rows.map((row) => ({
-        ...row,
-        readAt: row.readAt ?? new Date().toISOString(),
-      })),
+    const readIds = new Set(
+      results.flatMap((result, index) =>
+        result.status === "fulfilled" ? [pending[index].id] : [],
+      ),
     );
+    const readAt = new Date().toISOString();
+    setItems((rows) =>
+      rows.map((row) =>
+        readIds.has(row.id) ? { ...row, readAt: row.readAt ?? readAt } : row,
+      ),
+    );
+  }
+
+  async function openNotification(item: NotificationItem) {
+    if (!item.readAt) {
+      await api(`/notifications/${item.id}/read`, {}, "PATCH").catch(() => {});
+      setItems((rows) =>
+        rows.map((row) =>
+          row.id === item.id
+            ? { ...row, readAt: new Date().toISOString() }
+            : row,
+        ),
+      );
+    }
+    const basePath = location.pathname.startsWith("/app/admin")
+      ? "/app/admin"
+      : location.pathname.startsWith("/app/supervision")
+        ? "/app/supervision"
+        : location.pathname.startsWith("/app/station")
+          ? "/app/station"
+          : "/app/mon-espace";
+    const destination =
+      item.kind === "ACCESS_PENDING"
+        ? "/app/admin/utilisateurs?status=pending"
+        : item.kind.startsWith("PLANNING_")
+          ? `${basePath}/plannings`
+          : item.kind.includes("LEAVE") && basePath === "/app/mon-espace"
+            ? `${basePath}/conges`
+            : [
+                  "CHECKIN",
+                  "CORRECTION",
+                  "AUTOMATIC_ABSENCE",
+                  "ABSENCE_DECLARED",
+                ].includes(item.kind) && basePath === "/app/supervision"
+              ? `${basePath}/pointages`
+              : basePath;
+    if (destination) {
+      setOpen(false);
+      navigate(destination);
+    }
   }
 
   return (
     <div className="notification-bell" ref={ref}>
       <button
         type="button"
+        ref={triggerRef}
         className="notification-bell__trigger"
         aria-label={
           unread.length
@@ -80,46 +242,111 @@ export function NotificationBell() {
           <span className="notification-bell__count">{unread.length}</span>
         )}
       </button>
-      {open && (
-        <div
-          className="notification-bell__menu"
-          role="dialog"
-          aria-label="Notifications"
-        >
-          <div className="notification-bell__head">
-            <strong>Notifications</strong>
-            {!!unread.length && (
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => void markAllRead()}
-              >
-                Tout marquer comme lu
-              </button>
-            )}
-          </div>
-          {!items.length ? (
-            <p className="notification-bell__empty">Aucune notification.</p>
-          ) : (
-            <ul className="notification-bell__list">
-              {items.slice(0, 20).map((item) => (
-                <li
-                  key={item.id}
-                  className={
-                    item.readAt
-                      ? "notification-bell__item"
-                      : "notification-bell__item unread"
-                  }
+      {open &&
+        placement &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className={
+              "notification-bell__menu" + (sheet.current ? " is-sheet" : "")
+            }
+            role="dialog"
+            aria-label="Notifications"
+            style={{
+              top: placement.top,
+              left: placement.left,
+              width: placement.width,
+              maxHeight: placement.maxHeight,
+            }}
+          >
+            <div className="notification-bell__head">
+              <strong>Centre de notifications</strong>
+              {!!unread.length && (
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => void markAllRead()}
                 >
-                  <strong>{item.title}</strong>
-                  <p>{item.body}</p>
-                  <time>{formatDateTime(item.createdAt)}</time>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+                  Tout marquer comme lu
+                </button>
+              )}
+            </div>
+            <div
+              className="notification-bell__filters"
+              role="group"
+              aria-label="Filtrer les notifications"
+            >
+              <button
+                aria-pressed={view === "all"}
+                onClick={() => setView("all")}
+              >
+                Toutes <span>{items.length}</span>
+              </button>
+              <button
+                aria-pressed={view === "unread"}
+                onClick={() => setView("unread")}
+              >
+                Non lues <span>{unread.length}</span>
+              </button>
+            </div>
+            {!visibleItems.length ? (
+              <p className="notification-bell__empty">
+                {view === "unread"
+                  ? "Aucune notification non lue."
+                  : "Aucune notification."}
+              </p>
+            ) : (
+              <ul className="notification-bell__list">
+                {visibleItems.slice(0, 20).map((item) => (
+                  <li
+                    key={item.id}
+                    className={
+                      item.readAt
+                        ? "notification-bell__item"
+                        : "notification-bell__item unread"
+                    }
+                  >
+                    <strong>{item.title}</strong>
+                    <p>{item.body}</p>
+                    <time>{formatDateTime(item.createdAt)}</time>
+                    <button
+                      type="button"
+                      className="notification-bell__action"
+                      onClick={() => void openNotification(item)}
+                    >
+                      {item.kind === "ACCESS_PENDING"
+                        ? "Examiner les comptes"
+                        : item.kind.startsWith("PLANNING_")
+                          ? "Ouvrir le planning"
+                          : location.pathname.startsWith("/app/admin")
+                            ? "Revenir à l’accueil"
+                            : "Ouvrir les opérations"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              type="button"
+              className="notification-bell__preferences"
+              onClick={() => {
+                setOpen(false);
+                const base = location.pathname.startsWith("/app/admin")
+                  ? "/app/admin"
+                  : location.pathname.startsWith("/app/supervision")
+                    ? "/app/supervision"
+                    : location.pathname.startsWith("/app/station")
+                      ? "/app/station"
+                      : "/app/mon-espace";
+                navigate(`${base}/compte?section=notifications`);
+              }}
+            >
+              <SlidersHorizontalIcon size={15} weight="duotone" /> Gérer mes
+              préférences <CaretRightIcon size={15} weight="bold" />
+            </button>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

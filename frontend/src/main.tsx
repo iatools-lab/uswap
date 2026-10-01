@@ -10,6 +10,7 @@ import "./styles/styles.css";
 import "./styles/users.css";
 import "./styles/detail.css";
 import "./styles/design-system.css";
+import "./styles/foundation.css";
 import { Notifications } from "./ui/Toast";
 import { PwaStatus } from "./ui/PwaStatus";
 import { startOutboxSync } from "./features/offline/outbox";

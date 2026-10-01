@@ -31,10 +31,16 @@
 /* --- Toolbar: period title + status + primary actions --- */
 .planner-toolbar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+}
+
+.planner-toolbar__intro {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
 .planner-toolbar h2 {
@@ -42,6 +48,242 @@
   font-weight: 600;
   letter-spacing: -0.3px;
   margin: 0;
+}
+
+/* Sur écran étroit, les actions passent sur leur propre ligne, en pleine
+   largeur, sans forcer un défilement horizontal. */
+@media (max-width: 720px) {
+  .planner-toolbar {
+    align-items: stretch;
+  }
+  .planner-toolbar__intro {
+    width: 100%;
+  }
+  .planner-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .planner-actions .admin-button,
+  .planner-actions .planner-filter-select {
+    flex: 1 1 auto;
+  }
+}
+
+.planner-station-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, .82fr);
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.planner-station-summary__panel {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #dce4f0;
+  border-radius: 12px;
+  background: #f8faff;
+}
+
+.planner-station-summary__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.planner-station-summary__head span:first-child {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.planner-station-summary__head h3 {
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.planner-station-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+  margin: 0;
+}
+
+.planner-station-facts div {
+  min-width: 0;
+}
+
+.planner-station-facts dt {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.planner-station-facts dd {
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.planner-station-facts a {
+  color: #092784;
+  text-decoration: none;
+}
+
+.planner-station-facts a:hover {
+  text-decoration: underline;
+}
+
+.planner-station-team {
+  display: grid;
+  gap: 8px;
+  max-height: 198px;
+  margin: 0;
+  padding: 0 3px 0 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.planner-station-team li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f2;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.planner-station-team__avatar {
+  display: grid;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e9efff;
+  color: #092784;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.planner-station-team li > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.planner-station-team strong,
+.planner-station-team small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-station-team strong { color: var(--ink); font-size: 13px; }
+.planner-station-team small { color: var(--muted); font-size: 11.5px; }
+
+.planner-station-coverage {
+  display: flex;
+  gap: 8px;
+  margin: -4px 0 14px;
+  padding: 2px 0;
+  overflow-x: auto;
+}
+
+.planner-station-coverage button {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 2px;
+  min-width: 150px;
+  padding: 9px 12px;
+  border: 1px solid #dce4f0;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+
+.planner-station-coverage button:hover,
+.planner-station-coverage button.is-active {
+  border-color: #9fb1df;
+  background: #f4f7ff;
+  box-shadow: 0 2px 8px rgba(9, 39, 132, .07);
+}
+
+.planner-station-coverage strong { font-size: 12.5px; }
+.planner-station-coverage span { color: var(--muted); font-size: 11.5px; }
+
+.planner-validation-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid #dce4f0;
+  border-radius: 10px;
+  background: #f7f9fd;
+}
+
+.planner-validation-summary strong { color: var(--ink); font-size: 14px; }
+.planner-validation-summary span { color: var(--muted); font-size: 12.5px; }
+
+.planner-validation-section {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.planner-validation-section h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.planner-validation-section.is-error h3 { color: #b42318; }
+.planner-validation-section.is-warning h3 { color: #935f00; }
+
+.planner-validation-issue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 13px;
+  border: 1px solid #e3e8f1;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.planner-validation-section.is-error .planner-validation-issue { border-left: 3px solid #d92d20; }
+.planner-validation-section.is-warning .planner-validation-issue { border-left: 3px solid #e3a008; }
+.planner-validation-issue p { margin: 0; color: var(--ink); font-size: 12.5px; line-height: 1.45; }
+.planner-validation-issue .text-button { flex: 0 0 auto; }
+
+.planner-validation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+@media (max-width: 760px) {
+  .planner-station-summary { grid-template-columns: 1fr; }
+  .planner-station-facts { grid-template-columns: 1fr 1fr; }
+  .planner-validation-summary,
+  .planner-validation-issue { align-items: flex-start; flex-direction: column; }
+  .planner-validation-actions { flex-direction: column-reverse; }
+  .planner-validation-actions .admin-button { width: 100%; }
+}
+
+@media (max-width: 480px) {
+  .planner-station-facts { grid-template-columns: 1fr; }
 }
 
 .planner-muted {
@@ -59,19 +301,29 @@
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
-/* Filtre de station intégré à la barre d'action */
-.planner-filter-select {
-  min-height: 40px;
+/* Filtre de station en ligne : compact, aligné avec les métadonnées. */
+.planner-inline-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.planner-inline-filter .planner-filter-select {
+  min-height: 28px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 7px;
   background: #fff;
-  padding: 6px 12px;
-  font-size: 13px;
+  padding: 2px 8px;
+  font-size: 12.5px;
   color: var(--ink);
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .planner-filter-select:focus-visible {
@@ -147,7 +399,9 @@
   background: #fff;
   color: var(--ink);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .planner-step:hover {
@@ -222,10 +476,11 @@
 .planner-board {
   padding: 16px;
   display: grid;
-  gap: 12px;
+  gap: 16px;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
 }
 
 .planner-hint {
@@ -254,7 +509,9 @@
   padding: 14px;
   color: inherit;
   min-height: 104px;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
 .planner-year-month:hover {
@@ -328,12 +585,12 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-  min-height: 105px;
+  min-height: 115px;
   border-radius: 8px;
-  padding: 6px;
+  padding: 8px;
   background: #fafbfc;
   border: 1px solid #f1f3f4;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .planner-cell:hover {
@@ -379,9 +636,9 @@
 .planner-cell-events {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   overflow-y: auto;
-  max-height: 70px;
+  max-height: 80px;
 }
 
 /* Pastille événement horizontale style Google Agenda */
@@ -392,8 +649,8 @@
   background: #e8f0fe;
   border: 0;
   border-radius: 4px;
-  padding: 3px 6px;
-  font-size: 11px;
+  padding: 4px 8px;
+  font-size: 11.5px;
   font-weight: 500;
   color: #1967d2;
   text-align: left;
@@ -436,7 +693,7 @@
 .planner-week-overview {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
 .planner-week-overview.is-single {
@@ -452,12 +709,12 @@
 .planner-week-day {
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 10px;
+  padding: 12px;
 }
 
 .planner-week-day-head {
@@ -497,11 +754,13 @@
   border-radius: 8px;
   background: var(--live-bg);
   color: var(--ink);
-  padding: 10px 12px;
+  padding: 12px 14px;
   font-size: 13px;
-  min-height: 44px;
+  min-height: 52px;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .planner-range:hover {
@@ -620,7 +879,9 @@
   text-align: left;
   color: inherit;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .planner-occurrence-card small {
@@ -667,7 +928,7 @@
   min-width: 0;
 }
 
-.planner input:not([type="checkbox"]),
+.planner input:not([type="checkbox"]):not([type="radio"]),
 .planner select {
   width: 100%;
   min-width: 0;
@@ -678,10 +939,12 @@
   padding: 9px 12px;
   color: var(--ink);
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
-.planner input:not([type="checkbox"]):focus,
+.planner input:not([type="checkbox"]):not([type="radio"]):focus,
 .planner select:focus {
   border-color: var(--navy);
   box-shadow: 0 0 0 3px rgba(24, 36, 62, 0.1);
@@ -726,7 +989,9 @@
   border-radius: 8px;
   background: #fff;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
 .planner-options label:has(:checked),
@@ -832,7 +1097,9 @@
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .planner-icon-btn.danger:hover {
@@ -870,11 +1137,13 @@ dialog[open],
   max-height: calc(100vh - 40px);
   overflow-y: auto;
   margin: auto;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1);
 }
 
 /* --- Correctif z-index critique pour le StationPicker dans les modals --- */
-.station-picker-dropdown, 
+.station-picker-dropdown,
 .station-picker-popover,
 .station-picker-menu,
 .station-picker-list {
@@ -944,7 +1213,7 @@ dialog[open],
 @media (min-width: 768px) {
   .planner-week-overview {
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 8px;
+    gap: 10px;
   }
   .planner-week-grid {
     grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -1058,32 +1327,6 @@ dialog[open],
   margin-right: 12px;
 }
 
-.planner-swapper-list {
-  max-height: 200px;
-  overflow-y: auto;
-  background: #fff;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  display: grid;
-  gap: 4px;
-}
-
-.planner-swapper-list .checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.planner-swapper-list .checkbox-label span {
-  overflow-wrap: anywhere;
-}
-
-.stepper-field-group.is-tall {
-  min-height: 260px;
-}
-
 /* Récapitulatif du stepper */
 .planner-publish-toggle {
   margin-top: 12px;
@@ -1102,6 +1345,17 @@ dialog[open],
   font-weight: 600;
   color: var(--ink);
   cursor: pointer;
+}
+
+.planner-form-note {
+  margin: 12px 0 0;
+  padding: 11px 13px;
+  border: 1px solid #dfe5ef;
+  border-radius: 9px;
+  background: #f7f9fc;
+  color: #59677e;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 /* Aperçu des shifts */
@@ -1317,7 +1571,9 @@ dialog[open],
   background: rgba(0, 26, 112, 0.1);
   color: var(--navy, #001a70);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .planner-day-swapper-remove:hover {
@@ -1378,7 +1634,6 @@ dialog[open],
 }
 /* ============================================================
    Planning — clarté, contexte & micro-interactions
-   Ajouts additifs : ils n'altèrent aucun style existant.
    ============================================================ */
 
 /* --- Bandeau de contexte « vous êtes ici » --- */
@@ -1416,7 +1671,6 @@ dialog[open],
   white-space: nowrap;
 }
 
-/* Sur petits écrans, la pastille de compte passe sur sa propre ligne. */
 @media (max-width: 560px) {
   .planner-context-count {
     margin-left: 23px;
@@ -1426,9 +1680,7 @@ dialog[open],
 
 /* --- Bandeau d'étape (brouillon / publié) dans l'éditeur --- */
 .planner-stage {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  display: block;
   margin: 0;
   padding: 12px 16px;
   border-radius: 10px;
@@ -1437,6 +1689,7 @@ dialog[open],
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .planner-stage strong {
@@ -1559,7 +1812,7 @@ dialog[open],
   margin-top: 4px;
 }
 
-/* --- Cartes de shift dans la grille (refonte sobre) --- */
+/* --- Cartes de shift dans la grille --- */
 .planner-occurrence-card {
   gap: 6px;
 }
@@ -1643,7 +1896,7 @@ dialog[open],
   color: var(--draft);
 }
 
-/* --- Cartes de jour (vue semaine / jour) : compactes & informatives --- */
+/* --- Cartes de jour (vue semaine / jour) --- */
 .planner-range.is-full {
   border-left: 3px solid var(--live-border);
 }
@@ -1686,7 +1939,7 @@ dialog[open],
   color: var(--draft);
 }
 
-/* --- « Non affecté » sur un planning publié : ton neutre, pas alarmant --- */
+/* --- « Non affecté » sur un planning publié --- */
 .planner-day-vacant.is-published {
   background: #f1f3f7;
   color: var(--muted);
@@ -1704,7 +1957,7 @@ dialog[open],
   color: var(--muted);
 }
 
-/* --- Légende : pastilles harmonisées --- */
+/* --- Légende --- */
 .planner-legend i.is-filled {
   background: var(--live);
 }
@@ -1712,17 +1965,17 @@ dialog[open],
 .planner-legend i.is-vacant {
   background: var(--draft);
 }
-/* Jour sans aucun shift : ton discret, non alarmant */
+
 .planner-range-empty {
   font-size: 12.5px;
   color: var(--muted);
   font-style: italic;
 }
+
 /* ============================================================
-   Cartes de shift — lisibilité du titre (ne pas casser les mots)
+   Cartes de shift — lisibilité du titre
    ============================================================ */
 
-/* Le titre garde des coupures propres (au mot), limité à 2 lignes. */
 .planner-occurrence-head strong {
   overflow-wrap: break-word;
   word-break: normal;
@@ -1735,12 +1988,10 @@ dialog[open],
   overflow: hidden;
 }
 
-/* La plage horaire ne doit jamais se compresser. */
 .planner-occurrence-head small {
   flex-shrink: 0;
 }
 
-/* Carte de shift : largeur minimale confortable pour éviter l'écrasement. */
 .planner-day .planner-occurrence-card {
   min-width: 0;
 }
@@ -1750,31 +2001,30 @@ dialog[open],
     min-width: 0;
   }
 }
+
 /* ============================================================
-   Audit — bouton de création & chrome (mobile inclus)
+   Audit — bouton de création & chrome
    ============================================================ */
 
-/* Le bouton de création reste compact, y compris en colonne sur mobile. */
 .planner-create-btn {
   white-space: nowrap;
 }
 
 @media (max-width: 760px) {
-  /* En colonne (mobile), on centre le bouton au lieu de l'étirer pleine largeur. */
   .planner-chrome .planner-create-btn {
     align-self: center;
     width: auto;
   }
 }
+
 /* ============================================================
-   Onglets de vue — libellés adaptatifs (long / court / icône)
+   Onglets de vue
    ============================================================ */
 
 .planner-tab-label-short {
   display: none;
 }
 
-/* Sous 760px : libellés courts pour que les 4 onglets tiennent au doigt. */
 @media (max-width: 760px) {
   .planner-tab-label-full {
     display: none;
@@ -1790,7 +2040,6 @@ dialog[open],
   }
 }
 
-/* Sous 400px : on ne garde que l'icône (accessible via aria-label). */
 @media (max-width: 400px) {
   .planner-period-tabs button .planner-tab-label-short {
     display: none;
@@ -1800,7 +2049,7 @@ dialog[open],
     gap: 0 !important;
   }
 }
-/* Jour sans aucun shift : bordure neutre (aucune alerte) */
+
 .planner-range.is-none {
   border-left: 3px solid var(--line);
   background: #fff;
@@ -1810,11 +2059,11 @@ dialog[open],
   border-color: var(--line);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
 }
+
 /* ============================================================
-   Modal du jour — une ligne par shift, tous les swappeurs empilés
+   Modal du jour
    ============================================================ */
 
-/* Compteur de postes couverts sous l'horaire du shift */
 .planner-day-slots {
   display: inline-flex;
   align-items: center;
@@ -1844,7 +2093,6 @@ dialog[open],
   color: var(--draft);
 }
 
-/* Colonne des swappeurs : empilement vertical des puces */
 .planner-day-swappers {
   display: flex;
   flex-direction: column;
@@ -1853,7 +2101,6 @@ dialog[open],
   min-width: 0;
 }
 
-/* Menu déroulant « Actions » par shift */
 .planner-day-menu-holder {
   position: relative;
 }
@@ -1908,10 +2155,288 @@ dialog[open],
   flex-shrink: 0;
 }
 
-/* Sur petits écrans, le menu s'ancre à gauche pour rester visible */
 @media (max-width: 560px) {
   .planner-day-menu {
     right: auto;
     left: 0;
+  }
+}
+
+/* ============================================================
+   Barre de lecture du planning
+   ============================================================ */
+
+.planner-filterbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+/* One compact reading toolbar, including within narrower workspaces. */
+.planner .planner-filterbar,
+.planner-filterbar[role="group"] {
+  flex-direction: row;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  container-type: inline-size;
+  padding: 10px 12px;
+  gap: 12px;
+}
+.planner-filterbar[role="group"] > .planner-filterbar__group:first-child {
+  flex: 1 0 auto;
+}
+.planner-filterbar[role="group"] > .planner-filterbar__group:last-child:not(:first-child) {
+  flex: 0 0 190px;
+  border-left: 1px solid var(--line);
+  padding-left: 12px;
+}
+.planner-filterbar[role="group"] .planner-viewbar {
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: 16px;
+}
+.planner-filterbar[role="group"] .planner-viewbar__tabs {
+  margin: 0;
+  padding: 3px;
+  gap: 2px;
+  width: auto;
+  min-height: 40px;
+  background: #f3f5f8;
+  border-radius: 8px;
+}
+.planner-filterbar[role="group"] .planner-viewbar__tabs button {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  border-radius: 6px;
+  transition: background .2s, color .2s, box-shadow .2s;
+}
+.planner-filterbar[role="group"] .planner-viewbar__tabs button[aria-selected="true"] {
+  background: #fff;
+  color: var(--navy);
+  box-shadow: 0 1px 3px #18243e18;
+}
+.planner-filterbar[role="group"] .planner-viewbar__nav {
+  gap: 6px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+.planner-filterbar[role="group"] .planner-period-picker strong {
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.planner-filterbar[role="group"] .planner-step,
+.planner-filterbar[role="group"] .planner-today,
+.planner-filterbar[role="group"] .planner-filter-select {
+  height: 38px;
+  min-height: 38px;
+  font-size: 12px;
+  border-radius: 7px;
+}
+.planner-filterbar[role="group"] .planner-filter-select {
+  width: 100%;
+  max-width: 100%;
+}
+@container (max-width: 1050px) {
+  .planner-filterbar[role="group"] .planner-tab-label-full { display: none; }
+  .planner-filterbar[role="group"] .planner-tab-label-short { display: inline; }
+  .planner-filterbar[role="group"] .planner-viewbar__tabs button svg { display: none; }
+}
+
+.planner-filterbar__group {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.planner-filterbar__label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #8590a8;
+}
+
+.planner-viewbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.planner-viewbar__tabs {
+  flex-wrap: nowrap;
+}
+
+.planner-viewbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.planner-today {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.planner-today:hover {
+  background: #f0f3fa;
+  border-color: #aabfc9;
+}
+
+.planner-cell-shifts {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  padding: 1px 7px;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  background: #eef3ff;
+  color: #143a9e;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.planner-cell-shifts .event-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.planner-cell-shifts.is-full {
+  background: #e8f7ef;
+  color: #1c7a4b;
+}
+
+.planner-cell-shifts.is-partial {
+  background: #fff3e0;
+  color: #a2620a;
+}
+
+.planner-cell-shifts.is-empty {
+  background: #fdecec;
+  color: #a51616;
+}
+
+/* ============================================================
+   Détail d'une journée (modale)
+   ============================================================ */
+
+.planner-day-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.planner-day-detail__meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.planner-day-detail__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planner-day-detail__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.6fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfcff;
+}
+
+.planner-day-detail__shift {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.planner-day-detail__shift strong {
+  font-size: 13.5px;
+  color: #18243e;
+}
+
+.planner-day-detail__shift span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.planner-day-detail__slots {
+  font-weight: 600;
+}
+
+.planner-day-detail__slots.is-full {
+  color: #1c7a4b;
+}
+
+.planner-day-detail__slots.is-partial {
+  color: #a2620a;
+}
+
+.planner-day-detail__slots.is-empty {
+  color: #a51616;
+}
+
+.planner-day-detail__people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .planner-filterbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .planner-viewbar {
+    justify-content: space-between;
+  }
+  .planner-viewbar__tabs {
+    justify-content: space-between;
+  }
+  .planner-viewbar__nav {
+    justify-content: space-between;
+  }
+  .planner-inline-filter .planner-filter-select {
+    width: 100%;
+  }
+  .planner-day-detail__row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .planner-day-detail__row .admin-button {
+    width: 100%;
   }
 }

@@ -9,12 +9,7 @@
 export type Role = "ADMIN" | "SUPERVISOR" | "STATION_CHIEF" | "SWAPPER";
 
 export type AttendanceStatus =
-  | "EXPECTED"
-  | "PRESENT"
-  | "LATE"
-  | "CLOSED"
-  | "ABSENT"
-  | "JUSTIFIED";
+  "EXPECTED" | "PRESENT" | "LATE" | "CLOSED" | "ABSENT" | "JUSTIFIED";
 
 export type MockStation = {
   id: string;
@@ -29,8 +24,10 @@ export type MockStation = {
   contactPhone: string | null;
   isActive: boolean;
   latenessToleranceMinutes: number;
+  enforceMinRest: boolean;
   minRestHours: number;
   weeklyHoursLimit: number;
+  blockPublishingWithVacancies: boolean;
   checkinQrTtl: number;
   checkoutQrTtl: number;
 };
@@ -77,6 +74,7 @@ export type MockTemplate = {
 };
 
 export type MockPlanning = {
+  name?: string;
   id: string;
   startDate: string;
   endDate: string;
@@ -110,7 +108,7 @@ export type MockAttendance = {
   justified: boolean;
   correction: {
     reason: string;
-    attachmentId: string;
+    attachmentId: string | null;
     authorId: string;
     authorName: string;
     at: string;
@@ -124,11 +122,154 @@ export type MockAbsence = {
   shiftId: string;
   swapperId: string;
   reason: string;
+  attachmentId: string | null;
   clientRef: string | null;
   reportedAt: string;
   origin: "DECLARATION" | "AUTOMATIC_ABSENCE";
   status: "OPEN" | "COVERED";
   coveredBy: string | null;
+};
+
+export type LeaveRequestStatus =
+  | "DRAFT"
+  | "QUEUED"
+  | "SYNCING"
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "SYNC_FAILED";
+
+export type SyncOperationStatus =
+  "QUEUED" | "PROCESSING" | "SYNCED" | "FAILED" | "REVIEW_REQUIRED";
+
+export type MockLeave = {
+  id: string;
+  swapperId: string;
+  startTime: string;
+  endTime: string;
+  type: "ANNUAL" | "SICK" | "FAMILY" | "UNPAID" | "OTHER";
+  status: LeaveRequestStatus;
+  reason: string;
+  attachmentId: string | null;
+  externalId: string | null;
+  clientRef: string;
+  createdAt: string;
+  updatedAt: string;
+  submittedAt: string | null;
+  decidedAt: string | null;
+  decisionReason: string | null;
+  cancellable: boolean;
+  editable: boolean;
+};
+
+export type MockLeaveBalance = {
+  swapperId: string;
+  year: number;
+  entitledDays: number;
+  usedDays: number;
+  pendingDays: number;
+  remainingDays: number;
+  syncedAt: string;
+};
+
+export type MockLeaveSyncOperation = {
+  id: string;
+  leaveId: string;
+  userId: string;
+  action: "CREATE" | "UPDATE" | "CANCEL" | "REFRESH";
+  status: SyncOperationStatus;
+  idempotencyKey: string;
+  attempts: number;
+  queuedAt: string;
+  lastAttemptAt: string | null;
+  nextAttemptAt: string | null;
+  completedAt: string | null;
+  lastError: string | null;
+};
+
+export type IncidentStatus =
+  | "REPORTED"
+  | "TO_REVIEW"
+  | "ACKNOWLEDGED"
+  | "IN_PROGRESS"
+  | "RESOLVED"
+  | "CLOSED";
+
+export type IncidentSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export type MockIncidentAction = {
+  id: string;
+  incidentId: string;
+  authorId: string;
+  type:
+    "CREATED" | "QUALIFIED" | "ASSIGNED" | "COMMENT" | "RESOLVED" | "CLOSED";
+  fromStatus: IncidentStatus | null;
+  toStatus: IncidentStatus;
+  comment: string;
+  createdAt: string;
+};
+
+export type MockIncident = {
+  id: string;
+  stationId: string;
+  affectedSwapperId: string;
+  reporterId: string;
+  assigneeId: string | null;
+  category:
+    "ATTENDANCE" | "HEALTH" | "SAFETY" | "BEHAVIOR" | "SCHEDULING" | "OTHER";
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  title: string;
+  description: string;
+  attachmentIds: string[];
+  occurredAt: string;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  resolution: string | null;
+  actions: MockIncidentAction[];
+};
+
+export type MockNotificationPreference = {
+  userId: string;
+  internalEnabled: true;
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  categories: Record<string, { email: boolean; push: boolean }>;
+  updatedAt: string;
+};
+
+export type MockScheduledReport = {
+  id: string;
+  ownerId: string;
+  name: string;
+  frequency: "DAILY" | "WEEKLY" | "MONTHLY";
+  format: "XLSX" | "CSV";
+  scope: "NETWORK" | "STATION";
+  stationId: string | null;
+  recipients: string[];
+  sections: string[];
+  isActive: boolean;
+  nextRunAt: string;
+  lastRunAt: string | null;
+  createdAt: string;
+};
+
+export type MockOfflineOperation = {
+  id: string;
+  userId: string;
+  kind: "ABSENCE" | "LEAVE" | "NOTIFICATION_READ";
+  method: "POST" | "PATCH";
+  path: string;
+  payload: Record<string, unknown>;
+  idempotencyKey: string;
+  status: SyncOperationStatus;
+  attempts: number;
+  createdAt: string;
+  nextAttemptAt: string | null;
+  lastError: string | null;
 };
 
 export type MockChange = {
@@ -183,6 +324,8 @@ export type MockImportRow = {
   fullName: string;
   email: string;
   role: string;
+  stationId: string | null;
+  stationName: string;
   status: "READY" | "IGNORED" | "REJECTED" | "CREATED";
   reason: string;
 };
@@ -212,6 +355,13 @@ export type MockDb = {
   occurrences: MockOccurrence[];
   attendance: MockAttendance[];
   absences: MockAbsence[];
+  leaves: MockLeave[];
+  leaveBalances: MockLeaveBalance[];
+  leaveSyncOperations: MockLeaveSyncOperation[];
+  incidents: MockIncident[];
+  notificationPreferences: MockNotificationPreference[];
+  scheduledReports: MockScheduledReport[];
+  offlineOperations: MockOfflineOperation[];
   changes: MockChange[];
   notifications: MockNotification[];
   notices: MockNotice[];

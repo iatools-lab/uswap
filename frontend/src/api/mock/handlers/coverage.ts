@@ -12,7 +12,8 @@ import {
 } from "../shared";
 import { MockHttpError, type MockCtx, type MockRoute } from "../types";
 
-const asText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+const asText = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
 
 const recordOf = (ctx: MockCtx, shiftId: string) =>
   ctx.db.attendance.find((item) => item.shiftId === shiftId) ?? null;
@@ -28,20 +29,36 @@ const urgencyOf = (startTime: string, now: number) => {
 /** Absences sans remplaçant, congés approuvés inclus lorsque fournis (US 2047). */
 const pendingReplacements = (ctx: MockCtx, stationId: string | null) => {
   const published = new Set(
-    ctx.db.plannings.filter((item) => item.status === "PUBLISHED").map((item) => item.id),
+    ctx.db.plannings
+      .filter((item) => item.status === "PUBLISHED")
+      .map((item) => item.id),
   );
-  return ctx.db.absences
+  const absenceRows = ctx.db.absences
     .filter((item) => item.status === "OPEN")
-    .map((absence) => ({ absence, occurrence: occurrenceOf(ctx.db, absence.shiftId) }))
+    .map((absence) => ({
+      absence,
+      occurrence: occurrenceOf(ctx.db, absence.shiftId),
+    }))
     .filter(({ occurrence }) => published.has(occurrence.planningId))
-    .filter(({ occurrence }) => Date.parse(occurrence.endTime) > ctx.now - 2 * 3600000)
-    .filter(({ occurrence }) => (stationId ? occurrence.stationId === stationId : true))
+    .filter(
+      ({ occurrence }) =>
+        Date.parse(occurrence.endTime) > ctx.now - 2 * 3600000,
+    )
+    .filter(({ occurrence }) =>
+      stationId ? occurrence.stationId === stationId : true,
+    )
     .map(({ absence, occurrence }) => {
       const station = stationOf(ctx.db, occurrence.stationId);
-      const swapper = ctx.db.users.find((item) => item.id === absence.swapperId);
+      const swapper = ctx.db.users.find(
+        (item) => item.id === absence.swapperId,
+      );
       return {
         shiftId: occurrence.id,
-        station: { id: station.id, name: station.name, timezone: station.timezone },
+        station: {
+          id: station.id,
+          name: station.name,
+          timezone: station.timezone,
+        },
         swapper: {
           id: swapper?.id ?? absence.swapperId,
           fullName: swapper?.fullName ?? "—",
@@ -51,16 +68,103 @@ const pendingReplacements = (ctx: MockCtx, stationId: string | null) => {
         endTime: occurrence.endTime,
         urgency: urgencyOf(occurrence.startTime, ctx.now),
         hoursUntilStart:
-          Math.round(((Date.parse(occurrence.startTime) - ctx.now) / 3600000) * 10) / 10,
+          Math.round(
+            ((Date.parse(occurrence.startTime) - ctx.now) / 3600000) * 10,
+          ) / 10,
         origin: absence.origin,
         reason: absence.reason,
         reportedAt: absence.reportedAt,
       };
-    })
-    .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
+    });
+
+  const absenceShiftIds = new Set(absenceRows.map((row) => row.shiftId));
+  const leaveRows = ctx.db.leaves
+    .filter((leave) => leave.status === "APPROVED")
+    .flatMap((leave) =>
+      ctx.db.occurrences
+        .filter((occurrence) => published.has(occurrence.planningId))
+        .filter((occurrence) => occurrence.swapperId === leave.swapperId)
+        .filter(
+          (occurrence) =>
+            Date.parse(occurrence.startTime) < Date.parse(leave.endTime) &&
+            Date.parse(occurrence.endTime) > Date.parse(leave.startTime),
+        )
+        .filter(
+          (occurrence) =>
+            Date.parse(occurrence.endTime) > ctx.now - 2 * 3600000,
+        )
+        .filter((occurrence) =>
+          stationId ? occurrence.stationId === stationId : true,
+        )
+        .filter((occurrence) => !absenceShiftIds.has(occurrence.id))
+        .map((occurrence) => {
+          const station = stationOf(ctx.db, occurrence.stationId);
+          const swapper = ctx.db.users.find(
+            (item) => item.id === leave.swapperId,
+          );
+          return {
+            shiftId: occurrence.id,
+            station: {
+              id: station.id,
+              name: station.name,
+              timezone: station.timezone,
+            },
+            swapper: {
+              id: swapper?.id ?? leave.swapperId,
+              fullName: swapper?.fullName ?? "—",
+            },
+            template: occurrence.label,
+            startTime: occurrence.startTime,
+            endTime: occurrence.endTime,
+            urgency: urgencyOf(occurrence.startTime, ctx.now),
+            hoursUntilStart:
+              Math.round(
+                ((Date.parse(occurrence.startTime) - ctx.now) / 3600000) * 10,
+              ) / 10,
+            origin: "APPROVED_LEAVE" as const,
+            reason: leave.reason,
+            reportedAt: null,
+          };
+        }),
+    );
+
+  return [...absenceRows, ...leaveRows].sort(
+    (a, b) => Date.parse(a.startTime) - Date.parse(b.startTime),
+  );
 };
 
 export const coverageRoutes: MockRoute[] = [
+  {
+    method: "POST",
+    pattern: /^\/operations\/absences\/attachments$/,
+    handler: (ctx) => {
+      requireRole(requireUser(ctx.db, ctx.user), ["SWAPPER"]);
+      if (!ctx.file)
+        throw new MockHttpError(400, "Aucune pièce justificative reçue.");
+      if (ctx.file.size > 5 * 1024 * 1024)
+        throw new MockHttpError(413, "Le justificatif dépasse 5 Mo.");
+      const allowed = [
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+      ];
+      if (!allowed.includes(ctx.file.type))
+        throw new MockHttpError(
+          400,
+          "Utilisez un fichier PDF, JPG, PNG ou WebP.",
+        );
+      const created = {
+        id: nextId("att"),
+        name: ctx.file.name,
+        size: ctx.file.size,
+        type: ctx.file.type,
+        createdAt: isoFromMs(ctx.now),
+      };
+      ctx.db.attachments.push(created);
+      return { id: created.id };
+    },
+  },
   {
     method: "POST",
     pattern: /^\/operations\/absences$/,
@@ -68,15 +172,26 @@ export const coverageRoutes: MockRoute[] = [
       const user = requireRole(requireUser(ctx.db, ctx.user), ["SWAPPER"]);
       const occurrence = occurrenceOf(ctx.db, asText(ctx.body.shiftId));
       const reason = asText(ctx.body.reason);
+      const attachmentId = asText(ctx.body.attachmentId);
       const clientRef = asText(ctx.body.clientRef) || null;
       if (reason.length < 3)
-        throw new MockHttpError(400, "Précisez un motif d'absence (3 caractères minimum).");
+        throw new MockHttpError(
+          400,
+          "Précisez un motif d'absence (3 caractères minimum).",
+        );
+      if (!ctx.db.attachments.some((item) => item.id === attachmentId))
+        throw new MockHttpError(
+          400,
+          "Une pièce justificative valide est obligatoire.",
+        );
       if (occurrence.swapperId !== user.id)
         throw new MockHttpError(403, "Ce shift ne vous est pas affecté.");
       if (Date.parse(occurrence.endTime) < ctx.now)
         throw new MockHttpError(409, "Ce service est déjà terminé.");
       if (clientRef) {
-        const replayed = ctx.db.absences.find((item) => item.clientRef === clientRef);
+        const replayed = ctx.db.absences.find(
+          (item) => item.clientRef === clientRef,
+        );
         if (replayed) return { id: replayed.id, replayed: true };
       }
       if (
@@ -84,12 +199,16 @@ export const coverageRoutes: MockRoute[] = [
           (item) => item.shiftId === occurrence.id && item.status === "OPEN",
         )
       )
-        throw new MockHttpError(409, "Une absence est déjà déclarée pour ce shift.");
+        throw new MockHttpError(
+          409,
+          "Une absence est déjà déclarée pour ce shift.",
+        );
       const created = {
         id: nextId("abs"),
         shiftId: occurrence.id,
         swapperId: user.id,
         reason,
+        attachmentId,
         clientRef,
         reportedAt: isoFromMs(ctx.now),
         origin: "DECLARATION" as const,
@@ -113,7 +232,7 @@ export const coverageRoutes: MockRoute[] = [
     pattern: /^\/operations\/replacements\/pending$/,
     handler: (ctx) => {
       const user = requireUser(ctx.db, ctx.user);
-      requireRole(user, ["ADMIN", "SUPERVISOR", "STATION_CHIEF"]);
+      requireRole(user, ["SUPERVISOR"]);
       return pendingReplacements(ctx, scopeStationId(user));
     },
   },
@@ -121,16 +240,15 @@ export const coverageRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/operations\/shifts\/([^/]+)\/candidates$/,
     handler: (ctx) => {
-      const user = requireRole(requireUser(ctx.db, ctx.user), [
-        "ADMIN",
-        "SUPERVISOR",
-        "STATION_CHIEF",
-      ]);
+      requireRole(requireUser(ctx.db, ctx.user), ["SUPERVISOR"]);
       const occurrence = occurrenceOf(ctx.db, ctx.params[0]);
-      if (user.role === "STATION_CHIEF" && occurrence.stationId !== user.stationId)
-        throw new MockHttpError(403, "Ce shift n'appartient pas à votre station.");
       const candidates = ctx.db.users
-        .filter((item) => item.role === "SWAPPER" && item.isActive)
+        .filter(
+          (item) =>
+            item.role === "SWAPPER" &&
+            item.isActive &&
+            item.stationId === occurrence.stationId,
+        )
         .map((item) => {
           if (item.id === occurrence.swapperId)
             return {
@@ -171,11 +289,20 @@ export const coverageRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/operations\/shifts\/([^/]+)\/replacement$/,
     handler: (ctx) => {
-      const actor = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
+      const actor = requireRole(requireUser(ctx.db, ctx.user), ["SUPERVISOR"]);
       const occurrence = occurrenceOf(ctx.db, ctx.params[0]);
       const swapperId = asText(ctx.body.swapperId);
       const swapper = ctx.db.users.find((item) => item.id === swapperId);
-      if (!swapper) throw new MockHttpError(400, "Sélectionnez un remplaçant.");
+      if (
+        !swapper ||
+        swapper.role !== "SWAPPER" ||
+        !swapper.isActive ||
+        swapper.stationId !== occurrence.stationId
+      )
+        throw new MockHttpError(
+          400,
+          "Sélectionnez un swappeur actif rattaché à cette station.",
+        );
       const report = constraintReport(ctx.db, {
         stationId: occurrence.stationId,
         swapperId,
@@ -185,10 +312,16 @@ export const coverageRoutes: MockRoute[] = [
         ignoreOccurrenceId: occurrence.id,
       });
       if (!report.valid)
-        throw new MockHttpError(409, report.errors[0]?.message ?? "Remplacement impossible.");
-      const planning = ctx.db.plannings.find((item) => item.id === occurrence.planningId);
+        throw new MockHttpError(
+          409,
+          report.errors[0]?.message ?? "Remplacement impossible.",
+        );
+      const planning = ctx.db.plannings.find(
+        (item) => item.id === occurrence.planningId,
+      );
       const previous = occurrence.swapperId
-        ? ctx.db.users.find((item) => item.id === occurrence.swapperId) ?? null
+        ? (ctx.db.users.find((item) => item.id === occurrence.swapperId) ??
+          null)
         : null;
       occurrence.swapperId = swapperId;
       if (planning) planning.revision += 1;
@@ -214,7 +347,8 @@ export const coverageRoutes: MockRoute[] = [
         inSwapperId: swapper.id,
         before: { swapper: previous?.fullName ?? null },
         after: { swapper: swapper.fullName },
-        reason: asText(ctx.body.reason) || "Remplacement décidé par le superviseur",
+        reason:
+          asText(ctx.body.reason) || "Remplacement décidé par le superviseur",
         createdAt: isoFromMs(ctx.now),
       });
       notifyStaff(
@@ -237,14 +371,14 @@ export const coverageRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/operations\/changes$/,
     handler: (ctx) => {
-      const user = requireUser(ctx.db, ctx.user);
-      requireRole(user, ["ADMIN", "SUPERVISOR", "STATION_CHIEF"]);
+      const user = requireRole(requireUser(ctx.db, ctx.user), ["SUPERVISOR"]);
       const fromValue = asText(ctx.query.get("from"));
       const toValue = asText(ctx.query.get("to"));
       const from = fromValue ? Date.parse(fromValue) : ctx.now - 30 * 86400000;
       const to = toValue ? Date.parse(toValue) : ctx.now;
       const type = asText(ctx.query.get("type")).toUpperCase();
-      const stationFilter = asText(ctx.query.get("stationId")) || scopeStationId(user);
+      const stationFilter =
+        asText(ctx.query.get("stationId")) || scopeStationId(user);
       const swapperFilter = asText(ctx.query.get("swapperId"));
       return ctx.db.changes
         .filter((item) => {
@@ -252,10 +386,13 @@ export const coverageRoutes: MockRoute[] = [
           return at >= from && at <= to;
         })
         .filter((item) => (type ? item.type === type : true))
-        .filter((item) => (stationFilter ? item.stationId === stationFilter : true))
+        .filter((item) =>
+          stationFilter ? item.stationId === stationFilter : true,
+        )
         .filter((item) =>
           swapperFilter
-            ? item.outSwapperId === swapperFilter || item.inSwapperId === swapperFilter
+            ? item.outSwapperId === swapperFilter ||
+              item.inSwapperId === swapperFilter
             : true,
         )
         .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
@@ -265,8 +402,9 @@ export const coverageRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/corrections\/attachments$/,
     handler: (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
-      if (!ctx.file) throw new MockHttpError(400, "Aucune pièce justificative reçue.");
+      requireRole(requireUser(ctx.db, ctx.user), ["SUPERVISOR"]);
+      if (!ctx.file)
+        throw new MockHttpError(400, "Aucune pièce justificative reçue.");
       if (ctx.file.size > 5 * 1024 * 1024)
         throw new MockHttpError(413, "Le justificatif dépasse 5 Mo.");
       const created = {
@@ -284,7 +422,7 @@ export const coverageRoutes: MockRoute[] = [
     method: "PATCH",
     pattern: /^\/corrections\/shifts\/([^/]+)$/,
     handler: (ctx) => {
-      const actor = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
+      const actor = requireRole(requireUser(ctx.db, ctx.user), ["SUPERVISOR"]);
       const occurrence = occurrenceOf(ctx.db, ctx.params[0]);
       const reason = asText(ctx.body.reason);
       const attachmentId = asText(ctx.body.attachmentId);
@@ -293,22 +431,39 @@ export const coverageRoutes: MockRoute[] = [
           400,
           "Le motif de correction est obligatoire (5 caractères minimum).",
         );
-      const attachment = ctx.db.attachments.find((item) => item.id === attachmentId);
-      if (!attachment)
-        throw new MockHttpError(400, "Une pièce justificative valide est obligatoire.");
+      if (
+        attachmentId &&
+        !ctx.db.attachments.some((item) => item.id === attachmentId)
+      )
+        throw new MockHttpError(400, "La pièce justificative est invalide.");
       if (!occurrence.swapperId)
-        throw new MockHttpError(409, "Ce poste n'a pas de swappeur à corriger.");
+        throw new MockHttpError(
+          409,
+          "Ce poste n'a pas de swappeur à corriger.",
+        );
 
       // US 2045 : le statut « justifié » est distinct de l'absence constatée.
       const justified = ctx.body.isJustified === true;
       const absent = justified || ctx.body.isAbsent === true;
       const plannedMissed = asText(ctx.body.checkedInAt);
       const checkedInAt = absent ? null : plannedMissed || null;
-      const checkedOutAt = absent ? null : asText(ctx.body.checkedOutAt) || null;
-      if (checkedInAt && checkedOutAt && Date.parse(checkedOutAt) <= Date.parse(checkedInAt))
-        throw new MockHttpError(400, "La fin de service doit suivre la prise de service.");
+      const checkedOutAt = absent
+        ? null
+        : asText(ctx.body.checkedOutAt) || null;
+      if (
+        checkedInAt &&
+        checkedOutAt &&
+        Date.parse(checkedOutAt) <= Date.parse(checkedInAt)
+      )
+        throw new MockHttpError(
+          400,
+          "La fin de service doit suivre la prise de service.",
+        );
       if (!absent && !checkedInAt)
-        throw new MockHttpError(400, "Indiquez l'heure de prise de service ou un statut d'absence.");
+        throw new MockHttpError(
+          400,
+          "Indiquez l'heure de prise de service ou un statut d'absence.",
+        );
 
       const existing = recordOf(ctx, occurrence.id);
       const status = justified
@@ -327,11 +482,21 @@ export const coverageRoutes: MockRoute[] = [
             checkedOutAt: existing.checkedOutAt,
             isLate: existing.isLate,
           }
-        : { status: "ABSENT", checkedInAt: null, checkedOutAt: null, isLate: false };
-      const after = { status, checkedInAt, checkedOutAt, isLate: !absent && ctx.body.isLate === true };
+        : {
+            status: "ABSENT",
+            checkedInAt: null,
+            checkedOutAt: null,
+            isLate: false,
+          };
+      const after = {
+        status,
+        checkedInAt,
+        checkedOutAt,
+        isLate: !absent && ctx.body.isLate === true,
+      };
       const correction = {
         reason,
-        attachmentId,
+        attachmentId: attachmentId || null,
         authorId: actor.id,
         authorName: actor.fullName,
         at: isoFromMs(ctx.now),
@@ -396,6 +561,49 @@ export const coverageRoutes: MockRoute[] = [
       if (!target) throw new MockHttpError(404, "Notification introuvable.");
       target.readAt = isoFromMs(ctx.now);
       return { ok: true };
+    },
+  },
+  {
+    method: "PATCH",
+    pattern: /^\/notifications\/read-all$/,
+    handler: (ctx) => {
+      const user = requireUser(ctx.db, ctx.user);
+      for (const item of ctx.db.notifications)
+        if (item.userId === user.id && !item.readAt) item.readAt = isoFromMs(ctx.now);
+      return { ok: true };
+    },
+  },
+  {
+    method: "GET",
+    pattern: /^\/notifications\/preferences$/,
+    handler: (ctx) => {
+      const user = requireUser(ctx.db, ctx.user);
+      const preferences = ctx.db.notificationPreferences.find((item) => item.userId === user.id);
+      if (!preferences) throw new MockHttpError(404, "Préférences de notification introuvables.");
+      return preferences;
+    },
+  },
+  {
+    method: "PATCH",
+    pattern: /^\/notifications\/preferences$/,
+    handler: (ctx) => {
+      const user = requireUser(ctx.db, ctx.user);
+      const preferences = ctx.db.notificationPreferences.find((item) => item.userId === user.id);
+      if (!preferences) throw new MockHttpError(404, "Préférences de notification introuvables.");
+      preferences.emailEnabled = ctx.body.emailEnabled !== false;
+      preferences.pushEnabled = ctx.body.pushEnabled === true;
+      if (ctx.body.categories && typeof ctx.body.categories === "object") {
+        const requested = ctx.body.categories as Record<string, { email?: boolean; push?: boolean }>;
+        for (const category of Object.keys(preferences.categories)) {
+          const next = requested[category];
+          if (next) preferences.categories[category] = {
+            email: preferences.emailEnabled && next.email === true,
+            push: preferences.pushEnabled && next.push === true,
+          };
+        }
+      }
+      preferences.updatedAt = isoFromMs(ctx.now);
+      return preferences;
     },
   },
 ];

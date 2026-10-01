@@ -1,7 +1,6 @@
 import { SwapperHome } from "./SwapperHome";
 import { ChiefHome } from "./ChiefHome";
 import { SupervisorHome } from "./SupervisorHome";
-import { SwapperPanel } from "../supervision/SwapperPanel";
 import { AttendanceMonitor } from "../supervision/AttendanceMonitor";
 import type { OperationData } from "./types";
 import type { User } from "../../api/auth-api";
@@ -22,9 +21,9 @@ export function Operations({
     return (
       <div className="operations-stack">
         <SwapperHome user={user} data={data} onChanged={onChanged} />
-        <SwapperPanel user={user} data={data} onChanged={onChanged} />
       </div>
     );
+
   if (user.role === "STATION_CHIEF")
     return (
       <div className="operations-stack">
@@ -32,11 +31,13 @@ export function Operations({
         <AttendanceMonitor user={user} />
       </div>
     );
+
   if (user.role === "SUPERVISOR")
     return (
       <div className="operations-stack">
         <SupervisorHome user={user} data={data} onChanged={onChanged} />
       </div>
     );
+
   return null;
 }

@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/auth-api";
-import { FileCsv, LoaderCircle } from "../../ui/icons";
+import { FileSpreadsheet, LoaderCircle } from "../../ui/icons";
+import {
+  ResponsiveDataTable,
+  type ResponsiveColumn,
+} from "../../ui/ResponsiveDataTable";
+import { exportToExcel } from "../../utils/excelExport";
+import { Select } from "../../ui/Select";
 import { toDateInput, formatDateTime } from "./format";
 import type { ShiftChange, SupervisionProps } from "./types";
 
 const TYPE_LABEL: Record<ShiftChange["type"], string> = {
   REPLACEMENT: "Remplacement",
-  SWAP: "Permutation",
+  PERMUTATION: "Permutation",
   REASSIGNMENT: "Réaffectation",
 };
 
@@ -18,8 +24,8 @@ export function ChangeHistory({ user }: SupervisionProps) {
   );
   const [to, setTo] = useState(() => toDateInput(new Date()));
   const [type, setType] = useState("");
-  const [search, setSearch] = useState("");
-  const [swapperId, setSwapperId] = useState("");
+  const [stationSearch, setStationSearch] = useState("");
+  const [swapperSearch, setSwapperSearch] = useState("");
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -40,43 +46,65 @@ export function ChangeHistory({ user }: SupervisionProps) {
     load();
   }, [load]);
 
-  function exportCsv() {
-    if (!rows?.length) return;
-    const header = [
-      "Type",
-      "Initiateur",
-      "Station",
-      "Sortant",
-      "Entrant",
-      "Motif",
-      "Date",
-    ];
-    const lines = rows.map((row) =>
-      [
-        TYPE_LABEL[row.type],
-        row.initiator,
-        row.station,
-        row.outSwapper ?? "",
-        row.inSwapper ?? "",
-        row.reason ?? "",
-        row.createdAt,
-      ]
-        .map((value) => `"${String(value).replace(/"/g, '""')}"`)
-        .join(";"),
-    );
-    const blob = new Blob(
-      [`\uFEFF${[header.join(";"), ...lines].join("\r\n")}`],
-      {
-        type: "text/csv;charset=utf-8",
-      },
-    );
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `uswap-changements-${toDateInput(new Date())}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+  function exportExcel() {
+    if (!visibleRows.length) return;
+    exportToExcel<ShiftChange>({
+      data: visibleRows,
+      filename: `uswap-changements-${toDateInput(new Date())}`,
+      sheetName: "Changements",
+      columns: [
+        { header: "Type", key: (row) => TYPE_LABEL[row.type], width: 18 },
+        { header: "Initiateur", key: (row) => row.initiator, width: 24 },
+        { header: "Station", key: (row) => row.station, width: 24 },
+        { header: "Sortant", key: (row) => row.outSwapper ?? "", width: 24 },
+        { header: "Entrant", key: (row) => row.inSwapper ?? "", width: 24 },
+        { header: "Motif", key: (row) => row.reason ?? "", width: 38 },
+        {
+          header: "Date",
+          key: (row) => formatDateTime(row.createdAt),
+          width: 22,
+        },
+      ],
+    });
   }
+
+  const visibleRows = useMemo(() => {
+    const stationNeedle = stationSearch.trim().toLocaleLowerCase("fr");
+    const swapperNeedle = swapperSearch.trim().toLocaleLowerCase("fr");
+    return (rows ?? [])
+      .filter((row) =>
+        stationNeedle
+          ? row.station.toLocaleLowerCase("fr").includes(stationNeedle)
+          : true,
+      )
+      .filter((row) =>
+        swapperNeedle
+          ? `${row.outSwapper ?? ""} ${row.inSwapper ?? ""}`
+              .toLocaleLowerCase("fr")
+              .includes(swapperNeedle)
+          : true,
+      );
+  }, [rows, stationSearch, swapperSearch]);
+  const columns: ResponsiveColumn<ShiftChange>[] = [
+    {
+      key: "type",
+      header: "Type",
+      primary: true,
+      render: (row) => (
+        <span className="admin-badge">{TYPE_LABEL[row.type]}</span>
+      ),
+    },
+    { key: "initiator", header: "Initiateur", render: (row) => row.initiator },
+    { key: "station", header: "Station", render: (row) => row.station },
+    { key: "out", header: "Sortant", render: (row) => row.outSwapper ?? "—" },
+    { key: "in", header: "Entrant", render: (row) => row.inSwapper ?? "—" },
+    { key: "reason", header: "Motif", render: (row) => row.reason ?? "—" },
+    {
+      key: "date",
+      header: "Date",
+      render: (row) => formatDateTime(row.createdAt),
+    },
+  ];
 
   return (
     <section className="admin-card">
@@ -91,11 +119,11 @@ export function ChangeHistory({ user }: SupervisionProps) {
         <button
           type="button"
           className="admin-button secondary small"
-          disabled={!rows?.length}
-          onClick={exportCsv}
+          disabled={!visibleRows.length}
+          onClick={exportExcel}
         >
-          <FileCsv size={16} />
-          Exporter
+          <FileSpreadsheet size={16} />
+          Exporter Excel
         </button>
       </div>
       <div className="supervision-toolbar">
@@ -117,22 +145,35 @@ export function ChangeHistory({ user }: SupervisionProps) {
         </label>
         <label>
           Type
-          <select
+          <Select
             value={type}
-            onChange={(event) => setType(event.target.value)}
-          >
-            <option value="">Tous</option>
-            <option value="REPLACEMENT">Remplacement</option>
-            <option value="SWAP">Permutation</option>
-            <option value="REASSIGNMENT">Réaffectation</option>
-          </select>
+            size="sm"
+            ariaLabel="Type de changement"
+            onChange={(value) => setType(String(value))}
+            options={[
+              { value: "", label: "Tous" },
+              { value: "REPLACEMENT", label: "Remplacement" },
+              { value: "PERMUTATION", label: "Permutation" },
+              { value: "REASSIGNMENT", label: "Réaffectation" },
+            ]}
+          />
+        </label>
+        <label>
+          Station
+          <input
+            type="search"
+            value={stationSearch}
+            onChange={(event) => setStationSearch(event.target.value)}
+            placeholder="Filtrer une station…"
+          />
         </label>
         <label>
           Swappeur
           <input
-            value={swapperId}
-            onChange={(event) => setSwapperId(event.target.value)}
-            placeholder="Identifiant (optionnel)"
+            type="search"
+            value={swapperSearch}
+            onChange={(event) => setSwapperSearch(event.target.value)}
+            placeholder="Nom du swappeur…"
           />
         </label>
       </div>
@@ -146,41 +187,22 @@ export function ChangeHistory({ user }: SupervisionProps) {
           <LoaderCircle className="spin" />
           Chargement de l’historique…
         </div>
-      ) : !rows.length ? (
+      ) : !visibleRows.length ? (
         <div className="admin-empty">
-          <h3>Aucun changement sur la période</h3>
+          <h3>
+            {rows.length
+              ? "Aucun changement ne correspond"
+              : "Aucun changement sur la période"}
+          </h3>
         </div>
       ) : (
-        <div className="admin-table-wrap ops-table">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Initiateur</th>
-                <th>Station</th>
-                <th>Sortant</th>
-                <th>Entrant</th>
-                <th>Motif</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <span className="admin-badge">{TYPE_LABEL[row.type]}</span>
-                  </td>
-                  <td>{row.initiator}</td>
-                  <td>{row.station}</td>
-                  <td>{row.outSwapper ?? "—"}</td>
-                  <td>{row.inSwapper ?? "—"}</td>
-                  <td>{row.reason ?? "—"}</td>
-                  <td>{formatDateTime(row.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveDataTable
+          rows={visibleRows}
+          columns={columns}
+          rowKey={(row) => row.id}
+          ariaLabel="Historique des changements d’affectation"
+          className="ops-table"
+        />
       )}
       <p className="operations-hint">
         Historique en lecture seule.{" "}

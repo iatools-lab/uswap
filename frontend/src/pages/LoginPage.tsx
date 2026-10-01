@@ -1,10 +1,17 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye, EyeOff, LoaderCircle, Mail, X } from "../ui/icons";
 import { useSession } from "../app/session";
-import { fetchProfiles, roles, type Profile } from "../api/auth-api";
+import {
+  fetchProfiles,
+  mockPeople,
+  roles,
+  usingMock,
+  type User,
+} from "../api/auth-api";
 import { AuthLayout } from "./AuthLayout";
 import { RouteFallback } from "../app/RouteFallback";
+import { Select } from "../ui/Select";
 
 /** Format d'adresse e-mail attendu, partagé par la validation et les messages d'erreur. */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -18,17 +25,17 @@ export function LoginPage() {
   const [help, setHelp] = useState<"invite" | null>(null);
   const [capsLock, setCapsLock] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [profiles, setProfiles] = useState<User[]>(usingMock ? mockPeople : []);
 
-  // Accounts offered by the picker come from the real directory. A failure
-  // (backend down) just hides the picker: typing an e-mail still works.
   useEffect(() => {
+    if (usingMock) return;
     let active = true;
-    fetchProfiles()
-      .then((rows) => {
-        if (active) setProfiles(rows);
+    void fetchProfiles()
+      .then((items) => {
+        if (active) setProfiles(items);
       })
       .catch(() => {
+        // Le sélecteur est facultatif : l'e-mail peut toujours être saisi.
         if (active) setProfiles([]);
       });
     return () => {
@@ -40,13 +47,17 @@ export function LoginPage() {
     e.preventDefault();
     setSubmitted(true);
     setError("");
-    const emailInput = e.currentTarget.elements.namedItem("username") as HTMLInputElement;
+    const emailInput = e.currentTarget.elements.namedItem(
+      "username",
+    ) as HTMLInputElement;
     if (!EMAIL_PATTERN.test(identifier.trim()) || !emailInput.validity.valid) {
       emailInput.focus();
       return;
     }
     if (!password) {
-      (e.currentTarget.elements.namedItem("password") as HTMLInputElement).focus();
+      (
+        e.currentTarget.elements.namedItem("password") as HTMLInputElement
+      ).focus();
       return;
     }
     if (new TextEncoder().encode(password).length > 72) {
@@ -74,18 +85,31 @@ export function LoginPage() {
         <>
           <h2 className="login-title">Connexion</h2>
           <form onSubmit={submit} noValidate>
-            <div className="field">
-              <label htmlFor="demo-profile">Profil à ouvrir</label>
-              <div className="input-wrap">
-                <select id="demo-profile" value={identifier} onChange={(e) => { setIdentifier(e.target.value); setError(""); }} disabled={locked} aria-label="Choisir un profil">
-                  <option value="">{profiles.length ? "Choisir un compte" : "Aucun compte disponible"}</option>
-                  {profiles.map((person) => <option key={person.id} value={person.email}>{roles[person.role]} · {person.fullName}</option>)}
-                </select>
+            {profiles.length > 0 && (
+              <div className="field">
+                <span className="field-label">Profil à ouvrir</span>
+                <Select
+                  size="lg"
+                  value={identifier}
+                  disabled={locked}
+                  ariaLabel="Choisir un profil"
+                  placeholder="Choisir un compte"
+                  onChange={(value) => {
+                    setIdentifier(String(value));
+                    setError("");
+                  }}
+                  options={profiles.map((person) => ({
+                    value: person.email,
+                    label: `${roles[person.role]} · ${person.fullName} — ${person.email}`,
+                  }))}
+                />
               </div>
-            </div>
+            )}
             <div className="field">
               <label htmlFor="identifier">Adresse e-mail</label>
-              <div className={`input-wrap ${submitted && !EMAIL_PATTERN.test(identifier.trim()) ? "invalid" : ""}`}>
+              <div
+                className={`input-wrap ${submitted && !EMAIL_PATTERN.test(identifier.trim()) ? "invalid" : ""}`}
+              >
                 <input
                   id="identifier"
                   name="username"
@@ -102,9 +126,13 @@ export function LoginPage() {
                     setIdentifier(e.target.value);
                     setError("");
                   }}
-                  aria-invalid={submitted && !EMAIL_PATTERN.test(identifier.trim())}
+                  aria-invalid={
+                    submitted && !EMAIL_PATTERN.test(identifier.trim())
+                  }
                   aria-describedby={
-                    submitted && !EMAIL_PATTERN.test(identifier.trim()) ? "identifier-error" : undefined
+                    submitted && !EMAIL_PATTERN.test(identifier.trim())
+                      ? "identifier-error"
+                      : undefined
                   }
                   disabled={locked}
                 />
@@ -122,7 +150,9 @@ export function LoginPage() {
                   Mot de passe oublié ?
                 </Link>
               </div>
-              <div className={`input-wrap ${submitted && !password ? "invalid" : ""}`}>
+              <div
+                className={`input-wrap ${submitted && !password ? "invalid" : ""}`}
+              >
                 <input
                   id="password"
                   name="password"
@@ -137,14 +167,20 @@ export function LoginPage() {
                   onKeyUp={(e) => setCapsLock(e.getModifierState("CapsLock"))}
                   onBlur={() => setCapsLock(false)}
                   aria-invalid={submitted && !password}
-                  aria-describedby={submitted && !password ? "password-error" : undefined}
+                  aria-describedby={
+                    submitted && !password ? "password-error" : undefined
+                  }
                   disabled={locked}
                 />
                 <button
                   className="eye-button"
                   type="button"
                   onClick={() => setVisible(!visible)}
-                  aria-label={visible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                  aria-label={
+                    visible
+                      ? "Masquer le mot de passe"
+                      : "Afficher le mot de passe"
+                  }
                   aria-pressed={visible}
                 >
                   {visible ? <EyeOff size={19} /> : <Eye size={19} />}
@@ -202,7 +238,12 @@ export function LoginPage() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button className="dialog-close" autoFocus aria-label="Fermer" onClick={() => setHelp(null)}>
+            <button
+              className="dialog-close"
+              autoFocus
+              aria-label="Fermer"
+              onClick={() => setHelp(null)}
+            >
               <X />
             </button>
             <div className="form-icon">
@@ -210,8 +251,9 @@ export function LoginPage() {
             </div>
             <h2 id="help-title">Activez votre accès</h2>
             <p>
-              Ouvrez le lien d’activation reçu par e-mail pour définir votre mot de passe. Si vous n’avez pas reçu
-              d’invitation, contactez votre administrateur.
+              Ouvrez le lien d’activation reçu par e-mail pour définir votre mot
+              de passe. Si vous n’avez pas reçu d’invitation, contactez votre
+              administrateur.
             </p>
           </dialog>
         </div>

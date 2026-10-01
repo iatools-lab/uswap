@@ -1,5 +1,5 @@
 import { mockDownload, mockRequest } from "./mock";
-import { MOCK_LATENCY_MS, delay } from "./mock";
+import { DEMO_PASSWORD, FICTITIOUS_DOMAIN, MOCK_LATENCY_MS, delay } from "./mock";
 import { MockHttpError, type MockCtx } from "./mock/types";
 
 export type Role = "ADMIN" | "SUPERVISOR" | "STATION_CHIEF" | "SWAPPER";
@@ -39,25 +39,54 @@ export const rolePaths: Record<Role, string> = {
   SWAPPER: "/app/mon-espace",
 };
 
-export type Profile = {
-  id: string;
-  email: string;
-  fullName: string;
-  role: Role;
-  stationId?: string | null;
-};
+export const mockPeople: User[] = [
+  {
+    id: "us-admin",
+    email: `admin@${FICTITIOUS_DOMAIN}`,
+    fullName: "Administrateur uSwap",
+    role: "ADMIN",
+  },
+  {
+    id: "us-supervisor",
+    email: `superviseur@${FICTITIOUS_DOMAIN}`,
+    fullName: "Camille Nola",
+    role: "SUPERVISOR",
+  },
+  {
+    id: "us-chief-bastos",
+    email: `chef@${FICTITIOUS_DOMAIN}`,
+    fullName: "Sam Kotto",
+    role: "STATION_CHIEF",
+    stationId: "st-bastos",
+    stationName: "Station Bastos",
+  },
+  {
+    id: "us-chief-obobogo",
+    email: `chef.obobogo@${FICTITIOUS_DOMAIN}`,
+    fullName: "Ariane Tchana",
+    role: "STATION_CHIEF",
+    stationId: "st-obobogo",
+    stationName: "Obobogo",
+  },
+  {
+    id: "sw-01",
+    email: `swappeur@${FICTITIOUS_DOMAIN}`,
+    fullName: "Léa Meka",
+    role: "SWAPPER",
+    stationId: "st-bastos",
+    stationName: "Station Bastos",
+  },
+];
 
-/**
- * Real accounts the login screen may offer, read from the backend directory.
- * Returns an empty list on failure so the (optional) picker simply hides
- * instead of blocking authentication.
- */
-export async function fetchProfiles(): Promise<Profile[]> {
-  const rows = await api<Profile[]>("/public/profiles");
+export { DEMO_PASSWORD, FICTITIOUS_DOMAIN, MOCK_LATENCY_MS };
 
-  return rows.filter((row) =>
-    Object.prototype.hasOwnProperty.call(roles, row.role),
-  );
+/** Profils proposés sur l'écran de connexion. En mode démo, la liste reste locale. */
+export async function fetchProfiles(): Promise<User[]> {
+  if (usingMock) return mockPeople;
+
+  // Le backend ne publie pas de répertoire de comptes avant authentification.
+  // Le champ e-mail reste saisissable librement sur l'écran de connexion.
+  return [];
 }
 
 const configured = (
@@ -102,8 +131,6 @@ const USER_KEY = "uswap-session-user";
 
 let accessToken: string | null = null;
 let generation = 0;
-
-/** Single in-flight refresh shared by concurrent callers. See refresh(). */
 let inFlightRefresh: Promise<Session> | null = null;
 
 function serialize(body: unknown): {
@@ -338,31 +365,10 @@ export function refresh(): Promise<Session> {
     );
   }
 
-  // The refresh token is single-use and rotated server-side. Under React
-  // StrictMode (dev) the boot effect runs twice, so two concurrent calls would
-  // send the same token: the first succeeds, the second is refused as already
-  // used, and the session looks dead. Share one in-flight request instead.
-  if (inFlightRefresh) return inFlightRefresh;
-
-  const started = doRefresh();
-
-  inFlightRefresh = started.finally(() => {
-    inFlightRefresh = null;
-  });
-
-  return inFlightRefresh;
-}
-
-function doRefresh(): Promise<Session> {
-  const refreshToken =
-    localStorage.getItem(
-      REFRESH_TOKEN_KEY,
-    );
-
   const savedUser =
     localStorage.getItem(USER_KEY);
 
-  if (!refreshToken || !savedUser) {
+  if (!savedUser) {
     return Promise.reject(
       new ApiError(
         401,
@@ -370,6 +376,10 @@ function doRefresh(): Promise<Session> {
       ),
     );
   }
+
+  // Partage le refresh en cours : le backend renouvelle le token, donc deux
+  // appels concurrents pourraient réutiliser le même token à usage unique.
+  if (inFlightRefresh) return inFlightRefresh;
 
   let user: UserIcon;
 
@@ -395,31 +405,28 @@ function doRefresh(): Promise<Session> {
     );
   }
 
-  return api<{
-    accessToken: string;
-    refreshToken: string;
-    expiresIn: number;
-  }>(
+  // Le backend conserve le refresh token dans un cookie HttpOnly et le fait
+  // tourner à chaque renouvellement. Il ne doit donc jamais être lu ni envoyé
+  // dans le corps de la requête côté navigateur.
+  const request = api<Session>(
     "/auth/refresh",
-    {
-      refreshToken,
-    },
-  ).then((data) =>
-    remember({
-      user,
-      accessToken:
-        data.accessToken,
-      refreshToken:
-        data.refreshToken,
-      expiresIn:
-        data.expiresIn,
-      sessionExpiresAt:
-        new Date(
-          Date.now() +
-            data.expiresIn * 1000,
-        ).toISOString(),
-    }),
-  );
+    {},
+    "POST",
+  ).then((data) => {
+    const session = remember({
+      ...data,
+      user: data.user ?? user,
+    });
+    if (!data.refreshToken)
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+    return session;
+  });
+
+  inFlightRefresh = request.finally(() => {
+    inFlightRefresh = null;
+  });
+
+  return inFlightRefresh;
 }
 
 export function forgetSession() {
