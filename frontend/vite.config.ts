@@ -1,8 +1,32 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  server: { host: "127.0.0.1" },
-  preview: { host: "127.0.0.1" },
+  server: {
+    host: "127.0.0.1",
+    /**
+     * Le frontend et l'API sont servis sur la meme origine en developpement.
+     * C'est indispensable au cookie de session HttpOnly : envoye depuis
+     * http://localhost:3000 vers http://127.0.0.1:5173 il serait cross-site,
+     * et un cookie SameSite=Lax n'est alors jamais joint a la requete.
+     */
+    proxy: {
+      "/api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+    },
+  },
+  preview: {
+    host: "127.0.0.1",
+    proxy: {
+      "/api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+    },
+  },
   build: {
     rollupOptions: {
       output: {

@@ -215,7 +215,10 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     const email = this.normalizeEmail(dto.email);
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { station: { select: { name: true } } },
+    });
 
     if (!user) {
       await this.recordLoginAttempt(email, false);
@@ -241,17 +244,17 @@ export class AuthService {
       accessToken,
       refreshToken,
       expiresIn: AuthService.ACCESS_TOKEN_TTL_SECONDS,
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-      },
+      sessionExpiresAt: this.sessionExpiresAt(user),
+      idleTimeoutSeconds: AuthService.ACCESS_TOKEN_TTL_SECONDS,
+      absoluteExpiresAt: new Date(
+        Date.now() + AuthService.REFRESH_TOKEN_TTL_MS,
+      ).toISOString(),
+      user: this.toSessionUser(user),
     };
   }
 
   async refreshAccessToken(dto: RefreshTokenDto) {
-    const tokenHash = this.hashToken(dto.refreshToken);
+    const tokenHash = this.hashToken(dto.refreshToken ?? '');
     const storedToken = await this.prisma.refreshToken.findUnique({ where: { tokenHash } });
 
     if (!storedToken || storedToken.expiresAt <= new Date()) {
@@ -261,7 +264,10 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token invalide ou expiré');
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: storedToken.userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: storedToken.userId },
+      include: { station: { select: { name: true } } },
+    });
     if (!user || !user.isActive) {
       await this.prisma.refreshToken.deleteMany({ where: { userId: storedToken.userId } });
       throw new UnauthorizedException('Compte introuvable ou inactif');
@@ -277,7 +283,17 @@ export class AuthService {
     const accessToken = this.issueAccessToken(user);
     const refreshToken = await this.createRefreshToken(user.id);
 
-    return { accessToken, refreshToken, expiresIn: AuthService.ACCESS_TOKEN_TTL_SECONDS };
+    return {
+      accessToken,
+      refreshToken,
+      expiresIn: AuthService.ACCESS_TOKEN_TTL_SECONDS,
+      sessionExpiresAt: this.sessionExpiresAt(user),
+      idleTimeoutSeconds: AuthService.ACCESS_TOKEN_TTL_SECONDS,
+      absoluteExpiresAt: new Date(
+        Date.now() + AuthService.REFRESH_TOKEN_TTL_MS,
+      ).toISOString(),
+      user: this.toSessionUser(user),
+    };
   }
 
   async logout(userId: string) {
@@ -301,6 +317,40 @@ export class AuthService {
       expiresInSeconds,
     };
   }
+
+  /**
+   * The shape the frontend stores as its session user. `stationName` is
+   * resolved through the relation so the header can show the station without
+   * a second round-trip.
+   */
+  private toSessionUser(user: {
+    id: string;
+    email: string;
+    fullName: string;
+    role: string;
+    stationId: string | null;
+    station?: { name: string } | null;
+  }) {
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      stationId: user.stationId,
+      stationName: user.station?.name ?? null,
+    };
+  }
+
+  /** Hard deadline of the current access token, as an ISO string. */
+  private sessionExpiresAt(user: { id: string }): string {
+    const token = this.issueAccessToken(user as never);
+    const decoded = this.jwtService.decode(token) as { exp?: number } | null;
+    const exp = decoded?.exp ?? Math.floor(Date.now() / 1000) + AuthService.ACCESS_TOKEN_TTL_SECONDS;
+    return new Date(exp * 1000).toISOString();
+  }
+
+  /** Refresh-token cookie name shared with the controller. */
+  static readonly REFRESH_COOKIE = 'uswap_refresh';
 
   async forgotPassword(dto: ForgotPasswordDto) {
     const email = this.normalizeEmail(dto.email);

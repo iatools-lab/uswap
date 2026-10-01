@@ -120,6 +120,8 @@ function migrateDb(candidate: unknown): MockDb | null {
     notificationPreferences:
       previous.notificationPreferences ?? seed.notificationPreferences,
     scheduledReports: previous.scheduledReports ?? [],
+    globalSettings: previous.globalSettings ?? seed.globalSettings,
+    settingsHistory: previous.settingsHistory ?? [],
     offlineOperations: previous.offlineOperations ?? [],
     leaves: [...previousLeaves, ...sprint4DemoLeaves].map((leave, index) => ({
       ...leave,

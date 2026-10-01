@@ -6,6 +6,7 @@ Role,
 } from '@prisma/client';
 import {
 BadRequestException,
+ForbiddenException,
 Injectable,
 NotFoundException,
 UnauthorizedException,
@@ -1349,4 +1350,164 @@ private async openReplacementForAbsence(
     // the next run will retry.
   }
 }
+
+  // ============================================================
+  // SPRINT 5 — MONITOR & HISTORY
+  // ============================================================
+
+  /**
+   * Live board used by supervisors and station chiefs: every shift of the day,
+   * with the derived attendance status and a per-status summary.
+   */
+  async monitor(userId: string) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, stationId: true },
+    });
+    if (!actor) {
+      throw new NotFoundException('Compte introuvable');
+    }
+    if (
+      actor.role !== Role.SUPERVISOR &&
+      actor.role !== Role.STATION_CHIEF &&
+      actor.role !== Role.ADMIN
+    ) {
+      throw new ForbiddenException('Accès non autorisé au suivi des pointages.');
+    }
+
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start.getTime() + 86_400_000);
+
+    const shifts = await this.prisma.shift.findMany({
+      where: {
+        ...(actor.stationId ? { stationId: actor.stationId } : {}),
+        startTime: { gte: start, lt: end },
+      },
+      include: {
+        station: {
+          select: {
+            id: true,
+            name: true,
+            timezone: true,
+            latenessToleranceMinutes: true,
+          },
+        },
+        swapper: { select: { id: true, fullName: true } },
+        attendances: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    const summary = {
+      expected: 0,
+      present: 0,
+      late: 0,
+      absent: 0,
+      closed: 0,
+      justified: 0,
+    };
+
+    const rows = shifts.map((shift) => {
+      const record = shift.attendances[0];
+      const status = this.mapStatus(record?.status);
+      const key = status.toLowerCase() as keyof typeof summary;
+      if (key in summary) summary[key] += 1;
+      return {
+        shiftId: shift.id,
+        station: {
+          id: shift.station.id,
+          name: shift.station.name,
+          timezone: shift.station.timezone,
+        },
+        swapper: { id: shift.swapper.id, fullName: shift.swapper.fullName },
+        template: `${shift.startTime.toISOString().slice(11, 16)} – ${shift.endTime
+          .toISOString()
+          .slice(11, 16)}`,
+        startTime: shift.startTime.toISOString(),
+        endTime: shift.endTime.toISOString(),
+        status,
+        checkedInAt: record?.checkInAt?.toISOString() ?? null,
+        checkedOutAt: record?.checkOutAt?.toISOString() ?? null,
+        isLate: status === 'LATE',
+        justified: status === 'JUSTIFIED',
+        toleranceMinutes: shift.station.latenessToleranceMinutes,
+      };
+    });
+
+    return {
+      generatedAt: new Date().toISOString(),
+      stationId: actor.stationId ?? null,
+      summary,
+      rows,
+    };
+  }
+
+  /**
+   * Personal attendance history of the signed-in swapper, over an optional
+   * [from, to] window.
+   */
+  async history(userId: string, from?: string, to?: string) {
+    const fromDate = from
+      ? new Date(from)
+      : new Date(Date.now() - 30 * 86_400_000);
+    const toDate = to ? new Date(to) : new Date(Date.now() + 7 * 86_400_000);
+
+    const shifts = await this.prisma.shift.findMany({
+      where: {
+        swapperId: userId,
+        startTime: { gte: fromDate, lte: toDate },
+      },
+      include: {
+        station: { select: { id: true, name: true, timezone: true } },
+        attendances: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+      orderBy: { startTime: 'desc' },
+    });
+
+    return shifts.map((shift) => {
+      const record = shift.attendances[0];
+      const status = this.mapStatus(record?.status);
+      const plannedHours =
+        (shift.endTime.getTime() - shift.startTime.getTime()) / 3_600_000;
+      return {
+        shiftId: shift.id,
+        station: {
+          id: shift.station.id,
+          name: shift.station.name,
+          timezone: shift.station.timezone,
+        },
+        template: `${shift.startTime.toISOString().slice(11, 16)} – ${shift.endTime
+          .toISOString()
+          .slice(11, 16)}`,
+        plannedStart: shift.startTime.toISOString(),
+        plannedEnd: shift.endTime.toISOString(),
+        plannedHours: Math.round(plannedHours * 10) / 10,
+        checkedInAt: record?.checkInAt?.toISOString() ?? null,
+        checkedOutAt: record?.checkOutAt?.toISOString() ?? null,
+        isLate: status === 'LATE',
+        isAbsent: status === 'ABSENT',
+        isJustified: status === 'JUSTIFIED',
+        corrected: Boolean(record?.correctedAt),
+        correctedAt: record?.correctedAt?.toISOString() ?? null,
+        correctionReason: record?.absenceReason ?? null,
+      };
+    });
+  }
+
+  /** Maps the Prisma status onto the vocabulary the frontend displays. */
+  private mapStatus(status?: AttendanceStatus | null): string {
+    switch (status) {
+      case 'CHECKED_IN':
+        return 'PRESENT';
+      case 'CHECKED_OUT':
+        return 'CLOSED';
+      case 'ABSENT':
+        return 'ABSENT';
+      case 'JUSTIFIED':
+        return 'JUSTIFIED';
+      default:
+        return 'EXPECTED';
+    }
+  }
 }

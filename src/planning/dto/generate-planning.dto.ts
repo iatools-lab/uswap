@@ -1,6 +1,7 @@
 import {
 IsArray,
 IsIn,
+IsInt,
 IsNotEmpty,
 IsOptional,
 IsString,
@@ -62,26 +63,61 @@ shiftNames?: string[];
 
 export class GeneratePlanningDto {
 @ApiProperty({
-type: [PlanningStationSelectionDto],
-example: [
-{
-stationId: 'uuid-station-1',
-swapperIds: [
-'uuid-swapper-1',
-'uuid-swapper-2',
-],
-shiftNames: [
-'MORNING',
-'AFTERNOON',
-'NIGHT',
-],
-},
-],
-description:
-'Stations concernees. En mode automatique, les swapperIds et shiftNames peuvent etre omis.',
+  type: [PlanningStationSelectionDto],
+  example: [
+    {
+      stationId: 'uuid-station-1',
+      swapperIds: [
+        'uuid-swapper-1',
+        'uuid-swapper-2',
+      ],
+      shiftNames: [
+        'MORNING',
+        'AFTERNOON',
+        'NIGHT',
+      ],
+    },
+  ],
+  description:
+    'Stations concernees. En mode automatique, les swapperIds et shiftNames peuvent etre omis.',
+  required: false,
 })
+@IsOptional()
 @IsArray()
 @ValidateNested({ each: true })
 @Type(() => PlanningStationSelectionDto)
-stations: PlanningStationSelectionDto[];
+stations?: PlanningStationSelectionDto[];
+
+  // --- Sprint 5 : forme plate envoyee par l'ecran de planification ---
+
+  @ApiProperty({ required: false, example: 'uuid-de-la-station' })
+  @IsOptional()
+  @IsString()
+  stationId?: string;
+
+  @ApiProperty({ required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  templateIds?: string[];
+
+  @ApiProperty({
+    required: false,
+    type: [Number],
+    description: 'Jours de semaine 0=dimanche … 6=samedi',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  weekdays?: number[];
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  previewHash?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsInt()
+  revision?: number;
 }

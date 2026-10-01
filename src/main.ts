@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -11,6 +12,9 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
   const corsOrigin = process.env.CORS_ORIGIN;
+
+  // Needed to read the HttpOnly refresh cookie on POST /auth/refresh.
+  app.use(cookieParser());
 
   app.enableCors({
     origin: corsOrigin

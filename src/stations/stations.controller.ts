@@ -119,6 +119,19 @@ isActive,
 }
 
 @Roles(Role.ADMIN)
+@Patch(':id/activate')
+activate(@Param('id') id: string) {
+  // Alias used by the station manager: a dedicated verb per direction.
+  return this.stationsService.setActive(id, true);
+}
+
+@Roles(Role.ADMIN)
+@Patch(':id/deactivate')
+deactivate(@Param('id') id: string) {
+  return this.stationsService.setActive(id, false);
+}
+
+@Roles(Role.ADMIN)
 @Patch(':id/status')
 setStatus(
 @Param('id') id: string,

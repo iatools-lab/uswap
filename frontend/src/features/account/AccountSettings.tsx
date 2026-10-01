@@ -231,18 +231,35 @@ function NotificationPreferences() {
     );
 
   async function channel(name: "emailEnabled" | "pushEnabled", value: boolean) {
-    if (name === "pushEnabled" && value && "Notification" in window) {
-      value = (await Notification.requestPermission()) === "granted";
-      if (value)
-        new Notification("Notifications uSwap activées", {
-          body: "Les alertes autorisées pourront apparaître sur cet appareil.",
-          icon: "/icons/app-192.png",
-        });
+    setError("");
+    try {
+      if (name === "pushEnabled" && value) {
+        if (!("Notification" in window)) {
+          setError("Les notifications ne sont pas prises en charge par ce navigateur.");
+          return;
+        }
+        value = (await Notification.requestPermission()) === "granted";
+        if (!value) {
+          setError("L’autorisation des notifications a été refusée dans le navigateur.");
+          return;
+        }
+      }
+      if (name === "pushEnabled" && !value && "serviceWorker" in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = await registration?.pushManager.getSubscription();
+        await subscription?.unsubscribe();
+      }
+      setPreferences((current) =>
+        current ? { ...current, [name]: value } : current,
+      );
+      setSaved(false);
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Le réglage des notifications a échoué.",
+      );
     }
-    setPreferences((current) =>
-      current ? { ...current, [name]: value } : current,
-    );
-    setSaved(false);
   }
   function category(
     name: string,
@@ -320,7 +337,10 @@ function NotificationPreferences() {
           </span>
           <div>
             <strong>Notifications push</strong>
-            <small>Recevoir les alertes sur cet appareil</small>
+            <small>
+              Gérer les alertes uSwap sur cet appareil. L’autorisation globale
+              reste contrôlée par le navigateur.
+            </small>
           </div>
           <PreferenceSwitch
             label="Notifications push"

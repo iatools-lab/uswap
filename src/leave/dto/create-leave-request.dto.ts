@@ -1,5 +1,12 @@
-import { IsDateString, IsEnum, IsOptional, IsString } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { LeaveType } from '@prisma/client';
 
 export class CreateLeaveRequestDto {
@@ -15,8 +22,24 @@ export class CreateLeaveRequestDto {
   @IsEnum(LeaveType)
   type: LeaveType;
 
-  @ApiProperty({ required: false, example: 'Voyage familial' })
+  @ApiPropertyOptional({ example: 'Voyage familial' })
   @IsOptional()
   @IsString()
+  @MinLength(8)
   reason?: string;
+
+  /**
+   * Offline-first reference. Mandatory on the /leaves route so a replayed
+   * queue item is deduplicated instead of creating a second request.
+   */
+  @ApiPropertyOptional({ example: 'leave-1780000000000-abc123' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  idempotencyKey?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  attachmentId?: string;
 }

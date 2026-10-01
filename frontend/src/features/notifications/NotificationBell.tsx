@@ -14,6 +14,7 @@ import {
 } from "@phosphor-icons/react";
 import { api, usingMock } from "../../api/auth-api";
 import { formatDateTime } from "../supervision/format";
+import { Select } from "../../ui/Select";
 
 /** En dessous de cette largeur, le panneau devient une feuille ancrée en bas. */
 const SHEET_MAX_WIDTH = 620;
@@ -38,12 +39,42 @@ type NotificationItem = {
   createdAt: string;
 };
 
+type NotificationCategory =
+  | "PLANNING"
+  | "ATTENDANCE"
+  | "LEAVE"
+  | "INCIDENT"
+  | "ACCESS"
+  | "OTHER";
+
+const categoryFor = (kind: string): NotificationCategory => {
+  if (kind.startsWith("PLANNING_")) return "PLANNING";
+  if (kind.includes("LEAVE")) return "LEAVE";
+  if (kind.includes("INCIDENT")) return "INCIDENT";
+  if (kind === "ACCESS_PENDING") return "ACCESS";
+  if (
+    ["CHECKIN", "CHECKOUT", "CORRECTION", "AUTOMATIC_ABSENCE", "ABSENCE_DECLARED"].includes(kind)
+  )
+    return "ATTENDANCE";
+  return "OTHER";
+};
+
+const categoryLabels: Record<NotificationCategory, string> = {
+  PLANNING: "Plannings",
+  ATTENDANCE: "Pointages",
+  LEAVE: "Congés",
+  INCIDENT: "Incidents",
+  ACCESS: "Accès",
+  OTHER: "Autres",
+};
+
 export function NotificationBell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"all" | "unread">("all");
+  const [category, setCategory] = useState<NotificationCategory | "ALL">("ALL");
   const [placement, setPlacement] = useState<Placement | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -153,7 +184,18 @@ export function NotificationBell() {
   }, []);
 
   const unread = items.filter((item) => !item.readAt);
-  const visibleItems = view === "unread" ? unread : items;
+  const categoryCounts = items.reduce<Record<NotificationCategory, number>>(
+    (counts, item) => {
+      counts[categoryFor(item.kind)] += 1;
+      return counts;
+    },
+    { PLANNING: 0, ATTENDANCE: 0, LEAVE: 0, INCIDENT: 0, ACCESS: 0, OTHER: 0 },
+  );
+  const visibleItems = items.filter(
+    (item) =>
+      (view === "all" || !item.readAt) &&
+      (category === "ALL" || categoryFor(item.kind) === category),
+  );
 
   async function markAllRead() {
     const pending = unread;
@@ -288,12 +330,28 @@ export function NotificationBell() {
               >
                 Non lues <span>{unread.length}</span>
               </button>
+              <Select
+                size="sm"
+                width="auto"
+                minWidth="142px"
+                menuMinWidth="190px"
+                value={category}
+                ariaLabel="Catégorie de notifications"
+                onChange={(value) => setCategory(value as NotificationCategory | "ALL")}
+                options={[
+                  { value: "ALL", label: `Toutes les catégories · ${items.length}` },
+                  ...Object.entries(categoryLabels).map(([key, label]) => ({
+                    value: key,
+                    label: `${label} · ${categoryCounts[key as NotificationCategory]}`,
+                  })),
+                ]}
+              />
             </div>
             {!visibleItems.length ? (
               <p className="notification-bell__empty">
                 {view === "unread"
-                  ? "Aucune notification non lue."
-                  : "Aucune notification."}
+                  ? "Aucune notification non lue dans cette sélection."
+                  : "Aucune notification dans cette catégorie."}
               </p>
             ) : (
               <ul className="notification-bell__list">

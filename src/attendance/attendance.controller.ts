@@ -327,6 +327,30 @@ export class AttendanceController {
     );
   }
 
+  /**
+   * Sprint 5: live attendance board for supervisors and station chiefs.
+   * Declared before GET ':id' so 'monitor' is not read as an attendance id.
+   */
+  @Get("monitor")
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  async monitor(@Req() req: { user: { id: string } }) {
+    return this.attendanceService.monitor(req.user.id);
+  }
+
+  /**
+   * Sprint 5: personal attendance history of the signed-in swapper.
+   * Declared before GET ':id' as well.
+   */
+  @Get("history")
+  @Roles(Role.SWAPPER)
+  async history(
+    @Req() req: { user: { id: string } },
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+  ) {
+    return this.attendanceService.history(req.user.id, from, to);
+  }
+
   @Get(":id")
   @Roles(
     Role.ADMIN,

@@ -18,6 +18,8 @@ import { WorkspaceModule } from './workspace/workspace.module';
 import { CorrectionsModule } from './corrections/corrections.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { IncidentsModule } from './incidents/incidents.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
 imports: [
@@ -37,7 +39,8 @@ WorkspaceModule,
 CorrectionsModule,
 NotificationsModule,
 DashboardModule,
-
+IncidentsModule,
+ReportsModule,
 ],
 controllers: [AppController],
 providers: [AppService],

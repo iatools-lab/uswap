@@ -46,6 +46,13 @@ export class UsersController {
   }
 
   @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @Get('export')
+  export(@Query() query: QueryUsersDto) {
+    // Declared before GET /:id so "export" is never captured as a user id.
+    return this.usersService.exportRows(query);
+  }
+
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
@@ -123,6 +130,28 @@ export class UsersController {
       throw new BadRequestException('Aucun fichier recu');
     }
     return this.usersService.parseAndPreview(file.buffer);
+  }
+
+  @Roles(Role.ADMIN)
+  @Post('imports/preview')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  async previewImportAlias(@UploadedFile() file: Express.Multer.File) {
+    // Alias: the sprint 5 import screen posts to /users/imports/preview.
+    if (!file) {
+      throw new BadRequestException('Aucun fichier recu');
+    }
+    return this.usersService.parseAndPreview(file.buffer);
+  }
+
+  @Roles(Role.ADMIN)
+  @Post('imports/:id/confirm')
+  confirmImportAlias(
+    @Param('id') id: string,
+    @Body() dto: ConfirmImportDto,
+  ) {
+    void id;
+    return this.usersService.confirmImport(dto.rows);
   }
 
   @Roles(Role.ADMIN)

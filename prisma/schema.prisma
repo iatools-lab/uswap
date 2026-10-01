@@ -24,6 +24,7 @@ enum LeaveStatus {
 enum LeaveType {
   ANNUAL
   SICK
+  FAMILY
   UNPAID
   OTHER
 }
@@ -68,6 +69,73 @@ enum NotificationKind {
   SHIFT_CHANGED
   ABSENCE_RECORDED
   ACCOUNT_ACTIVATED
+  INCIDENT
+  LEAVE
+  ATTENDANCE
+  PLANNING
+  SYSTEM
+}
+
+/// Business incident raised by a station chief and handled by a supervisor.
+/// Status follows the state machine exposed by the frontend IncidentCenter:
+/// REPORTED -> TO_REVIEW -> ACKNOWLEDGED -> IN_PROGRESS -> RESOLVED -> CLOSED.
+enum IncidentStatus {
+  REPORTED
+  TO_REVIEW
+  ACKNOWLEDGED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentCategory {
+  ABSENCE
+  LATENESS
+  EQUIPMENT
+  SECURITY
+  CUSTOMER
+  OTHER
+}
+
+enum IncidentActionType {
+  CREATED
+  QUALIFIED
+  COMMENT
+  RESOLVED
+  CLOSED
+}
+
+enum ScheduledReportFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ScheduledReportFormat {
+  XLSX
+  CSV
+}
+
+/// Tracks the (idempotent) propagation of a leave request to the external HR
+/// system, so the swapper screen can show "synced / retrying / failed".
+enum LeaveSyncAction {
+  CREATE
+  UPDATE
+  CANCEL
+}
+
+enum LeaveSyncStatus {
+  QUEUED
+  PROCESSING
+  SYNCED
+  FAILED
 }
 
 model User {
@@ -106,7 +174,14 @@ model User {
   newShiftChanges      ShiftChange[] @relation("NewSwapper")
 
   notifications Notification[]
-
+  notificationPreference NotificationPreference?
+  incidentsReported  Incident[] @relation("IncidentReporter")
+  incidentsAssigned  Incident[] @relation("IncidentAssignee")
+  incidentsAffected  Incident[] @relation("IncidentAffectedSwapper")
+  incidentActions    IncidentAction[]
+  scheduledReports   ScheduledReport[]
+  leaveBalance       LeaveBalance?
+  leaveSyncOperations LeaveSyncOperation[]
   auditLogs UserAuditLog[] @relation("AuditedUser")
 
   resetTokenHash    String?
@@ -173,6 +248,8 @@ model Station {
   attendances   Attendance[]
   attendanceQrs AttendanceQr[]
 
+  incidents Incident[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -218,6 +295,12 @@ model LeaveRequest {
 
   externalId   String?
   lastSyncedAt DateTime?
+
+  /// Offline-first reference supplied by the client, used to deduplicate a
+  /// replayed request (one queue item must never create two leaves).
+  clientRef String? @unique
+
+  syncOperations LeaveSyncOperation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -523,19 +606,168 @@ model ShiftTemplateVersion {
   id         String @id @default(uuid())
   templateId String
   template   ShiftTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
   label     String
   startTime String
   endTime   String
   breakStart String?
   breakEnd   String?
-
   breakMinutes    Int
   durationMinutes Int
   isActive        Boolean
   revision        Int
+  createdAt DateTime @default(now())
+  @@index([templateId])
+}
 
+/// One row per user: the notification channels the account accepts. Absence
+/// of a row means "all channels on", matching the frontend defaults.
+model NotificationPreference {
+  userId            String @id
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inApp             Boolean @default(true)
+  email             Boolean @default(true)
+  push              Boolean @default(false)
+  digest            Boolean @default(true)
+  quietHoursEnabled Boolean @default(false)
+  quietHoursStart   String?  @default("22:00")
+  quietHoursEnd     String?  @default("07:00")
+  retentionDays     Int      @default(30)
+  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now())
+}
+
+/// Operational incident tracked by supervisors (sprint 4/5 scope).
+model Incident {
+  id        String @id @default(uuid())
+  stationId String
+  station   Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  affectedSwapperId String?
+  affectedSwapper   User?   @relation("IncidentAffectedSwapper", fields: [affectedSwapperId], references: [id])
+  reporterId        String
+  reporter          User    @relation("IncidentReporter", fields: [reporterId], references: [id])
+  assigneeId        String?
+  assignee          User?   @relation("IncidentAssignee", fields: [assigneeId], references: [id])
+
+  category   IncidentCategory @default(OTHER)
+  severity   IncidentSeverity @default(MEDIUM)
+  status     IncidentStatus   @default(REPORTED)
+  title      String
+  description String
+
+  occurredAt DateTime
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime?
+  closedAt   DateTime?
+  resolution String?
+
+  actions IncidentAction[]
+
+  @@index([stationId])
+  @@index([status])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+/// Immutable audit trail of every incident transition.
+model IncidentAction {
+  id         String @id @default(uuid())
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User     @relation(fields: [authorId], references: [id])
+  type       IncidentActionType
+  fromStatus IncidentStatus?
+  toStatus   IncidentStatus?
+  comment    String
+  createdAt  DateTime @default(now())
+
+  @@index([incidentId])
+}
+
+/// Network-wide settings managed from the admin settings screen. A single row
+/// is kept (id = 1) and every change is mirrored into GlobalSettingRevision.
+model GlobalSetting {
+  id                      Int      @id @default(1)
+  sessionMinutes          Int      @default(60)
+  invitationValidityHours Int      @default(72)
+  maxAttachmentMb         Int      @default(10)
+  notificationRetentionDays Int    @default(30)
+  supportEmail            String   @default("support@uswap.app")
+  webhookSecretConfigured Boolean  @default(false)
+  revision                Int      @default(1)
+  updatedBy               String?
+  updatedAt               DateTime @updatedAt
+  createdAt               DateTime @default(now())
+}
+
+/// Snapshot of GlobalSetting before/after each edit, so the admin screen can
+/// display a revision history.
+model GlobalSettingRevision {
+  id        String @id @default(uuid())
+  revision  Int
+  actorId   String?
+  before    Json
+  after     Json
   createdAt DateTime @default(now())
 
-  @@index([templateId])
+  @@index([revision])
+}
+
+/// Recurring report delivery configured by an administrator.
+model ScheduledReport {
+  id          String @id @default(uuid())
+  ownerId     String
+  owner       User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name        String
+  frequency   ScheduledReportFrequency @default(WEEKLY)
+  format      ScheduledReportFormat    @default(XLSX)
+  scope       String   @default("NETWORK")
+  stationId   String?
+  recipients  String[]
+  sections    String[]
+  isActive    Boolean  @default(true)
+  nextRunAt   DateTime
+  lastRunAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([ownerId])
+  @@index([nextRunAt])
+}
+
+/// Annual leave allowance per swapper, displayed at the top of the leave
+/// workspace ("Solde de conges").
+model LeaveBalance {
+  id            String @id @default(uuid())
+  swapperId     String @unique
+  swapper       User   @relation(fields: [swapperId], references: [id], onDelete: Cascade)
+  year          Int
+  entitledDays  Int @default(30)
+  usedDays      Int @default(0)
+  pendingDays   Int @default(0)
+  syncedAt      DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+/// One row per attempt to push a leave change to the external system.
+/// Idempotency key prevents an offline replay from creating a duplicate.
+model LeaveSyncOperation {
+  id             String @id @default(uuid())
+  leaveRequestId String
+  leaveRequest   LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action         LeaveSyncAction
+  status         LeaveSyncStatus @default(SYNCED)
+  idempotencyKey String @unique
+  attempts       Int    @default(1)
+  lastAttemptAt  DateTime?
+  completedAt    DateTime?
+  lastError      String?
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([leaveRequestId])
 }

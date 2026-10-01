@@ -300,6 +300,27 @@ export type MockNotification = {
   createdAt: string;
 };
 
+export type MockGlobalSettings = {
+  sessionMinutes: number;
+  invitationValidityHours: number;
+  maxAttachmentMb: number;
+  notificationRetentionDays: number;
+  supportEmail: string;
+  webhookSecretConfigured: boolean;
+  revision: number;
+  updatedAt: string;
+  updatedBy: string;
+};
+
+export type MockSettingsRevision = {
+  id: string;
+  revision: number;
+  actorId: string;
+  createdAt: string;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+};
+
 export type MockNotice = {
   id: string;
   userId: string;
@@ -364,6 +385,8 @@ export type MockDb = {
   offlineOperations: MockOfflineOperation[];
   changes: MockChange[];
   notifications: MockNotification[];
+  globalSettings: MockGlobalSettings;
+  settingsHistory: MockSettingsRevision[];
   notices: MockNotice[];
   qrTokens: MockQr[];
   importBatches: MockImportBatch[];

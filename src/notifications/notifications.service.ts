@@ -168,4 +168,83 @@ export class NotificationsService {
 
     return { updated: result.count };
   }
+
+  /**
+   * Notification preferences of one account. The row is created lazily with
+   * the frontend defaults (in-app + e-mail on, push off) so the settings
+   * screen always has a complete object to bind to.
+   */
+  async getPreferences(userId: string) {
+    const existing = await this.prisma.notificationPreference.findUnique({
+      where: { userId },
+    });
+    if (existing) return this.serialize(existing);
+
+    const created = await this.prisma.notificationPreference.create({
+      data: { userId },
+    });
+    return this.serialize(created);
+  }
+
+  async updatePreferences(
+    userId: string,
+    patch: Partial<{
+      inApp: boolean;
+      email: boolean;
+      push: boolean;
+      digest: boolean;
+      quietHoursEnabled: boolean;
+      quietHoursStart: string | null;
+      quietHoursEnd: string | null;
+      retentionDays: number;
+    }>,
+  ) {
+    await this.getPreferences(userId);
+    const updated = await this.prisma.notificationPreference.update({
+      where: { userId },
+      data: {
+        ...(patch.inApp !== undefined ? { inApp: patch.inApp } : {}),
+        ...(patch.email !== undefined ? { email: patch.email } : {}),
+        ...(patch.push !== undefined ? { push: patch.push } : {}),
+        ...(patch.digest !== undefined ? { digest: patch.digest } : {}),
+        ...(patch.quietHoursEnabled !== undefined
+          ? { quietHoursEnabled: patch.quietHoursEnabled }
+          : {}),
+        ...(patch.quietHoursStart !== undefined
+          ? { quietHoursStart: patch.quietHoursStart }
+          : {}),
+        ...(patch.quietHoursEnd !== undefined
+          ? { quietHoursEnd: patch.quietHoursEnd }
+          : {}),
+        ...(patch.retentionDays !== undefined
+          ? { retentionDays: Math.min(365, Math.max(7, patch.retentionDays)) }
+          : {}),
+      },
+    });
+    return this.serialize(updated);
+  }
+
+  private serialize(row: {
+    inApp: boolean;
+    email: boolean;
+    push: boolean;
+    digest: boolean;
+    quietHoursEnabled: boolean;
+    quietHoursStart: string | null;
+    quietHoursEnd: string | null;
+    retentionDays: number;
+    updatedAt: Date;
+  }) {
+    return {
+      inApp: row.inApp,
+      email: row.email,
+      push: row.push,
+      digest: row.digest,
+      quietHoursEnabled: row.quietHoursEnabled,
+      quietHoursStart: row.quietHoursStart,
+      quietHoursEnd: row.quietHoursEnd,
+      retentionDays: row.retentionDays,
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
 }

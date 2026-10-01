@@ -61,7 +61,7 @@ export class QueryUsersDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page?: number = 1;
+  page?: number;
 
   @ApiProperty({ required: false, default: 20 })
   @IsOptional()
@@ -69,5 +69,5 @@ export class QueryUsersDto {
   @IsInt()
   @Min(1)
   @Max(100)
-  limit?: number = 20;
+  limit?: number;
 }

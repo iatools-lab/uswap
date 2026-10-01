@@ -13,6 +13,14 @@ const TEMPLATE_HEADER = 'fullName,email,role,stationId,phoneNumber,address';
 const VALID_ROLES = ['SUPERVISOR', 'STATION_CHIEF', 'SWAPPER'];
 const INVITATION_TOKEN_TTL_MS = 48 * 60 * 60 * 1000;
 
+/** Human labels used by the Excel export. */
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN: 'Administrateur',
+  SUPERVISOR: 'Superviseur',
+  STATION_CHIEF: 'Chef de station',
+  SWAPPER: 'Swappeur',
+};
+
 const SAFE_SELECT = {
   id: true,
   fullName: true,
@@ -55,6 +63,41 @@ export class UsersService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
+    /**
+     * Two call shapes share this route:
+     *  - the users screen sends page/limit and expects a paginated envelope;
+     *  - selector components (Planner, assignment pickers) call
+     *    `/users?role=SWAPPER` with neither and expect a plain array.
+     * Returning the envelope to a selector makes it call `.filter` on an
+     * object, so the absence of pagination is what picks the shape.
+     */
+    const wantsPlainList = query.page === undefined && query.limit === undefined;
+
+    if (wantsPlainList) {
+      const rows = await this.prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          role: true,
+          phoneNumber: true,
+          address: true,
+          isActive: true,
+          stationId: true,
+          invitationTokenExpires: true,
+          createdAt: true,
+        },
+        orderBy:
+          query.sort === 'name'
+            ? { fullName: 'asc' }
+            : query.sort === 'role'
+              ? { role: 'asc' }
+              : { createdAt: 'desc' },
+      });
+      return rows.map((user) => this.withInvitationStatus(user));
+    }
+
     // The screen sends `sort`; map it to a Prisma order. Anything unknown
     // falls back to newest-first rather than erroring.
     const orderBy: Prisma.UserOrderByWithRelationInput =
@@ -92,6 +135,56 @@ export class UsersService {
         pending,
         inactive: pending,
       },
+    };
+  }
+
+  /**
+   * Rows backing the admin Excel export. Returns plain data (not a file) so the
+   * frontend builds the workbook with the same column labels it already uses.
+   */
+  async exportRows(query: QueryUsersDto) {
+    const term = query.q ?? query.search;
+
+    const where: Prisma.UserWhereInput = {
+      ...(query.role ? { role: query.role } : {}),
+      ...(query.stationId ? { stationId: query.stationId } : {}),
+      ...(query.status ? { isActive: query.status === 'active' } : {}),
+      ...(term
+        ? {
+            OR: [
+              { fullName: { contains: term, mode: 'insensitive' } },
+              { email: { contains: term, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const users = await this.prisma.user.findMany({
+      where,
+      select: {
+        fullName: true,
+        email: true,
+        role: true,
+        phoneNumber: true,
+        address: true,
+        isActive: true,
+        invitationTokenExpires: true,
+        station: { select: { name: true } },
+      },
+      orderBy: { fullName: 'asc' },
+    });
+
+    return {
+      rows: users.map((user) => ({
+        fullName: user.fullName,
+        email: user.email,
+        role: ROLE_LABELS[user.role] ?? user.role,
+        station: user.station?.name ?? '',
+        status: user.isActive ? 'Actif' : 'En attente',
+        phoneNumber: user.phoneNumber ?? '',
+        address: user.address ?? '',
+      })),
+      filename: `utilisateurs-uswap-${new Date().toISOString().slice(0, 10)}.xlsx`,
     };
   }
 
