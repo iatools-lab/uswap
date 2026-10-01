@@ -1,257 +1,241 @@
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
 # UpOwa / Uswap
+
+Application web de planification et de supervision des équipes de *swapping*
+réparties sur plusieurs stations.
+
+- **Version courante** : `uswap-v5.2.0` — sprint 5 intégré (frontend + backend)
+- **Backend** : NestJS 11 + Prisma 6 + PostgreSQL
+- **Frontend** : React 19 + Vite + TypeScript
+
+> Documentation détaillée : [`docs/FONCTIONNEMENT-SPRINTS-1-A-5.md`](docs/FONCTIONNEMENT-SPRINTS-1-A-5.md)
+> (fonctionnement du projet et rôle de chaque API, sprint par sprint).
+
+---
 
 ## Présentation
 
-**UpOwa / Uswap** est une application web de gestion et de supervision des swappers au niveau des stations.
+L'application couvre le cycle complet d'une journée de travail :
 
-L'application permet notamment de gérer :
+1. **Planifier** — créer un planning, générer les créneaux depuis les modèles
+   de la station, publier.
+2. **Pointer** — le chef de station génère un QR de prise/fin de service, le
+   swapper le scanne.
+3. **Suivre** — retards, absences, corrections, journal des mouvements.
+4. **Couvrir** — une absence ouvre une demande de remplacement, le superviseur
+   arbitre.
+5. **Piloter** — rapports consolidés, réglages réseau, administration des accès.
 
-* les utilisateurs et leurs rôles ;
-* les stations ;
-* les swappers ;
-* les plannings et shifts ;
-* les présences et absences ;
-* le pointage par QR Code START / END ;
-* les remplacements et changements de shifts ;
-* la supervision des opérations.
-
-**Sprint actuel : Sprint 4**
+Modules fonctionnels : utilisateurs et rôles, stations, congés, plannings et
+créneaux, pointage QR, remplacements, incidents, notifications, rapports,
+réglages globaux.
 
 ---
 
 ## Architecture
 
-Le projet est organisé en trois parties principales :
+```
+Frontend React (Vite)  ──proxy /api──▶  Backend NestJS  ──Prisma──▶  PostgreSQL
+```
 
-Frontend React
-↓
-API REST
-↓
-Backend NestJS
-↓
-Prisma
-↓
-PostgreSQL
-
-Le frontend fournit l'interface utilisateur tandis que le backend centralise l'API, l'authentification et la logique métier.
+Le frontend est servi sur `http://127.0.0.1:5173` et **proxifie** `/api` vers le
+backend (`http://localhost:3000`). Ce point est important : frontend et API
+partagent ainsi la **même origine**, condition nécessaire au bon fonctionnement
+du cookie de session `HttpOnly`.
 
 ---
 
 ## Stack technique
 
 ### Frontend
-
-* React **19.3.0**
-* React DOM **19.3.0**
-* Vite **8.0.14**
-* TypeScript **~5.8.3**
-* React Router **7.18.3**
+- React 19.3.0 / React DOM 19.3.0
+- Vite 8.0.14
+- TypeScript ~5.8.3
+- React Router 7.18.3
 
 ### Backend
-
-* NestJS **^11.0.1**
-* TypeScript **^5.7.3**
-* Prisma Client **^6.19.3**
-* `@prisma/adapter-pg` **^7.10.0**
-* `pg` **^8.23.0**
-* Swagger **^11.4.7**
-* JWT **^12.0.1**
+- NestJS ^11.0.1
+- TypeScript ^5.7.3
+- Prisma Client ^6.19.3 (+ `@prisma/adapter-pg`, `pg`)
+- Swagger ^11.4.7
+- JWT ^12.0.1
 
 ### Environnement
-
-* Node.js **24.15.0**
-* npm **11.12.1**
-* Git + GitHub
-* PostgreSQL
+- Node.js 24.x — npm 11.x
+- PostgreSQL
+- Git + GitHub (dépôt `uswap-github`)
 
 ---
 
-## Fonctionnalités principales
+## Démarrage
 
-### Authentification
+### 1. Backend
 
-Le système utilise JWT et gère quatre rôles :
-
-* `ADMIN`
-* `SUPERVISOR`
-* `STATION_CHIEF`Versions déjà identifiées :
-
-  Node.js 24.15.0
-
-  npm 11.12.1
-
-  React 19.3.0
-
-  React DOM 19.3.0
-
-  Vite 8.0.14
-
-  TypeScript frontend ~5.8.3
-
-  React Router 7.18.3
-
-  NestJS ^11.0.1
-
-  TypeScript backend ^5.7.3
-
-  Prisma Client ^6.19.3
-
-  @prisma/adapter-pg ^7.10.0
-
-  pg ^8.23.0
-
-  Swagger ^11.4.7
-
-  JWT ^12.0.1
-
-  Git + GitHub, dépôt uswap-github, branche danielle
-* `SWAPPER`
-
-### Stations
-
-Gestion des stations avec leurs informations et coordonnées géographiques.
-
-### Planning et shifts
-
-Gestion des périodes de planning et des shifts :
-
-* MORNING : 06:00–14:00
-* AFTERNOON : 14:00–22:00
-* NIGHT : 22:00–06:00
-
-Les règles de planification prennent notamment en compte le repos minimal et la limite hebdomadaire.
-
-### Attendance / QR Code
-
-Le pointage utilise deux QR Codes :
-
-* `START`
-* `END`
-
-La règle actuelle exige les deux scans pour une présence complète.
-
-`START + END` → présence normale
-
-`START` seulement ou `END` seulement → `ABSENT`
-
----
-
-## API
-
-Le backend expose une API REST documentée avec Swagger.
-
-En développement local :
-
-`http://localhost:3000/api-docs`
-
----
-
-## Installation
-
-### Backend
-
+```bash
 npm install
-
+npx prisma migrate deploy
 npx prisma generate
+npm run seed          # jeu de données de démonstration
+npm run start:dev     # http://localhost:3000
+```
 
-npx prisma migrate dev
+API documentée (Swagger) : `http://localhost:3000/api-docs`
 
-npm run start
+### 2. Frontend
 
-### Frontend
-
+```bash
+cd frontend
 npm install
+npm run dev           # http://127.0.0.1:5173
+```
 
-npm run dev
+### Variables d'environnement
 
-Le frontend utilise la variable :
+**Backend** — copier `.env.example` vers `.env` :
 
-`VITE_API_URL=http://localhost:3000`
+```bash
+DATABASE_URL="postgresql://user:pass@localhost:5432/uswap"
+JWT_SECRET="une-chaine-longue-et-secrete"
+ACCESS_TOKEN_TTL_SECONDS=900
+PORT=3000
+CORS_ORIGIN="http://127.0.0.1:5173,http://localhost:5173"
+FRONTEND_URL="http://127.0.0.1:5173"
+
+# E-mails (optionnel) — voir la section « E-mails » plus bas.
+RESEND_API_KEY=""
+MAIL_FROM="Uswap <onboarding@resend.dev>"
+
+# Intégration RH externe des congés (optionnel).
+LEAVE_API_URL=""
+```
+
+**Frontend** — copier `frontend/.env.example` vers `frontend/.env` :
+
+```bash
+VITE_API_URL=/api
+```
+
+> Ne mettez pas `http://localhost:3000` ici : l'appel direct étant *cross-site*,
+> le cookie de session n'est pas transmis et la session se perd à chaque
+> changement de page.
+
+---
+
+## Comptes de démonstration
+
+Mot de passe commun : **`Uswap2026!Demo`**
+(surchargeable via `DEMO_PASSWORD` avant de lancer le seed).
+
+| Rôle | E-mail |
+|---|---|
+| Administrateur | `admin@upowa.org` |
+| Superviseur | `superviseur@upowa.org` |
+| Chef de station | `chef@upowa.org` |
+| Swappeur | tout compte `SWAPPER` actif (voir `npm run seed`) |
+
+Les comptes swappers du seed sont créés **inactifs** (parcours d'invitation).
+Pour en activer un sans service e-mail :
+
+```bash
+node scripts/activate-user.cjs <email> [motDePasse]
+```
+
+---
+
+## E-mails
+
+Les e-mails transactionnels (invitation, réinitialisation) passent par
+[Resend](https://resend.com).
+
+- **Sans `RESEND_API_KEY`**, aucun e-mail n'est envoyé : le compte est bien créé
+  en base, mais reste inactif. Depuis la version 5.2, l'API renvoie alors un
+  champ **`activationUrl`** afin que l'administrateur transmette le lien
+  lui-même. Le lien est également écrit dans les logs du serveur.
+- **Avec `RESEND_API_KEY`**, aucun lien n'est renvoyé dans la réponse : le jeton
+  ne circule que par e-mail.
+
+Points d'attention :
+
+- `MAIL_FROM` doit utiliser un domaine **vérifié** dans Resend. En test,
+  utilisez `Uswap <onboarding@resend.dev>`, sinon l'envoi est refusé.
+- En mode test, Resend n'accepte comme destinataire que l'adresse du compte
+  Resend lui-même.
+
+---
+
+## Tests et vérifications
+
+```bash
+# Backend
+npx tsc --noEmit -p tsconfig.build.json   # typage
+npm run build                             # compilation
+npx jest                                  # tests unitaires
+
+# Frontend
+cd frontend && npm run build              # typage + build
+
+# Contrats et bout en bout (backend et frontend démarrés)
+node scripts/audit-contract.cjs           # chaque appel frontend a une route
+node scripts/test-e2e.mjs                 # 70 vérifications fonctionnelles
+```
+
+---
+
+## Rôles et permissions
+
+| Rôle | Périmètre |
+|---|---|
+| `ADMIN` | Réglages réseau, comptes, stations, rapports programmés |
+| `SUPERVISOR` | Plannings, incidents, points de contrôle, rapports réseau |
+| `STATION_CHIEF` | Sa station : pointage, incidents, suivi du jour |
+| `SWAPPER` | Son espace : créneaux, congés, historique de pointage |
+
+Sécurité : JWT à durée courte, refresh token à usage unique dans un cookie
+`HttpOnly`, cloisonnement par station, machine à états des incidents validée
+côté serveur, validation d'entrée stricte, et journalisation des actions
+sensibles (`UserAuditLog`, `IncidentAction`, `GlobalSettingRevision`).
 
 ---
 
 ## Git et organisation des branches
 
-Le dépôt GitHub est :
+Dépôt : `uswap-github`.
 
-`uswap-github`
-
-### Branches
-
-`danielle`
-→ branche de développement personnelle.
-
-`dylane_v0`
-→ branche intermédiaire commune pour intégrer les travaux de l'équipe.
-
-`main`
-→ branche destinée à la version stable et finale.
+| Branche | Rôle |
+|---|---|
+| `danielle` | Développement backend et intégration |
+| `dylane` | Développement frontend |
+| `develop` | Branche d'intégration : reçoit les versions testées |
+| `main` | Version stable |
 
 ### Workflow
 
-`danielle`
+```
+danielle ─┐
+          ├─▶ develop ──(tests OK)──▶ tag de version
+dylane   ─┘
+```
 
-↓
+Chaque intégration dans `develop` est précédée des vérifications listées plus
+haut, puis marquée par un tag.
 
-Pull Request
+### Versions publiées
 
-↓
-
-`dylane_v0`
-
-↓
-
-Intégration et tests
-
-↓
-
-`main`
-
-↓
-
-Tag de version
+| Tag | Contenu |
+|---|---|
+| `uswap-frontend-s4.1.0` | Frontend sprint 4 |
+| `uswap-frontend-s5.1.0` | Frontend sprint 5 |
+| `uswap-v5.2.0` | **Sprint 5 intégré : frontend + backend raccordés** |
 
 ---
 
-## Versionnement
+## Sécurité — bonnes pratiques
 
-Les versions importantes sont identifiées avec des tags Git.
+Ne jamais commiter :
 
-Exemple :
+- `DATABASE_URL`, `JWT_SECRET`, `RESEND_API_KEY` et tout autre secret ;
+- les mots de passe ;
+- les fichiers `.env` réels.
 
-`v1.0.0`
-
-Le tag permet d'identifier précisément le commit correspondant à une version donnée du projet.
-
----
-
-## Sécurité
-
-Les informations sensibles telles que :
-
-* `DATABASE_URL`
-* `JWT_SECRET`
-* mots de passe
-* autres secrets
-
-ne doivent pas être commités dans Git.
-
-Les variables sensibles doivent être conservées dans les fichiers `.env` locaux.
-
----
-
-## État actuel
-
-**Sprint : 4**
-
-Le frontend et le backend sont actuellement fonctionnels et continuent d'être intégrés et testés avant la version finale.
-
-**Branche de développement :** `danielle`
-
-**Branche intermédiaire :** `dylane_v0`
-
-**Branche finale :** `main`
-
-**Version finale prévue :** `v1.0.0`
+Ces valeurs vivent uniquement dans les fichiers `.env` locaux, exclus par
+`.gitignore`. Utilisez `.env.example` comme référence.
