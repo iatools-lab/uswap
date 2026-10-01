@@ -25,7 +25,7 @@ La vérification de production se lance depuis `frontend/` :
 npm run build
 ```
 
-## Périmètre livré — sprints 1 à 4
+## Périmètre livré — sprints 1 à 5
 
 - **Sprint 1 — Accès et profils** : connexion, session, espaces selon les rôles
   et gestion des comptes.
@@ -36,18 +36,26 @@ npm run build
 - **Sprint 4 — Exceptions et pilotage** : demandes de congé, incidents liés aux
   swappeurs, notifications, tableaux de bord et premières fonctions hors
   connexion.
+- **Sprint 5 — Finition du pilotage** : filtres et navigation des notifications,
+  indicateurs ouvrant leurs détails, séparation des postes vacants passés et
+  futurs, tableau de bord superviseur consolidé, réglages globaux de
+  démonstration et notification de mise à jour de la PWA.
 
-Les parcours sont utilisables avec les données fictives. La compilation vérifie
-le frontend ; elle ne valide pas les services externes. Les limites de connexion
-au backend sont détaillées dans le guide d’intégration.
+Les parcours d’interface du sprint 5 sont utilisables avec les données
+fictives. Les réglages globaux et les rapports programmés n’ont pas encore de
+contrat backend ; les notifications push à distance et certaines opérations
+hors connexion demandent également des services serveur. La compilation valide
+le frontend, pas ces intégrations. Le guide d’intégration distingue les routes
+déjà prises en charge des contrats en attente.
 
 ## Versionnage
 
-Une livraison frontend utilise un tag annoté `uswap-frontend-s4.1.0` : `s4`
-identifie le sprint, `1` la version de livraison et le dernier chiffre les
-correctifs (`uswap-frontend-s4.1.1`). Chaque version stable est accompagnée
-d’une Release GitHub qui décrit les parcours livrés, les vérifications et les
-intégrations encore nécessaires.
+Une livraison frontend utilise un tag annoté par sprint, par exemple
+`uswap-frontend-s4.1.0` ou `uswap-frontend-s5.1.0` : `s4` ou `s5` identifie le
+sprint, `1` la version de livraison et le dernier chiffre les correctifs
+(`uswap-frontend-s5.1.1`). Chaque version stable est accompagnée d’une Release
+GitHub qui décrit les parcours livrés, les vérifications et les intégrations
+encore nécessaires.
 
 ## Organisation
 

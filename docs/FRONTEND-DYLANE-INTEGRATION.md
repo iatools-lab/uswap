@@ -49,6 +49,16 @@ données alors qu'un serveur est configuré. Le backend expose un dépôt et une
 création de congé basiques sous `/leave-requests`, mais ceux-ci ne couvrent pas
 encore l'interface de congés Dylane.
 
+Les fonctions de finition du sprint 5 suivent la même règle : le filtrage et
+la navigation des notifications, les détails des indicateurs et la distinction
+des postes vacants passés et futurs fonctionnent sur les données mock. La page
+« Réglages globaux » (routes mock `/admin/settings`) n'est active qu'en mode
+démonstration. Les rapports périodiques (routes mock
+`/admin/reports/schedules`) ne sont pas exécutés par un ordonnanceur réel. Le
+navigateur peut autoriser ou couper ses alertes locales, mais les notifications
+push à distance exigent un service push et des routes de gestion des abonnements
+côté serveur ; ce frontend ne crée aucun abonnement serveur.
+
 Le backend ne persiste pas non plus le nom libre d'un planning et ne dispose pas
 d'une route d'affectation automatique dédiée. Le frontend compose cette dernière
 fonction à partir des routes de validation et d'affectation déjà exposées ; cela
