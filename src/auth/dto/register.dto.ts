@@ -30,9 +30,17 @@ export class RegisterDto {
     required: false,
     example: 'motdepasse123',
     minLength: 8,
-    description: 'Requis uniquement si sendInvite est absent ou false',
+    description:
+      'Requis uniquement lorsque le compte est cree actif. Un compte en ' +
+      'invitation (sendInvite ou accountStatus=PENDING) recoit un mot de ' +
+      'passe temporaire et definit le sien a l activation.',
   })
-  @ValidateIf((o) => !o.sendInvite)
+  // Le mot de passe n'est exige que pour un compte cree ACTIF. Les deux
+  // signaux d'invitation doivent etre pris en compte : le frontend envoie
+  // accountStatus=PENDING tandis que d'anciens appels utilisent sendInvite.
+  @ValidateIf(
+    (o) => !o.sendInvite && o.accountStatus !== 'PENDING',
+  )
   @IsString()
   @MinLength(8)
   @MaxLength(128)

@@ -31,16 +31,29 @@ export class EmailService {
         `<p><a href="${activationUrl}">Activer mon compte</a></p>`,
         '<p>Ce lien expire dans 48 heures.</p>',
       ].join(''),
+      // Le lien est journalisé même sans fournisseur configuré, pour que
+      // l'activation reste possible en developpement (voir sendEmail).
+      debugLink: activationUrl,
     });
   }
 
-  private async sendEmail(input: { to: string; subject: string; html: string }): Promise<boolean> {
+  private async sendEmail(input: {
+    to: string;
+    subject: string;
+    html: string;
+    /** Lien d'action, journalise lorsque l'envoi reel est indisponible. */
+    debugLink?: string;
+  }): Promise<boolean> {
     const apiKey = process.env.RESEND_API_KEY;
     const from = process.env.MAIL_FROM;
 
     if (!apiKey || !from) {
+      // Sans fournisseur, le compte est bien cree mais l'utilisateur ne peut
+      // pas activer son compte. On expose donc le lien pour ne pas le perdre.
       this.logger.warn(
-        'Service e-mail non configuré. Définissez RESEND_API_KEY et MAIL_FROM pour activer les e-mails transactionnels.',
+        'Service e-mail non configuré (RESEND_API_KEY manquante). ' +
+          `Aucun e-mail envoyé à ${input.to}.` +
+          (input.debugLink ? ` Lien d'action : ${input.debugLink}` : ''),
       );
       return false;
     }

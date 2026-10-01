@@ -71,12 +71,22 @@ export class AuthService {
       });
 
       const invitationSent = await this.emailService.sendInvitation(user.email, invitationToken);
+
+      // Si aucun fournisseur e-mail n'est configuré, l'administrateur doit
+      // pouvoir transmettre le lien lui-même : on le renvoie alors dans la
+      // réponse. En production (RESEND_API_KEY défini) il est omis, pour ne
+      // jamais exposer un jeton d'activation. Réinitialisez toujours un mot de passe.
+      const activationUrl = invitationSent
+        ? undefined
+        : `${(process.env.FRONTEND_URL ?? 'http://localhost:5173').replace(/\/$/, '')}/activate-account?token=${encodeURIComponent(invitationToken)}`;
+
       return {
         ...this.sanitizeUser(user),
         invitationSent,
+        ...(activationUrl ? { activationUrl } : {}),
         message: invitationSent
           ? 'Utilisateur créé. Une invitation lui a été envoyée.'
-          : 'Utilisateur créé, mais le service e-mail n’est pas configuré ou l’envoi a échoué.',
+          : 'Utilisateur créé. Le service e-mail n’est pas configuré : transmettez le lien d’activation affiché ci-dessous.',
       };
     }
 
@@ -205,11 +215,16 @@ export class AuthService {
       invitationToken,
     );
 
+    const activationUrl = invitationSent
+      ? undefined
+      : `${(process.env.FRONTEND_URL ?? 'http://localhost:5173').replace(/\/$/, '')}/activate-account?token=${encodeURIComponent(invitationToken)}`;
+
     return {
       message: invitationSent
         ? 'Invitation renvoyee.'
-        : 'Invitation regeneree, mais le service e-mail n’est pas configure.',
+        : 'Invitation regeneree. Le service e-mail n’est pas configure : transmettez le lien ci-dessous.',
       invitationSent,
+      ...(activationUrl ? { activationUrl } : {}),
     };
   }
 
