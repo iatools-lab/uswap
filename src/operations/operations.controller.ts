@@ -34,9 +34,7 @@ type AuthenticatedRequest = {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('operations')
 export class OperationsController {
-  constructor(
-    private readonly operationsService: OperationsService,
-  ) {}
+  constructor(private readonly operationsService: OperationsService) {}
 
   // ============================================================
   // BLOC A — SWAPPER DECLARES AN IMPEDIMENT
@@ -52,6 +50,7 @@ export class OperationsController {
       swapperId: req.user.id,
       shiftId: dto.shiftId,
       reason: dto.reason,
+      clientRef: dto.clientRef,
     });
   }
 
@@ -62,9 +61,7 @@ export class OperationsController {
   @Get('replacements/pending')
   @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
   findPendingReplacements(@Req() req: AuthenticatedRequest) {
-    return this.operationsService.findPendingReplacements(
-      req.user.id,
-    );
+    return this.operationsService.findPendingReplacements(req.user.id);
   }
 
   // ============================================================

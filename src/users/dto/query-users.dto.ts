@@ -1,5 +1,13 @@
 import { Transform } from 'class-transformer';
-import { IsEnum, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
@@ -44,11 +52,11 @@ export class QueryUsersDto {
   @IsEnum(Role)
   role?: Role;
 
-  @ApiProperty({ required: false, enum: ['active', 'inactive'] })
+  @ApiProperty({ required: false, enum: ['active', 'pending', 'inactive'] })
   @IsOptional()
   @Transform(blankToUndefined)
-  @IsIn(['active', 'inactive'])
-  status?: 'active' | 'inactive';
+  @IsIn(['active', 'pending', 'inactive'])
+  status?: 'active' | 'pending' | 'inactive';
 
   @ApiProperty({ required: false })
   @IsOptional()

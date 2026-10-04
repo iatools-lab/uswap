@@ -1,4 +1,15 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { Role } from '@prisma/client';
@@ -29,7 +40,9 @@ export class AuthController {
 
   @Post('activate')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Activer un compte invité et définir son mot de passe' })
+  @ApiOperation({
+    summary: 'Activer un compte invité et définir son mot de passe',
+  })
   activate(@Body() dto: ActivateAccountDto) {
     return this.authService.activateAccount(dto);
   }
@@ -44,7 +57,9 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Connexion utilisateur (génère Access et Refresh Tokens)' })
+  @ApiOperation({
+    summary: 'Connexion utilisateur (génère Access et Refresh Tokens)',
+  })
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
@@ -60,7 +75,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Renouveler les Access et Refresh Tokens' })
   async refresh(
-    @Req() req: { cookies?: Record<string, string>; headers?: Record<string, unknown> },
+    @Req()
+    req: {
+      cookies?: Record<string, string>;
+      headers?: Record<string, unknown>;
+    },
     @Body() dto: RefreshTokenDto,
     @Res({ passthrough: true }) res: Response,
   ) {
@@ -76,7 +95,10 @@ export class AuthController {
   @Get('session')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Verifier le temps restant avant expiration de la session en cours' })
+  @ApiOperation({
+    summary:
+      'Verifier le temps restant avant expiration de la session en cours',
+  })
   session(@Req() req: { user: { exp: number } }) {
     return this.authService.getSessionStatus(req.user.exp);
   }
@@ -95,7 +117,9 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Déconnexion et révocation des tokens de la session utilisateur' })
+  @ApiOperation({
+    summary: 'Déconnexion et révocation des tokens de la session utilisateur',
+  })
   async logout(
     @Req() req: { user: { id: string } },
     @Res({ passthrough: true }) res: Response,
@@ -115,7 +139,9 @@ export class AuthController {
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Réinitialisation du mot de passe avec le token reçu par e-mail' })
+  @ApiOperation({
+    summary: 'Réinitialisation du mot de passe avec le token reçu par e-mail',
+  })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
   }

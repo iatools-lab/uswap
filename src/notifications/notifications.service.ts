@@ -1,10 +1,12 @@
+import { NotificationKind, Role } from '@prisma/client';
 import {
-  NotificationKind,
-  Role,
-} from '@prisma/client';
-import { Injectable, NotFoundException } from '@nestjs/common';
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
+import * as webpush from 'web-push';
 
 const LIST_LIMIT = 50;
 
@@ -19,7 +21,14 @@ export type NotifyInput = {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {
+    const publicKey = process.env.VAPID_PUBLIC_KEY;
+    const privateKey = process.env.VAPID_PRIVATE_KEY;
+    const subject = process.env.VAPID_SUBJECT;
+    if (publicKey && privateKey && subject) {
+      webpush.setVapidDetails(subject, publicKey, privateKey);
+    }
+  }
 
   // ============================================================
   // WRITE
@@ -32,18 +41,62 @@ export class NotificationsService {
    */
   async notify(input: NotifyInput): Promise<void> {
     try {
-      await this.prisma.notification.create({
-        data: {
-          userId: input.userId,
-          kind: input.kind,
-          title: input.title,
-          body: input.body,
-          link: input.link ?? null,
-          entityId: input.entityId ?? null,
-        },
+      const preference = await this.prisma.notificationPreference.findUnique({
+        where: { userId: input.userId },
+        select: { inApp: true, push: true },
       });
+
+      if (!preference || preference.inApp) {
+        await this.prisma.notification.create({
+          data: {
+            userId: input.userId,
+            kind: input.kind,
+            title: input.title,
+            body: input.body,
+            link: input.link ?? null,
+            entityId: input.entityId ?? null,
+          },
+        });
+      }
+
+      if (
+        preference?.push &&
+        process.env.VAPID_PUBLIC_KEY &&
+        process.env.VAPID_PRIVATE_KEY
+      ) {
+        const subscriptions = await this.prisma.pushSubscription.findMany({
+          where: { userId: input.userId },
+        });
+        await Promise.all(
+          subscriptions.map(async (subscription) => {
+            try {
+              await webpush.sendNotification(
+                {
+                  endpoint: subscription.endpoint,
+                  keys: {
+                    p256dh: subscription.p256dh,
+                    auth: subscription.auth,
+                  },
+                },
+                JSON.stringify({
+                  title: input.title,
+                  body: input.body,
+                  link: input.link ?? '/app',
+                }),
+              );
+            } catch (error) {
+              const statusCode = (error as { statusCode?: number }).statusCode;
+              if (statusCode === 404 || statusCode === 410) {
+                await this.prisma.pushSubscription.delete({
+                  where: { id: subscription.id },
+                });
+              }
+            }
+          }),
+        );
+      }
     } catch {
-      // Swallowed on purpose — see the method contract above.
+      // Notifications remain a non-blocking side effect.
     }
   }
 
@@ -89,16 +142,18 @@ export class NotificationsService {
 
       if (!recipients.length) return;
 
-      await this.prisma.notification.createMany({
-        data: recipients.map((user) => ({
-          userId: user.id,
-          kind: params.kind,
-          title: params.title,
-          body: params.body,
-          link: params.link ?? null,
-          entityId: params.entityId ?? null,
-        })),
-      });
+      await Promise.all(
+        recipients.map((user) =>
+          this.notify({
+            userId: user.id,
+            kind: params.kind,
+            title: params.title,
+            body: params.body,
+            link: params.link,
+            entityId: params.entityId,
+          }),
+        ),
+      );
     } catch {
       // Same rationale as notify().
     }
@@ -222,6 +277,50 @@ export class NotificationsService {
       },
     });
     return this.serialize(updated);
+  }
+
+  async savePushSubscription(
+    userId: string,
+    subscription: {
+      endpoint: string;
+      keys?: { p256dh?: string; auth?: string };
+      p256dh?: string;
+      auth?: string;
+      userAgent?: string;
+    },
+  ) {
+    const p256dh = subscription.p256dh ?? subscription.keys?.p256dh;
+    const auth = subscription.auth ?? subscription.keys?.auth;
+    if (!subscription.endpoint || !p256dh || !auth) {
+      throw new BadRequestException('Abonnement push invalide.');
+    }
+    return this.prisma.pushSubscription.upsert({
+      where: { endpoint: subscription.endpoint },
+      create: {
+        userId,
+        endpoint: subscription.endpoint,
+        p256dh,
+        auth,
+        userAgent: subscription.userAgent ?? null,
+      },
+      update: {
+        userId,
+        p256dh,
+        auth,
+        userAgent: subscription.userAgent ?? null,
+      },
+      select: { id: true, endpoint: true, createdAt: true, updatedAt: true },
+    });
+  }
+
+  async removePushSubscription(userId: string, endpoint?: string) {
+    const result = await this.prisma.pushSubscription.deleteMany({
+      where: {
+        userId,
+        ...(endpoint ? { endpoint } : {}),
+      },
+    });
+    return { removed: result.count };
   }
 
   private serialize(row: {

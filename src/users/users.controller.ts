@@ -52,6 +52,36 @@ export class UsersController {
     return this.usersService.exportRows(query);
   }
 
+  @Roles(Role.ADMIN)
+  @Get('import/template')
+  downloadTemplate(@Res() res: Response) {
+    const csv = this.usersService.generateTemplate();
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="modele_import_utilisateurs.csv"',
+    );
+    res.send(csv);
+  }
+
+  @Roles(Role.ADMIN)
+  @Get('imports/template')
+  downloadTemplateAlias(@Res() res: Response) {
+    const csv = this.usersService.generateTemplate();
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="modele_import_utilisateurs.csv"',
+    );
+    res.send(csv);
+  }
+
+  @Roles(Role.ADMIN)
+  @Get(':id/communication-history')
+  communicationHistory(@Param('id') id: string) {
+    return this.usersService.communicationHistory(id);
+  }
+
   @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Get(':id')
   findOne(@Param('id') id: string) {
@@ -60,7 +90,11 @@ export class UsersController {
 
   @Roles(Role.ADMIN)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateUserDto, @Req() req: { user: { id: string } }) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateUserDto,
+    @Req() req: { user: { id: string } },
+  ) {
     return this.usersService.update(id, dto, req.user.id);
   }
 
@@ -103,25 +137,6 @@ export class UsersController {
     return this.usersService.resendInvitation(id);
   }
   @Roles(Role.ADMIN)
-  @Get('import/template')
-  downloadTemplate(@Res() res: Response) {
-    const csv = this.usersService.generateTemplate();
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="modele_import_utilisateurs.csv"');
-    res.send(csv);
-  }
-
-  @Roles(Role.ADMIN)
-  @Get('imports/template')
-  downloadTemplateAlias(@Res() res: Response) {
-    // Alias: the user-import screen requests /users/imports/template (plural).
-    const csv = this.usersService.generateTemplate();
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="modele_import_utilisateurs.csv"');
-    res.send(csv);
-  }
-
-  @Roles(Role.ADMIN)
   @Post('import/preview')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
@@ -146,10 +161,7 @@ export class UsersController {
 
   @Roles(Role.ADMIN)
   @Post('imports/:id/confirm')
-  confirmImportAlias(
-    @Param('id') id: string,
-    @Body() dto: ConfirmImportDto,
-  ) {
+  confirmImportAlias(@Param('id') id: string, @Body() dto: ConfirmImportDto) {
     void id;
     return this.usersService.confirmImport(dto.rows);
   }

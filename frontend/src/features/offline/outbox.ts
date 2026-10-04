@@ -110,6 +110,23 @@ export async function discard(id: string): Promise<void> {
   await remove(id);
 }
 
+
+export async function clearAll(): Promise<void> {
+  const db = await open();
+  if (!db) return;
+  await new Promise<void>((resolve) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => resolve();
+  });
+  changed();
+}
+
+window.addEventListener("uswap:session-cleared", () => {
+  void clearAll();
+});
+
 let flushing = false;
 
 /**
@@ -144,10 +161,14 @@ export async function flush(): Promise<{ sent: number; remaining: number }> {
           const { attachment: _attachment, ...absence } = mutation.body;
           body = { ...absence, attachmentId: uploaded.id };
         }
-        await api(
+        const synced = await api<{ syncedAt?: string }>(
           mutation.path,
           { ...body, idempotencyKey: mutation.idempotencyKey },
           mutation.method === "PATCH" ? "PATCH" : undefined,
+        );
+        localStorage.setItem(
+          "uswap:last-sync",
+          JSON.stringify({ queuedAt: mutation.queuedAt, syncedAt: synced?.syncedAt ?? new Date().toISOString() }),
         );
         await remove(mutation.id);
         sent += 1;

@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 
 export class QueryReportDashboardDto {
   @IsOptional()
@@ -16,4 +16,8 @@ export class QueryReportDashboardDto {
   @IsOptional()
   @IsString()
   swapperId?: string;
+
+  @IsOptional()
+  @IsIn(['CSV', 'XLSX'])
+  format?: 'CSV' | 'XLSX';
 }

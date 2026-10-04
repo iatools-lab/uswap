@@ -81,12 +81,12 @@ async function autoAssignBackendPlanning(
       );
       if (!check.valid) continue;
 
-      await api(
+      const updated = await api<Planning>(
         `/plannings/${planningId}/occurrences/${occurrence.id}`,
         { swapperId: swapper.id, revision: planning.revision },
         "PATCH",
       );
-      planning.revision += 1;
+      planning.revision = updated.revision;
       assignedPerSwapper.set(
         swapper.id,
         (assignedPerSwapper.get(swapper.id) ?? 0) + 1,
@@ -419,6 +419,14 @@ export function Planner({ user }: { user: User }) {
     "manual",
   );
   const [offlineCopy, setOfflineCopy] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(() => {
+    try {
+      const value = localStorage.getItem("uswap:last-sync");
+      return value ? (JSON.parse(value) as { syncedAt?: string }).syncedAt ?? null : null;
+    } catch {
+      return null;
+    }
+  });
 
   const [start, setStart] = useState(""),
     [end, setEnd] = useState(""),
@@ -454,6 +462,7 @@ export function Planner({ user }: { user: User }) {
           setPlans(p);
           setError("");
           setOfflineCopy(false);
+          setLastSyncAt(new Date().toISOString());
           if (user.role === "SWAPPER")
             localStorage.setItem(`${cacheKey}:list`, JSON.stringify(p));
         }
@@ -991,9 +1000,11 @@ export function Planner({ user }: { user: User }) {
 
   return (
     <>
-      {offlineCopy && (
+      {(offlineCopy || lastSyncAt) && (
         <div className="planner-offline-copy" role="status">
-          Mode hors connexion · dernière version synchronisée du planning
+          {offlineCopy
+            ? `Mode hors connexion · dernière synchronisation ${lastSyncAt ? new Date(lastSyncAt).toLocaleString("fr-FR") : "inconnue"}`
+            : `Dernière synchronisation : ${lastSyncAt ? new Date(lastSyncAt).toLocaleString("fr-FR") : "maintenant"}`}
         </div>
       )}
       <PlanningList
@@ -2108,6 +2119,7 @@ function DayDetail({
   const [temporaryVacantId, setTemporaryVacantId] = useState<string | null>(
     null,
   );
+  const [swapSourceId, setSwapSourceId] = useState<string | null>(null);
   const editing = rows.find((o) => o.id === editingId);
   async function addMember(group: ShiftGroup) {
     const vacant = group.occurrences.find((o) => !o.swapper);
@@ -2179,7 +2191,41 @@ function DayDetail({
       setRemoving(null);
     }
   }
+  async function swapWith(occurrence: Occurrence) {
+    if (!canEdit || busy || removing || !occurrence.swapper) return;
+    if (!swapSourceId) {
+      setSwapSourceId(occurrence.id);
+      notify("Premier shift sélectionné. Sélectionnez maintenant le second shift.", "info");
+      return;
+    }
+    if (swapSourceId === occurrence.id) {
+      setSwapSourceId(null);
+      return;
+    }
+    setRemoving("swap");
+    setRemoveError("");
+    try {
+      await api(
+        `/plannings/${planning.id}/occurrences/${swapSourceId}`,
+        {
+          swapperId: rows.find((item) => item.id === swapSourceId)?.swapper?.id ?? null,
+          swapWithId: occurrence.id,
+          revision: planning.revision,
+        },
+        "PATCH",
+      );
+      onUpdate(await api<Planning>(`/plannings/${planning.id}`));
+      setSwapSourceId(null);
+      notify("Permutation effectuée avec succès.");
+    } catch (error) {
+      setRemoveError(error instanceof Error ? error.message : "Permutation impossible.");
+    } finally {
+      setRemoving(null);
+    }
+  }
+
   async function closeAssignment() {
+    setSwapSourceId(null);
     const temporaryId = temporaryVacantId;
     setEditingId(null);
     setTemporaryVacantId(null);
@@ -2303,6 +2349,18 @@ function DayDetail({
                                       onClick={() => void remove(o)}
                                     >
                                       <XIcon size={14} />
+                                    </button>
+                                  )}
+                                  {canEdit && (
+                                    <button
+                                      type="button"
+                                      className="day-roster-remove"
+                                      disabled={busy || removing !== null}
+                                      aria-label={`Permuter ${o.swapper.fullName}`}
+                                      title={swapSourceId === o.id ? "Sélectionné pour permutation" : "Permuter ce shift"}
+                                      onClick={() => void swapWith(o)}
+                                    >
+                                      ⇄
                                     </button>
                                   )}
                                 </span>

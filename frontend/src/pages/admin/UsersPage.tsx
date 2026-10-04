@@ -134,7 +134,7 @@ export function UsersPage() {
       stationId: plannedStation,
       sort,
     });
-    Promise.all([
+    Promise.allSettled([
       api<{
         data: Member[];
         total: number;
@@ -144,25 +144,32 @@ export function UsersPage() {
       }>("/users/page?" + params),
       api<Station[]>("/stations"),
     ])
-      .then(([membersData, stationsData]) => {
+      .then(([membersResult, stationsResult]) => {
         if (!active) return;
-        setMembers(membersData.data);
-        setCounts(membersData.statusCounts);
-        setTotal(membersData.total);
-        setLastPage(membersData.totalPages);
-        setCurrentPage(membersData.page);
-        setStations(stationsData);
-      })
-      .catch((errorData) => {
-        if (!active) return;
-        setMembers(null);
-        setStations(null);
-        if (
-          errorData instanceof ApiError &&
-          [401, 403].includes(errorData.status)
-        )
-          onAccessLost();
-        else setLoadError("Les données n’ont pas pu être chargées. Réessayez.");
+
+        if (membersResult.status === "fulfilled") {
+          const membersData = membersResult.value;
+          setMembers(membersData.data);
+          setCounts(membersData.statusCounts);
+          setTotal(membersData.total);
+          setLastPage(membersData.totalPages);
+          setCurrentPage(membersData.page);
+          setLoadError("");
+        } else {
+          const errorData = membersResult.reason;
+          if (errorData instanceof ApiError && [401, 403].includes(errorData.status)) {
+            onAccessLost();
+            return;
+          }
+          setLoadError("Les utilisateurs n’ont pas pu être chargés. Réessayez.");
+        }
+
+        if (stationsResult.status === "fulfilled") {
+          setStations(stationsResult.value);
+        } else {
+          // A station API failure must not make the user directory disappear.
+          setStations([]);
+        }
       })
       .finally(() => {
         if (active) {

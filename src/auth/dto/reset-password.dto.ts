@@ -12,7 +12,11 @@ export class ResetPasswordDto {
     description: 'Nouveau mot de passe (8 à 128 caractères)',
   })
   @IsString()
-  @MinLength(8, { message: 'Le mot de passe doit contenir au moins 8 caractères' })
-  @MaxLength(128, { message: 'Le mot de passe ne peut pas dépasser 128 caractères' })
+  @MinLength(8, {
+    message: 'Le mot de passe doit contenir au moins 8 caractères',
+  })
+  @MaxLength(128, {
+    message: 'Le mot de passe ne peut pas dépasser 128 caractères',
+  })
   password: string;
 }

@@ -1,8 +1,4 @@
-import {
-  AttendanceStatus,
-  ReplacementStatus,
-  Role,
-} from '@prisma/client';
+import { AttendanceStatus, ReplacementStatus, Role } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -64,9 +60,7 @@ export class DashboardService {
 
     // A swapper's dashboard is about their own work, not the whole station.
     const isSwapper = user?.role === Role.SWAPPER;
-    const shiftScope = isSwapper
-      ? { swapperId: userId }
-      : stationFilter;
+    const shiftScope = isSwapper ? { swapperId: userId } : stationFilter;
 
     // ------------------------------------------------------------
     // TODAY
@@ -116,12 +110,8 @@ export class DashboardService {
     const timeline = todayShifts.map((shift) => {
       const attendance = shift.attendances[0] ?? null;
 
-      let status:
-        | 'EXPECTED'
-        | 'PRESENT'
-        | 'LATE'
-        | 'ABSENT'
-        | 'CLOSED' = 'EXPECTED';
+      let status: 'EXPECTED' | 'PRESENT' | 'LATE' | 'ABSENT' | 'CLOSED' =
+        'EXPECTED';
 
       if (!attendance || attendance.status === AttendanceStatus.EXPECTED) {
         status = 'EXPECTED';
@@ -133,8 +123,7 @@ export class DashboardService {
         status = 'CLOSED';
         completed++;
       } else if (attendance.status === AttendanceStatus.CHECKED_IN) {
-        const tolerance =
-          shift.station.latenessToleranceMinutes * 60 * 1000;
+        const tolerance = shift.station.latenessToleranceMinutes * 60 * 1000;
         const isLate =
           attendance.checkInAt !== null &&
           attendance.checkInAt.getTime() >
@@ -154,10 +143,7 @@ export class DashboardService {
 
       // A shift that ended without a check-out is closed, even if the
       // attendance row was never flipped by the scheduler yet.
-      if (
-        status === 'PRESENT' &&
-        shift.endTime.getTime() < now.getTime()
-      ) {
+      if (status === 'PRESENT' && shift.endTime.getTime() < now.getTime()) {
         status = 'CLOSED';
         present--;
         completed++;
@@ -167,7 +153,7 @@ export class DashboardService {
         shiftId: shift.id,
         station: shift.station.name,
         timezone: shift.station.timezone,
-        swapper: shift.swapper.fullName,
+        swapper: shift.swapper?.fullName ?? 'Poste vacant',
         startTime: shift.startTime,
         endTime: shift.endTime,
         status,
@@ -231,9 +217,7 @@ export class DashboardService {
     const stations = await this.prisma.station.findMany({
       where: {
         isActive: true,
-        ...(access.unrestricted
-          ? {}
-          : { id: { in: access.stationIds } }),
+        ...(access.unrestricted ? {} : { id: { in: access.stationIds } }),
       },
       select: { weeklyHoursLimit: true },
       orderBy: { weeklyHoursLimit: 'asc' },

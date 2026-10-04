@@ -7,6 +7,11 @@ generated/
 *.log
 coverage/
 uploads/
+
+# Artefacts locaux (ne pas suivre)
+*.backup
+git-diff-*.txt
+git-diff-stat.txt
 .agents/
 .claude/
 .cursor/

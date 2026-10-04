@@ -1,10 +1,5 @@
 import { Type } from 'class-transformer';
-import {
-  IsArray,
-  IsInt,
-  IsOptional,
-  IsString,
-} from 'class-validator';
+import { IsArray, IsInt, IsOptional, IsString } from 'class-validator';
 
 /**
  * Payload sent by the planner screen to preview or generate shifts:
@@ -39,5 +34,9 @@ export class PreviewPlanningDto {
   // Legacy shape: stations[] with swapperIds/shiftNames.
   @IsOptional()
   @IsArray()
-  stations?: { stationId: string; swapperIds?: string[]; shiftNames?: string[] }[];
+  stations?: {
+    stationId: string;
+    swapperIds?: string[];
+    shiftNames?: string[];
+  }[];
 }

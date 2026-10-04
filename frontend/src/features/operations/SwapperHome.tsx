@@ -545,6 +545,33 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
         )}
       </section>
 
+      {/* Scanner QR toujours visible dans l’espace swappeur */}
+      <section className="admin-card operations-scanner-card">
+        <div className="ops-quick-action">
+          <div>
+            <span className="admin-eyebrow">Pointage QR</span>
+            <h2>Scanner le QR de la station</h2>
+            <p>
+              Utilisez la caméra pour enregistrer votre prise ou fin de service.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="admin-button secondary"
+            onClick={() => {
+              if (!targetShift) {
+                setError("Aucun shift publié et affecté n’est disponible pour le pointage.");
+                return;
+              }
+              setError("");
+              setScanning(true);
+            }}
+          >
+            <Scan size={18} /> Ouvrir le scanner
+          </button>
+        </div>
+      </section>
+
       {/* --- CARTE UNIQUE UNIFIÉE : Shift Cible & Actions de Service --- */}
       {targetShift ? (
         <section className="admin-card operations-unified-card">

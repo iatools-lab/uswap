@@ -1,7 +1,4 @@
-import {
-  AttendanceStatus,
-  Role,
-} from '@prisma/client';
+import { AttendanceStatus, Role } from '@prisma/client';
 import {
   BadRequestException,
   Injectable,
@@ -48,9 +45,7 @@ export class CorrectionsService {
    */
   async saveAttachment(file?: UploadedAttachment) {
     if (!file) {
-      throw new BadRequestException(
-        'A supporting document is required.',
-      );
+      throw new BadRequestException('A supporting document is required.');
     }
 
     if (!ALLOWED_MIME.has(file.mimetype)) {
@@ -67,15 +62,9 @@ export class CorrectionsService {
 
     const id = randomUUID();
     const extension =
-      file.mimetype === 'application/pdf'
-        ? 'pdf'
-        : file.mimetype.split('/')[1];
+      file.mimetype === 'application/pdf' ? 'pdf' : file.mimetype.split('/')[1];
 
-    const directory = join(
-      process.cwd(),
-      'uploads',
-      'corrections',
-    );
+    const directory = join(process.cwd(), 'uploads', 'corrections');
 
     await mkdir(directory, { recursive: true });
 
@@ -107,10 +96,9 @@ export class CorrectionsService {
     isLate?: boolean;
     isAbsent?: boolean;
   }) {
-    const access =
-      await this.operationsService.resolveAccessibleStationIds(
-        params.correctedById,
-      );
+    const access = await this.operationsService.resolveAccessibleStationIds(
+      params.correctedById,
+    );
 
     if (!params.reason || params.reason.trim().length < 5) {
       throw new BadRequestException(
@@ -138,12 +126,13 @@ export class CorrectionsService {
       throw new NotFoundException('Shift not found.');
     }
 
-    if (
-      !access.unrestricted &&
-      !access.stationIds.includes(shift.stationId)
-    ) {
+    if (!access.unrestricted && !access.stationIds.includes(shift.stationId)) {
+      throw new BadRequestException('You do not have access to this station.');
+    }
+
+    if (!shift.swapperId) {
       throw new BadRequestException(
-        'You do not have access to this station.',
+        'Cannot correct attendance for a vacant shift.',
       );
     }
 
@@ -325,13 +314,8 @@ export class CorrectionsService {
       throw new NotFoundException('Shift not found.');
     }
 
-    if (
-      !access.unrestricted &&
-      !access.stationIds.includes(shift.stationId)
-    ) {
-      throw new BadRequestException(
-        'You do not have access to this station.',
-      );
+    if (!access.unrestricted && !access.stationIds.includes(shift.stationId)) {
+      throw new BadRequestException('You do not have access to this station.');
     }
 
     const attendances = await this.prisma.attendance.findMany({
@@ -339,26 +323,25 @@ export class CorrectionsService {
       select: { id: true },
     });
 
-    const corrections =
-      await this.prisma.attendanceCorrection.findMany({
-        where: {
-          attendanceId: {
-            in: attendances.map((row) => row.id),
+    const corrections = await this.prisma.attendanceCorrection.findMany({
+      where: {
+        attendanceId: {
+          in: attendances.map((row) => row.id),
+        },
+      },
+      include: {
+        correctedBy: {
+          select: {
+            id: true,
+            fullName: true,
+            role: true,
           },
         },
-        include: {
-          correctedBy: {
-            select: {
-              id: true,
-              fullName: true,
-              role: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
 
     // Shape expected by CorrectionHistory in the frontend.
     return corrections.map((row) => ({

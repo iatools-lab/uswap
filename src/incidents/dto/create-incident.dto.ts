@@ -7,10 +7,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import {
-  IncidentCategory,
-  IncidentSeverity,
-} from '@prisma/client';
+import { IncidentCategory, IncidentSeverity } from '@prisma/client';
 
 export class CreateIncidentDto {
   @IsString()

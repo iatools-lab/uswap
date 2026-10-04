@@ -7,7 +7,8 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { RolesGuard } from './roles.guard';
 
-const ACCESS_TOKEN_TTL_SECONDS = Number(process.env.ACCESS_TOKEN_TTL_SECONDS) || 900;
+const ACCESS_TOKEN_TTL_SECONDS =
+  Number(process.env.ACCESS_TOKEN_TTL_SECONDS) || 900;
 
 @Module({
   imports: [
@@ -19,6 +20,6 @@ const ACCESS_TOKEN_TTL_SECONDS = Number(process.env.ACCESS_TOKEN_TTL_SECONDS) ||
   ],
   controllers: [AuthController],
   providers: [AuthService, EmailService, JwtStrategy, RolesGuard],
-  exports: [AuthService,EmailService],
+  exports: [AuthService, EmailService],
 })
 export class AuthModule {}

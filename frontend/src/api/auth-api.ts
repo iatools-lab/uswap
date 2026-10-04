@@ -179,6 +179,7 @@ export async function api<T>(
   path: string,
   body?: unknown,
   method?: "POST" | "PUT" | "PATCH" | "DELETE",
+  allowRefresh = true,
 ): Promise<T> {
   const verb: MockCtx["method"] =
     method ?? (body === undefined ? "GET" : "POST");
@@ -255,6 +256,23 @@ export async function api<T>(
             }),
       },
     );
+
+    if (
+      response.status === 401 &&
+      allowRefresh &&
+      Boolean(accessToken) &&
+      !path.startsWith("/auth/login") &&
+      !path.startsWith("/auth/refresh") &&
+      !path.startsWith("/auth/activate") &&
+      !path.startsWith("/auth/reset-password")
+    ) {
+      try {
+        await refresh();
+        return await api<T>(path, body, method, false);
+      } catch {
+        // Fall through with the original 401 so callers keep their normal error handling.
+      }
+    }
 
     if (!response.ok) {
       const detail = [
@@ -433,6 +451,12 @@ export function forgetSession() {
   generation += 1;
 
   accessToken = null;
+
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (key?.startsWith("uswap:planning-cache:")) localStorage.removeItem(key);
+  }
+  window.dispatchEvent(new Event("uswap:session-cleared"));
 
   localStorage.removeItem(
     REFRESH_TOKEN_KEY,

@@ -6,6 +6,9 @@ import {
   Req,
   UseGuards,
   Body,
+  Delete,
+  Query,
+  Post,
 } from '@nestjs/common';
 
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
@@ -26,9 +29,7 @@ type AuthenticatedRequest = {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('notifications')
 export class NotificationsController {
-  constructor(
-    private readonly notificationsService: NotificationsService,
-  ) {}
+  constructor(private readonly notificationsService: NotificationsService) {}
 
   /**
    * Every authenticated role reads its own notifications, so no @Roles()
@@ -66,11 +67,34 @@ export class NotificationsController {
     return this.notificationsService.updatePreferences(req.user.id, dto);
   }
 
-  @Patch(':id/read')
-  markAsRead(
+  @Post('push-subscription')
+  savePushSubscription(
     @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
+    @Body()
+    body: {
+      endpoint: string;
+      keys?: { p256dh?: string; auth?: string };
+      p256dh?: string;
+      auth?: string;
+      userAgent?: string;
+    },
   ) {
+    return this.notificationsService.savePushSubscription(req.user.id, body);
+  }
+
+  @Delete('push-subscription')
+  removePushSubscription(
+    @Req() req: AuthenticatedRequest,
+    @Query('endpoint') endpoint?: string,
+  ) {
+    return this.notificationsService.removePushSubscription(
+      req.user.id,
+      endpoint,
+    );
+  }
+
+  @Patch(':id/read')
+  markAsRead(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.notificationsService.markAsRead(req.user.id, id);
   }
 }

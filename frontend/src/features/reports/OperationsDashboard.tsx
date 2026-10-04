@@ -7,8 +7,7 @@ import {
   UsersThreeIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { api } from "../../api/auth-api";
-import { exportToExcel } from "../../utils/excelExport";
+import { api, download } from "../../api/auth-api";
 import { Select } from "../../ui/Select";
 import { Modal } from "../../ui/Modal";
 import "./reports.css";
@@ -23,6 +22,9 @@ type Dashboard = {
     absences: number;
     late: number;
     approvedLeaves: number;
+    leavesSynced: number;
+    leavesPendingSync: number;
+    leavesFailedSync: number;
     movements: number;
     totalHours: number;
     futureVacant: number;
@@ -50,6 +52,9 @@ type Dashboard = {
     label: string;
   }>;
   hours: Array<{ name: string; station: string; hours: number }>;
+  hoursByStation: Array<{ station: string; hours: number }>;
+  hoursByWeek: Array<{ week: string; hours: number }>;
+  hoursByMonth: Array<{ month: string; hours: number }>;
   changes: Array<{
     date: string;
     station: string;
@@ -111,18 +116,15 @@ export function OperationsDashboard() {
       data ? Object.values(data.attendance).reduce((a, b) => a + b, 0) : 0,
     [data],
   );
-  function exportReport() {
+  async function exportReport(format: "CSV" | "XLSX") {
     if (!data) return;
-    exportToExcel({
-      data: data.hours,
-      filename: `rapport-uswap-${from}-${to}`,
-      sheetName: "Heures",
-      columns: [
-        { header: "Swappeur", key: "name", width: 25 },
-        { header: "Station", key: "station", width: 22 },
-        { header: "Heures", key: "hours", width: 12 },
-      ],
-    });
+    const query = new URLSearchParams({ from, to, format });
+    if (station) query.set("stationId", station);
+    if (swapper) query.set("swapperId", swapper);
+    await download(
+      `/reports/export?${query.toString()}`,
+      `rapport-uswap-${from}-${to}.${format === "CSV" ? "csv" : "xlsx"}`,
+    );
   }
   return (
     <section className="ops-dashboard" aria-busy={loading}>
@@ -135,14 +137,23 @@ export function OperationsDashboard() {
             période choisie.
           </p>
         </div>
-        <button
-          className="admin-button secondary"
-          disabled={!data}
-          onClick={exportReport}
-        >
-          <DownloadSimpleIcon />
-          Exporter Excel
-        </button>
+        <div className="ops-dashboard-export-actions">
+          <button
+            className="admin-button secondary"
+            disabled={!data}
+            onClick={() => void exportReport("XLSX")}
+          >
+            <DownloadSimpleIcon />
+            Exporter Excel
+          </button>
+          <button
+            className="admin-button secondary"
+            disabled={!data}
+            onClick={() => void exportReport("CSV")}
+          >
+            CSV
+          </button>
+        </div>
       </div>
       <div className="ops-dashboard-filters">
         <label>
@@ -241,6 +252,14 @@ export function OperationsDashboard() {
               </div>
             ) : detail === "hours" ? (
               <div className="kpi-detail-list">
+                <article><strong>Par semaine</strong><span>{data.hoursByWeek.map((row) => `${row.week}: ${row.hours} h`).join(" · ") || "Aucune donnée"}</span></article>
+                <article><strong>Par mois</strong><span>{data.hoursByMonth.map((row) => `${row.month}: ${row.hours} h`).join(" · ") || "Aucune donnée"}</span></article>
+                {data.hoursByStation.map((row) => (
+                  <article key={row.station}>
+                    <strong>{row.station}</strong>
+                    <span>{row.hours} h planifiées</span>
+                  </article>
+                ))}
                 {data.hours.map((row) => (
                   <article key={`${row.name}-${row.station}`}>
                     <strong>{row.name}</strong>
@@ -317,6 +336,7 @@ export function OperationsDashboard() {
                 <small>Charge planifiée</small>
                 <strong>{Math.round(data.kpis.totalHours)} h</strong>
                 <span>{data.kpis.approvedLeaves} congé(s) approuvé(s)</span>
+                <em>{data.kpis.leavesSynced} synchronisé(s) · {data.kpis.leavesPendingSync} en attente</em>
               </div>
             </button>
             <button

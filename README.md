@@ -4,12 +4,42 @@
 Application web de planification et de supervision des équipes de *swapping*
 réparties sur plusieurs stations.
 
-- **Version courante** : `uswap-v5.2.0` — sprint 5 intégré (frontend + backend)
+- **Version courante** : `uswap-v5.3.0` — sprint 5 intégré (frontend + backend)
 - **Backend** : NestJS 11 + Prisma 6 + PostgreSQL
 - **Frontend** : React 19 + Vite + TypeScript
 
 > Documentation détaillée : [`docs/FONCTIONNEMENT-SPRINTS-1-A-5.md`](docs/FONCTIONNEMENT-SPRINTS-1-A-5.md)
 > (fonctionnement du projet et rôle de chaque API, sprint par sprint).
+>
+> **Nouveautés et API de la version 5.3.0** :
+> [`docs/V5.3.0-NOUVELLE-VERSION-ET-API.md`](docs/V5.3.0-NOUVELLE-VERSION-ET-API.md)
+> (changements détaillés + documentation complète des routes).
+
+---
+
+## Nouveautés de la version 5.3.0
+
+Cette version intègre le frontend et le backend et complète les User Stories
+**2069 à 2078**. Voir `US-2069-2078-COMPLIANCE.md` pour la matrice de conformité.
+
+- **Reporting opérationnel** : dashboard `/reports/dashboard` (période, station,
+  swappeur) avec KPI de couverture, assiduité, absences, retards, mouvements et heures.
+- **Calcul des heures** par swappeur, station, semaine et mois (shifts publiés et affectés uniquement).
+- **Export CSV / XLSX** généré côté serveur, avec **audit** de chaque export (`ReportExportAudit`).
+- **Rapports périodiques** : planification quotidienne/hebdo/mensuelle, aperçu avant
+  création, historique d'exécution (`ScheduledReportRun`), envoi SMTP.
+- **PWA / hors ligne** : cache du planning du swappeur, file d'absences annulable
+  avant synchronisation, horodatage de synchronisation, notifications push.
+- **Correctifs full-stack** (authentification, utilisateurs, planning/shifts,
+  notifications, offline) : voir `FIXES.md`.
+
+### Correctifs principaux
+
+- Liens d'activation corrigés (`/auth/activate?token=...`), envoi SMTP Gmail/Nodemailer.
+- Statut utilisateur réel `pending / active / inactive` + `disabledAt`.
+- Poste de shift **vacant** possible (`Shift.swapperId` nullable).
+- Anti-doublon hors ligne via `clientRef` (`ReplacementRequest`).
+- Préférences de notification alignées avec le contrat backend.
 
 ---
 
@@ -225,7 +255,7 @@ haut, puis marquée par un tag.
 |---|---|
 | `uswap-frontend-s4.1.0` | Frontend sprint 4 |
 | `uswap-frontend-s5.1.0` | Frontend sprint 5 |
-| `uswap-v5.2.0` | **Sprint 5 intégré : frontend + backend raccordés** |
+| `uswap-v5.3.0` | **Sprint 5 intégré : frontend + backend raccordés** |
 
 ---
 
@@ -239,3 +269,9 @@ Ne jamais commiter :
 
 Ces valeurs vivent uniquement dans les fichiers `.env` locaux, exclus par
 `.gitignore`. Utilisez `.env.example` comme référence.
+
+## uSwap 5.3 — User Stories 2069–2078
+
+La version 5.3 complète le socle 5.2 avec le reporting exportable CSV/XLSX, l’audit des exports, les rapports périodiques avec aperçu et historique d’exécution, le calcul des heures par station/semaine/mois, la visibilité de la synchronisation externe des congés et l’amélioration du parcours offline/PWA (file d’absences annulable avant synchronisation et horodatage de synchronisation).
+
+Voir `US-2069-2078-COMPLIANCE.md` pour la matrice de conformité détaillée.

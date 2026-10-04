@@ -22,27 +22,27 @@ import { IncidentsModule } from './incidents/incidents.module';
 import { ReportsModule } from './reports/reports.module';
 
 @Module({
-imports: [
-ScheduleModule.forRoot(),
+  imports: [
+    ScheduleModule.forRoot(),
 
-PrismaModule,
-AuthModule,
-StationsModule,
-LeaveModule,
-UsersModule,
-ShiftsModule,
-PlanningModule,
-SchedulingModule,
-AttendanceModule,
-OperationsModule,
-WorkspaceModule,
-CorrectionsModule,
-NotificationsModule,
-DashboardModule,
-IncidentsModule,
-ReportsModule,
-],
-controllers: [AppController],
-providers: [AppService],
+    PrismaModule,
+    AuthModule,
+    StationsModule,
+    LeaveModule,
+    UsersModule,
+    ShiftsModule,
+    PlanningModule,
+    SchedulingModule,
+    AttendanceModule,
+    OperationsModule,
+    WorkspaceModule,
+    CorrectionsModule,
+    NotificationsModule,
+    DashboardModule,
+    IncidentsModule,
+    ReportsModule,
+  ],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}

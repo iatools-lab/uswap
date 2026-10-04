@@ -86,6 +86,18 @@ export async function mockDownload(
   url: string,
 ): Promise<{ blob: Blob; filename: string } | null> {
   const path = url.split("?")[0].replace(/\/+$/, "");
+  if (path === "/reports/export") {
+    const rows = [
+      ["Section", "Statut", "Nombre"],
+      ["ASSIDUITE", "PRESENT", 0],
+      ["ASSIDUITE", "ABSENT", 0],
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Rapport");
+    const data = XLSX.write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+    return { blob: new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), filename: "rapport-uswap.xlsx" };
+  }
   if (path === "/users/imports/template") {
     const sheet = XLSX.utils.json_to_sheet([
       {

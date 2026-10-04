@@ -50,9 +50,7 @@ export class OperationsService {
    *
    * Public so the workspace module applies the exact same scoping rules.
    */
-  async resolveAccessibleStationIds(
-    userId: string,
-  ): Promise<{
+  async resolveAccessibleStationIds(userId: string): Promise<{
     unrestricted: boolean;
     stationIds: string[];
   }> {
@@ -133,9 +131,7 @@ export class OperationsService {
     }
 
     if (!access.stationIds.includes(stationId)) {
-      throw new ForbiddenException(
-        'You do not have access to this station.',
-      );
+      throw new ForbiddenException('You do not have access to this station.');
     }
   }
 
@@ -150,8 +146,7 @@ export class OperationsService {
     urgency: ReplacementUrgency;
     hoursUntilStart: number;
   } {
-    const hoursUntilStart =
-      (startTime.getTime() - now.getTime()) / HOUR_MS;
+    const hoursUntilStart = (startTime.getTime() - now.getTime()) / HOUR_MS;
 
     if (hoursUntilStart <= 12) {
       return { urgency: 'CRITICAL', hoursUntilStart };
@@ -165,7 +160,7 @@ export class OperationsService {
   }
 
   // ============================================================
-  // BLOC A — OPEN A REPLACEMENT REQUEST
+  // BLOC A â€” OPEN A REPLACEMENT REQUEST
   // ============================================================
 
   /**
@@ -183,18 +178,31 @@ export class OperationsService {
     requestedById: string;
     reason?: string | null;
     source: ReplacementSource;
+    clientRef?: string;
   }): Promise<{
     created: boolean;
     requestId: string;
     status: ReplacementStatus;
   }> {
     const existing = await this.prisma.replacementRequest.findFirst({
-      where: {
-        shiftId: params.shiftId,
-        status: {
-          in: [ReplacementStatus.OPEN, ReplacementStatus.ASSIGNED],
-        },
-      },
+      where: params.clientRef
+        ? {
+            OR: [
+              { clientRef: params.clientRef },
+              {
+                shiftId: params.shiftId,
+                status: {
+                  in: [ReplacementStatus.OPEN, ReplacementStatus.ASSIGNED],
+                },
+              },
+            ],
+          }
+        : {
+            shiftId: params.shiftId,
+            status: {
+              in: [ReplacementStatus.OPEN, ReplacementStatus.ASSIGNED],
+            },
+          },
       select: {
         id: true,
         status: true,
@@ -216,6 +224,7 @@ export class OperationsService {
         requestedById: params.requestedById,
         reason: params.reason?.trim() || null,
         source: params.source,
+        clientRef: params.clientRef ?? null,
         status: ReplacementStatus.OPEN,
       },
       select: {
@@ -264,8 +273,9 @@ export class OperationsService {
 
     if (!shift) return;
 
-    const isAutomatic =
-      params.source === REPLACEMENT_SOURCE.AUTOMATIC_ABSENCE;
+    if (!shift.swapper) return;
+
+    const isAutomatic = params.source === REPLACEMENT_SOURCE.AUTOMATIC_ABSENCE;
 
     const when = shift.startTime.toISOString().slice(0, 16).replace('T', ' ');
 
@@ -274,11 +284,11 @@ export class OperationsService {
       stationIds: [shift.stationId],
       kind: NotificationKind.REPLACEMENT_REQUESTED,
       title: isAutomatic
-        ? `Absence constatée — ${shift.station.name}`
-        : `Empêchement déclaré — ${shift.station.name}`,
+        ? `Absence constatÃ©e â€” ${shift.station.name}`
+        : `EmpÃªchement dÃ©clarÃ© â€” ${shift.station.name}`,
       body: isAutomatic
-        ? `Aucun pointage enregistré pour ${shift.swapper.fullName} (${when}). Un remplaçant est nécessaire.`
-        : `${shift.swapper.fullName} ne peut plus assurer le shift du ${when}. Motif : ${params.reason ?? 'non précisé'}.`,
+        ? `Aucun pointage enregistrÃ© pour ${shift.swapper.fullName} (${when}). Un remplaÃ§ant est nÃ©cessaire.`
+        : `${shift.swapper.fullName} ne peut plus assurer le shift du ${when}. Motif : ${params.reason ?? 'non prÃ©cisÃ©'}.`,
       link: '/app/supervision/operations',
       entityId: params.requestId,
     });
@@ -291,6 +301,7 @@ export class OperationsService {
     swapperId: string;
     shiftId: string;
     reason: string;
+    clientRef?: string;
   }) {
     const shift = await this.prisma.shift.findUnique({
       where: { id: params.shiftId },
@@ -320,9 +331,7 @@ export class OperationsService {
     }
 
     if (!shift.planning) {
-      throw new BadRequestException(
-        'The shift is not attached to a planning.',
-      );
+      throw new BadRequestException('The shift is not attached to a planning.');
     }
 
     if (shift.planning.status !== PlanningStatus.PUBLISHED) {
@@ -366,6 +375,7 @@ export class OperationsService {
       requestedById: params.swapperId,
       reason: params.reason,
       source: REPLACEMENT_SOURCE.DECLARATION,
+      clientRef: params.clientRef,
     });
 
     return {
@@ -377,11 +387,13 @@ export class OperationsService {
       shiftId: shift.id,
       stationId: shift.stationId,
       startTime: shift.startTime,
+      syncedAt: new Date(),
+      clientRef: params.clientRef ?? null,
     };
   }
 
   // ============================================================
-  // BLOC B — PENDING REPLACEMENTS (COVERAGE QUEUE)
+  // BLOC B â€” PENDING REPLACEMENTS (COVERAGE QUEUE)
   // ============================================================
 
   async findPendingReplacements(userId: string) {
@@ -480,14 +492,13 @@ export class OperationsService {
         }
 
         return (
-          new Date(a.startTime).getTime() -
-          new Date(b.startTime).getTime()
+          new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
         );
       });
   }
 
   // ============================================================
-  // BLOC B — SHIFT CHANGE HISTORY
+  // BLOC B â€” SHIFT CHANGE HISTORY
   // ============================================================
 
   async findShiftChanges(
@@ -610,7 +621,7 @@ export class OperationsService {
   }
 
   // ============================================================
-  // BLOC C — REPLACEMENT CANDIDATES
+  // BLOC C â€” REPLACEMENT CANDIDATES
   // ============================================================
 
   /**
@@ -639,6 +650,12 @@ export class OperationsService {
     }
 
     this.assertStationAccess(access, shift.stationId);
+
+    if (!shift.swapperId) {
+      throw new BadRequestException(
+        'Ce poste est vacant et ne nÃ©cessite pas de remplacement.',
+      );
+    }
 
     const swappers = await this.prisma.user.findMany({
       where: {
@@ -685,16 +702,13 @@ export class OperationsService {
       stationId: shift.stationId,
       startTime: shift.startTime,
       endTime: shift.endTime,
-      durationHours: getDurationInHours(
-        shift.startTime,
-        shift.endTime,
-      ),
+      durationHours: getDurationInHours(shift.startTime, shift.endTime),
       candidates,
     };
   }
 
   // ============================================================
-  // BLOC C — ASSIGN A REPLACEMENT
+  // BLOC C â€” ASSIGN A REPLACEMENT
   // ============================================================
 
   /**
@@ -707,9 +721,7 @@ export class OperationsService {
     swapperId: string;
     reason?: string;
   }) {
-    const access = await this.resolveAccessibleStationIds(
-      params.changedById,
-    );
+    const access = await this.resolveAccessibleStationIds(params.changedById);
 
     const shift = await this.prisma.shift.findUnique({
       where: { id: params.shiftId },
@@ -732,6 +744,12 @@ export class OperationsService {
 
     this.assertStationAccess(access, shift.stationId);
 
+    if (!shift.swapperId) {
+      throw new BadRequestException(
+        'Ce poste est vacant : affectez un swappeur directement depuis le planning.',
+      );
+    }
+
     if (shift.swapperId === params.swapperId) {
       throw new BadRequestException(
         'This swapper is already assigned to the shift.',
@@ -739,9 +757,7 @@ export class OperationsService {
     }
 
     if (!shift.station.isActive) {
-      throw new BadRequestException(
-        'This station is deactivated.',
-      );
+      throw new BadRequestException('This station is deactivated.');
     }
 
     // Re-evaluate the rules at assignment time: availability may have
@@ -758,23 +774,22 @@ export class OperationsService {
     // A supervisor may replace on a shift that never went through the queue
     // (ad-hoc cover). Record a request so the change is traceable and the
     // audit trail is complete, rather than silently skipping it.
-    const existingRequest =
-      await this.prisma.replacementRequest.findFirst({
-        where: {
-          shiftId: shift.id,
-          status: {
-            in: [ReplacementStatus.OPEN, ReplacementStatus.ASSIGNED],
-          },
+    const existingRequest = await this.prisma.replacementRequest.findFirst({
+      where: {
+        shiftId: shift.id,
+        status: {
+          in: [ReplacementStatus.OPEN, ReplacementStatus.ASSIGNED],
         },
-        orderBy: {
-          requestedAt: 'asc',
-        },
-        select: {
-          id: true,
-          reason: true,
-          originalSwapperId: true,
-        },
-      });
+      },
+      orderBy: {
+        requestedAt: 'asc',
+      },
+      select: {
+        id: true,
+        reason: true,
+        originalSwapperId: true,
+      },
+    });
 
     const openRequest =
       existingRequest ??
@@ -836,6 +851,10 @@ export class OperationsService {
       // Hand the attendance row over to the replacement. Only an
       // untouched EXPECTED row is removed; anything already scanned is
       // preserved as history.
+      if (!shift.swapperId) {
+        throw new BadRequestException('Cannot replace a vacant shift.');
+      }
+
       const previousAttendance = await tx.attendance.findUnique({
         where: {
           shiftId_swapperId: {
@@ -883,9 +902,7 @@ export class OperationsService {
             assignedAt: now,
             resolvedAt: now,
             status: ReplacementStatus.RESOLVED,
-            ...(params.reason?.trim()
-              ? { reason: params.reason.trim() }
-              : {}),
+            ...(params.reason?.trim() ? { reason: params.reason.trim() } : {}),
           },
         });
       }
@@ -898,6 +915,11 @@ export class OperationsService {
 
     // Notifications go out after the transaction commits: a rollback must
     // never leave a message claiming a change that did not happen.
+    if (!result.shift.swapper) {
+      throw new BadRequestException(
+        'Replacement assignment did not produce an assigned swapper.',
+      );
+    }
     await this.notifyReplacementAssigned({
       shiftId: shift.id,
       previousSwapperId: shift.swapperId,
@@ -918,9 +940,7 @@ export class OperationsService {
       },
       shiftChangeId: result.shiftChange.id,
       requestId: openRequest?.id ?? null,
-      requestStatus: openRequest
-        ? ReplacementStatus.RESOLVED
-        : null,
+      requestStatus: openRequest ? ReplacementStatus.RESOLVED : null,
     };
   }
 
@@ -942,16 +962,13 @@ export class OperationsService {
       select: { name: true },
     });
 
-    const when = params.startTime
-      .toISOString()
-      .slice(0, 16)
-      .replace('T', ' ');
+    const when = params.startTime.toISOString().slice(0, 16).replace('T', ' ');
 
-    // The incoming swapper — the most important message of the three.
+    // The incoming swapper â€” the most important message of the three.
     await this.notifications.notify({
       userId: params.newSwapperId,
       kind: NotificationKind.REPLACEMENT_ASSIGNED,
-      title: 'Nouveau shift qui vous est affecté',
+      title: 'Nouveau shift qui vous est affectÃ©',
       body: `Vous remplacez sur ${station?.name ?? 'la station'} le ${when}. Motif : ${params.reason}.`,
       link: '/app/supervision/operations',
       entityId: params.shiftId,
@@ -961,8 +978,8 @@ export class OperationsService {
     await this.notifications.notify({
       userId: params.previousSwapperId,
       kind: NotificationKind.SHIFT_CHANGED,
-      title: 'Vous êtes déchargé de ce shift',
-      body: `${params.newSwapperName} assure désormais le shift du ${when} à ${station?.name ?? 'la station'}.`,
+      title: 'Vous Ãªtes dÃ©chargÃ© de ce shift',
+      body: `${params.newSwapperName} assure dÃ©sormais le shift du ${when} Ã  ${station?.name ?? 'la station'}.`,
       link: '/app/supervision/operations',
       entityId: params.shiftId,
     });
@@ -972,8 +989,8 @@ export class OperationsService {
       roles: [Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF],
       stationIds: [params.stationId],
       kind: NotificationKind.SHIFT_CHANGED,
-      title: 'Remplacement effectué',
-      body: `${params.newSwapperName} couvre le shift du ${when} à ${station?.name ?? 'la station'}.`,
+      title: 'Remplacement effectuÃ©',
+      body: `${params.newSwapperName} couvre le shift du ${when} Ã  ${station?.name ?? 'la station'}.`,
       link: '/app/supervision/operations',
       entityId: params.shiftId,
     });

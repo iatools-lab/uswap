@@ -9,26 +9,19 @@ import {
   Query,
   Req,
   UseGuards,
-} from "@nestjs/common";
+} from '@nestjs/common';
 
-import {
-  AttendanceQrType,
-  AttendanceStatus,
-  Role,
-} from "@prisma/client";
+import { AttendanceQrType, AttendanceStatus, Role } from '@prisma/client';
 
-import { AttendanceService } from "./attendance.service";
-import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { RolesGuard } from "../auth/roles.guard";
-import { Roles } from "../auth/roles.decorator";
-import { OperationsService } from "../operations/operations.service";
-import { PrismaService } from "../prisma/prisma.service";
+import { AttendanceService } from './attendance.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { OperationsService } from '../operations/operations.service';
+import { PrismaService } from '../prisma/prisma.service';
 
-@Controller("attendance")
-@UseGuards(
-  JwtAuthGuard,
-  RolesGuard,
-)
+@Controller('attendance')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class AttendanceController {
   constructor(
     private readonly attendanceService: AttendanceService,
@@ -36,11 +29,8 @@ export class AttendanceController {
     private readonly prisma: PrismaService,
   ) {}
 
-  @Post("qr")
-  @Roles(
-    Role.SUPERVISOR,
-    Role.STATION_CHIEF,
-  )
+  @Post('qr')
+  @Roles(Role.SUPERVISOR, Role.STATION_CHIEF)
   async generateQr(
     @Req()
     req: {
@@ -53,60 +43,45 @@ export class AttendanceController {
       shiftId: string;
       stationId: string;
       type?: AttendanceQrType;
-      kind?:
-        | "CHECKIN"
-        | "CHECKOUT";
+      kind?: 'CHECKIN' | 'CHECKOUT';
     },
   ) {
     const type =
       body.type ??
-      (body.kind ===
-      "CHECKOUT"
+      (body.kind === 'CHECKOUT'
         ? AttendanceQrType.END
         : AttendanceQrType.START);
 
-    const result =
-      await this.attendanceService.generateQr(
-        body.shiftId,
-        body.stationId,
-        req.user.id,
-        type,
-      );
+    const result = await this.attendanceService.generateQr(
+      body.shiftId,
+      body.stationId,
+      req.user.id,
+      type,
+    );
 
-    const station =
-      await this.prisma.station.findUnique(
-        {
-          where: {
-            id: body.stationId,
-          },
-          select: {
-            name: true,
-            timezone: true,
-          },
-        },
-      );
+    const station = await this.prisma.station.findUnique({
+      where: {
+        id: body.stationId,
+      },
+      select: {
+        name: true,
+        timezone: true,
+      },
+    });
 
     if (!station) {
-      throw new ForbiddenException(
-        "Station introuvable.",
-      );
+      throw new ForbiddenException('Station introuvable.');
     }
 
     return {
       ...result,
-      kind:
-        type ===
-        AttendanceQrType.END
-          ? "CHECKOUT"
-          : "CHECKIN",
-      stationName:
-        station.name,
-      timezone:
-        station.timezone,
+      kind: type === AttendanceQrType.END ? 'CHECKOUT' : 'CHECKIN',
+      stationName: station.name,
+      timezone: station.timezone,
     };
   }
 
-  @Post("check-in")
+  @Post('check-in')
   @Roles(Role.SWAPPER)
   async checkIn(
     @Req()
@@ -134,7 +109,7 @@ export class AttendanceController {
     );
   }
 
-  @Post("check-out")
+  @Post('check-out')
   @Roles(Role.SWAPPER)
   async checkOut(
     @Req()
@@ -163,29 +138,21 @@ export class AttendanceController {
   }
 
   @Get()
-  @Roles(
-    Role.ADMIN,
-    Role.SUPERVISOR,
-  )
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   async findAll(
-    @Query("status")
+    @Query('status')
     status?: AttendanceStatus,
   ) {
-    return this.attendanceService.findAll(
-      status,
-    );
+    return this.attendanceService.findAll(status);
   }
 
-  @Get("statistics")
-  @Roles(
-    Role.ADMIN,
-    Role.SUPERVISOR,
-  )
+  @Get('statistics')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   async getStatistics() {
     return this.attendanceService.getStatistics();
   }
 
-  @Get("mine")
+  @Get('mine')
   @Roles(Role.SWAPPER)
   async findMine(
     @Req()
@@ -194,54 +161,34 @@ export class AttendanceController {
         id: string;
       };
     },
-    @Query("status")
+    @Query('status')
     status?: AttendanceStatus,
   ) {
-    return this.attendanceService.findBySwapper(
-      req.user.id,
-      status,
-    );
+    return this.attendanceService.findBySwapper(req.user.id, status);
   }
 
-  @Get("shift/:shiftId")
-  @Roles(
-    Role.ADMIN,
-    Role.SUPERVISOR,
-  )
+  @Get('shift/:shiftId')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   async findByShift(
-    @Param("shiftId")
+    @Param('shiftId')
     shiftId: string,
-    @Query("status")
+    @Query('status')
     status?: AttendanceStatus,
   ) {
-    return this.attendanceService.findByShift(
-      shiftId,
-      status,
-    );
+    return this.attendanceService.findByShift(shiftId, status);
   }
 
-  @Get(
-    "shift/:shiftId/pending-checkout",
-  )
-  @Roles(
-    Role.ADMIN,
-    Role.SUPERVISOR,
-  )
+  @Get('shift/:shiftId/pending-checkout')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   async findPendingCheckouts(
-    @Param("shiftId")
+    @Param('shiftId')
     shiftId: string,
   ) {
-    return this.attendanceService.findPendingCheckouts(
-      shiftId,
-    );
+    return this.attendanceService.findPendingCheckouts(shiftId);
   }
 
-  @Get("station/:stationId")
-  @Roles(
-    Role.ADMIN,
-    Role.SUPERVISOR,
-    Role.STATION_CHIEF,
-  )
+  @Get('station/:stationId')
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
   async findByStation(
     @Req()
     req: {
@@ -249,57 +196,39 @@ export class AttendanceController {
         id: string;
       };
     },
-    @Param("stationId")
+    @Param('stationId')
     stationId: string,
-    @Query("status")
+    @Query('status')
     status?: AttendanceStatus,
   ) {
-    const access =
-      await this.operationsService.resolveAccessibleStationIds(
-        req.user.id,
-      );
+    const access = await this.operationsService.resolveAccessibleStationIds(
+      req.user.id,
+    );
 
-    if (
-      !access.unrestricted &&
-      !access.stationIds.includes(
-        stationId,
-      )
-    ) {
+    if (!access.unrestricted && !access.stationIds.includes(stationId)) {
       throw new ForbiddenException(
-        "Vous ne disposez pas des droits sur cette station.",
+        'Vous ne disposez pas des droits sur cette station.',
       );
     }
 
-    return this.attendanceService.findByStation(
-      stationId,
-      status,
-    );
+    return this.attendanceService.findByStation(stationId, status);
   }
 
-  @Get("swapper/:swapperId")
-  @Roles(
-    Role.ADMIN,
-    Role.SUPERVISOR,
-  )
+  @Get('swapper/:swapperId')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   async findBySwapper(
-    @Param("swapperId")
+    @Param('swapperId')
     swapperId: string,
-    @Query("status")
+    @Query('status')
     status?: AttendanceStatus,
   ) {
-    return this.attendanceService.findBySwapper(
-      swapperId,
-      status,
-    );
+    return this.attendanceService.findBySwapper(swapperId, status);
   }
 
-  @Patch(":id/correct")
-  @Roles(
-    Role.ADMIN,
-    Role.SUPERVISOR,
-  )
+  @Patch(':id/correct')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   async correctAttendance(
-    @Param("id")
+    @Param('id')
     id: string,
     @Body()
     body: {
@@ -331,7 +260,7 @@ export class AttendanceController {
    * Sprint 5: live attendance board for supervisors and station chiefs.
    * Declared before GET ':id' so 'monitor' is not read as an attendance id.
    */
-  @Get("monitor")
+  @Get('monitor')
   @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
   async monitor(@Req() req: { user: { id: string } }) {
     return this.attendanceService.monitor(req.user.id);
@@ -341,27 +270,22 @@ export class AttendanceController {
    * Sprint 5: personal attendance history of the signed-in swapper.
    * Declared before GET ':id' as well.
    */
-  @Get("history")
+  @Get('history')
   @Roles(Role.SWAPPER)
   async history(
     @Req() req: { user: { id: string } },
-    @Query("from") from?: string,
-    @Query("to") to?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
     return this.attendanceService.history(req.user.id, from, to);
   }
 
-  @Get(":id")
-  @Roles(
-    Role.ADMIN,
-    Role.SUPERVISOR,
-  )
+  @Get(':id')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   async findOne(
-    @Param("id")
+    @Param('id')
     id: string,
   ) {
-    return this.attendanceService.findOne(
-      id,
-    );
+    return this.attendanceService.findOne(id);
   }
 }
