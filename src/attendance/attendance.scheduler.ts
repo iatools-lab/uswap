@@ -5,31 +5,25 @@ import { AttendanceService } from './attendance.service';
 
 @Injectable()
 export class AttendanceScheduler {
-private readonly logger = new Logger(AttendanceScheduler.name);
+  private readonly logger = new Logger(AttendanceScheduler.name);
 
-constructor(
-private readonly attendanceService: AttendanceService,
-) {}
+  constructor(private readonly attendanceService: AttendanceService) {}
 
-@Cron(CronExpression.EVERY_5_MINUTES)
-async handleAutomaticAbsence(): Promise<void> {
-try {
-const result =
-await this.attendanceService.markExpectedAsAbsent();
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleAutomaticAbsence(): Promise<void> {
+    try {
+      const result = await this.attendanceService.markExpectedAsAbsent();
 
-  if (result.updatedCount > 0) {
-    this.logger.log(
-      `${result.updatedCount} attendance record(s) automatically marked as ABSENT.`,
-    );
+      if (result.updatedCount > 0) {
+        this.logger.log(
+          `${result.updatedCount} attendance record(s) automatically marked as ABSENT.`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        'Automatic absence check failed.',
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
-} catch (error) {
-  this.logger.error(
-    'Automatic absence check failed.',
-    error instanceof Error
-      ? error.stack
-      : String(error),
-  );
-}
-
-}
 }

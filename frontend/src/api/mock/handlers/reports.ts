@@ -75,6 +75,7 @@ export const reportRoutes: MockRoute[] = [
     pattern: /^\/reports\/dashboard$/,
     handler: ({ db, user, query, now }) => {
       const actor = requireRole(requireUser(db, user), [
+        "ADMIN",
         "SUPERVISOR",
         "STATION_CHIEF",
       ]);
@@ -240,6 +241,9 @@ export const reportRoutes: MockRoute[] = [
           absences: status.absent,
           late: status.late,
           approvedLeaves: leaves.length,
+          leavesSynced: leaves.length,
+          leavesPendingSync: 0,
+          leavesFailedSync: 0,
           movements: changes.length,
           totalHours: Array.from(hoursBySwapper.values()).reduce(
             (sum, row) => sum + row.hours,
@@ -257,6 +261,9 @@ export const reportRoutes: MockRoute[] = [
         hours: Array.from(hoursBySwapper.values())
           .sort((a, b) => b.hours - a.hours)
           .slice(0, 8),
+        hoursByStation: Array.from(new Map(occurrences.filter((row) => row.swapperId).map((row) => [row.stationId, row])).entries()).map(([stationId]) => ({ station: stationNameOf(db, stationId) ?? "—", hours: occurrences.filter((row) => row.stationId === stationId && row.swapperId).reduce((sum, row) => sum + durationHours(db, row), 0) })),
+        hoursByWeek: [],
+        hoursByMonth: [],
         changes: changes.map((item) => ({
           date: item.createdAt,
           station: item.station,
@@ -266,6 +273,31 @@ export const reportRoutes: MockRoute[] = [
         })),
       };
     },
+  },
+  {
+    method: "POST",
+    pattern: /^\/admin\/reports\/schedules\/preview$/,
+    handler: async ({ user, db, body }) => {
+      requireRole(requireUser(db, user), ["ADMIN"]);
+      const stationId = text(body.stationId) || undefined;
+      const dashboard = await reportRoutes[2].handler({
+        method: "GET", path: "/reports/dashboard", params: [], query: new URLSearchParams({ ...(stationId ? { stationId } : {}) }), body: {}, file: null, db, user, now: Date.now(),
+      } as never);
+      return dashboard;
+    },
+  },
+  {
+    method: "GET",
+    pattern: /^\/admin\/reports\/schedules\/([^/]+)\/runs$/,
+    handler: ({ db, user, params }) => {
+      requireRole(requireUser(db, user), ["ADMIN"]);
+      return [];
+    },
+  },
+  {
+    method: "GET",
+    pattern: /^\/reports\/export$/,
+    handler: ({ user, db }) => requireRole(requireUser(db, user), ["ADMIN", "SUPERVISOR", "STATION_CHIEF"]),
   },
   {
     method: "GET",

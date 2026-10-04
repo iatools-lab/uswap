@@ -4,7 +4,7 @@ import { notify } from "../../ui/Toast";
 import { Modal } from "../../ui/Modal";
 import { LoaderCircle, UploadSimple, Warning, X } from "../../ui/icons";
 import { Select } from "../../ui/Select";
-import { enqueue, startOutboxSync } from "../offline/outbox";
+import { enqueue, pending, discard, startOutboxSync, subscribeOutbox } from "../offline/outbox";
 import { formatDateTime } from "./format";
 import type { OperationShift } from "../operations/types";
 
@@ -25,16 +25,21 @@ export function AbsenceDeclaration({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [online, setOnline] = useState(navigator.onLine);
+  const [queued, setQueued] = useState<Array<{ id: string; queuedAt: string; body: Record<string, unknown> }>>([]);
 
   useEffect(() => {
     const sync = () => setOnline(true);
     const drop = () => setOnline(false);
     window.addEventListener("online", sync);
     window.addEventListener("offline", drop);
-    const stopSync = startOutboxSync();
+    const refreshQueue = () => void pending().then((rows) => setQueued(rows.filter((row) => row.path === "/operations/absences" && row.status !== "PROCESSING").map((row) => ({ id: row.id, queuedAt: row.queuedAt, body: row.body }))));
+    refreshQueue();
+    const unsubscribe = subscribeOutbox(refreshQueue);
+    const stopSync = startOutboxSync(refreshQueue);
     return () => {
       window.removeEventListener("online", sync);
       window.removeEventListener("offline", drop);
+      unsubscribe();
       stopSync();
     };
   }, []);
@@ -131,6 +136,23 @@ export function AbsenceDeclaration({
 
   return (
     <>
+      {queued.length > 0 && (
+        <section className="admin-card" aria-live="polite">
+          <div className="ops-quick-action">
+            <div>
+              <h2>Déclarations en attente</h2>
+              <p>{queued.length} déclaration(s) hors connexion attend(ent) la synchronisation.</p>
+            </div>
+            <div>
+              {queued.map((item) => (
+                <button key={item.id} type="button" className="admin-button secondary small" onClick={() => void discard(item.id)}>
+                  Annuler · {new Date(item.queuedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
       <section className="admin-card">
         <div className="ops-quick-action">
           <div>

@@ -35,17 +35,14 @@ export class ShiftsService {
     }
 
     if (dto.planningId) {
-      const planning =
-        await this.prisma.planning.findUnique({
-          where: {
-            id: dto.planningId,
-          },
-        });
+      const planning = await this.prisma.planning.findUnique({
+        where: {
+          id: dto.planningId,
+        },
+      });
 
       if (!planning) {
-        throw new NotFoundException(
-          'Planning introuvable',
-        );
+        throw new NotFoundException('Planning introuvable');
       }
     }
 
@@ -57,45 +54,43 @@ export class ShiftsService {
       planningId: dto.planningId,
     });
 
-    const result = await this.prisma.$transaction(
-      async (tx) => {
-        // Create the shift
-        const shift = await tx.shift.create({
-          data: {
-            stationId: dto.stationId,
-            swapperId: dto.swapperId,
-            startTime: start,
-            endTime: end,
-            planningId: dto.planningId,
-          },
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Create the shift
+      const shift = await tx.shift.create({
+        data: {
+          stationId: dto.stationId,
+          swapperId: dto.swapperId,
+          startTime: start,
+          endTime: end,
+          planningId: dto.planningId,
+        },
 
-          include: {
-            station: true,
+        include: {
+          station: true,
 
-            swapper: {
-              select: {
-                id: true,
-                fullName: true,
-              },
+          swapper: {
+            select: {
+              id: true,
+              fullName: true,
             },
-
-            planning: true,
           },
-        });
 
-        // Create the expected attendance automatically
-        await tx.attendance.create({
-          data: {
-            shiftId: shift.id,
-            swapperId: dto.swapperId,
-            stationId: dto.stationId,
-            status: 'EXPECTED',
-          },
-        });
+          planning: true,
+        },
+      });
 
-        return shift;
-      },
-    );
+      // Create the expected attendance automatically
+      await tx.attendance.create({
+        data: {
+          shiftId: shift.id,
+          swapperId: dto.swapperId,
+          stationId: dto.stationId,
+          status: 'EXPECTED',
+        },
+      });
+
+      return shift;
+    });
 
     return result;
   }
@@ -163,46 +158,31 @@ export class ShiftsService {
   // UPDATE SHIFT
   // =========================================================
 
-  async update(
-    id: string,
-    dto: UpdateShiftDto,
-    changedById: string,
-  ) {
-    const existing =
-      await this.prisma.shift.findUnique({
-        where: {
-          id,
-        },
-      });
+  async update(id: string, dto: UpdateShiftDto, changedById: string) {
+    const existing = await this.prisma.shift.findUnique({
+      where: {
+        id,
+      },
+    });
 
     if (!existing) {
-      throw new NotFoundException(
-        'Creneau introuvable',
-      );
+      throw new NotFoundException('Creneau introuvable');
     }
 
-    const stationId =
-      dto.stationId ??
-      existing.stationId;
+    const stationId = dto.stationId ?? existing.stationId;
 
-    const swapperId =
-      dto.swapperId ??
-      existing.swapperId;
+    const swapperId = dto.swapperId ?? existing.swapperId;
 
-    const start =
-      dto.startTime
-        ? new Date(dto.startTime)
-        : existing.startTime;
+    if (!swapperId) {
+      throw new BadRequestException('Un swappeur est requis pour ce creneau.');
+    }
 
-    const end =
-      dto.endTime
-        ? new Date(dto.endTime)
-        : existing.endTime;
+    const start = dto.startTime ? new Date(dto.startTime) : existing.startTime;
+
+    const end = dto.endTime ? new Date(dto.endTime) : existing.endTime;
 
     const planningId =
-      dto.planningId !== undefined
-        ? dto.planningId
-        : existing.planningId;
+      dto.planningId !== undefined ? dto.planningId : existing.planningId;
 
     if (end <= start) {
       throw new BadRequestException(
@@ -211,17 +191,14 @@ export class ShiftsService {
     }
 
     if (planningId) {
-      const planning =
-        await this.prisma.planning.findUnique({
-          where: {
-            id: planningId,
-          },
-        });
+      const planning = await this.prisma.planning.findUnique({
+        where: {
+          id: planningId,
+        },
+      });
 
       if (!planning) {
-        throw new NotFoundException(
-          'Planning introuvable',
-        );
+        throw new NotFoundException('Planning introuvable');
       }
     }
 
@@ -234,150 +211,137 @@ export class ShiftsService {
       excludeShiftId: id,
     });
 
-    const changeType =
-      dto.changeType ??
-      'MANUAL_EDIT';
+    const changeType = dto.changeType ?? 'MANUAL_EDIT';
 
-    const updatedShift =
-      await this.prisma.$transaction(
-        async (tx) => {
-          // Update the shift
-          const shift =
-            await tx.shift.update({
-              where: {
-                id,
+    const updatedShift = await this.prisma.$transaction(async (tx) => {
+      // Update the shift
+      const shift = await tx.shift.update({
+        where: {
+          id,
+        },
+
+        data: {
+          stationId,
+          swapperId,
+          startTime: start,
+          endTime: end,
+          planningId,
+        },
+
+        include: {
+          station: true,
+
+          swapper: {
+            select: {
+              id: true,
+              fullName: true,
+            },
+          },
+
+          planning: true,
+        },
+      });
+
+      // Record the shift change
+      await tx.shiftChange.create({
+        data: {
+          shiftId: id,
+
+          previousSwapperId: existing.swapperId,
+
+          newSwapperId: swapperId,
+
+          changedById,
+
+          type: changeType,
+
+          reason: dto.reason,
+
+          oldStartTime: existing.startTime,
+
+          oldEndTime: existing.endTime,
+
+          newStartTime: start,
+
+          newEndTime: end,
+        },
+      });
+
+      // Find the existing attendance
+      const existingAttendance = existing.swapperId
+        ? await tx.attendance.findUnique({
+            where: {
+              shiftId_swapperId: {
+                shiftId: id,
+                swapperId: existing.swapperId,
               },
+            },
+          })
+        : null;
 
-              data: {
-                stationId,
-                swapperId,
-                startTime: start,
-                endTime: end,
-                planningId,
-              },
+      // If the swapper did not change,
+      // update the station if necessary.
+      if (existing.swapperId === swapperId) {
+        if (!swapperId) {
+          await tx.attendance.deleteMany({ where: { shiftId: id } });
+        } else if (existingAttendance) {
+          await tx.attendance.update({
+            where: {
+              id: existingAttendance.id,
+            },
 
-              include: {
-                station: true,
-
-                swapper: {
-                  select: {
-                    id: true,
-                    fullName: true,
-                  },
-                },
-
-                planning: true,
-              },
-            });
-
-          // Record the shift change
-          await tx.shiftChange.create({
+            data: {
+              stationId,
+            },
+          });
+        } else {
+          await tx.attendance.create({
             data: {
               shiftId: id,
+              swapperId,
+              stationId,
+              status: 'EXPECTED',
+            },
+          });
+        }
+      } else {
+        // The swapper changed.
+        // Remove the old EXPECTED attendance
+        // and create an attendance for the new swapper.
 
-              previousSwapperId:
-                existing.swapperId,
+        if (existingAttendance && existingAttendance.status === 'EXPECTED') {
+          await tx.attendance.delete({
+            where: {
+              id: existingAttendance.id,
+            },
+          });
+        }
 
-              newSwapperId:
+        if (swapperId) {
+          const newAttendance = await tx.attendance.findUnique({
+            where: {
+              shiftId_swapperId: {
+                shiftId: id,
                 swapperId,
-
-              changedById,
-
-              type: changeType,
-
-              reason: dto.reason,
-
-              oldStartTime:
-                existing.startTime,
-
-              oldEndTime:
-                existing.endTime,
-
-              newStartTime:
-                start,
-
-              newEndTime:
-                end,
+              },
             },
           });
 
-          // Find the existing attendance
-          const existingAttendance =
-            await tx.attendance.findUnique({
-              where: {
-                shiftId_swapperId: {
-                  shiftId: id,
-                  swapperId: existing.swapperId,
-                },
+          if (!newAttendance) {
+            await tx.attendance.create({
+              data: {
+                shiftId: id,
+                swapperId,
+                stationId,
+                status: 'EXPECTED',
               },
             });
-
-          // If the swapper did not change,
-          // update the station if necessary.
-          if (
-            existing.swapperId === swapperId
-          ) {
-            if (existingAttendance) {
-              await tx.attendance.update({
-                where: {
-                  id: existingAttendance.id,
-                },
-
-                data: {
-                  stationId,
-                },
-              });
-            } else {
-              await tx.attendance.create({
-                data: {
-                  shiftId: id,
-                  swapperId,
-                  stationId,
-                  status: 'EXPECTED',
-                },
-              });
-            }
-          } else {
-            // The swapper changed.
-            // Remove the old EXPECTED attendance
-            // and create an attendance for the new swapper.
-
-            if (
-              existingAttendance &&
-              existingAttendance.status === 'EXPECTED'
-            ) {
-              await tx.attendance.delete({
-                where: {
-                  id: existingAttendance.id,
-                },
-              });
-            }
-
-            const newAttendance =
-              await tx.attendance.findUnique({
-                where: {
-                  shiftId_swapperId: {
-                    shiftId: id,
-                    swapperId,
-                  },
-                },
-              });
-
-            if (!newAttendance) {
-              await tx.attendance.create({
-                data: {
-                  shiftId: id,
-                  swapperId,
-                  stationId,
-                  status: 'EXPECTED',
-                },
-              });
-            }
           }
+        }
+      }
 
-          return shift;
-        },
-      );
+      return shift;
+    });
 
     return updatedShift;
   }
@@ -387,17 +351,14 @@ export class ShiftsService {
   // =========================================================
 
   async remove(id: string) {
-    const existing =
-      await this.prisma.shift.findUnique({
-        where: {
-          id,
-        },
-      });
+    const existing = await this.prisma.shift.findUnique({
+      where: {
+        id,
+      },
+    });
 
     if (!existing) {
-      throw new NotFoundException(
-        'Creneau introuvable',
-      );
+      throw new NotFoundException('Creneau introuvable');
     }
 
     await this.prisma.shift.delete({
@@ -407,8 +368,7 @@ export class ShiftsService {
     });
 
     return {
-      message:
-        'Creneau supprime avec succes',
+      message: 'Creneau supprime avec succes',
     };
   }
 
@@ -424,31 +384,23 @@ export class ShiftsService {
     planningId?: string | null;
     excludeShiftId?: string;
   }) {
-    const {
+    const { stationId, swapperId, start, end, planningId, excludeShiftId } =
+      params;
+
+    const result = await this.schedulingEngine.validateShift({
       stationId,
       swapperId,
-      start,
-      end,
+      startTime: start,
+      endTime: end,
       planningId,
       excludeShiftId,
-    } = params;
-
-    const result =
-      await this.schedulingEngine.validateShift({
-        stationId,
-        swapperId,
-        startTime: start,
-        endTime: end,
-        planningId,
-        excludeShiftId,
-      });
+    });
 
     if (!result.valid) {
       return {
         ok: false,
 
-        reason:
-          result.errors.join(' | '),
+        reason: result.errors.join(' | '),
       };
     }
 

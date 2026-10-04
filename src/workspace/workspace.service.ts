@@ -93,9 +93,7 @@ export class WorkspaceService {
 
     const shapedShifts = shifts.map((shift) => {
       const attendance =
-        shift.attendances.find(
-          (row) => row.status !== 'ABSENT',
-        ) ??
+        shift.attendances.find((row) => row.status !== 'ABSENT') ??
         shift.attendances[0] ??
         null;
 
@@ -111,11 +109,10 @@ export class WorkspaceService {
           id: shift.station.id,
           name: shift.station.name,
           timezone: shift.station.timezone,
-          latenessToleranceMinutes:
-            shift.station.latenessToleranceMinutes,
+          latenessToleranceMinutes: shift.station.latenessToleranceMinutes,
         },
         swapper: {
-          fullName: shift.swapper.fullName,
+          fullName: shift.swapper?.fullName ?? 'Poste vacant',
         },
         attendance: attendance
           ? {
@@ -148,24 +145,21 @@ export class WorkspaceService {
         timezone: first.timezone,
       };
     } else {
-      const station =
-        await this.prisma.station.findFirst({
-          where: {
-            isActive: true,
-            ...(access.unrestricted
-              ? {}
-              : { id: { in: access.stationIds } }),
-          },
-          select: {
-            id: true,
-            name: true,
-            location: true,
-            timezone: true,
-          },
-          orderBy: {
-            name: 'asc',
-          },
-        });
+      const station = await this.prisma.station.findFirst({
+        where: {
+          isActive: true,
+          ...(access.unrestricted ? {} : { id: { in: access.stationIds } }),
+        },
+        select: {
+          id: true,
+          name: true,
+          location: true,
+          timezone: true,
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      });
 
       headerStation = station ?? null;
     }

@@ -1,15 +1,15 @@
 import {
-AttendanceQrType,
-AttendanceStatus,
-PlanningStatus,
-Role,
+  AttendanceQrType,
+  AttendanceStatus,
+  PlanningStatus,
+  Role,
 } from '@prisma/client';
 import {
-BadRequestException,
-ForbiddenException,
-Injectable,
-NotFoundException,
-UnauthorizedException,
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 
@@ -21,373 +21,331 @@ import {
 
 @Injectable()
 export class AttendanceService {
-constructor(
-  private readonly prisma: PrismaService,
-  private readonly operationsService: OperationsService,
-) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly operationsService: OperationsService,
+  ) {}
 
-// ============================================================
-// GENERATE ATTENDANCE QR
-// ============================================================
+  // ============================================================
+  // GENERATE ATTENDANCE QR
+  // ============================================================
 
-async generateQr(
-shiftId: string,
-stationId: string,
-generatedById: string,
-type: AttendanceQrType,
-) {
-const generator = await this.prisma.user.findUnique({
-where: {
-id: generatedById,
-},
-select: {
-id: true,
-role: true,
-isActive: true,
-stationId: true,
-stationScopes: {
-select: {
-stationId: true,
-},
-},
-},
-});
-
-if (!generator) {
-  throw new UnauthorizedException(
-    'User account not found.',
-  );
-}
-
-if (!generator.isActive) {
-  throw new UnauthorizedException(
-    'Your account is inactive.',
-  );
-}
-
-if (
-  generator.role !== Role.SUPERVISOR &&
-  generator.role !== Role.STATION_CHIEF
-) {
-  throw new UnauthorizedException(
-    'Only a supervisor or station chief can generate attendance QR codes.',
-  );
-}
-
-// ------------------------------------------------------------
-// STATION CHIEF CAN ONLY GENERATE QR FOR THEIR OWN STATION
-// ------------------------------------------------------------
-
-if (generator.role === Role.STATION_CHIEF) {
-  if (!generator.stationId) {
-    throw new UnauthorizedException(
-      'This station chief is not assigned to a station.',
-    );
-  }
-
-  if (generator.stationId !== stationId) {
-    throw new UnauthorizedException(
-      'A station chief can only generate QR codes for their own station.',
-    );
-  }
-}
-
-// ------------------------------------------------------------
-// SUPERVISOR STATION ACCESS
-// ------------------------------------------------------------
-
-if (generator.role === Role.SUPERVISOR) {
-  const hasStationAccess =
-    generator.stationId === stationId ||
-    generator.stationScopes.some(
-      (scope) => scope.stationId === stationId,
-    );
-
-  if (!hasStationAccess) {
-    throw new UnauthorizedException(
-      'You do not have access to this station.',
-    );
-  }
-}
-
-const shift = await this.prisma.shift.findUnique({
-  where: {
-    id: shiftId,
-  },
-  include: {
-    planning: {
+  async generateQr(
+    shiftId: string,
+    stationId: string,
+    generatedById: string,
+    type: AttendanceQrType,
+  ) {
+    const generator = await this.prisma.user.findUnique({
+      where: {
+        id: generatedById,
+      },
       select: {
         id: true,
-        status: true,
-        startDate: true,
-        endDate: true,
+        role: true,
+        isActive: true,
+        stationId: true,
+        stationScopes: {
+          select: {
+            stationId: true,
+          },
+        },
       },
-    },
-  },
-});
+    });
 
-if (!shift) {
-  throw new NotFoundException('Shift not found.');
-}
+    if (!generator) {
+      throw new UnauthorizedException('User account not found.');
+    }
 
-if (shift.stationId !== stationId) {
-  throw new BadRequestException(
-    'This shift does not belong to the selected station.',
-  );
-}
+    if (!generator.isActive) {
+      throw new UnauthorizedException('Your account is inactive.');
+    }
 
-if (!shift.planning) {
-  throw new BadRequestException(
-    'The shift is not attached to a planning.',
-  );
-}
+    if (
+      generator.role !== Role.SUPERVISOR &&
+      generator.role !== Role.STATION_CHIEF
+    ) {
+      throw new UnauthorizedException(
+        'Only a supervisor or station chief can generate attendance QR codes.',
+      );
+    }
 
-if (shift.planning.status !== PlanningStatus.PUBLISHED) {
-  throw new BadRequestException(
-    'Attendance QR codes can only be generated for a published planning.',
-  );
-}
+    // ------------------------------------------------------------
+    // STATION CHIEF CAN ONLY GENERATE QR FOR THEIR OWN STATION
+    // ------------------------------------------------------------
 
-const station = await this.prisma.station.findUnique({
-  where: {
-    id: stationId,
-  },
-  select: {
-    id: true,
-    isActive: true,
-    checkinQrTtl: true,
-    checkoutQrTtl: true,
-  },
-});
+    if (generator.role === Role.STATION_CHIEF) {
+      if (!generator.stationId) {
+        throw new UnauthorizedException(
+          'This station chief is not assigned to a station.',
+        );
+      }
 
-if (!station) {
-  throw new NotFoundException('Station not found.');
-}
+      if (generator.stationId !== stationId) {
+        throw new UnauthorizedException(
+          'A station chief can only generate QR codes for their own station.',
+        );
+      }
+    }
 
-if (!station.isActive) {
-  throw new BadRequestException(
-    'The selected station is inactive.',
-  );
-}
+    // ------------------------------------------------------------
+    // SUPERVISOR STATION ACCESS
+    // ------------------------------------------------------------
 
-const qrTtl =
-  type === AttendanceQrType.START
-    ? station.checkinQrTtl
-    : station.checkoutQrTtl;
+    if (generator.role === Role.SUPERVISOR) {
+      const hasStationAccess =
+        generator.stationId === stationId ||
+        generator.stationScopes.some((scope) => scope.stationId === stationId);
 
-if (!Number.isInteger(qrTtl) || qrTtl <= 0) {
-  throw new BadRequestException(
-    'The QR validity duration configured for this station is invalid.',
-  );
-}
+      if (!hasStationAccess) {
+        throw new UnauthorizedException(
+          'You do not have access to this station.',
+        );
+      }
+    }
 
-const rawToken = randomBytes(32).toString('hex');
+    const shift = await this.prisma.shift.findUnique({
+      where: {
+        id: shiftId,
+      },
+      include: {
+        planning: {
+          select: {
+            id: true,
+            status: true,
+            startDate: true,
+            endDate: true,
+          },
+        },
+      },
+    });
 
-const tokenHash = createHash('sha256')
-  .update(rawToken)
-  .digest('hex');
+    if (!shift) {
+      throw new NotFoundException('Shift not found.');
+    }
 
-const expiresAt = new Date(
-  Date.now() + qrTtl * 1000,
-);
+    if (shift.stationId !== stationId) {
+      throw new BadRequestException(
+        'This shift does not belong to the selected station.',
+      );
+    }
 
-const qr = await this.prisma.attendanceQr.create({
-  data: {
-    stationId,
-    shiftId,
-    type,
-    tokenHash,
-    expiresAt,
-    createdById: generatedById,
-  },
-});
+    if (!shift.planning) {
+      throw new BadRequestException('The shift is not attached to a planning.');
+    }
 
-return {
-  id: qr.id,
-  token: rawToken,
-  type: qr.type,
-  shiftId: qr.shiftId,
-  stationId: qr.stationId,
-  expiresAt: qr.expiresAt,
-  ttlSeconds: qrTtl,
-};
+    if (shift.planning.status !== PlanningStatus.PUBLISHED) {
+      throw new BadRequestException(
+        'Attendance QR codes can only be generated for a published planning.',
+      );
+    }
 
-}
+    const station = await this.prisma.station.findUnique({
+      where: {
+        id: stationId,
+      },
+      select: {
+        id: true,
+        isActive: true,
+        checkinQrTtl: true,
+        checkoutQrTtl: true,
+      },
+    });
 
-// ============================================================
-// CHECK IN
-// ============================================================
+    if (!station) {
+      throw new NotFoundException('Station not found.');
+    }
 
-async checkIn(
-token: string,
-swapperId: string,
-shiftId: string,
-stationId: string,
-latitude?: number,
-longitude?: number,
-) {
-if (!token) {
-throw new BadRequestException(
-'Attendance QR token is required.',
-);
-}
+    if (!station.isActive) {
+      throw new BadRequestException('The selected station is inactive.');
+    }
 
-const tokenHash = createHash('sha256')
-  .update(token)
-  .digest('hex');
+    const qrTtl =
+      type === AttendanceQrType.START
+        ? station.checkinQrTtl
+        : station.checkoutQrTtl;
 
-const qr = await this.prisma.attendanceQr.findUnique({
-  where: {
-    tokenHash,
-  },
-});
+    if (!Number.isInteger(qrTtl) || qrTtl <= 0) {
+      throw new BadRequestException(
+        'The QR validity duration configured for this station is invalid.',
+      );
+    }
 
-if (!qr) {
-  throw new BadRequestException(
-    'Invalid attendance QR code.',
-  );
-}
+    const rawToken = randomBytes(32).toString('hex');
 
-if (qr.type !== AttendanceQrType.START) {
-  throw new BadRequestException(
-    'This QR code is not a check-in QR code.',
-  );
-}
+    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
 
-if (qr.expiresAt.getTime() < Date.now()) {
-  throw new BadRequestException(
-    'This attendance QR code has expired.',
-  );
-}
+    const expiresAt = new Date(Date.now() + qrTtl * 1000);
 
-if (qr.usedAt) {
-  throw new BadRequestException(
-    'This attendance QR code has already been used.',
-  );
-}
+    const qr = await this.prisma.attendanceQr.create({
+      data: {
+        stationId,
+        shiftId,
+        type,
+        tokenHash,
+        expiresAt,
+        createdById: generatedById,
+      },
+    });
 
-if (
-  qr.shiftId !== shiftId ||
-  qr.stationId !== stationId
-) {
-  throw new BadRequestException(
-    'This QR code does not belong to the selected shift and station.',
-  );
-}
+    return {
+      id: qr.id,
+      token: rawToken,
+      type: qr.type,
+      shiftId: qr.shiftId,
+      stationId: qr.stationId,
+      expiresAt: qr.expiresAt,
+      ttlSeconds: qrTtl,
+    };
+  }
 
-const swapper = await this.prisma.user.findUnique({
-  where: {
-    id: swapperId,
-  },
-  select: {
-    id: true,
-    fullName: true,
-    role: true,
-    isActive: true,
-  },
-});
+  // ============================================================
+  // CHECK IN
+  // ============================================================
 
-if (!swapper) {
-  throw new UnauthorizedException(
-    'Swapper account not found.',
-  );
-}
+  async checkIn(
+    token: string,
+    swapperId: string,
+    shiftId: string,
+    stationId: string,
+    latitude?: number,
+    longitude?: number,
+  ) {
+    if (!token) {
+      throw new BadRequestException('Attendance QR token is required.');
+    }
 
-if (
-  !swapper.isActive ||
-  swapper.role !== Role.SWAPPER
-) {
-  throw new UnauthorizedException(
-    'Only an active swapper can check in.',
-  );
-}
+    const tokenHash = createHash('sha256').update(token).digest('hex');
 
-const attendance = await this.prisma.attendance.findUnique({
-  where: {
-    shiftId_swapperId: {
-      shiftId,
-      swapperId,
-    },
-  },
-});
+    const qr = await this.prisma.attendanceQr.findUnique({
+      where: {
+        tokenHash,
+      },
+    });
 
-if (!attendance) {
-  throw new BadRequestException(
-    'No attendance record exists for this swapper and shift.',
-  );
-}
+    if (!qr) {
+      throw new BadRequestException('Invalid attendance QR code.');
+    }
 
-if (attendance.stationId !== stationId) {
-  throw new BadRequestException(
-    'The attendance record does not belong to this station.',
-  );
-}
+    if (qr.type !== AttendanceQrType.START) {
+      throw new BadRequestException('This QR code is not a check-in QR code.');
+    }
 
-if (attendance.status === AttendanceStatus.CHECKED_IN) {
-  throw new BadRequestException(
-    'This swapper is already checked in.',
-  );
-}
+    if (qr.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException('This attendance QR code has expired.');
+    }
 
-if (attendance.status === AttendanceStatus.CHECKED_OUT) {
-  throw new BadRequestException(
-    'This attendance record has already been completed.',
-  );
-}
+    if (qr.usedAt) {
+      throw new BadRequestException(
+        'This attendance QR code has already been used.',
+      );
+    }
 
-if (attendance.status === AttendanceStatus.ABSENT) {
-  throw new BadRequestException(
-    'This attendance has already been marked as absent.',
-  );
-}
+    if (qr.shiftId !== shiftId || qr.stationId !== stationId) {
+      throw new BadRequestException(
+        'This QR code does not belong to the selected shift and station.',
+      );
+    }
 
-if (attendance.status === AttendanceStatus.JUSTIFIED) {
-  throw new BadRequestException(
-    'This attendance record is a legacy justified record and cannot be checked in again.',
-  );
-}
+    const swapper = await this.prisma.user.findUnique({
+      where: {
+        id: swapperId,
+      },
+      select: {
+        id: true,
+        fullName: true,
+        role: true,
+        isActive: true,
+      },
+    });
 
-const station = await this.prisma.station.findUnique({
-  where: {
-    id: stationId,
-  },
-  select: {
-    latenessToleranceMinutes: true,
-  },
-});
+    if (!swapper) {
+      throw new UnauthorizedException('Swapper account not found.');
+    }
 
-if (!station) {
-  throw new NotFoundException('Station not found.');
-}
+    if (!swapper.isActive || swapper.role !== Role.SWAPPER) {
+      throw new UnauthorizedException('Only an active swapper can check in.');
+    }
 
-const shift = await this.prisma.shift.findUnique({
-  where: {
-    id: shiftId,
-  },
-  select: {
-    startTime: true,
-  },
-});
+    const attendance = await this.prisma.attendance.findUnique({
+      where: {
+        shiftId_swapperId: {
+          shiftId,
+          swapperId,
+        },
+      },
+    });
 
-if (!shift) {
-  throw new NotFoundException('Shift not found.');
-}
+    if (!attendance) {
+      throw new BadRequestException(
+        'No attendance record exists for this swapper and shift.',
+      );
+    }
 
-const now = new Date();
+    if (attendance.stationId !== stationId) {
+      throw new BadRequestException(
+        'The attendance record does not belong to this station.',
+      );
+    }
 
-const toleranceMs =
-  station.latenessToleranceMinutes * 60 * 1000;
+    if (attendance.status === AttendanceStatus.CHECKED_IN) {
+      throw new BadRequestException('This swapper is already checked in.');
+    }
 
-const allowedStartTime =
-  shift.startTime.getTime() + toleranceMs;
+    if (attendance.status === AttendanceStatus.CHECKED_OUT) {
+      throw new BadRequestException(
+        'This attendance record has already been completed.',
+      );
+    }
 
-const isLate =
-  now.getTime() > allowedStartTime;
+    if (attendance.status === AttendanceStatus.ABSENT) {
+      throw new BadRequestException(
+        'This attendance has already been marked as absent.',
+      );
+    }
 
-const result = await this.prisma.$transaction(
-  async (tx) => {
-    const updatedAttendance =
-      await tx.attendance.update({
+    if (attendance.status === AttendanceStatus.JUSTIFIED) {
+      throw new BadRequestException(
+        'This attendance record is a legacy justified record and cannot be checked in again.',
+      );
+    }
+
+    const station = await this.prisma.station.findUnique({
+      where: {
+        id: stationId,
+      },
+      select: {
+        latenessToleranceMinutes: true,
+      },
+    });
+
+    if (!station) {
+      throw new NotFoundException('Station not found.');
+    }
+
+    const shift = await this.prisma.shift.findUnique({
+      where: {
+        id: shiftId,
+      },
+      select: {
+        startTime: true,
+      },
+    });
+
+    if (!shift) {
+      throw new NotFoundException('Shift not found.');
+    }
+
+    const now = new Date();
+
+    const toleranceMs = station.latenessToleranceMinutes * 60 * 1000;
+
+    const allowedStartTime = shift.startTime.getTime() + toleranceMs;
+
+    const isLate = now.getTime() > allowedStartTime;
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updatedAttendance = await tx.attendance.update({
         where: {
           id: attendance.id,
         },
@@ -399,276 +357,243 @@ const result = await this.prisma.$transaction(
         },
       });
 
-    await tx.attendanceQr.update({
+      await tx.attendanceQr.update({
+        where: {
+          id: qr.id,
+        },
+        data: {
+          usedAt: now,
+        },
+      });
+
+      return updatedAttendance;
+    });
+
+    return {
+      message: 'Check-in successful',
+      punctuality: isLate ? 'LATE' : 'ON_TIME',
+      attendance: result,
+    };
+  }
+
+  // ============================================================
+  // CHECK OUT
+  // ============================================================
+
+  async checkOut(
+    token: string,
+    swapperId: string,
+    shiftId: string,
+    stationId: string,
+    latitude?: number,
+    longitude?: number,
+  ) {
+    if (!token) {
+      throw new BadRequestException('Attendance QR token is required.');
+    }
+
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+
+    const qr = await this.prisma.attendanceQr.findUnique({
       where: {
-        id: qr.id,
-      },
-      data: {
-        usedAt: now,
+        tokenHash,
       },
     });
 
-    return updatedAttendance;
-  },
-);
+    if (!qr) {
+      throw new BadRequestException('Invalid attendance QR code.');
+    }
 
-return {
-  message: 'Check-in successful',
-  punctuality: isLate ? 'LATE' : 'ON_TIME',
-  attendance: result,
-};
+    if (qr.type !== AttendanceQrType.END) {
+      throw new BadRequestException('This QR code is not a check-out QR code.');
+    }
 
-}
+    if (qr.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException('This attendance QR code has expired.');
+    }
 
-// ============================================================
-// CHECK OUT
-// ============================================================
+    if (qr.usedAt) {
+      throw new BadRequestException(
+        'This attendance QR code has already been used.',
+      );
+    }
 
-async checkOut(
-token: string,
-swapperId: string,
-shiftId: string,
-stationId: string,
-latitude?: number,
-longitude?: number,
-) {
-if (!token) {
-throw new BadRequestException(
-'Attendance QR token is required.',
-);
-}
+    if (qr.shiftId !== shiftId || qr.stationId !== stationId) {
+      throw new BadRequestException(
+        'This QR code does not belong to the selected shift and station.',
+      );
+    }
 
-const tokenHash = createHash('sha256')
-  .update(token)
-  .digest('hex');
+    const swapper = await this.prisma.user.findUnique({
+      where: {
+        id: swapperId,
+      },
+      select: {
+        id: true,
+        fullName: true,
+        role: true,
+        isActive: true,
+      },
+    });
 
-const qr = await this.prisma.attendanceQr.findUnique({
-  where: {
-    tokenHash,
-  },
-});
+    if (!swapper) {
+      throw new UnauthorizedException('Swapper account not found.');
+    }
 
-if (!qr) {
-  throw new BadRequestException(
-    'Invalid attendance QR code.',
-  );
-}
+    if (!swapper.isActive || swapper.role !== Role.SWAPPER) {
+      throw new UnauthorizedException('Only an active swapper can check out.');
+    }
 
-if (qr.type !== AttendanceQrType.END) {
-  throw new BadRequestException(
-    'This QR code is not a check-out QR code.',
-  );
-}
-
-if (qr.expiresAt.getTime() < Date.now()) {
-  throw new BadRequestException(
-    'This attendance QR code has expired.',
-  );
-}
-
-if (qr.usedAt) {
-  throw new BadRequestException(
-    'This attendance QR code has already been used.',
-  );
-}
-
-if (
-  qr.shiftId !== shiftId ||
-  qr.stationId !== stationId
-) {
-  throw new BadRequestException(
-    'This QR code does not belong to the selected shift and station.',
-  );
-}
-
-const swapper = await this.prisma.user.findUnique({
-  where: {
-    id: swapperId,
-  },
-  select: {
-    id: true,
-    fullName: true,
-    role: true,
-    isActive: true,
-  },
-});
-
-if (!swapper) {
-  throw new UnauthorizedException(
-    'Swapper account not found.',
-  );
-}
-
-if (
-  !swapper.isActive ||
-  swapper.role !== Role.SWAPPER
-) {
-  throw new UnauthorizedException(
-    'Only an active swapper can check out.',
-  );
-}
-
-const attendance = await this.prisma.attendance.findUnique({
-  where: {
-    shiftId_swapperId: {
-      shiftId,
-      swapperId,
-    },
-  },
-});
-
-if (!attendance) {
-  throw new BadRequestException(
-    'No attendance record exists for this swapper and shift.',
-  );
-}
-
-if (attendance.stationId !== stationId) {
-  throw new BadRequestException(
-    'The attendance record does not belong to this station.',
-  );
-}
-
-if (attendance.status === AttendanceStatus.CHECKED_OUT) {
-  throw new BadRequestException(
-    'This swapper has already checked out.',
-  );
-}
-
-if (attendance.status === AttendanceStatus.ABSENT) {
-  throw new BadRequestException(
-    'This attendance has already been marked as absent.',
-  );
-}
-
-if (attendance.status === AttendanceStatus.JUSTIFIED) {
-  throw new BadRequestException(
-    'This attendance record is a legacy justified record and cannot be checked out.',
-  );
-}
-
-// ------------------------------------------------------------
-// END WITHOUT START
-// ------------------------------------------------------------
-
-if (attendance.status === AttendanceStatus.EXPECTED) {
-  const now = new Date();
-
-  await this.prisma.$transaction(
-    async (tx) => {
-      await tx.attendance.update({
-        where: {
-          id: attendance.id,
+    const attendance = await this.prisma.attendance.findUnique({
+      where: {
+        shiftId_swapperId: {
+          shiftId,
+          swapperId,
         },
-        data: {
-          status: AttendanceStatus.ABSENT,
-          absenceReason:
-            'Check-out was attempted without a recorded check-in.',
-        },
+      },
+    });
+
+    if (!attendance) {
+      throw new BadRequestException(
+        'No attendance record exists for this swapper and shift.',
+      );
+    }
+
+    if (attendance.stationId !== stationId) {
+      throw new BadRequestException(
+        'The attendance record does not belong to this station.',
+      );
+    }
+
+    if (attendance.status === AttendanceStatus.CHECKED_OUT) {
+      throw new BadRequestException('This swapper has already checked out.');
+    }
+
+    if (attendance.status === AttendanceStatus.ABSENT) {
+      throw new BadRequestException(
+        'This attendance has already been marked as absent.',
+      );
+    }
+
+    if (attendance.status === AttendanceStatus.JUSTIFIED) {
+      throw new BadRequestException(
+        'This attendance record is a legacy justified record and cannot be checked out.',
+      );
+    }
+
+    // ------------------------------------------------------------
+    // END WITHOUT START
+    // ------------------------------------------------------------
+
+    if (attendance.status === AttendanceStatus.EXPECTED) {
+      const now = new Date();
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.attendance.update({
+          where: {
+            id: attendance.id,
+          },
+          data: {
+            status: AttendanceStatus.ABSENT,
+            absenceReason:
+              'Check-out was attempted without a recorded check-in.',
+          },
+        });
+
+        await tx.attendanceQr.update({
+          where: {
+            id: qr.id,
+          },
+          data: {
+            usedAt: now,
+          },
+        });
       });
 
-      await tx.attendanceQr.update({
-        where: {
-          id: qr.id,
-        },
-        data: {
-          usedAt: now,
-        },
+      throw new BadRequestException({
+        message:
+          'Check-out cannot be recorded because no check-in was recorded. Attendance has been marked ABSENT.',
+        code: 'ABSENT_NO_CHECKIN',
       });
-    },
-  );
+    }
 
-  throw new BadRequestException({
-    message:
-      'Check-out cannot be recorded because no check-in was recorded. Attendance has been marked ABSENT.',
-    code: 'ABSENT_NO_CHECKIN',
-  });
-}
+    if (attendance.status !== AttendanceStatus.CHECKED_IN) {
+      throw new BadRequestException(
+        'Check-in must be completed before check-out.',
+      );
+    }
 
-if (attendance.status !== AttendanceStatus.CHECKED_IN) {
-  throw new BadRequestException(
-    'Check-in must be completed before check-out.',
-  );
-}
+    // ------------------------------------------------------------
+    // CHECK IF THE END OF THE SHIFT + TOLERANCE HAS PASSED
+    // ------------------------------------------------------------
 
-// ------------------------------------------------------------
-// CHECK IF THE END OF THE SHIFT + TOLERANCE HAS PASSED
-// ------------------------------------------------------------
+    const station = await this.prisma.station.findUnique({
+      where: {
+        id: stationId,
+      },
+      select: {
+        latenessToleranceMinutes: true,
+      },
+    });
 
-const station = await this.prisma.station.findUnique({
-  where: {
-    id: stationId,
-  },
-  select: {
-    latenessToleranceMinutes: true,
-  },
-});
+    if (!station) {
+      throw new NotFoundException('Station not found.');
+    }
 
-if (!station) {
-  throw new NotFoundException('Station not found.');
-}
+    const shift = await this.prisma.shift.findUnique({
+      where: {
+        id: shiftId,
+      },
+      select: {
+        endTime: true,
+      },
+    });
 
-const shift = await this.prisma.shift.findUnique({
-  where: {
-    id: shiftId,
-  },
-  select: {
-    endTime: true,
-  },
-});
+    if (!shift) {
+      throw new NotFoundException('Shift not found.');
+    }
 
-if (!shift) {
-  throw new NotFoundException('Shift not found.');
-}
+    const now = new Date();
 
-const now = new Date();
+    const toleranceMs = station.latenessToleranceMinutes * 60 * 1000;
 
-const toleranceMs =
-  station.latenessToleranceMinutes * 60 * 1000;
+    const absenceDeadline = shift.endTime.getTime() + toleranceMs;
 
-const absenceDeadline =
-  shift.endTime.getTime() + toleranceMs;
+    if (now.getTime() > absenceDeadline) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.attendance.update({
+          where: {
+            id: attendance.id,
+          },
+          data: {
+            status: AttendanceStatus.ABSENT,
+            absenceReason: 'No check-out was recorded before the shift ended.',
+          },
+        });
 
-if (now.getTime() > absenceDeadline) {
-  await this.prisma.$transaction(
-    async (tx) => {
-      await tx.attendance.update({
-        where: {
-          id: attendance.id,
-        },
-        data: {
-          status: AttendanceStatus.ABSENT,
-          absenceReason:
-            'No check-out was recorded before the shift ended.',
-        },
+        await tx.attendanceQr.update({
+          where: {
+            id: qr.id,
+          },
+          data: {
+            usedAt: now,
+          },
+        });
       });
 
-      await tx.attendanceQr.update({
-        where: {
-          id: qr.id,
-        },
-        data: {
-          usedAt: now,
-        },
+      throw new BadRequestException({
+        message:
+          'The check-out was not recorded before the allowed shift end time. Attendance has been marked ABSENT.',
+        code: 'ABSENT_NO_CHECKOUT',
       });
-    },
-  );
+    }
 
-  throw new BadRequestException({
-    message:
-      'The check-out was not recorded before the allowed shift end time. Attendance has been marked ABSENT.',
-    code: 'ABSENT_NO_CHECKOUT',
-  });
-}
+    // ------------------------------------------------------------
+    // NORMAL CHECK OUT
+    // ------------------------------------------------------------
 
-// ------------------------------------------------------------
-// NORMAL CHECK OUT
-// ------------------------------------------------------------
-
-const result = await this.prisma.$transaction(
-  async (tx) => {
-    const updatedAttendance =
-      await tx.attendance.update({
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updatedAttendance = await tx.attendance.update({
         where: {
           id: attendance.id,
         },
@@ -680,648 +605,576 @@ const result = await this.prisma.$transaction(
         },
       });
 
-    await tx.attendanceQr.update({
-      where: {
-        id: qr.id,
+      await tx.attendanceQr.update({
+        where: {
+          id: qr.id,
+        },
+        data: {
+          usedAt: now,
+        },
+      });
+
+      return updatedAttendance;
+    });
+
+    return {
+      message: 'Check-out successful',
+      attendance: result,
+    };
+  }
+
+  // ============================================================
+  // FIND ALL ATTENDANCES
+  // ============================================================
+
+  async findAll(status?: AttendanceStatus) {
+    return this.prisma.attendance.findMany({
+      where: status
+        ? {
+            status,
+          }
+        : undefined,
+      include: {
+        shift: {
+          include: {
+            station: {
+              select: {
+                id: true,
+                name: true,
+                timezone: true,
+                latenessToleranceMinutes: true,
+              },
+            },
+          },
+        },
+        station: true,
+        swapper: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phoneNumber: true,
+            role: true,
+          },
+        },
       },
-      data: {
-        usedAt: now,
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  // ============================================================
+  // GET ATTENDANCE STATISTICS
+  // ============================================================
+
+  async getStatistics() {
+    const grouped = await this.prisma.attendance.groupBy({
+      by: ['status'],
+      _count: {
+        _all: true,
       },
     });
 
-    return updatedAttendance;
-  },
-);
+    const statistics = {
+      total: 0,
+      expected: 0,
+      checkedIn: 0,
+      checkedOut: 0,
+      absent: 0,
+    };
 
-return {
-  message: 'Check-out successful',
-  attendance: result,
-};
+    for (const item of grouped) {
+      const count = item._count._all;
 
-}
+      statistics.total += count;
 
-// ============================================================
-// FIND ALL ATTENDANCES
-// ============================================================
+      if (item.status === AttendanceStatus.EXPECTED) {
+        statistics.expected = count;
+      }
 
-async findAll(status?: AttendanceStatus) {
-return this.prisma.attendance.findMany({
-where: status
-? {
-status,
-}
-: undefined,
-include: {
-shift: {
-include: {
-station: {
-select: {
-id: true,
-name: true,
-timezone: true,
-latenessToleranceMinutes: true,
-},
-},
-},
-},
-station: true,
-swapper: {
-select: {
-id: true,
-fullName: true,
-email: true,
-phoneNumber: true,
-role: true,
-},
-},
-},
-orderBy: {
-createdAt: 'desc',
-},
-});
-}
+      if (item.status === AttendanceStatus.CHECKED_IN) {
+        statistics.checkedIn = count;
+      }
 
-// ============================================================
-// GET ATTENDANCE STATISTICS
-// ============================================================
+      if (item.status === AttendanceStatus.CHECKED_OUT) {
+        statistics.checkedOut = count;
+      }
 
-async getStatistics() {
-const grouped =
-await this.prisma.attendance.groupBy({
-by: ['status'],
-_count: {
-_all: true,
-},
-});
+      if (item.status === AttendanceStatus.ABSENT) {
+        statistics.absent = count;
+      }
+    }
 
-const statistics = {
-  total: 0,
-  expected: 0,
-  checkedIn: 0,
-  checkedOut: 0,
-  absent: 0,
-};
-
-for (const item of grouped) {
-  const count = item._count._all;
-
-  statistics.total += count;
-
-  if (item.status === AttendanceStatus.EXPECTED) {
-    statistics.expected = count;
+    return statistics;
   }
 
-  if (item.status === AttendanceStatus.CHECKED_IN) {
-    statistics.checkedIn = count;
-  }
+  // ============================================================
+  // FIND ATTENDANCES BY SHIFT
+  // ============================================================
 
-  if (item.status === AttendanceStatus.CHECKED_OUT) {
-    statistics.checkedOut = count;
-  }
-
-  if (item.status === AttendanceStatus.ABSENT) {
-    statistics.absent = count;
-  }
-}
-
-return statistics;
-
-}
-
-// ============================================================
-// FIND ATTENDANCES BY SHIFT
-// ============================================================
-
-async findByShift(
-shiftId: string,
-status?: AttendanceStatus,
-) {
-const shift = await this.prisma.shift.findUnique({
-where: {
-id: shiftId,
-},
-select: {
-id: true,
-},
-});
-
-if (!shift) {
-  throw new NotFoundException('Shift not found.');
-}
-
-return this.prisma.attendance.findMany({
-  where: {
-    shiftId,
-    ...(status ? { status } : {}),
-  },
-  include: {
-    station: true,
-    swapper: {
+  async findByShift(shiftId: string, status?: AttendanceStatus) {
+    const shift = await this.prisma.shift.findUnique({
+      where: {
+        id: shiftId,
+      },
       select: {
         id: true,
-        fullName: true,
-        email: true,
-        phoneNumber: true,
-        role: true,
       },
-    },
-  },
-  orderBy: {
-    checkInAt: 'asc',
-  },
-});
+    });
 
-}
+    if (!shift) {
+      throw new NotFoundException('Shift not found.');
+    }
 
-// ============================================================
-// FIND PENDING CHECKOUTS
-// ============================================================
-
-async findPendingCheckouts(shiftId: string) {
-const shift = await this.prisma.shift.findUnique({
-where: {
-id: shiftId,
-},
-select: {
-id: true,
-stationId: true,
-startTime: true,
-endTime: true,
-},
-});
-
-if (!shift) {
-  throw new NotFoundException('Shift not found.');
-}
-
-const attendances =
-  await this.prisma.attendance.findMany({
-    where: {
-      shiftId,
-      status: AttendanceStatus.CHECKED_IN,
-    },
-    include: {
-      swapper: {
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          phoneNumber: true,
-        },
+    return this.prisma.attendance.findMany({
+      where: {
+        shiftId,
+        ...(status ? { status } : {}),
       },
-    },
-    orderBy: {
-      checkInAt: 'asc',
-    },
-  });
-
-return {
-  shift: {
-    id: shift.id,
-    stationId: shift.stationId,
-    startTime: shift.startTime,
-    endTime: shift.endTime,
-  },
-  count: attendances.length,
-  swappers: attendances.map((attendance) => ({
-    attendanceId: attendance.id,
-    swapperId: attendance.swapper.id,
-    fullName: attendance.swapper.fullName,
-    email: attendance.swapper.email,
-    phoneNumber: attendance.swapper.phoneNumber,
-    status: attendance.status,
-    checkInAt: attendance.checkInAt,
-    missingCheckout: true,
-  })),
-};
-
-}
-
-// ============================================================
-// FIND ATTENDANCES BY STATION
-// ============================================================
-
-async findByStation(
-stationId: string,
-status?: AttendanceStatus,
-) {
-const station = await this.prisma.station.findUnique({
-where: {
-id: stationId,
-},
-select: {
-id: true,
-},
-});
-
-if (!station) {
-  throw new NotFoundException('Station not found.');
-}
-
-return this.prisma.attendance.findMany({
-  where: {
-    stationId,
-    ...(status ? { status } : {}),
-  },
-  include: {
-    shift: {
       include: {
-        station: {
+        station: true,
+        swapper: {
           select: {
             id: true,
-            name: true,
-            timezone: true,
-            latenessToleranceMinutes: true,
+            fullName: true,
+            email: true,
+            phoneNumber: true,
+            role: true,
           },
         },
       },
-    },
-    swapper: {
+      orderBy: {
+        checkInAt: 'asc',
+      },
+    });
+  }
+
+  // ============================================================
+  // FIND PENDING CHECKOUTS
+  // ============================================================
+
+  async findPendingCheckouts(shiftId: string) {
+    const shift = await this.prisma.shift.findUnique({
+      where: {
+        id: shiftId,
+      },
       select: {
         id: true,
-        fullName: true,
-        email: true,
-        phoneNumber: true,
+        stationId: true,
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    if (!shift) {
+      throw new NotFoundException('Shift not found.');
+    }
+
+    const attendances = await this.prisma.attendance.findMany({
+      where: {
+        shiftId,
+        status: AttendanceStatus.CHECKED_IN,
+      },
+      include: {
+        swapper: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phoneNumber: true,
+          },
+        },
+      },
+      orderBy: {
+        checkInAt: 'asc',
+      },
+    });
+
+    return {
+      shift: {
+        id: shift.id,
+        stationId: shift.stationId,
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+      },
+      count: attendances.length,
+      swappers: attendances.map((attendance) => ({
+        attendanceId: attendance.id,
+        swapperId: attendance.swapper.id,
+        fullName: attendance.swapper.fullName,
+        email: attendance.swapper.email,
+        phoneNumber: attendance.swapper.phoneNumber,
+        status: attendance.status,
+        checkInAt: attendance.checkInAt,
+        missingCheckout: true,
+      })),
+    };
+  }
+
+  // ============================================================
+  // FIND ATTENDANCES BY STATION
+  // ============================================================
+
+  async findByStation(stationId: string, status?: AttendanceStatus) {
+    const station = await this.prisma.station.findUnique({
+      where: {
+        id: stationId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!station) {
+      throw new NotFoundException('Station not found.');
+    }
+
+    return this.prisma.attendance.findMany({
+      where: {
+        stationId,
+        ...(status ? { status } : {}),
+      },
+      include: {
+        shift: {
+          include: {
+            station: {
+              select: {
+                id: true,
+                name: true,
+                timezone: true,
+                latenessToleranceMinutes: true,
+              },
+            },
+          },
+        },
+        swapper: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phoneNumber: true,
+            role: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  // ============================================================
+  // FIND ATTENDANCES BY SWAPPER
+  // ============================================================
+
+  async findBySwapper(swapperId: string, status?: AttendanceStatus) {
+    const swapper = await this.prisma.user.findUnique({
+      where: {
+        id: swapperId,
+      },
+      select: {
+        id: true,
         role: true,
       },
-    },
-  },
-  orderBy: {
-    createdAt: 'desc',
-  },
-});
+    });
 
-}
+    if (!swapper) {
+      throw new NotFoundException('Swapper not found.');
+    }
 
-// ============================================================
-// FIND ATTENDANCES BY SWAPPER
-// ============================================================
+    if (swapper.role !== Role.SWAPPER) {
+      throw new BadRequestException('The selected user is not a swapper.');
+    }
 
-async findBySwapper(
-swapperId: string,
-status?: AttendanceStatus,
-) {
-const swapper = await this.prisma.user.findUnique({
-where: {
-id: swapperId,
-},
-select: {
-id: true,
-role: true,
-},
-});
-
-if (!swapper) {
-  throw new NotFoundException(
-    'Swapper not found.',
-  );
-}
-
-if (swapper.role !== Role.SWAPPER) {
-  throw new BadRequestException(
-    'The selected user is not a swapper.',
-  );
-}
-
-return this.prisma.attendance.findMany({
-  where: {
-    swapperId,
-    ...(status ? { status } : {}),
-  },
-  include: {
-    shift: true,
-    station: true,
-  },
-  orderBy: {
-    createdAt: 'desc',
-  },
-});
-
-}
-
-// ============================================================
-// FIND ONE ATTENDANCE
-// ============================================================
-
-async findOne(id: string) {
-const attendance =
-await this.prisma.attendance.findUnique({
-where: {
-id,
-},
-include: {
-shift: true,
-station: true,
-swapper: {
-select: {
-id: true,
-fullName: true,
-email: true,
-phoneNumber: true,
-role: true,
-},
-},
-correctionHistory: {
-orderBy: {
-createdAt: 'desc',
-},
-},
-},
-});
-
-if (!attendance) {
-  throw new NotFoundException(
-    `Attendance ${id} not found.`,
-  );
-}
-
-return attendance;
-
-}
-
-// ============================================================
-// CORRECT ATTENDANCE
-// ============================================================
-
-async correctAttendance(
-attendanceId: string,
-correctedById: string,
-newStatus: AttendanceStatus,
-reason: string,
-checkInAt?: string,
-checkOutAt?: string,
-evidenceUrl?: string,
-) {
-if (!reason || !reason.trim()) {
-throw new BadRequestException(
-'A correction reason is required.',
-);
-}
-
-if (newStatus === AttendanceStatus.JUSTIFIED) {
-  throw new BadRequestException(
-    'JUSTIFIED status is no longer supported by the attendance workflow.',
-  );
-}
-
-const attendance =
-  await this.prisma.attendance.findUnique({
-    where: {
-      id: attendanceId,
-    },
-  });
-
-if (!attendance) {
-  throw new NotFoundException(
-    `Attendance ${attendanceId} not found.`,
-  );
-}
-
-const correctedBy =
-  await this.prisma.user.findUnique({
-    where: {
-      id: correctedById,
-    },
-    select: {
-      id: true,
-      role: true,
-      isActive: true,
-    },
-  });
-
-if (!correctedBy) {
-  throw new NotFoundException(
-    `User ${correctedById} not found.`,
-  );
-}
-
-if (
-  !correctedBy.isActive ||
-  (
-    correctedBy.role !== Role.ADMIN &&
-    correctedBy.role !== Role.SUPERVISOR
-  )
-) {
-  throw new UnauthorizedException(
-    'Only active administrators or supervisors can correct attendance.',
-  );
-}
-
-let newCheckInAt: Date | null =
-  attendance.checkInAt;
-
-let newCheckOutAt: Date | null =
-  attendance.checkOutAt;
-
-if (checkInAt !== undefined) {
-  const parsedCheckIn = new Date(checkInAt);
-
-  if (Number.isNaN(parsedCheckIn.getTime())) {
-    throw new BadRequestException(
-      'Invalid check-in date.',
-    );
+    return this.prisma.attendance.findMany({
+      where: {
+        swapperId,
+        ...(status ? { status } : {}),
+      },
+      include: {
+        shift: true,
+        station: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
   }
 
-  newCheckInAt = parsedCheckIn;
-}
+  // ============================================================
+  // FIND ONE ATTENDANCE
+  // ============================================================
 
-if (checkOutAt !== undefined) {
-  const parsedCheckOut = new Date(checkOutAt);
+  async findOne(id: string) {
+    const attendance = await this.prisma.attendance.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        shift: true,
+        station: true,
+        swapper: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phoneNumber: true,
+            role: true,
+          },
+        },
+        correctionHistory: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+    });
 
-  if (Number.isNaN(parsedCheckOut.getTime())) {
-    throw new BadRequestException(
-      'Invalid check-out date.',
-    );
+    if (!attendance) {
+      throw new NotFoundException(`Attendance ${id} not found.`);
+    }
+
+    return attendance;
   }
 
-  newCheckOutAt = parsedCheckOut;
-}
+  // ============================================================
+  // CORRECT ATTENDANCE
+  // ============================================================
 
-if (
-  newStatus === AttendanceStatus.CHECKED_IN &&
-  !newCheckInAt
-) {
-  throw new BadRequestException(
-    'Check-in time is required for CHECKED_IN status.',
-  );
-}
+  async correctAttendance(
+    attendanceId: string,
+    correctedById: string,
+    newStatus: AttendanceStatus,
+    reason: string,
+    checkInAt?: string,
+    checkOutAt?: string,
+    evidenceUrl?: string,
+  ) {
+    if (!reason || !reason.trim()) {
+      throw new BadRequestException('A correction reason is required.');
+    }
 
-if (
-  newStatus === AttendanceStatus.CHECKED_OUT &&
-  (!newCheckInAt || !newCheckOutAt)
-) {
-  throw new BadRequestException(
-    'Both check-in and check-out times are required for CHECKED_OUT status.',
-  );
-}
+    if (newStatus === AttendanceStatus.JUSTIFIED) {
+      throw new BadRequestException(
+        'JUSTIFIED status is no longer supported by the attendance workflow.',
+      );
+    }
 
-if (
-  newCheckInAt &&
-  newCheckOutAt &&
-  newCheckOutAt.getTime() <
-    newCheckInAt.getTime()
-) {
-  throw new BadRequestException(
-    'Check-out time cannot be before check-in time.',
-  );
-}
+    const attendance = await this.prisma.attendance.findUnique({
+      where: {
+        id: attendanceId,
+      },
+    });
 
-const now = new Date();
+    if (!attendance) {
+      throw new NotFoundException(`Attendance ${attendanceId} not found.`);
+    }
 
-const result =
-  await this.prisma.$transaction(
-    async (tx) => {
-      const correction =
-        await tx.attendanceCorrection.create({
-          data: {
-            attendanceId: attendance.id,
-            correctedById: correctedBy.id,
-            oldStatus: attendance.status,
-            newStatus,
-            oldCheckInAt:
-              attendance.checkInAt,
-            newCheckInAt,
-            oldCheckOutAt:
-              attendance.checkOutAt,
-            newCheckOutAt,
-            reason: reason.trim(),
-            evidenceUrl:
-              evidenceUrl?.trim() || null,
-          },
-        });
+    const correctedBy = await this.prisma.user.findUnique({
+      where: {
+        id: correctedById,
+      },
+      select: {
+        id: true,
+        role: true,
+        isActive: true,
+      },
+    });
 
-      const updatedAttendance =
-        await tx.attendance.update({
-          where: {
-            id: attendance.id,
-          },
-          data: {
-            status: newStatus,
-            checkInAt: newCheckInAt,
-            checkOutAt: newCheckOutAt,
-            correctedAt: now,
-            correctedById: correctedBy.id,
-            correctionReason: reason.trim(),
-          },
-        });
+    if (!correctedBy) {
+      throw new NotFoundException(`User ${correctedById} not found.`);
+    }
+
+    if (
+      !correctedBy.isActive ||
+      (correctedBy.role !== Role.ADMIN && correctedBy.role !== Role.SUPERVISOR)
+    ) {
+      throw new UnauthorizedException(
+        'Only active administrators or supervisors can correct attendance.',
+      );
+    }
+
+    let newCheckInAt: Date | null = attendance.checkInAt;
+
+    let newCheckOutAt: Date | null = attendance.checkOutAt;
+
+    if (checkInAt !== undefined) {
+      const parsedCheckIn = new Date(checkInAt);
+
+      if (Number.isNaN(parsedCheckIn.getTime())) {
+        throw new BadRequestException('Invalid check-in date.');
+      }
+
+      newCheckInAt = parsedCheckIn;
+    }
+
+    if (checkOutAt !== undefined) {
+      const parsedCheckOut = new Date(checkOutAt);
+
+      if (Number.isNaN(parsedCheckOut.getTime())) {
+        throw new BadRequestException('Invalid check-out date.');
+      }
+
+      newCheckOutAt = parsedCheckOut;
+    }
+
+    if (newStatus === AttendanceStatus.CHECKED_IN && !newCheckInAt) {
+      throw new BadRequestException(
+        'Check-in time is required for CHECKED_IN status.',
+      );
+    }
+
+    if (
+      newStatus === AttendanceStatus.CHECKED_OUT &&
+      (!newCheckInAt || !newCheckOutAt)
+    ) {
+      throw new BadRequestException(
+        'Both check-in and check-out times are required for CHECKED_OUT status.',
+      );
+    }
+
+    if (
+      newCheckInAt &&
+      newCheckOutAt &&
+      newCheckOutAt.getTime() < newCheckInAt.getTime()
+    ) {
+      throw new BadRequestException(
+        'Check-out time cannot be before check-in time.',
+      );
+    }
+
+    const now = new Date();
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const correction = await tx.attendanceCorrection.create({
+        data: {
+          attendanceId: attendance.id,
+          correctedById: correctedBy.id,
+          oldStatus: attendance.status,
+          newStatus,
+          oldCheckInAt: attendance.checkInAt,
+          newCheckInAt,
+          oldCheckOutAt: attendance.checkOutAt,
+          newCheckOutAt,
+          reason: reason.trim(),
+          evidenceUrl: evidenceUrl?.trim() || null,
+        },
+      });
+
+      const updatedAttendance = await tx.attendance.update({
+        where: {
+          id: attendance.id,
+        },
+        data: {
+          status: newStatus,
+          checkInAt: newCheckInAt,
+          checkOutAt: newCheckOutAt,
+          correctedAt: now,
+          correctedById: correctedBy.id,
+          correctionReason: reason.trim(),
+        },
+      });
 
       return {
         correction,
         attendance: updatedAttendance,
       };
-    },
-  );
+    });
 
-return {
-  message:
-    'Attendance corrected successfully.',
-  attendance: result.attendance,
-  correction: result.correction,
-};
+    return {
+      message: 'Attendance corrected successfully.',
+      attendance: result.attendance,
+      correction: result.correction,
+    };
+  }
 
-}
+  // ============================================================
+  // AUTOMATICALLY MARK INCOMPLETE ATTENDANCES AS ABSENT
+  // ============================================================
 
-// ============================================================
-// AUTOMATICALLY MARK INCOMPLETE ATTENDANCES AS ABSENT
-// ============================================================
+  async markExpectedAsAbsent() {
+    const now = new Date();
 
-async markExpectedAsAbsent() {
-const now = new Date();
-
-const completedShifts =
-  await this.prisma.shift.findMany({
-    where: {
-      endTime: {
-        lt: now,
-      },
-    },
-    select: {
-      id: true,
-      endTime: true,
-      station: {
-        select: {
-          latenessToleranceMinutes: true,
+    const completedShifts = await this.prisma.shift.findMany({
+      where: {
+        endTime: {
+          lt: now,
         },
       },
-    },
-  });
-
-if (completedShifts.length === 0) {
-  return {
-    updatedCount: 0,
-  };
-}
-
-let updatedCount = 0;
-
-for (const shift of completedShifts) {
-  const toleranceMs =
-    shift.station.latenessToleranceMinutes *
-    60 *
-    1000;
-
-  const absenceDeadline =
-    shift.endTime.getTime() + toleranceMs;
-
-  if (now.getTime() < absenceDeadline) {
-    continue;
-  }
-
-  const expectedResult =
-    await this.prisma.attendance.updateMany({
-      where: {
-        shiftId: shift.id,
-        status: AttendanceStatus.EXPECTED,
-      },
-      data: {
-        status: AttendanceStatus.ABSENT,
-        absenceReason:
-          'No check-in was recorded before the shift ended.',
+      select: {
+        id: true,
+        endTime: true,
+        station: {
+          select: {
+            latenessToleranceMinutes: true,
+          },
+        },
       },
     });
 
-  const missingCheckoutResult =
-    await this.prisma.attendance.updateMany({
-      where: {
-        shiftId: shift.id,
-        status: AttendanceStatus.CHECKED_IN,
-      },
-      data: {
-        status: AttendanceStatus.ABSENT,
-        absenceReason:
-          'No check-out was recorded before the shift ended.',
-      },
-    });
+    if (completedShifts.length === 0) {
+      return {
+        updatedCount: 0,
+      };
+    }
 
-  const absentCount =
-    expectedResult.count +
-    missingCheckoutResult.count;
+    let updatedCount = 0;
 
-  // An automatically detected absence must feed the replacement queue,
-  // otherwise no one is asked to cover the shift. A declared impediment
-  // is not an absence, so the two remain distinguishable via `source`.
-  if (absentCount > 0) {
-    await this.openReplacementForAbsence(shift.id);
+    for (const shift of completedShifts) {
+      const toleranceMs = shift.station.latenessToleranceMinutes * 60 * 1000;
+
+      const absenceDeadline = shift.endTime.getTime() + toleranceMs;
+
+      if (now.getTime() < absenceDeadline) {
+        continue;
+      }
+
+      const expectedResult = await this.prisma.attendance.updateMany({
+        where: {
+          shiftId: shift.id,
+          status: AttendanceStatus.EXPECTED,
+        },
+        data: {
+          status: AttendanceStatus.ABSENT,
+          absenceReason: 'No check-in was recorded before the shift ended.',
+        },
+      });
+
+      const missingCheckoutResult = await this.prisma.attendance.updateMany({
+        where: {
+          shiftId: shift.id,
+          status: AttendanceStatus.CHECKED_IN,
+        },
+        data: {
+          status: AttendanceStatus.ABSENT,
+          absenceReason: 'No check-out was recorded before the shift ended.',
+        },
+      });
+
+      const absentCount = expectedResult.count + missingCheckoutResult.count;
+
+      // An automatically detected absence must feed the replacement queue,
+      // otherwise no one is asked to cover the shift. A declared impediment
+      // is not an absence, so the two remain distinguishable via `source`.
+      if (absentCount > 0) {
+        await this.openReplacementForAbsence(shift.id);
+      }
+
+      updatedCount += absentCount;
+    }
+
+    return {
+      updatedCount,
+    };
   }
 
-  updatedCount += absentCount;
-}
+  // ============================================================
+  // OPEN A REPLACEMENT REQUEST FOR AN AUTOMATIC ABSENCE
+  // ============================================================
 
-return {
-  updatedCount,
-};
-
-}
-
-// ============================================================
-// OPEN A REPLACEMENT REQUEST FOR AN AUTOMATIC ABSENCE
-// ============================================================
-
-private async openReplacementForAbsence(
-  shiftId: string,
-): Promise<void> {
-  const shift =
-    await this.prisma.shift.findUnique({
+  private async openReplacementForAbsence(shiftId: string): Promise<void> {
+    const shift = await this.prisma.shift.findUnique({
       where: {
         id: shiftId,
       },
@@ -1331,25 +1184,24 @@ private async openReplacementForAbsence(
       },
     });
 
-  if (!shift) {
-    return;
-  }
+    if (!shift || !shift.swapperId) {
+      return;
+    }
 
-  try {
-    await this.operationsService.openReplacementRequest({
-      shiftId: shift.id,
-      originalSwapperId: shift.swapperId,
-      requestedById: shift.swapperId,
-      reason:
-        'No check-in was recorded before the shift ended.',
-      source: REPLACEMENT_SOURCE.AUTOMATIC_ABSENCE,
-    });
-  } catch {
-    // The absence itself is already recorded. A failure to open the
-    // replacement request must not roll back or crash the scheduler;
-    // the next run will retry.
+    try {
+      await this.operationsService.openReplacementRequest({
+        shiftId: shift.id,
+        originalSwapperId: shift.swapperId,
+        requestedById: shift.swapperId,
+        reason: 'No check-in was recorded before the shift ended.',
+        source: REPLACEMENT_SOURCE.AUTOMATIC_ABSENCE,
+      });
+    } catch {
+      // The absence itself is already recorded. A failure to open the
+      // replacement request must not roll back or crash the scheduler;
+      // the next run will retry.
+    }
   }
-}
 
   // ============================================================
   // SPRINT 5 — MONITOR & HISTORY
@@ -1372,7 +1224,9 @@ private async openReplacementForAbsence(
       actor.role !== Role.STATION_CHIEF &&
       actor.role !== Role.ADMIN
     ) {
-      throw new ForbiddenException('Accès non autorisé au suivi des pointages.');
+      throw new ForbiddenException(
+        'Accès non autorisé au suivi des pointages.',
+      );
     }
 
     const start = new Date();
@@ -1420,7 +1274,10 @@ private async openReplacementForAbsence(
           name: shift.station.name,
           timezone: shift.station.timezone,
         },
-        swapper: { id: shift.swapper.id, fullName: shift.swapper.fullName },
+        swapper: {
+          id: shift.swapper?.id ?? '',
+          fullName: shift.swapper?.fullName ?? 'Poste vacant',
+        },
         template: `${shift.startTime.toISOString().slice(11, 16)} – ${shift.endTime
           .toISOString()
           .slice(11, 16)}`,

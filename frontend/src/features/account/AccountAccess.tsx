@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Check, CheckCheck, Eye, EyeOff, Link2Off, LoaderCircle, MailCheck } from '../../ui/icons';
 import { api, ApiError } from '../../api/auth-api';
 
-const initialToken = new URLSearchParams(location.hash.slice(1)).get('token') || '';
-// Keep invitation secrets out of the URL and browser persistence.
-if (initialToken) history.replaceState(null, '', location.pathname);
+const initialToken =
+  new URLSearchParams(window.location.search).get('token') ||
+  new URLSearchParams(window.location.hash.slice(1)).get('token') ||
+  '';
+// Keep invitation/reset secrets out of browser history once captured.
+if (initialToken) window.history.replaceState(null, '', window.location.pathname);
 
 export function AccountAccess({ mode }: { mode: 'forgot' | 'activate' | 'reset' }) {
   const [email, setEmail] = useState('');

@@ -5,16 +5,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { SchedulingEngineService } from './scheduling-engine.service';
 
 @Module({
-  imports: [
-    PrismaModule,
-  ],
+  imports: [PrismaModule],
 
-  providers: [
-    SchedulingEngineService,
-  ],
+  providers: [SchedulingEngineService],
 
-  exports: [
-    SchedulingEngineService,
-  ],
+  exports: [SchedulingEngineService],
 })
 export class SchedulingModule {}

@@ -47,9 +47,7 @@ type CorrectShiftBody = {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('corrections')
 export class CorrectionsController {
-  constructor(
-    private readonly correctionsService: CorrectionsService,
-  ) {}
+  constructor(private readonly correctionsService: CorrectionsService) {}
 
   // ============================================================
   // UPLOAD AN EVIDENCE DOCUMENT
@@ -59,9 +57,7 @@ export class CorrectionsController {
   @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
-  uploadAttachment(
-    @UploadedFile() file?: UploadedAttachment,
-  ) {
+  uploadAttachment(@UploadedFile() file?: UploadedAttachment) {
     return this.correctionsService.saveAttachment(file);
   }
 
@@ -98,9 +94,6 @@ export class CorrectionsController {
     @Req() req: AuthenticatedRequest,
     @Param('shiftId') shiftId: string,
   ) {
-    return this.correctionsService.findShiftCorrections(
-      req.user.id,
-      shiftId,
-    );
+    return this.correctionsService.findShiftCorrections(req.user.id, shiftId);
   }
 }

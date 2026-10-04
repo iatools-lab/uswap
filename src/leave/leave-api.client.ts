@@ -16,7 +16,9 @@ export class LeaveApiClient {
     type: string;
   }): Promise<ExternalLeaveResponse | null> {
     if (!this.baseUrl) {
-      this.logger.warn('LEAVE_API_URL non configuree, envoi ignore pour le moment');
+      this.logger.warn(
+        'LEAVE_API_URL non configuree, envoi ignore pour le moment',
+      );
       return null;
     }
 
@@ -28,14 +30,16 @@ export class LeaveApiClient {
       });
 
       if (!response.ok) {
-        this.logger.error(`API conges a repondu avec le statut ${response.status}`);
+        this.logger.error(
+          `API conges a repondu avec le statut ${response.status}`,
+        );
         return null;
       }
 
       const data = await response.json();
       return { externalId: data.id };
     } catch (error) {
-      this.logger.error('Echec de l\'appel a l\'API conges', error);
+      this.logger.error("Echec de l'appel a l'API conges", error);
       return null;
     }
   }

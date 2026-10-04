@@ -22,7 +22,9 @@ export class RegisterDto {
   fullName: string;
 
   @ApiProperty({ example: 'utilisateur@upowa.org' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
   @IsEmail()
   email: string;
 
@@ -38,9 +40,7 @@ export class RegisterDto {
   // Le mot de passe n'est exige que pour un compte cree ACTIF. Les deux
   // signaux d'invitation doivent etre pris en compte : le frontend envoie
   // accountStatus=PENDING tandis que d'anciens appels utilisent sendInvite.
-  @ValidateIf(
-    (o) => !o.sendInvite && o.accountStatus !== 'PENDING',
-  )
+  @ValidateIf((o) => !o.sendInvite && o.accountStatus !== 'PENDING')
   @IsString()
   @MinLength(8)
   @MaxLength(128)
@@ -70,7 +70,8 @@ export class RegisterDto {
   @ApiProperty({
     required: false,
     default: false,
-    description: 'Si true, le compte est créé inactif et une invitation est envoyée par e-mail',
+    description:
+      'Si true, le compte est créé inactif et une invitation est envoyée par e-mail',
   })
   @IsOptional()
   @IsBoolean()

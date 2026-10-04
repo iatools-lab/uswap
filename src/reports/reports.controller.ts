@@ -8,15 +8,18 @@ import {
   Query,
   Req,
   UseGuards,
+  Res,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import {
   CreateScheduledReportDto,
   ToggleScheduledReportDto,
+  PreviewScheduledReportDto,
 } from './dto/create-scheduled-report.dto';
 import { QueryReportDashboardDto } from './dto/query-report-dashboard.dto';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
@@ -54,7 +57,9 @@ export class ReportsController {
 
   @Get('reports/dashboard')
   @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
-  @ApiOperation({ summary: 'Tableau de bord operationnel (pointages, couverture)' })
+  @ApiOperation({
+    summary: 'Tableau de bord operationnel (pointages, couverture)',
+  })
   dashboard(
     @Req() req: AuthenticatedRequest,
     @Query() query: QueryReportDashboardDto,
@@ -69,6 +74,40 @@ export class ReportsController {
   @ApiOperation({ summary: 'Rapports programmes' })
   listSchedules() {
     return this.reportsService.listScheduledReports();
+  }
+
+  @Post('admin/reports/schedules/preview')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Prévisualiser un rapport programmé' })
+  previewSchedule(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: PreviewScheduledReportDto,
+  ) {
+    return this.reportsService.previewScheduledReport(req.user, dto);
+  }
+
+  @Get('admin/reports/schedules/:id/runs')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Historique des exécutions d’un rapport' })
+  listRuns(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.reportsService.listReportRuns(req.user, id);
+  }
+
+  @Get('reports/export')
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @ApiOperation({ summary: 'Exporter un rapport filtré en CSV ou Excel' })
+  async export(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: QueryReportDashboardDto & { format?: string },
+    @Res() res: Response,
+  ) {
+    const file = await this.reportsService.exportReport(req.user, query);
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.filename}"`,
+    );
+    res.send(file.content);
   }
 
   @Post('admin/reports/schedules')

@@ -15,10 +15,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { LeaveService } from './leave.service';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
-import {
-  CancelLeaveDto,
-  UpdateLeaveDto,
-} from './dto/update-leave-request.dto';
+import { CancelLeaveDto, UpdateLeaveDto } from './dto/update-leave-request.dto';
 
 type AuthenticatedRequest = { user: { id: string } };
 

@@ -4,12 +4,8 @@ export const MIN_REST_HOURS = 8;
 
 export const DEFAULT_WEEKLY_HOURS_LIMIT = 72;
 
-export function getDurationInHours(
-  startTime: Date,
-  endTime: Date,
-): number {
-  const milliseconds =
-    endTime.getTime() - startTime.getTime();
+export function getDurationInHours(startTime: Date, endTime: Date): number {
+  const milliseconds = endTime.getTime() - startTime.getTime();
 
   return milliseconds / (1000 * 60 * 60);
 }
@@ -28,22 +24,15 @@ export function getBusinessDate(date: Date): string {
 export function getWeekStart(date: Date): Date {
   const businessDate = getBusinessDate(date);
 
-  const [year, month, day] = businessDate
-    .split('-')
-    .map(Number);
+  const [year, month, day] = businessDate.split('-').map(Number);
 
-  const localDate = new Date(
-    Date.UTC(year, month - 1, day),
-  );
+  const localDate = new Date(Date.UTC(year, month - 1, day));
 
   const dayOfWeek = localDate.getUTCDay();
 
-  const daysFromMonday =
-    dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
 
-  localDate.setUTCDate(
-    localDate.getUTCDate() - daysFromMonday,
-  );
+  localDate.setUTCDate(localDate.getUTCDate() - daysFromMonday);
 
   return localDate;
 }
@@ -63,12 +52,6 @@ export function datesOverlap(
   return startA < endB && endA > startB;
 }
 
-export function hoursBetween(
-  firstEnd: Date,
-  secondStart: Date,
-): number {
-  return (
-    secondStart.getTime() -
-    firstEnd.getTime()
-  ) / (1000 * 60 * 60);
+export function hoursBetween(firstEnd: Date, secondStart: Date): number {
+  return (secondStart.getTime() - firstEnd.getTime()) / (1000 * 60 * 60);
 }

@@ -10,150 +10,147 @@ import { UpdateStationDto } from './dto/update-station.dto';
 
 @Injectable()
 export class StationsService {
-constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-async create(dto: CreateStationDto) {
-return this.prisma.station.create({
-  data: {
-    name: dto.name,
-    location: dto.location,
-    address: dto.address,
-    city: dto.city,
-    latitude: dto.latitude,
-    longitude: dto.longitude,
-    timezone: dto.timezone,
-    contactName: dto.contactName,
-    contactPhone: dto.contactPhone,
-    latenessToleranceMinutes: dto.latenessToleranceMinutes,
-    minRestHours: dto.minRestHours,
-    weeklyHoursLimit: dto.weeklyHoursLimit,
-    checkinQrTtl: dto.checkinQrTtl,
-    checkoutQrTtl: dto.checkoutQrTtl,
-  },
-});
-}
+  async create(dto: CreateStationDto) {
+    return this.prisma.station.create({
+      data: {
+        name: dto.name,
+        location: dto.location,
+        address: dto.address,
+        city: dto.city,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+        timezone: dto.timezone,
+        contactName: dto.contactName,
+        contactPhone: dto.contactPhone,
+        latenessToleranceMinutes: dto.latenessToleranceMinutes,
+        minRestHours: dto.minRestHours,
+        weeklyHoursLimit: dto.weeklyHoursLimit,
+        checkinQrTtl: dto.checkinQrTtl,
+        checkoutQrTtl: dto.checkoutQrTtl,
+      },
+    });
+  }
 
-async findAll() {
-return this.prisma.station.findMany({
-orderBy: {
-name: 'asc',
-},
-});
-}
+  async findAll() {
+    return this.prisma.station.findMany({
+      orderBy: {
+        name: 'asc',
+      },
+    });
+  }
 
-async findOne(id: string) {
-const station = await this.prisma.station.findUnique({
-where: {
-id: id,
-},
-});
+  async findOne(id: string) {
+    const station = await this.prisma.station.findUnique({
+      where: {
+        id: id,
+      },
+    });
 
-if (!station) {
-  throw new NotFoundException('Station introuvable');
-}
+    if (!station) {
+      throw new NotFoundException('Station introuvable');
+    }
 
-return station;
+    return station;
+  }
 
-}
+  async update(id: string, dto: UpdateStationDto) {
+    await this.findOne(id);
 
-async update(id: string, dto: UpdateStationDto) {
-await this.findOne(id);
+    const data: {
+      name?: string;
+      location?: string;
+      address?: string | null;
+      city?: string | null;
+      latitude?: number;
+      longitude?: number;
+      timezone?: string;
+      contactName?: string;
+      contactPhone?: string;
+      latenessToleranceMinutes?: number;
+      minRestHours?: number;
+      weeklyHoursLimit?: number;
+      checkinQrTtl?: number;
+      checkoutQrTtl?: number;
+    } = {};
 
-const data: {
-  name?: string;
-  location?: string;
-  address?: string | null;
-  city?: string | null;
-  latitude?: number;
-  longitude?: number;
-  timezone?: string;
-  contactName?: string;
-  contactPhone?: string;
-  latenessToleranceMinutes?: number;
-  minRestHours?: number;
-  weeklyHoursLimit?: number;
-  checkinQrTtl?: number;
-  checkoutQrTtl?: number;
-} = {};
+    if (dto.name !== undefined) {
+      data.name = dto.name;
+    }
 
-if (dto.name !== undefined) {
-  data.name = dto.name;
-}
+    if (dto.location !== undefined) {
+      data.location = dto.location;
+    }
 
-if (dto.location !== undefined) {
-  data.location = dto.location;
-}
+    if (dto.address !== undefined) {
+      data.address = dto.address;
+    }
 
-if (dto.address !== undefined) {
-  data.address = dto.address;
-}
+    if (dto.city !== undefined) {
+      data.city = dto.city;
+    }
 
-if (dto.city !== undefined) {
-  data.city = dto.city;
-}
+    if (dto.latitude !== undefined) {
+      data.latitude = dto.latitude;
+    }
 
-if (dto.latitude !== undefined) {
-  data.latitude = dto.latitude;
-}
+    if (dto.longitude !== undefined) {
+      data.longitude = dto.longitude;
+    }
 
-if (dto.longitude !== undefined) {
-  data.longitude = dto.longitude;
-}
+    if (dto.timezone !== undefined) {
+      data.timezone = dto.timezone;
+    }
 
-if (dto.timezone !== undefined) {
-  data.timezone = dto.timezone;
-}
+    if (dto.contactName !== undefined) {
+      data.contactName = dto.contactName;
+    }
 
-if (dto.contactName !== undefined) {
-  data.contactName = dto.contactName;
-}
+    if (dto.contactPhone !== undefined) {
+      data.contactPhone = dto.contactPhone;
+    }
 
-if (dto.contactPhone !== undefined) {
-  data.contactPhone = dto.contactPhone;
-}
+    if (dto.latenessToleranceMinutes !== undefined) {
+      data.latenessToleranceMinutes = dto.latenessToleranceMinutes;
+    }
 
-if (dto.latenessToleranceMinutes !== undefined) {
-  data.latenessToleranceMinutes = dto.latenessToleranceMinutes;
-}
+    if (dto.minRestHours !== undefined) {
+      data.minRestHours = dto.minRestHours;
+    }
 
-if (dto.minRestHours !== undefined) {
-  data.minRestHours = dto.minRestHours;
-}
+    if (dto.weeklyHoursLimit !== undefined) {
+      data.weeklyHoursLimit = dto.weeklyHoursLimit;
+    }
 
-if (dto.weeklyHoursLimit !== undefined) {
-  data.weeklyHoursLimit = dto.weeklyHoursLimit;
-}
+    if (dto.checkinQrTtl !== undefined) {
+      data.checkinQrTtl = dto.checkinQrTtl;
+    }
 
-if (dto.checkinQrTtl !== undefined) {
-  data.checkinQrTtl = dto.checkinQrTtl;
-}
+    if (dto.checkoutQrTtl !== undefined) {
+      data.checkoutQrTtl = dto.checkoutQrTtl;
+    }
 
-if (dto.checkoutQrTtl !== undefined) {
-  data.checkoutQrTtl = dto.checkoutQrTtl;
-}
-
-return this.prisma.station.update({
-  where: {
-    id: id,
-  },
-  data: data,
-});
-
-}
+    return this.prisma.station.update({
+      where: {
+        id: id,
+      },
+      data: data,
+    });
+  }
 
   async setActive(id: string, isActive: boolean) {
-await this.findOne(id);
+    await this.findOne(id);
 
-return this.prisma.station.update({
-  where: {
-    id: id,
-  },
-  data: {
-    isActive: isActive,
-  },
-});
-
-}
+    return this.prisma.station.update({
+      where: {
+        id: id,
+      },
+      data: {
+        isActive: isActive,
+      },
+    });
+  }
 
   // ============================================================
   // SHIFT TEMPLATES
@@ -223,9 +220,13 @@ return this.prisma.station.update({
     }
 
     const breakMinutes =
-      breakStart && breakEnd
-        ? this.slotMinutes(breakStart, breakEnd)
-        : 0;
+      breakStart && breakEnd ? this.slotMinutes(breakStart, breakEnd) : 0;
+
+    if (breakMinutes >= durationMinutes) {
+      throw new BadRequestException(
+        'La pause doit être plus courte que le shift.',
+      );
+    }
 
     const existing = await this.prisma.shiftTemplate.findFirst({
       where: { stationId, startTime, endTime },
@@ -324,9 +325,28 @@ return this.prisma.station.update({
     }
 
     const breakMinutes =
-      breakStart && breakEnd
-        ? this.slotMinutes(breakStart, breakEnd)
-        : 0;
+      breakStart && breakEnd ? this.slotMinutes(breakStart, breakEnd) : 0;
+
+    if (breakMinutes >= durationMinutes) {
+      throw new BadRequestException(
+        'La pause doit être plus courte que le shift.',
+      );
+    }
+
+    const conflicting = await this.prisma.shiftTemplate.findFirst({
+      where: {
+        stationId,
+        startTime,
+        endTime,
+        id: { not: templateId },
+      },
+      select: { id: true },
+    });
+    if (conflicting) {
+      throw new ConflictException(
+        'Un autre modèle occupe déjà ce créneau sur cette station.',
+      );
+    }
 
     const revision = template.revision + 1;
 

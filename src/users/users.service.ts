@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { parse } from 'csv-parse/sync';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
@@ -30,8 +34,10 @@ const SAFE_SELECT = {
   address: true,
   isActive: true,
   stationId: true,
+  disabledAt: true,
   invitationTokenExpires: true,
   createdAt: true,
+  updatedAt: true,
 } satisfies Prisma.UserSelect;
 
 @Injectable()
@@ -49,7 +55,13 @@ export class UsersService {
     const where: Prisma.UserWhereInput = {
       ...(query.role ? { role: query.role } : {}),
       ...(query.stationId ? { stationId: query.stationId } : {}),
-      ...(query.status ? { isActive: query.status === 'active' } : {}),
+      ...(query.status === 'active'
+        ? { isActive: true, disabledAt: null }
+        : query.status === 'pending'
+          ? { isActive: false, disabledAt: null }
+          : query.status === 'inactive'
+            ? { isActive: false, disabledAt: { not: null } }
+            : {}),
       ...(term
         ? {
             OR: [
@@ -71,7 +83,8 @@ export class UsersService {
      * Returning the envelope to a selector makes it call `.filter` on an
      * object, so the absence of pagination is what picks the shape.
      */
-    const wantsPlainList = query.page === undefined && query.limit === undefined;
+    const wantsPlainList =
+      query.page === undefined && query.limit === undefined;
 
     if (wantsPlainList) {
       const rows = await this.prisma.user.findMany({
@@ -85,8 +98,10 @@ export class UsersService {
           address: true,
           isActive: true,
           stationId: true,
+          disabledAt: true,
           invitationTokenExpires: true,
           createdAt: true,
+          updatedAt: true,
         },
         orderBy:
           query.sort === 'name'
@@ -107,7 +122,7 @@ export class UsersService {
           ? { role: 'asc' }
           : { createdAt: 'desc' };
 
-    const [data, total, all, active, pending] = await Promise.all([
+    const [data, total, all, active, pending, inactive] = await Promise.all([
       this.prisma.user.findMany({
         where,
         select: SAFE_SELECT,
@@ -120,7 +135,10 @@ export class UsersService {
       // so the admin home cards stay stable while filters change.
       this.prisma.user.count(),
       this.prisma.user.count({ where: { isActive: true } }),
-      this.prisma.user.count({ where: { isActive: false } }),
+      this.prisma.user.count({ where: { isActive: false, disabledAt: null } }),
+      this.prisma.user.count({
+        where: { isActive: false, disabledAt: { not: null } },
+      }),
     ]);
 
     return {
@@ -133,7 +151,7 @@ export class UsersService {
         all,
         active,
         pending,
-        inactive: pending,
+        inactive,
       },
     };
   }
@@ -148,7 +166,13 @@ export class UsersService {
     const where: Prisma.UserWhereInput = {
       ...(query.role ? { role: query.role } : {}),
       ...(query.stationId ? { stationId: query.stationId } : {}),
-      ...(query.status ? { isActive: query.status === 'active' } : {}),
+      ...(query.status === 'active'
+        ? { isActive: true, disabledAt: null }
+        : query.status === 'pending'
+          ? { isActive: false, disabledAt: null }
+          : query.status === 'inactive'
+            ? { isActive: false, disabledAt: { not: null } }
+            : {}),
       ...(term
         ? {
             OR: [
@@ -168,6 +192,7 @@ export class UsersService {
         phoneNumber: true,
         address: true,
         isActive: true,
+        disabledAt: true,
         invitationTokenExpires: true,
         station: { select: { name: true } },
       },
@@ -180,7 +205,11 @@ export class UsersService {
         email: user.email,
         role: ROLE_LABELS[user.role] ?? user.role,
         station: user.station?.name ?? '',
-        status: user.isActive ? 'Actif' : 'En attente',
+        status: user.isActive
+          ? 'Actif'
+          : user.disabledAt
+            ? 'Inactif'
+            : 'En attente',
         phoneNumber: user.phoneNumber ?? '',
         address: user.address ?? '',
       })),
@@ -190,7 +219,7 @@ export class UsersService {
 
   /**
    * Public directory used by the login screen's profile picker. Only active
-   * accounts are listed, and only fields a pre-auth visitor may see — no
+   * accounts are listed, and only fields a pre-auth visitor may see â€” no
    * phone number, no address, no invitation state.
    */
   async findProfiles() {
@@ -208,11 +237,78 @@ export class UsersService {
   }
 
   async findOne(id: string) {
-    const user = await this.prisma.user.findUnique({ where: { id }, select: SAFE_SELECT });
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: SAFE_SELECT,
+    });
     if (!user) {
       throw new NotFoundException('Utilisateur introuvable');
     }
-    return this.withInvitationStatus(user);
+
+    const auditRows = await this.prisma.userAuditLog.findMany({
+      where: { userId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    const audit = auditRows.map((row) => {
+      const raw = (row.changes ?? {}) as Record<string, unknown>;
+      const before: Record<string, unknown> = {};
+      const after: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(raw)) {
+        if (
+          value &&
+          typeof value === 'object' &&
+          'old' in (value as Record<string, unknown>)
+        ) {
+          const pair = value as { old: unknown; new: unknown };
+          before[key] = pair.old;
+          after[key] = pair.new;
+        }
+      }
+      const keys = Object.keys(before);
+      const action =
+        keys.includes('isActive') && keys.length === 1
+          ? after.isActive === false
+            ? 'DEACTIVATE'
+            : 'ACTIVATE'
+          : 'UPDATE';
+      return {
+        id: row.id,
+        action,
+        changedBy: row.changedBy,
+        createdAt: row.createdAt.toISOString(),
+        before,
+        after,
+      };
+    });
+
+    return { ...this.withInvitationStatus(user), audit };
+  }
+
+  async communicationHistory(id: string) {
+    const exists = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!exists) throw new NotFoundException('Utilisateur introuvable');
+    return this.prisma.communicationLog.findMany({
+      where: { userId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        channel: true,
+        type: true,
+        recipient: true,
+        subject: true,
+        status: true,
+        providerMessageId: true,
+        errorMessage: true,
+        actionUrl: true,
+        createdAt: true,
+      },
+    });
   }
 
   async update(id: string, dto: UpdateUserDto, changedBy: string) {
@@ -221,10 +317,32 @@ export class UsersService {
       throw new NotFoundException('Utilisateur introuvable');
     }
 
+    const normalizedEmail = dto.email?.trim().toLowerCase();
+    if (normalizedEmail && normalizedEmail !== existing.email) {
+      const duplicate = await this.prisma.user.findUnique({
+        where: { email: normalizedEmail },
+      });
+      if (duplicate && duplicate.id !== id) {
+        throw new BadRequestException(
+          'Cet e-mail est dÃ©jÃ  utilisÃ© par un autre compte.',
+        );
+      }
+    }
+
     const changes: Record<string, { old: unknown; new: unknown }> = {};
-    (['fullName', 'role', 'stationId', 'phoneNumber', 'address'] as const).forEach((field) => {
-      if (dto[field] !== undefined && dto[field] !== existing[field]) {
-        changes[field] = { old: existing[field], new: dto[field] };
+    (
+      [
+        'fullName',
+        'email',
+        'role',
+        'stationId',
+        'phoneNumber',
+        'address',
+      ] as const
+    ).forEach((field) => {
+      const next = field === 'email' ? normalizedEmail : dto[field];
+      if (next !== undefined && next !== existing[field]) {
+        changes[field] = { old: existing[field], new: next };
       }
     });
 
@@ -233,17 +351,34 @@ export class UsersService {
     }
 
     const roleChanged = 'role' in changes;
+    const emailChanged = 'email' in changes;
 
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id },
         data: {
           ...dto,
-          ...(roleChanged ? { tokenVersion: { increment: 1 } } : {}),
+          ...(normalizedEmail !== undefined ? { email: normalizedEmail } : {}),
+          ...(dto.phoneNumber !== undefined
+            ? { phoneNumber: dto.phoneNumber.trim() || null }
+            : {}),
+          ...(dto.address !== undefined
+            ? { address: dto.address.trim() || null }
+            : {}),
+          ...(dto.fullName !== undefined
+            ? { fullName: dto.fullName.trim() }
+            : {}),
+          ...(roleChanged || emailChanged
+            ? { tokenVersion: { increment: 1 } }
+            : {}),
         },
       }),
       this.prisma.userAuditLog.create({
-        data: { userId: id, changedBy, changes: changes as Prisma.InputJsonValue },
+        data: {
+          userId: id,
+          changedBy,
+          changes: changes as Prisma.InputJsonValue,
+        },
       }),
     ]);
 
@@ -258,7 +393,11 @@ export class UsersService {
     return this.setActiveState(id, true, changedBy);
   }
 
-  private async setActiveState(id: string, isActive: boolean, changedBy: string) {
+  private async setActiveState(
+    id: string,
+    isActive: boolean,
+    changedBy: string,
+  ) {
     const existing = await this.prisma.user.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('Utilisateur introuvable');
@@ -271,14 +410,20 @@ export class UsersService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id },
-        data: { isActive, tokenVersion: { increment: 1 } },
+        data: {
+          isActive,
+          disabledAt: isActive ? null : new Date(),
+          tokenVersion: { increment: 1 },
+        },
       }),
       this.prisma.refreshToken.deleteMany({ where: { userId: id } }),
       this.prisma.userAuditLog.create({
         data: {
           userId: id,
           changedBy,
-          changes: { isActive: { old: existing.isActive, new: isActive } } as Prisma.InputJsonValue,
+          changes: {
+            isActive: { old: existing.isActive, new: isActive },
+          },
         },
       }),
     ]);
@@ -296,15 +441,24 @@ export class UsersService {
     }
 
     const invitationToken = crypto.randomBytes(32).toString('hex');
-    const invitationTokenHash = crypto.createHash('sha256').update(invitationToken).digest('hex');
-    const invitationTokenExpires = new Date(Date.now() + INVITATION_TOKEN_TTL_MS);
+    const invitationTokenHash = crypto
+      .createHash('sha256')
+      .update(invitationToken)
+      .digest('hex');
+    const invitationTokenExpires = new Date(
+      Date.now() + INVITATION_TOKEN_TTL_MS,
+    );
 
     await this.prisma.user.update({
       where: { id },
       data: { invitationTokenHash, invitationTokenExpires },
     });
 
-    const sent = await this.emailService.sendInvitation(user.email, invitationToken);
+    const sent = await this.emailService.sendInvitation(
+      user.email,
+      invitationToken,
+      user.id,
+    );
 
     return {
       message: sent
@@ -314,16 +468,26 @@ export class UsersService {
   }
 
   generateTemplate(): string {
-    return TEMPLATE_HEADER + '\n' + 'Jean Dupont,jean.dupont@upowa.org,SWAPPER,,+237600000000,Douala\n';
+    return (
+      TEMPLATE_HEADER +
+      '\n' +
+      'Jean Dupont,jean.dupont@upowa.org,SWAPPER,,+237600000000,Douala\n'
+    );
   }
 
   async parseAndPreview(fileBuffer: Buffer) {
     let records: Record<string, string>[];
 
     try {
-      records = parse(fileBuffer, { columns: true, skip_empty_lines: true, trim: true });
+      records = parse(fileBuffer, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+      });
     } catch (error) {
-      throw new BadRequestException('Le fichier CSV est illisible ou mal forme');
+      throw new BadRequestException(
+        'Le fichier CSV est illisible ou mal forme',
+      );
     }
 
     const validRows: ImportUserRowDto[] = [];
@@ -343,13 +507,19 @@ export class UsersService {
       const address = (record.address || '').trim() || undefined;
 
       if (!fullName) reasons.push('Nom complet manquant');
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) reasons.push('E-mail manquant ou invalide');
-      if (!VALID_ROLES.includes(role)) reasons.push(`Role invalide, attendu parmi ${VALID_ROLES.join(', ')}`);
-      if (email && emailsInFile.has(email)) reasons.push('E-mail en double dans le fichier');
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+        reasons.push('E-mail manquant ou invalide');
+      if (!VALID_ROLES.includes(role))
+        reasons.push(`Role invalide, attendu parmi ${VALID_ROLES.join(', ')}`);
+      if (email && emailsInFile.has(email))
+        reasons.push('E-mail en double dans le fichier');
 
       if (email) {
-        const existingUser = await this.prisma.user.findUnique({ where: { email } });
-        if (existingUser) reasons.push('Un compte avec cet e-mail existe deja en base');
+        const existingUser = await this.prisma.user.findUnique({
+          where: { email },
+        });
+        if (existingUser)
+          reasons.push('Un compte avec cet e-mail existe deja en base');
       }
 
       if (reasons.length > 0) {
@@ -358,7 +528,14 @@ export class UsersService {
       }
 
       emailsInFile.add(email);
-      validRows.push({ fullName, email, role: role as Role, stationId, phoneNumber, address });
+      validRows.push({
+        fullName,
+        email,
+        role: role as Role,
+        stationId,
+        phoneNumber,
+        address,
+      });
     }
 
     return { validRows, errors, totalRows: records.length };
@@ -370,18 +547,28 @@ export class UsersService {
 
     for (const row of rows) {
       try {
-        const existingUser = await this.prisma.user.findUnique({ where: { email: row.email } });
+        const existingUser = await this.prisma.user.findUnique({
+          where: { email: row.email },
+        });
         if (existingUser) {
           rejected.push({ email: row.email, reason: 'E-mail deja utilise' });
           continue;
         }
 
-        const placeholderPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
+        const placeholderPassword = await bcrypt.hash(
+          crypto.randomBytes(32).toString('hex'),
+          12,
+        );
         const invitationToken = crypto.randomBytes(32).toString('hex');
-        const invitationTokenHash = crypto.createHash('sha256').update(invitationToken).digest('hex');
-        const invitationTokenExpires = new Date(Date.now() + INVITATION_TOKEN_TTL_MS);
+        const invitationTokenHash = crypto
+          .createHash('sha256')
+          .update(invitationToken)
+          .digest('hex');
+        const invitationTokenExpires = new Date(
+          Date.now() + INVITATION_TOKEN_TTL_MS,
+        );
 
-        await this.prisma.user.create({
+        const createdUser = await this.prisma.user.create({
           data: {
             fullName: row.fullName,
             email: row.email,
@@ -396,28 +583,54 @@ export class UsersService {
           },
         });
 
-        await this.emailService.sendInvitation(row.email, invitationToken);
+        await this.emailService.sendInvitation(
+          row.email,
+          invitationToken,
+          createdUser.id,
+        );
         created.push(row.email);
       } catch (error) {
-        rejected.push({ email: row.email, reason: 'Erreur lors de la creation' });
+        rejected.push({
+          email: row.email,
+          reason: 'Erreur lors de la creation',
+        });
       }
     }
 
-    return { createdCount: created.length, rejectedCount: rejected.length, created, rejected };
+    return {
+      createdCount: created.length,
+      rejectedCount: rejected.length,
+      created,
+      rejected,
+    };
   }
 
-  private withInvitationStatus<T extends { isActive: boolean; invitationTokenExpires: Date | null }>(
-    user: T,
-  ) {
+  private withInvitationStatus<
+    T extends {
+      isActive: boolean;
+      disabledAt?: Date | null;
+      invitationTokenExpires: Date | null;
+    },
+  >(user: T) {
     const { invitationTokenExpires, ...rest } = user;
-    let invitationStatus: 'activated' | 'pending' | 'expired' | null = null;
+    let invitationStatus:
+      'activated' | 'pending' | 'expired' | 'disabled' | null = null;
 
     if (user.isActive) {
       invitationStatus = 'activated';
+    } else if (user.disabledAt) {
+      invitationStatus = 'disabled';
     } else if (invitationTokenExpires) {
-      invitationStatus = invitationTokenExpires > new Date() ? 'pending' : 'expired';
+      invitationStatus =
+        invitationTokenExpires > new Date() ? 'pending' : 'expired';
     }
 
-    return { ...rest, invitationStatus };
+    return {
+      ...rest,
+      invitationStatus,
+      pendingActivation:
+        !user.isActive && !user.disabledAt && invitationStatus === 'pending',
+      invitationExpiresAt: invitationTokenExpires,
+    };
   }
 }

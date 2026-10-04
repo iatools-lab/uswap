@@ -45,7 +45,9 @@ export class LeaveService {
       this.prisma.leaveRequest.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
-        include: { syncOperations: { orderBy: { createdAt: 'desc' }, take: 1 } },
+        include: {
+          syncOperations: { orderBy: { createdAt: 'desc' }, take: 1 },
+        },
       }),
       this.prisma.leaveSyncOperation.findMany({ where: { userId } }),
     ]);
@@ -86,9 +88,7 @@ export class LeaveService {
   async create(userId: string, dto: CreateLeaveRequestDto) {
     const key = dto.idempotencyKey?.trim();
     if (!key) {
-      throw new BadRequestException(
-        'Référence de synchronisation manquante.',
-      );
+      throw new BadRequestException('Référence de synchronisation manquante.');
     }
 
     // A replayed queue item returns the request it already created.
@@ -153,9 +153,7 @@ export class LeaveService {
   async update(userId: string, id: string, dto: UpdateLeaveDto) {
     const request = await this.findOwned(userId, id);
     if (!this.isEditable(request.status)) {
-      throw new ConflictException(
-        'Cette demande ne peut plus être modifiée.',
-      );
+      throw new ConflictException('Cette demande ne peut plus être modifiée.');
     }
 
     const values = await this.validate(userId, dto, id);
@@ -200,9 +198,7 @@ export class LeaveService {
   async cancel(userId: string, id: string, dto: CancelLeaveDto) {
     const request = await this.findOwned(userId, id);
     if (request.status !== LeaveStatus.PENDING) {
-      throw new ConflictException(
-        'Cette demande ne peut plus être annulée.',
-      );
+      throw new ConflictException('Cette demande ne peut plus être annulée.');
     }
 
     const key =

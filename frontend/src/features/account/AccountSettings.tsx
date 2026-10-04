@@ -13,11 +13,14 @@ import { api, roles, type User } from "../../api/auth-api";
 
 type Section = "profile" | "notifications" | "security";
 type Preferences = {
-  userId: string;
-  internalEnabled: true;
-  emailEnabled: boolean;
-  pushEnabled: boolean;
-  categories: Record<string, { email: boolean; push: boolean }>;
+  inApp: boolean;
+  email: boolean;
+  push: boolean;
+  digest: boolean;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string | null;
+  quietHoursEnd: string | null;
+  retentionDays: number;
   updatedAt: string;
 };
 
@@ -202,6 +205,14 @@ function PreferenceSwitch({
   );
 }
 
+
+function urlBase64ToUint8Array(value: string) {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = window.atob(base64);
+  return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
+}
+
 function NotificationPreferences() {
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [busy, setBusy] = useState(false);
@@ -217,80 +228,74 @@ function NotificationPreferences() {
       active = false;
     };
   }, []);
-  if (error && !preferences)
+
+  if (error && !preferences) {
     return (
       <section className="settings-panel">
         <p className="error-message">{error}</p>
       </section>
     );
-  if (!preferences)
+  }
+
+  if (!preferences) {
     return (
       <section className="settings-panel">
         <p>Chargement de vos préférences…</p>
       </section>
     );
-
-  async function channel(name: "emailEnabled" | "pushEnabled", value: boolean) {
-    setError("");
-    try {
-      if (name === "pushEnabled" && value) {
-        if (!("Notification" in window)) {
-          setError("Les notifications ne sont pas prises en charge par ce navigateur.");
-          return;
-        }
-        value = (await Notification.requestPermission()) === "granted";
-        if (!value) {
-          setError("L’autorisation des notifications a été refusée dans le navigateur.");
-          return;
-        }
-      }
-      if (name === "pushEnabled" && !value && "serviceWorker" in navigator) {
-        const registration = await navigator.serviceWorker.getRegistration();
-        const subscription = await registration?.pushManager.getSubscription();
-        await subscription?.unsubscribe();
-      }
-      setPreferences((current) =>
-        current ? { ...current, [name]: value } : current,
-      );
-      setSaved(false);
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Le réglage des notifications a échoué.",
-      );
-    }
   }
-  function category(
-    name: string,
-    channelName: "email" | "push",
-    value: boolean,
-  ) {
-    setPreferences((current) =>
-      current
-        ? {
-            ...current,
-            categories: {
-              ...current.categories,
-              [name]: { ...current.categories[name], [channelName]: value },
-            },
-          }
-        : current,
-    );
+
+  async function togglePush(value: boolean) {
+    setError("");
+    if (value) {
+      if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+        setError("Les notifications push ne sont pas prises en charge par ce navigateur.");
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setError("L’autorisation des notifications a été refusée dans le navigateur.");
+        return;
+      }
+      const vapidKey = (import.meta as unknown as { env: Record<string, string | undefined> }).env.VITE_VAPID_PUBLIC_KEY;
+      if (vapidKey) {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        });
+        await api("/notifications/push-subscription", {
+          ...subscription.toJSON(),
+          userAgent: navigator.userAgent,
+        });
+      }
+    } else if ("serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      const subscription = await registration?.pushManager.getSubscription();
+      if (subscription) {
+        await api(
+          "/notifications/push-subscription?endpoint=" + encodeURIComponent(subscription.endpoint),
+          undefined,
+          "DELETE",
+        ).catch(() => undefined);
+        await subscription.unsubscribe();
+      }
+    }
+    setPreferences((current) => (current ? { ...current, push: value } : current));
     setSaved(false);
   }
+
+  function patch<K extends keyof Preferences>(key: K, value: Preferences[K]) {
+    setPreferences((current) => (current ? { ...current, [key]: value } : current));
+    setSaved(false);
+  }
+
   async function save() {
     setBusy(true);
     setSaved(false);
     setError("");
     try {
-      setPreferences(
-        await api<Preferences>(
-          "/notifications/preferences",
-          preferences,
-          "PATCH",
-        ),
-      );
+      setPreferences(await api<Preferences>("/notifications/preferences", preferences, "PATCH"));
       setSaved(true);
     } catch (reason) {
       setError((reason as Error).message);
@@ -305,97 +310,59 @@ function NotificationPreferences() {
         <div>
           <span className="settings-eyebrow">Préférences</span>
           <h2>Notifications</h2>
-          <p>
-            Choisissez les canaux complémentaires pour chaque type d’alerte.
-          </p>
+          <p>Gérez directement les canaux de notification de votre compte.</p>
         </div>
         {saved && (
           <span className="settings-saved">
-            <CheckCircleIcon size={16} />
-            Enregistré
+            <CheckCircleIcon size={16} /> Enregistré
           </span>
         )}
       </header>
+
       <div className="notification-channels">
         <div className="notification-channel-card">
-          <span>
-            <EnvelopeSimpleIcon size={20} />
-          </span>
-          <div>
-            <strong>E-mail</strong>
-            <small>Recevoir les alertes dans votre messagerie</small>
-          </div>
-          <PreferenceSwitch
-            label="Notifications par e-mail"
-            checked={preferences.emailEnabled}
-            onChange={(value) => void channel("emailEnabled", value)}
-          />
+          <span><BellIcon size={20} /></span>
+          <div><strong>Dans l’application</strong><small>Alertes visibles dans votre espace uSwap.</small></div>
+          <PreferenceSwitch label="Notifications dans l’application" checked={preferences.inApp} onChange={(value) => patch("inApp", value)} />
         </div>
         <div className="notification-channel-card">
-          <span>
-            <BellIcon size={20} />
-          </span>
-          <div>
-            <strong>Notifications push</strong>
-            <small>
-              Gérer les alertes uSwap sur cet appareil. L’autorisation globale
-              reste contrôlée par le navigateur.
-            </small>
-          </div>
-          <PreferenceSwitch
-            label="Notifications push"
-            checked={preferences.pushEnabled}
-            onChange={(value) => void channel("pushEnabled", value)}
-          />
+          <span><EnvelopeSimpleIcon size={20} /></span>
+          <div><strong>E-mail</strong><small>Recevoir les communications opérationnelles par e-mail.</small></div>
+          <PreferenceSwitch label="Notifications par e-mail" checked={preferences.email} onChange={(value) => patch("email", value)} />
+        </div>
+        <div className="notification-channel-card">
+          <span><BellIcon size={20} /></span>
+          <div><strong>Notifications push</strong><small>Alertes sur cet appareil. Le refus du navigateur ne bloque pas uSwap.</small></div>
+          <PreferenceSwitch label="Notifications push" checked={preferences.push} onChange={(value) => void togglePush(value)} />
         </div>
       </div>
+
       <div className="notification-matrix">
-        <div className="notification-matrix-head">
-          <span>Type d’alerte</span>
-          <span>E-mail</span>
-          <span>Push</span>
+        <div className="notification-matrix-head"><span>Réglage</span><span>Valeur</span></div>
+        <div className="notification-matrix-row">
+          <span><strong>Résumé périodique</strong><small>Autoriser les notifications regroupées.</small></span>
+          <PreferenceSwitch label="Résumé périodique" checked={preferences.digest} onChange={(value) => patch("digest", value)} />
         </div>
-        {Object.entries(preferences.categories)
-          .filter(([name]) => categoryLabels[name])
-          .map(([name, values]) => (
-            <div className="notification-matrix-row" key={name}>
-              <span>
-                <strong>{categoryLabels[name].title}</strong>
-                <small>{categoryLabels[name].description}</small>
-              </span>
-              <PreferenceSwitch
-                label={`${categoryLabels[name].title} par e-mail`}
-                disabled={!preferences.emailEnabled}
-                checked={preferences.emailEnabled && values.email}
-                onChange={(value) => category(name, "email", value)}
-              />
-              <PreferenceSwitch
-                label={`${categoryLabels[name].title} par notification push`}
-                disabled={!preferences.pushEnabled}
-                checked={preferences.pushEnabled && values.push}
-                onChange={(value) => category(name, "push", value)}
-              />
-            </div>
-          ))}
+        <div className="notification-matrix-row">
+          <span><strong>Heures silencieuses</strong><small>Ne pas envoyer les notifications non critiques pendant la plage choisie.</small></span>
+          <PreferenceSwitch label="Heures silencieuses" checked={preferences.quietHoursEnabled} onChange={(value) => patch("quietHoursEnabled", value)} />
+        </div>
+        {preferences.quietHoursEnabled && (
+          <div className="notification-matrix-row">
+            <label>Début <input type="time" value={preferences.quietHoursStart || "22:00"} onChange={(e) => patch("quietHoursStart", e.target.value)} /></label>
+            <label>Fin <input type="time" value={preferences.quietHoursEnd || "07:00"} onChange={(e) => patch("quietHoursEnd", e.target.value)} /></label>
+          </div>
+        )}
       </div>
-      {error && (
-        <p className="error-message" role="alert">
-          {error}
-        </p>
-      )}
+
+      {error && <p className="error-message" role="alert">{error}</p>}
       <footer className="settings-notification-footer">
-        <p>
-          Les alertes internes indispensables à la sécurité et au suivi
-          opérationnel restent actives.
-        </p>
-        <button
-          className="admin-button primary-cta"
-          disabled={busy}
-          onClick={() => void save()}
-        >
+        <p>Les alertes internes indispensables au suivi opérationnel peuvent rester actives.</p>
+        <button className="admin-button primary-cta" disabled={busy} onClick={() => void save()}>
           {busy ? "Enregistrement…" : "Enregistrer les préférences"}
         </button>
       </footer>
     </section>
   );
 }
+

@@ -1,7 +1,7 @@
 import {
-Injectable,
-NotFoundException,
-BadRequestException,
+  Injectable,
+  NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 
 import { Role } from '@prisma/client';
@@ -17,76 +17,88 @@ import { PreviewPlanningDto } from './dto/preview-planning.dto';
 import { CreatePlanningDto } from './dto/create-planning.dto';
 
 import {
-GeneratePlanningDto,
-PlanningStationSelectionDto,
+  GeneratePlanningDto,
+  PlanningStationSelectionDto,
 } from './dto/generate-planning.dto';
 
 const SHIFT_SLOTS = [
-{
-name: 'MORNING',
-startHour: 6,
-endHour: 14,
-},
-{
-name: 'AFTERNOON',
-startHour: 14,
-endHour: 22,
-},
-{
-name: 'NIGHT',
-startHour: 22,
-endHour: 6,
-},
+  {
+    name: 'MORNING',
+    startHour: 6,
+    endHour: 14,
+  },
+  {
+    name: 'AFTERNOON',
+    startHour: 14,
+    endHour: 22,
+  },
+  {
+    name: 'NIGHT',
+    startHour: 22,
+    endHour: 6,
+  },
 ];
 
 @Injectable()
 export class PlanningService {
-constructor(
-private readonly prisma: PrismaService,
-private readonly schedulingEngine: SchedulingEngineService,
-private readonly notifications: NotificationsService,
-) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly schedulingEngine: SchedulingEngineService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
-async create(
-dto: CreatePlanningDto,
-createdBy: string,
-) {
-const startDate = new Date(dto.startDate);
-const endDate = new Date(dto.endDate);
+  async create(dto: CreatePlanningDto, createdBy: string) {
+    const startDate = new Date(dto.startDate);
+    const endDate = new Date(dto.endDate);
 
-if (
-  Number.isNaN(startDate.getTime()) ||
-  Number.isNaN(endDate.getTime())
-) {
-  throw new BadRequestException(
-    'Les dates du planning sont invalides.',
-  );
-}
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      throw new BadRequestException('Les dates du planning sont invalides.');
+    }
 
-startDate.setHours(0, 0, 0, 0);
-endDate.setHours(23, 59, 59, 999);
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
 
-if (endDate <= startDate) {
-  throw new BadRequestException(
-    'La date de fin doit etre apres la date de debut.',
-  );
-}
+    if (endDate <= startDate) {
+      throw new BadRequestException(
+        'La date de fin doit etre apres la date de debut.',
+      );
+    }
 
-return this.prisma.planning.create({
-  data: {
-    startDate,
-    endDate,
-    createdBy,
-  },
-});
+    return this.prisma.planning.create({
+      data: {
+        startDate,
+        endDate,
+        createdBy,
+      },
+    });
+  }
 
-}
+  async findAll(userId?: string) {
+    const actor = userId
+      ? await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { role: true, stationId: true },
+        })
+      : null;
 
-  findAll() {
+    const shiftWhere =
+      actor?.role === Role.SWAPPER
+        ? { swapperId: userId }
+        : actor?.role === Role.STATION_CHIEF && actor.stationId
+          ? { stationId: actor.stationId }
+          : {};
+
     return this.prisma.planning
       .findMany({
+        where:
+          actor?.role === Role.SWAPPER
+            ? { status: 'PUBLISHED', shifts: { some: shiftWhere } }
+            : actor?.role === Role.STATION_CHIEF && actor.stationId
+              ? { shifts: { some: shiftWhere } }
+              : undefined,
         include: {
           shifts: {
+            where: shiftWhere,
             include: {
               station: true,
               swapper: {
@@ -111,44 +123,64 @@ return this.prisma.planning.create({
       .then((rows) => rows.map((row) => this.withOccurrences(row)));
   }
 
-async findOne(
-id: string,
-) {
-const planning =
-await this.prisma.planning.findUnique({
-where: {
-id,
-},
-include: {
-shifts: {
-include: {
-station: true,
-swapper: {
-select: {
-id: true,
-fullName: true,
-email: true,
-phoneNumber: true,
-},
-},
-attendances: true,
-},
-orderBy: {
-startTime: 'asc',
-},
-},
-},
-});
+  async findOne(id: string, userId?: string) {
+    const actor = userId
+      ? await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { role: true, stationId: true },
+        })
+      : null;
 
-if (!planning) {
-  throw new NotFoundException(
-    'Planning introuvable.',
-  );
-}
+    const planning = await this.prisma.planning.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        shifts: {
+          include: {
+            station: true,
+            swapper: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                phoneNumber: true,
+              },
+            },
+            attendances: true,
+          },
+          orderBy: {
+            startTime: 'asc',
+          },
+        },
+      },
+    });
 
-return this.withOccurrences(planning);
+    if (!planning) {
+      throw new NotFoundException('Planning introuvable.');
+    }
 
-}
+    if (actor?.role === Role.SWAPPER && planning.status !== 'PUBLISHED') {
+      throw new NotFoundException('Planning introuvable.');
+    }
+
+    if (
+      actor?.role === Role.SWAPPER &&
+      !planning.shifts.some((shift) => shift.swapperId === userId)
+    ) {
+      throw new NotFoundException('Planning introuvable.');
+    }
+
+    if (
+      actor?.role === Role.STATION_CHIEF &&
+      actor.stationId &&
+      planning.shifts.length === 0
+    ) {
+      throw new NotFoundException('Planning introuvable.');
+    }
+
+    return this.withOccurrences(planning);
+  }
 
   /**
    * The frontend models a planning as a list of `occurrences` with a
@@ -161,7 +193,7 @@ return this.withOccurrences(planning);
       shifts: {
         id: string;
         stationId: string;
-        swapperId: string;
+        swapperId: string | null;
         startTime: Date;
         endTime: Date;
         station?: unknown;
@@ -182,7 +214,7 @@ return this.withOccurrences(planning);
       templateVersion: {
         label: `${shift.startTime
           .toISOString()
-          .slice(11, 16)} – ${shift.endTime.toISOString().slice(11, 16)}`,
+          .slice(11, 16)} â€“ ${shift.endTime.toISOString().slice(11, 16)}`,
         breakStart: null,
         breakEnd: null,
         breakMinutes: 0,
@@ -197,766 +229,617 @@ return this.withOccurrences(planning);
       _count: { occurrences: occurrences.length },
       // A planning has no explicit version column; the last update time plays
       // the role the frontend uses to detect a stale edit.
-      revision:
-        (planning.updatedAt ?? planning.createdAt ?? new Date()).getTime(),
+      revision: (
+        planning.updatedAt ??
+        planning.createdAt ??
+        new Date()
+      ).getTime(),
     };
   }
 
-/**
- * Planning inbox: one row per unread "planning published" notice addressed
- * to the caller. The frontend (PlanningInbox) polls this route and filters
- * on `readAt`, so the shape is { id, planningId, readAt, createdAt }.
- */
-async findNotices(userId: string) {
-  const notices = await this.prisma.notification.findMany({
-    where: {
-      userId,
-      kind: 'SHIFT_CHANGED',
-      entityId: { not: null },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
-    select: {
-      id: true,
-      entityId: true,
-      readAt: true,
-      createdAt: true,
-    },
-  });
-
-  return notices
-    .filter((notice) => notice.entityId)
-    .map((notice) => ({
-      id: notice.id,
-      planningId: notice.entityId as string,
-      readAt: notice.readAt,
-      createdAt: notice.createdAt,
-    }));
-}
-
-/** Marks a planning notice as read, scoped to its owner. */
-async readNotice(userId: string, noticeId: string) {
-  const notice = await this.prisma.notification.findFirst({
-    where: { id: noticeId, userId },
-  });
-
-  if (!notice) {
-    throw new NotFoundException('Avis introuvable.');
-  }
-
-  await this.prisma.notification.update({
-    where: { id: noticeId },
-    data: { readAt: new Date() },
-  });
-
-  return { ok: true };
-}
-
-async publish(
-  id: string,
-) {
-const planning =
-await this.prisma.planning.findUnique({
-where: {
-id,
-},
-});
-
-if (!planning) {
-  throw new NotFoundException(
-    'Planning introuvable.',
-  );
-}
-
-if (planning.status === 'PUBLISHED') {
-  throw new BadRequestException(
-    'Ce planning est deja publie.',
-  );
-}
-
-const shiftCount =
-  await this.prisma.shift.count({
-    where: {
-      planningId: id,
-    },
-  });
-
-if (shiftCount === 0) {
-  throw new BadRequestException(
-    'Impossible de publier un planning sans creneau.',
-  );
-}
-
-return this.prisma.planning.update({
-  where: {
-    id,
-  },
-  data: {
-    status: 'PUBLISHED',
-  },
-}).then(async (published) => {
-  // Fan out the "planning published" notice to every swapper actually
-  // scheduled in it. entityId carries the planning id so the inbox can
-  // deep-link back to it, and kind SHIFT_CHANGED is what GET
-  // /plannings/notices filters on.
-  const shifts = await this.prisma.shift.findMany({
-    where: { planningId: id },
-    select: { swapperId: true },
-  });
-
-  const swapperIds = Array.from(
-    new Set(shifts.map((shift) => shift.swapperId)),
-  );
-
-  for (const swapperId of swapperIds) {
-    await this.notifications.notify({
-      userId: swapperId,
-      kind: 'SHIFT_CHANGED',
-      title: 'Planning publie',
-      body: 'Votre planning a ete publie. Consultez vos creneaux.',
-      entityId: id,
+  /**
+   * Planning inbox: one row per unread "planning published" notice addressed
+   * to the caller. The frontend (PlanningInbox) polls this route and filters
+   * on `readAt`, so the shape is { id, planningId, readAt, createdAt }.
+   */
+  async findNotices(userId: string) {
+    const notices = await this.prisma.notification.findMany({
+      where: {
+        userId,
+        kind: 'SHIFT_CHANGED',
+        entityId: { not: null },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        entityId: true,
+        readAt: true,
+        createdAt: true,
+      },
     });
+
+    return notices
+      .filter((notice) => notice.entityId)
+      .map((notice) => ({
+        id: notice.id,
+        planningId: notice.entityId as string,
+        readAt: notice.readAt,
+        createdAt: notice.createdAt,
+      }));
   }
 
-  return published;
-});
+  /** Marks a planning notice as read, scoped to its owner. */
+  async readNotice(userId: string, noticeId: string) {
+    const notice = await this.prisma.notification.findFirst({
+      where: { id: noticeId, userId },
+    });
 
-}
+    if (!notice) {
+      throw new NotFoundException('Avis introuvable.');
+    }
 
-async generateShifts(
-    planningId: string,
-    dto: GeneratePlanningDto,
-  ) {
+    await this.prisma.notification.update({
+      where: { id: noticeId },
+      data: { readAt: new Date() },
+    });
+
+    return { ok: true };
+  }
+
+  async publish(id: string) {
+    const planning = await this.prisma.planning.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    if (!planning) {
+      throw new NotFoundException('Planning introuvable.');
+    }
+
+    if (planning.status === 'PUBLISHED') {
+      throw new BadRequestException('Ce planning est deja publie.');
+    }
+
+    const shiftCount = await this.prisma.shift.count({
+      where: {
+        planningId: id,
+      },
+    });
+
+    if (shiftCount === 0) {
+      throw new BadRequestException(
+        'Impossible de publier un planning sans creneau.',
+      );
+    }
+
+    return this.prisma.planning
+      .update({
+        where: {
+          id,
+        },
+        data: {
+          status: 'PUBLISHED',
+        },
+      })
+      .then(async (published) => {
+        // Fan out the "planning published" notice to every swapper actually
+        // scheduled in it. entityId carries the planning id so the inbox can
+        // deep-link back to it, and kind SHIFT_CHANGED is what GET
+        // /plannings/notices filters on.
+        const shifts = await this.prisma.shift.findMany({
+          where: { planningId: id },
+          select: { swapperId: true },
+        });
+
+        const swapperIds = Array.from(
+          new Set(
+            shifts
+              .map((shift) => shift.swapperId)
+              .filter((value): value is string => Boolean(value)),
+          ),
+        );
+
+        for (const swapperId of swapperIds) {
+          await this.notifications.notify({
+            userId: swapperId,
+            kind: 'SHIFT_CHANGED',
+            title: 'Planning publie',
+            body: 'Votre planning a ete publie. Consultez vos creneaux.',
+            entityId: id,
+          });
+        }
+
+        return published;
+      });
+  }
+
+  async generateShifts(planningId: string, dto: GeneratePlanningDto) {
     // The sprint 5 planner sends { stationId, templateIds, weekdays }; older
     // callers send { stations: [{ stationId, shiftNames }] }. Normalising here
     // keeps the generation logic below untouched.
     const normalized = await this.normalizeGeneratePayload(planningId, dto);
     dto = normalized;
 
-    const planning =
-await this.prisma.planning.findUnique({
-where: {
-id: planningId,
-},
-});
-
-if (!planning) {
-  throw new NotFoundException(
-    'Planning introuvable.',
-  );
-}
-
-if (planning.status === 'PUBLISHED') {
-  throw new BadRequestException(
-    'Ce planning est deja publie.',
-  );
-}
-
-if (
-  !dto.stations ||
-  dto.stations.length === 0
-) {
-  throw new BadRequestException(
-    'Au moins une station doit etre selectionnee.',
-  );
-}
-
-const existingShiftCount =
-  await this.prisma.shift.count({
-    where: {
-      planningId,
-    },
-  });
-
-if (existingShiftCount > 0) {
-  throw new BadRequestException(
-    'Ce planning contient deja des creneaux. Modifiez ou supprimez les creneaux existants avant de relancer la generation.',
-  );
-}
-
-const uniqueStationIds =
-  new Set<string>();
-
-for (
-  const stationSelection of dto.stations
-) {
-  if (
-    uniqueStationIds.has(
-      stationSelection.stationId,
-    )
-  ) {
-    throw new BadRequestException(
-      `La station ${stationSelection.stationId} est selectionnee plusieurs fois.`,
-    );
-  }
-
-  uniqueStationIds.add(
-    stationSelection.stationId,
-  );
-
-  if (
-    stationSelection.swapperIds &&
-    stationSelection.swapperIds.length > 0
-  ) {
-    const uniqueSwapperIds =
-      new Set<string>();
-
-    for (
-      const swapperId of stationSelection.swapperIds
-    ) {
-      if (
-        uniqueSwapperIds.has(
-          swapperId,
-        )
-      ) {
-        throw new BadRequestException(
-          `Le swappeur ${swapperId} est selectionne plusieurs fois pour la meme station.`,
-        );
-      }
-
-      uniqueSwapperIds.add(
-        swapperId,
-      );
-    }
-  }
-}
-
-const stationIds =
-  Array.from(uniqueStationIds);
-
-const stations =
-  await this.prisma.station.findMany({
-    where: {
-      id: {
-        in: stationIds,
+    const planning = await this.prisma.planning.findUnique({
+      where: {
+        id: planningId,
       },
-      isActive: true,
-    },
-    orderBy: {
-      name: 'asc',
-    },
-  });
+      include: {
+        shifts: {
+          select: {
+            stationId: true,
+            startTime: true,
+          },
+        },
+      },
+    });
 
-if (
-  stations.length !==
-  stationIds.length
-) {
-  throw new BadRequestException(
-    'Une ou plusieurs stations selectionnees sont introuvables ou desactivees.',
-  );
-}
-
-const stationMap =
-  new Map<
-    string,
-    PlanningStationSelectionDto
-  >();
-
-for (
-  const stationSelection of dto.stations
-) {
-  stationMap.set(
-    stationSelection.stationId,
-    stationSelection,
-  );
-}
-
-const activeSwappers =
-  await this.prisma.user.findMany({
-    where: {
-      role: 'SWAPPER',
-      isActive: true,
-    },
-    select: {
-      id: true,
-      fullName: true,
-    },
-    orderBy: {
-      fullName: 'asc',
-    },
-  });
-
-if (
-  activeSwappers.length === 0
-) {
-  throw new BadRequestException(
-    'Aucun swappeur actif disponible.',
-  );
-}
-
-const activeSwapperIds =
-  new Set<string>();
-
-for (
-  const swapper of activeSwappers
-) {
-  activeSwapperIds.add(
-    swapper.id,
-  );
-}
-
-const createdShifts: Array<{
-  id: string;
-  planningId: string | null;
-  stationId: string;
-  swapperId: string;
-  startTime: Date;
-  endTime: Date;
-  station: unknown;
-  swapper: {
-    id: string;
-    fullName: string;
-  };
-}> = [];
-
-const vacancies: Array<{
-  stationId: string;
-  stationName: string;
-  date: string;
-  shift?: string;
-  startTime?: Date;
-  endTime?: Date;
-  reason: string;
-}> = [];
-
-for (
-  const day of this.eachDay(
-    planning.startDate,
-    planning.endDate,
-  )
-) {
-  for (
-    const station of stations
-  ) {
-    const stationSelection =
-      stationMap.get(
-        station.id,
-      );
-
-    if (!stationSelection) {
-      continue;
+    if (!planning) {
+      throw new NotFoundException('Planning introuvable.');
     }
 
-    const selectedSwapperIds =
-      this.resolveSwapperIds(
-        stationSelection,
-        activeSwapperIds,
-        activeSwappers.map(
-          (swapper) => swapper.id,
-        ),
-      );
-
-    const selectedSlots =
-      this.resolveShiftSlots(
-        stationSelection,
-      );
-
-    if (
-      selectedSwapperIds.length === 0
-    ) {
-      vacancies.push({
-        stationId: station.id,
-        stationName: station.name,
-        date: day.toISOString(),
-        reason:
-          'Aucun swappeur actif disponible pour cette station.',
-      });
-
-      continue;
+    if (planning.status === 'PUBLISHED') {
+      throw new BadRequestException('Ce planning est deja publie.');
     }
 
-    if (
-      selectedSlots.length === 0
-    ) {
-      vacancies.push({
-        stationId: station.id,
-        stationName: station.name,
-        date: day.toISOString(),
-        reason:
-          'Aucun shift selectionne pour cette station.',
-      });
-
-      continue;
+    if (!dto.stations || dto.stations.length === 0) {
+      throw new BadRequestException(
+        'Au moins une station doit etre selectionnee.',
+      );
     }
 
-    const orderedSwapperIds =
-      await this.orderSwappersByAvailability(
-        selectedSwapperIds,
-      );
+    const existingKeys = new Set(
+      planning.shifts.map(
+        (shift) => `${shift.stationId}|${shift.startTime.toISOString()}`,
+      ),
+    );
 
-    const usedSwapperIds =
-      new Set<string>();
+    const uniqueStationIds = new Set<string>();
 
-    for (
-      const slot of selectedSlots
-    ) {
-      const startTime =
-        this.buildSlotStart(
-          day,
-          slot.startHour,
+    for (const stationSelection of dto.stations) {
+      if (uniqueStationIds.has(stationSelection.stationId)) {
+        throw new BadRequestException(
+          `La station ${stationSelection.stationId} est selectionnee plusieurs fois.`,
         );
-
-      let endTime =
-        this.buildSlotEnd(
-          day,
-          slot.endHour,
-        );
-
-      if (
-        slot.name === 'NIGHT'
-      ) {
-        endTime =
-          this.buildSlotEnd(
-            this.addDays(
-              day,
-              1,
-            ),
-            6,
-          );
       }
 
+      uniqueStationIds.add(stationSelection.stationId);
+
       if (
-        startTime <
-          planning.startDate ||
-        endTime >
-          planning.endDate
+        stationSelection.swapperIds &&
+        stationSelection.swapperIds.length > 0
       ) {
-        continue;
+        const uniqueSwapperIds = new Set<string>();
+
+        for (const swapperId of stationSelection.swapperIds) {
+          if (uniqueSwapperIds.has(swapperId)) {
+            throw new BadRequestException(
+              `Le swappeur ${swapperId} est selectionne plusieurs fois pour la meme station.`,
+            );
+          }
+
+          uniqueSwapperIds.add(swapperId);
+        }
       }
+    }
 
-      let assigned = false;
+    const stationIds = Array.from(uniqueStationIds);
 
-      let lastReason =
-        'Aucun swappeur eligible pour ce shift.';
+    const stations = await this.prisma.station.findMany({
+      where: {
+        id: {
+          in: stationIds,
+        },
+        isActive: true,
+      },
+      orderBy: {
+        name: 'asc',
+      },
+    });
 
-      for (
-        const swapperId of orderedSwapperIds
-      ) {
+    if (stations.length !== stationIds.length) {
+      throw new BadRequestException(
+        'Une ou plusieurs stations selectionnees sont introuvables ou desactivees.',
+      );
+    }
+
+    const stationMap = new Map<string, PlanningStationSelectionDto>();
+
+    for (const stationSelection of dto.stations) {
+      stationMap.set(stationSelection.stationId, stationSelection);
+    }
+
+    const activeSwappers = await this.prisma.user.findMany({
+      where: {
+        role: 'SWAPPER',
+        isActive: true,
+      },
+      select: {
+        id: true,
+        fullName: true,
+      },
+      orderBy: {
+        fullName: 'asc',
+      },
+    });
+
+    if (activeSwappers.length === 0) {
+      throw new BadRequestException('Aucun swappeur actif disponible.');
+    }
+
+    const activeSwapperIds = new Set<string>();
+
+    for (const swapper of activeSwappers) {
+      activeSwapperIds.add(swapper.id);
+    }
+
+    const templateIds = Array.from(
+      new Set(dto.stations.flatMap((selection) => selection.templateIds ?? [])),
+    );
+    const templates = templateIds.length
+      ? await this.prisma.shiftTemplate.findMany({
+          where: {
+            id: { in: templateIds },
+            isActive: true,
+          },
+          select: {
+            id: true,
+            stationId: true,
+            label: true,
+            startTime: true,
+            endTime: true,
+          },
+        })
+      : [];
+    const templateMap = new Map(
+      templates.map((template) => [template.id, template]),
+    );
+    if (templateIds.length && templates.length !== templateIds.length) {
+      throw new BadRequestException(
+        'Un ou plusieurs modÃ¨les de shift sont introuvables, inactifs ou ne correspondent plus au planning.',
+      );
+    }
+
+    const createdShifts: Array<{
+      id: string;
+      planningId: string | null;
+      stationId: string;
+      swapperId: string | null;
+      startTime: Date;
+      endTime: Date;
+      station: unknown;
+      swapper: {
+        id: string;
+        fullName: string;
+      } | null;
+    }> = [];
+
+    const vacancies: Array<{
+      stationId: string;
+      stationName: string;
+      date: string;
+      shift?: string;
+      startTime?: Date;
+      endTime?: Date;
+      reason: string;
+    }> = [];
+
+    for (const day of this.eachDay(planning.startDate, planning.endDate)) {
+      for (const station of stations) {
+        const stationSelection = stationMap.get(station.id);
+
+        if (!stationSelection) {
+          continue;
+        }
+
+        const selectedWeekdays = stationSelection.weekdays;
         if (
-          usedSwapperIds.has(
-            swapperId,
-          )
+          selectedWeekdays?.length &&
+          !selectedWeekdays.includes(day.getUTCDay())
         ) {
           continue;
         }
 
-        const validation =
-          await this.schedulingEngine.validateShift(
-            {
+        const selectedSwapperIds = this.resolveSwapperIds(
+          stationSelection,
+          activeSwapperIds,
+          activeSwappers.map((swapper) => swapper.id),
+        );
+
+        const selectedSlots = this.resolveShiftSlots(
+          stationSelection,
+          templateMap,
+        );
+
+        if (selectedSwapperIds.length === 0) {
+          vacancies.push({
+            stationId: station.id,
+            stationName: station.name,
+            date: day.toISOString(),
+            reason: 'Aucun swappeur actif disponible pour cette station.',
+          });
+
+          continue;
+        }
+
+        if (selectedSlots.length === 0) {
+          vacancies.push({
+            stationId: station.id,
+            stationName: station.name,
+            date: day.toISOString(),
+            reason: 'Aucun shift selectionne pour cette station.',
+          });
+
+          continue;
+        }
+
+        const orderedSwapperIds =
+          await this.orderSwappersByAvailability(selectedSwapperIds);
+
+        const usedSwapperIds = new Set<string>();
+
+        for (const slot of selectedSlots) {
+          const startTime = this.buildSlotStart(day, slot.startHour);
+
+          let endTime = this.buildSlotEnd(day, slot.endHour);
+
+          if (slot.name === 'NIGHT') {
+            endTime = this.buildSlotEnd(this.addDays(day, 1), 6);
+          }
+
+          if (startTime < planning.startDate || endTime > planning.endDate) {
+            continue;
+          }
+
+          const occurrenceKey = `${station.id}|${startTime.toISOString()}`;
+          if (existingKeys.has(occurrenceKey)) {
+            continue;
+          }
+
+          let assigned = false;
+
+          let lastReason = 'Aucun swappeur eligible pour ce shift.';
+
+          for (const swapperId of orderedSwapperIds) {
+            if (usedSwapperIds.has(swapperId)) {
+              continue;
+            }
+
+            const validation = await this.schedulingEngine.validateShift({
               swapperId,
-              stationId:
-                station.id,
+              stationId: station.id,
               startTime,
               endTime,
               planningId,
-            },
-          );
+            });
 
-        if (
-          validation.valid
-        ) {
-          const created =
-            await this.prisma.$transaction(
-              async (tx) => {
-                const shift =
-                  await tx.shift.create({
-                    data: {
-                      planningId,
-                      stationId:
-                        station.id,
-                      swapperId,
-                      startTime,
-                      endTime,
-                    },
-                    include: {
-                      station: true,
-                      swapper: {
-                        select: {
-                          id: true,
-                          fullName: true,
-                        },
+            if (validation.valid) {
+              const created = await this.prisma.$transaction(async (tx) => {
+                const shift = await tx.shift.create({
+                  data: {
+                    planningId,
+                    stationId: station.id,
+                    swapperId,
+                    startTime,
+                    endTime,
+                  },
+                  include: {
+                    station: true,
+                    swapper: {
+                      select: {
+                        id: true,
+                        fullName: true,
                       },
                     },
-                  });
+                  },
+                });
 
                 await tx.attendance.create({
                   data: {
-                    shiftId:
-                      shift.id,
+                    shiftId: shift.id,
                     swapperId,
-                    stationId:
-                      station.id,
-                    status:
-                      'EXPECTED',
+                    stationId: station.id,
+                    status: 'EXPECTED',
                   },
                 });
 
                 return shift;
-              },
-            );
+              });
 
-          createdShifts.push(
-            created,
-          );
+              createdShifts.push(created);
+              existingKeys.add(occurrenceKey);
 
-          usedSwapperIds.add(
-            swapperId,
-          );
+              usedSwapperIds.add(swapperId);
 
-          assigned = true;
+              assigned = true;
 
-          break;
+              break;
+            }
+
+            lastReason = validation.errors.join(' | ');
+          }
+
+          if (!assigned) {
+            vacancies.push({
+              stationId: station.id,
+              stationName: station.name,
+              date: startTime.toISOString(),
+              shift: slot.name,
+              startTime,
+              endTime,
+              reason: lastReason,
+            });
+          }
         }
-
-        lastReason =
-          validation.errors.join(
-            ' | ',
-          );
-      }
-
-      if (!assigned) {
-        vacancies.push({
-          stationId:
-            station.id,
-          stationName:
-            station.name,
-          date:
-            startTime.toISOString(),
-          shift:
-            slot.name,
-          startTime,
-          endTime,
-          reason:
-            lastReason,
-        });
       }
     }
-  }
-}
 
-return {
-  planningId,
-  createdCount:
-    createdShifts.length,
-  vacancyCount:
-    vacancies.length,
-  createdShifts,
-  vacancies,
-};
-
-}
-
-private resolveSwapperIds(
-stationSelection: PlanningStationSelectionDto,
-activeSwapperIds: Set<string>,
-allActiveSwapperIds: string[],
-): string[] {
-if (
-!stationSelection.swapperIds ||
-stationSelection.swapperIds.length === 0
-) {
-return allActiveSwapperIds;
-}
-
-const result: string[] = [];
-
-for (
-  const swapperId of stationSelection.swapperIds
-) {
-  if (
-    !activeSwapperIds.has(
-      swapperId,
-    )
-  ) {
-    throw new BadRequestException(
-      `Le swappeur ${swapperId} est introuvable, inactif ou ne possede pas le role SWAPPER.`,
-    );
+    return {
+      planningId,
+      createdCount: createdShifts.length,
+      vacancyCount: vacancies.length,
+      createdShifts,
+      vacancies,
+    };
   }
 
-  if (
-    !result.includes(
-      swapperId,
-    )
-  ) {
-    result.push(
-      swapperId,
-    );
+  private resolveSwapperIds(
+    stationSelection: PlanningStationSelectionDto,
+    activeSwapperIds: Set<string>,
+    allActiveSwapperIds: string[],
+  ): string[] {
+    if (
+      !stationSelection.swapperIds ||
+      stationSelection.swapperIds.length === 0
+    ) {
+      return allActiveSwapperIds;
+    }
+
+    const result: string[] = [];
+
+    for (const swapperId of stationSelection.swapperIds) {
+      if (!activeSwapperIds.has(swapperId)) {
+        throw new BadRequestException(
+          `Le swappeur ${swapperId} est introuvable, inactif ou ne possede pas le role SWAPPER.`,
+        );
+      }
+
+      if (!result.includes(swapperId)) {
+        result.push(swapperId);
+      }
+    }
+
+    return result;
   }
-}
 
-return result;
+  private resolveShiftSlots(
+    stationSelection: PlanningStationSelectionDto,
+    templateMap: Map<
+      string,
+      {
+        id: string;
+        stationId: string;
+        label: string;
+        startTime: string;
+        endTime: string;
+      }
+    >,
+  ): Array<{
+    name: string;
+    startHour: number | string;
+    endHour: number | string;
+  }> {
+    if (stationSelection.templateIds?.length) {
+      const slots = stationSelection.templateIds
+        .map((id) => templateMap.get(id))
+        .filter(
+          (
+            template,
+          ): template is {
+            id: string;
+            stationId: string;
+            label: string;
+            startTime: string;
+            endTime: string;
+          } =>
+            Boolean(
+              template && template.stationId === stationSelection.stationId,
+            ),
+        )
+        .map((template) => ({
+          name: template.label,
+          startHour: template.startTime,
+          endHour: template.endTime,
+        }));
+      if (slots.length) return slots;
+    }
 
-}
+    if (
+      !stationSelection.shiftNames ||
+      stationSelection.shiftNames.length === 0
+    ) {
+      return SHIFT_SLOTS;
+    }
 
-private resolveShiftSlots(
-stationSelection: PlanningStationSelectionDto,
-) {
-if (
-!stationSelection.shiftNames ||
-stationSelection.shiftNames.length === 0
-) {
-return SHIFT_SLOTS;
-}
-
-const selectedSlots: Array<{
-  name: string;
-  startHour: number;
-  endHour: number;
-}> = [];
-
-for (
-  const shiftName of stationSelection.shiftNames
-) {
-  const slot =
-    SHIFT_SLOTS.find(
-      (item) =>
-        item.name ===
-        shiftName,
-    );
-
-  if (
-    slot &&
-    !selectedSlots.some(
-      (selectedSlot) =>
-        selectedSlot.name ===
-        slot.name,
-    )
-  ) {
-    selectedSlots.push(
-      slot,
-    );
+    return stationSelection.shiftNames
+      .map((shiftName) => SHIFT_SLOTS.find((item) => item.name === shiftName))
+      .filter(
+        (slot, index, array): slot is (typeof SHIFT_SLOTS)[number] =>
+          Boolean(slot) &&
+          array.findIndex((candidate) => candidate?.name === slot?.name) ===
+            index,
+      );
   }
-}
 
-return selectedSlots;
+  private async orderSwappersByAvailability(
+    swapperIds: string[],
+  ): Promise<string[]> {
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: {
+          in: swapperIds,
+        },
+        role: 'SWAPPER',
+        isActive: true,
+      },
+      select: {
+        id: true,
+        fullName: true,
+      },
+      orderBy: {
+        fullName: 'asc',
+      },
+    });
 
-}
+    const result: string[] = [];
 
-private async orderSwappersByAvailability(
-swapperIds: string[],
-): Promise<string[]> {
-const users =
-await this.prisma.user.findMany({
-where: {
-id: {
-in: swapperIds,
-},
-role: 'SWAPPER',
-isActive: true,
-},
-select: {
-id: true,
-fullName: true,
-},
-orderBy: {
-fullName: 'asc',
-},
-});
+    for (const user of users) {
+      result.push(user.id);
+    }
 
-const result: string[] = [];
+    return result;
+  }
 
-for (
-  const user of users
-) {
-  result.push(
-    user.id,
-  );
-}
+  private buildSlotStart(day: Date, value: number | string): Date {
+    const result = new Date(day);
+    if (typeof value === 'string') {
+      const [hours, minutes] = value.split(':').map(Number);
+      result.setHours(hours || 0, minutes || 0, 0, 0);
+    } else {
+      result.setHours(value, 0, 0, 0);
+    }
+    return result;
+  }
 
-return result;
+  private buildSlotEnd(day: Date, value: number | string): Date {
+    return this.buildSlotStart(day, value);
+  }
 
-}
+  private addDays(date: Date, days: number): Date {
+    const result = new Date(date);
 
-private buildSlotStart(
-day: Date,
-hour: number,
-): Date {
-const result =
-new Date(day);
+    result.setDate(result.getDate() + days);
 
-result.setHours(
-  hour,
-  0,
-  0,
-  0,
-);
+    return result;
+  }
 
-return result;
+  private *eachDay(startDate: Date, endDate: Date): Generator<Date> {
+    const current = new Date(startDate);
 
-}
+    current.setHours(0, 0, 0, 0);
 
-private buildSlotEnd(
-day: Date,
-hour: number,
-): Date {
-const result =
-new Date(day);
+    const last = new Date(endDate);
 
-result.setHours(
-  hour,
-  0,
-  0,
-  0,
-);
+    last.setHours(0, 0, 0, 0);
 
-return result;
+    while (current <= last) {
+      yield new Date(current);
 
-}
-
-private addDays(
-date: Date,
-days: number,
-): Date {
-const result =
-new Date(date);
-
-result.setDate(
-  result.getDate() +
-    days,
-);
-
-return result;
-
-}
-
-private *eachDay(
-startDate: Date,
-endDate: Date,
-): Generator<Date> {
-const current =
-new Date(startDate);
-
-current.setHours(
-  0,
-  0,
-  0,
-  0,
-);
-
-const last =
-  new Date(endDate);
-
-last.setHours(
-  0,
-  0,
-  0,
-  0,
-);
-
-while (
-  current <= last
-) {
-  yield new Date(
-    current,
-  );
-
-  current.setDate(
-    current.getDate() +
-      1,
-  );
-}
-
-}
+      current.setDate(current.getDate() + 1);
+    }
+  }
 
   // ============================================================
   // PAYLOAD NORMALISATION
@@ -985,36 +868,32 @@ while (
 
     void planningId;
 
-    // An empty shiftNames list means "use the station's default slots", which
-    // is exactly what the sprint 5 planner expects when it sends templates.
     return {
       stations: [
         {
           stationId: dto.stationId,
           swapperIds: [],
           shiftNames: [],
+          templateIds: dto.templateIds ?? [],
+          weekdays: dto.weekdays ?? [],
         },
       ],
     };
   }
 
   // ============================================================
-  // SPRINT 5 — PREVIEW, AUTO-ASSIGN, VALIDATION, OCCURRENCES
+  // SPRINT 5 â€” PREVIEW, AUTO-ASSIGN, VALIDATION, OCCURRENCES
   // ============================================================
 
   /**
    * Dry-run of the generation: returns the shifts that would be created for the
    * requested selection, without touching the database.
    */
-  async preview(
-    planningId: string,
-    dto: PreviewPlanningDto,
-  ) {
+  async preview(planningId: string, dto: PreviewPlanningDto) {
     const planning = await this.findOne(planningId);
     const existingKeys = new Set(
       planning.occurrences.map(
-        (occurrence) =>
-          `${occurrence.stationId}|${occurrence.startTime}`,
+        (occurrence) => `${occurrence.stationId}|${occurrence.startTime}`,
       ),
     );
 
@@ -1071,14 +950,13 @@ while (
         const key = `${template.stationId}|${start.toISOString()}`;
         const entry = {
           label: template.label,
-          stationName: template.station?.name ?? '—',
+          stationName: template.station?.name ?? 'â€”',
           timezone: template.station?.timezone ?? 'Africa/Douala',
           startTime: start.toISOString(),
           endTime: end.toISOString(),
           durationHours:
-            Math.round(
-              ((end.getTime() - start.getTime()) / 3_600_000) * 10,
-            ) / 10,
+            Math.round(((end.getTime() - start.getTime()) / 3_600_000) * 10) /
+            10,
         };
 
         // A slot for a station that already has a shift at that instant is a
@@ -1094,7 +972,7 @@ while (
           outside.push({
             startTime: start.toISOString(),
             label: template.label,
-            reason: 'Hors de la période du planning.',
+            reason: 'Hors de la pÃ©riode du planning.',
           });
           continue;
         }
@@ -1139,7 +1017,7 @@ while (
       _count: { _all: true },
     });
     for (const row of grouped) {
-      load.set(row.swapperId, row._count._all);
+      if (row.swapperId) load.set(row.swapperId, row._count._all);
     }
 
     let assigned = 0;
@@ -1171,7 +1049,8 @@ while (
     const planning = await this.findOne(planningId);
 
     const errors: { code: string; message: string }[] = [];
-    const warnings: { code: string; message: string; occurrenceId?: string }[] = [];
+    const warnings: { code: string; message: string; occurrenceId?: string }[] =
+      [];
 
     if (!planning.shifts.length) {
       errors.push({
@@ -1182,23 +1061,31 @@ while (
 
     const perSwapper = new Map<string, number>();
     let totalHours = 0;
-    const byStation = new Map<string, { total: number; assigned: number; vacant: number; stationName: string }>();
+    const byStation = new Map<
+      string,
+      { total: number; assigned: number; vacant: number; stationName: string }
+    >();
 
     for (const shift of planning.shifts) {
       const hours =
         (shift.endTime.getTime() - shift.startTime.getTime()) / 3_600_000;
       totalHours += hours;
-      perSwapper.set(shift.swapperId, (perSwapper.get(shift.swapperId) ?? 0) + hours);
+      if (shift.swapperId) {
+        perSwapper.set(
+          shift.swapperId,
+          (perSwapper.get(shift.swapperId) ?? 0) + hours,
+        );
+      }
 
-      const entry =
-        byStation.get(shift.stationId) ?? {
-          total: 0,
-          assigned: 0,
-          vacant: 0,
-          stationName: shift.station?.name ?? '—',
-        };
+      const entry = byStation.get(shift.stationId) ?? {
+        total: 0,
+        assigned: 0,
+        vacant: 0,
+        stationName: shift.station?.name ?? 'â€”',
+      };
       entry.total += 1;
-      entry.assigned += 1;
+      if (shift.swapperId) entry.assigned += 1;
+      else entry.vacant += 1;
       byStation.set(shift.stationId, entry);
     }
 
@@ -1207,18 +1094,31 @@ while (
       select: { id: true, weeklyHoursLimit: true, name: true },
     });
     const limits = new Map(
-      station.map((row) => [row.id, { limit: row.weeklyHoursLimit, name: row.name }]),
+      station.map((row) => [
+        row.id,
+        { limit: row.weeklyHoursLimit, name: row.name },
+      ]),
     );
 
     for (const shift of planning.shifts) {
       const config = limits.get(shift.stationId);
       const hours =
         (shift.endTime.getTime() - shift.startTime.getTime()) / 3_600_000;
-      const swapperTotal = perSwapper.get(shift.swapperId) ?? 0;
+      const swapperTotal = shift.swapperId
+        ? (perSwapper.get(shift.swapperId) ?? 0)
+        : 0;
+      if (!shift.swapperId) {
+        warnings.push({
+          code: 'VACANCY',
+          message: `Le poste du ${shift.startTime.toLocaleString('fr-FR')} est encore vacant.`,
+          occurrenceId: shift.id,
+        });
+        continue;
+      }
       if (config && swapperTotal > config.limit) {
         warnings.push({
           code: 'WEEKLY_LIMIT',
-          message: `Un swappeur dépasse la limite hebdomadaire de ${config.limit} h à ${config.name}.`,
+          message: `Un swappeur dÃ©passe la limite hebdomadaire de ${config.limit} h Ã  ${config.name}.`,
           occurrenceId: shift.id,
         });
         break;
@@ -1231,8 +1131,9 @@ while (
       warnings,
       totals: {
         occurrences: planning.shifts.length,
-        assigned: planning.shifts.length,
-        vacant: 0,
+        assigned: planning.shifts.filter((shift) => Boolean(shift.swapperId))
+          .length,
+        vacant: planning.shifts.filter((shift) => !shift.swapperId).length,
         hours: Math.round(totalHours * 100) / 100,
       },
       byStation: Array.from(byStation.entries()).map(([stationId, row]) => ({
@@ -1251,6 +1152,10 @@ while (
       throw new NotFoundException('Shift introuvable dans ce planning.');
     }
     await this.prisma.shift.delete({ where: { id: occurrenceId } });
+    await this.prisma.planning.update({
+      where: { id: planningId },
+      data: { updatedAt: new Date() },
+    });
     return this.findOne(planningId);
   }
 
@@ -1262,16 +1167,25 @@ while (
     if (!shift) {
       throw new NotFoundException('Shift introuvable dans ce planning.');
     }
-    await this.prisma.shift.create({
+    const duplicate = await this.prisma.shift.create({
       data: {
         stationId: shift.stationId,
-        swapperId: shift.swapperId,
+        swapperId: null,
         startTime: shift.startTime,
         endTime: shift.endTime,
         planningId,
       },
     });
-    return this.findOne(planningId);
+    await this.prisma.planning.update({
+      where: { id: planningId },
+      data: { updatedAt: new Date() },
+    });
+    const latest = await this.findOne(planningId);
+    return {
+      id: duplicate.id,
+      planningId,
+      revision: latest.revision,
+    };
   }
 
   /**
@@ -1304,6 +1218,19 @@ while (
     const candidateId = body.swapperId ?? shift.swapperId;
     const warnings: { code: string; message: string }[] = [];
 
+    if (!candidateId) {
+      return {
+        valid: false,
+        warnings: [
+          {
+            code: 'VACANCY',
+            message: 'Ce poste est vacant : sÃ©lectionnez un swappeur.',
+          },
+        ],
+        hours: 0,
+      };
+    }
+
     // 1. The candidate must belong to the station of the shift.
     const candidate = await this.prisma.user.findUnique({
       where: { id: candidateId },
@@ -1313,7 +1240,10 @@ while (
       return {
         valid: false,
         warnings: [
-          { code: 'INACTIVE', message: 'Ce swappeur est inactif ou introuvable.' },
+          {
+            code: 'INACTIVE',
+            message: 'Ce swappeur est inactif ou introuvable.',
+          },
         ],
         hours: 0,
       };
@@ -1321,7 +1251,7 @@ while (
     if (candidate.stationId !== shift.stationId) {
       warnings.push({
         code: 'WRONG_STATION',
-        message: `Ce swappeur n'est pas rattaché à ${shift.station.name}.`,
+        message: `Ce swappeur n'est pas rattachÃ© Ã  ${shift.station.name}.`,
       });
     }
 
@@ -1338,7 +1268,7 @@ while (
     if (overlap) {
       warnings.push({
         code: 'OVERLAP',
-        message: 'Ce swappeur a déjà un shift sur ce créneau.',
+        message: 'Ce swappeur a dÃ©jÃ  un shift sur ce crÃ©neau.',
       });
     }
 
@@ -1361,12 +1291,13 @@ while (
         (total, row) =>
           total + (row.endTime.getTime() - row.startTime.getTime()) / 3_600_000,
         0,
-      ) + (shift.endTime.getTime() - shift.startTime.getTime()) / 3_600_000;
+      ) +
+      (shift.endTime.getTime() - shift.startTime.getTime()) / 3_600_000;
 
     if (weekHours > shift.station.weeklyHoursLimit) {
       warnings.push({
         code: 'WEEKLY_LIMIT',
-        message: `Dépasse la limite de ${shift.station.weeklyHoursLimit} h par semaine.`,
+        message: `DÃ©passe la limite de ${shift.station.weeklyHoursLimit} h par semaine.`,
       });
     }
 
@@ -1381,7 +1312,11 @@ while (
   async updateOccurrence(
     planningId: string,
     occurrenceId: string,
-    body: { swapperId?: string | null; swapWithId?: string | null; revision?: number },
+    body: {
+      swapperId?: string | null;
+      swapWithId?: string | null;
+      revision?: number;
+    },
     changedById: string,
   ) {
     const shift = await this.prisma.shift.findFirst({
@@ -1391,36 +1326,124 @@ while (
       throw new NotFoundException('Shift introuvable dans ce planning.');
     }
 
+    if (body.revision !== undefined) {
+      const current = await this.findOne(planningId);
+      if (current.revision !== body.revision) {
+        throw new BadRequestException(
+          'Le planning a changÃ©. Rechargez-le avant de modifier cette affectation.',
+        );
+      }
+    }
+
     const targetSwapperId =
       body.swapperId === undefined ? shift.swapperId : body.swapperId;
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.shift.update({
+    if (targetSwapperId) {
+      const validation = await this.validateOccurrence(
+        planningId,
+        occurrenceId,
+        {
+          swapperId: targetSwapperId,
+        },
+      );
+      if (!validation.valid) {
+        throw new BadRequestException(
+          validation.warnings.map((item) => item.message).join(' '),
+        );
+      }
+    }
+
+    const previousSwapperId = shift.swapperId;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const updatedShift = await tx.shift.update({
         where: { id: occurrenceId },
-        data: { swapperId: targetSwapperId ?? shift.swapperId },
+        data: { swapperId: targetSwapperId },
       });
+
+      // A vacant occurrence must not keep an old attendance row.
+      await tx.attendance.deleteMany({
+        where: { shiftId: occurrenceId },
+      });
+
+      if (targetSwapperId) {
+        await tx.attendance.create({
+          data: {
+            shiftId: occurrenceId,
+            swapperId: targetSwapperId,
+            stationId: shift.stationId,
+            status: 'EXPECTED',
+          },
+        });
+      }
 
       if (body.swapWithId) {
         const counterpart = await tx.shift.findFirst({
           where: { id: body.swapWithId, planningId },
         });
-        if (counterpart) {
-          await tx.shift.update({
-            where: { id: counterpart.id },
-            data: { swapperId: shift.swapperId },
+        if (!counterpart) {
+          throw new NotFoundException('Shift de permutation introuvable.');
+        }
+        const counterpartSwapperId = counterpart.swapperId;
+        await tx.shift.update({
+          where: { id: counterpart.id },
+          data: { swapperId: previousSwapperId },
+        });
+
+        await tx.attendance.deleteMany({ where: { shiftId: counterpart.id } });
+        if (previousSwapperId) {
+          await tx.attendance.create({
+            data: {
+              shiftId: counterpart.id,
+              swapperId: previousSwapperId,
+              stationId: counterpart.stationId,
+              status: 'EXPECTED',
+            },
           });
         }
+
+        await tx.shiftChange.create({
+          data: {
+            shiftId: counterpart.id,
+            previousSwapperId: counterpartSwapperId,
+            newSwapperId: previousSwapperId,
+            changedById,
+            type: 'SWAP',
+          },
+        });
       }
 
       await tx.shiftChange.create({
         data: {
           shiftId: occurrenceId,
-          previousSwapperId: shift.swapperId,
-          newSwapperId: targetSwapperId ?? shift.swapperId,
+          previousSwapperId,
+          newSwapperId: targetSwapperId,
           changedById,
-          type: 'MANUAL_EDIT',
+          type: body.swapWithId
+            ? 'SWAP'
+            : targetSwapperId
+              ? 'ASSIGNMENT'
+              : 'MANUAL_EDIT',
         },
       });
+
+      return updatedShift;
+    });
+
+    await this.prisma.planning.update({
+      where: { id: planningId },
+      data: { updatedAt: new Date() },
+    });
+
+    await this.notifications.notify({
+      userId: targetSwapperId ?? previousSwapperId ?? changedById,
+      kind: 'SHIFT_CHANGED',
+      title: 'Planning mis Ã  jour',
+      body: targetSwapperId
+        ? 'Une affectation de votre planning a Ã©tÃ© mise Ã  jour.'
+        : 'Une affectation a Ã©tÃ© retirÃ©e de votre planning.',
+      entityId: updated.id,
+      link: '/app/mon-espace/plannings',
     });
 
     return this.findOne(planningId);

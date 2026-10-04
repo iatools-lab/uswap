@@ -93,8 +93,7 @@ export class CreateStationDto {
   @ApiProperty({
     required: false,
     example: 8,
-    description:
-      'Repos minimum entre deux shifts du même swapper, en heures',
+    description: 'Repos minimum entre deux shifts du même swapper, en heures',
   })
   @IsOptional()
   @IsInt()

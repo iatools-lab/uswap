@@ -8,16 +8,8 @@ import { PlanningController } from './planning.controller';
 import { PlanningService } from './planning.service';
 
 @Module({
-  imports: [
-    ShiftsModule,
-    SchedulingModule,
-    NotificationsModule,
-  ],
-  controllers: [
-    PlanningController,
-  ],
-  providers: [
-    PlanningService,
-  ],
+  imports: [ShiftsModule, SchedulingModule, NotificationsModule],
+  controllers: [PlanningController],
+  providers: [PlanningService],
 })
 export class PlanningModule {}

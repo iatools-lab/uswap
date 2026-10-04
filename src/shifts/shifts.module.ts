@@ -6,20 +6,12 @@ import { ShiftsService } from './shifts.service';
 import { SchedulingModule } from '../scheduling/scheduling.module';
 
 @Module({
-  imports: [
-    SchedulingModule,
-  ],
+  imports: [SchedulingModule],
 
-  controllers: [
-    ShiftsController,
-  ],
+  controllers: [ShiftsController],
 
-  providers: [
-    ShiftsService,
-  ],
+  providers: [ShiftsService],
 
-  exports: [
-    ShiftsService,
-  ],
+  exports: [ShiftsService],
 })
 export class ShiftsModule {}

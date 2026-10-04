@@ -90,7 +90,7 @@ export class IncidentsService {
 
     const scopeStationId =
       actor.role === Role.STATION_CHIEF
-        ? (await this.primaryStationOf(actor.id)) ?? undefined
+        ? ((await this.primaryStationOf(actor.id)) ?? undefined)
         : stationId;
 
     const swappers = await this.prisma.user.findMany({
@@ -315,13 +315,16 @@ export class IncidentsService {
     return user?.stationId ?? null;
   }
 
-  private serialize(row: {
-    stationId: string;
-    station?: { name: string } | null;
-    reporter?: { fullName: string } | null;
-    assignee?: { fullName: string } | null;
-    affectedSwapper?: { fullName: string } | null;
-  } & Record<string, unknown>) {    const { station, reporter, assignee, affectedSwapper, ...rest } = row;
+  private serialize(
+    row: {
+      stationId: string;
+      station?: { name: string } | null;
+      reporter?: { fullName: string } | null;
+      assignee?: { fullName: string } | null;
+      affectedSwapper?: { fullName: string } | null;
+    } & Record<string, unknown>,
+  ) {
+    const { station, reporter, assignee, affectedSwapper, ...rest } = row;
     return {
       ...rest,
       stationName: station?.name ?? 'Station inconnue',

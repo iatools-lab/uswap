@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -17,7 +22,8 @@ export class AuthService {
   private static readonly REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   private static readonly RESET_TOKEN_TTL_MS = 15 * 60 * 1000;
   private static readonly INVITATION_TOKEN_TTL_MS = 48 * 60 * 60 * 1000;
-  private static readonly ACCESS_TOKEN_TTL_SECONDS = Number(process.env.ACCESS_TOKEN_TTL_SECONDS) || 900;
+  private static readonly ACCESS_TOKEN_TTL_SECONDS =
+    Number(process.env.ACCESS_TOKEN_TTL_SECONDS) || 900;
   private static readonly GENERIC_RESET_MESSAGE =
     'Si cette adresse e-mail correspond à un compte, un lien de réinitialisation a été envoyé.';
 
@@ -31,13 +37,17 @@ export class AuthService {
     const email = this.normalizeEmail(dto.email);
 
     if (dto.role === 'ADMIN') {
-      const existingAdmin = await this.prisma.user.findFirst({ where: { role: 'ADMIN' } });
+      const existingAdmin = await this.prisma.user.findFirst({
+        where: { role: 'ADMIN' },
+      });
       if (existingAdmin) {
         throw new BadRequestException('Un compte administrateur existe déjà');
       }
     }
 
-    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+    });
     if (existingUser) {
       throw new BadRequestException('Cet e-mail est déjà utilisé');
     }
@@ -53,7 +63,9 @@ export class AuthService {
       );
       const invitationToken = this.generateOpaqueToken(32);
       const invitationTokenHash = this.hashToken(invitationToken);
-      const invitationTokenExpires = new Date(Date.now() + AuthService.INVITATION_TOKEN_TTL_MS);
+      const invitationTokenExpires = new Date(
+        Date.now() + AuthService.INVITATION_TOKEN_TTL_MS,
+      );
 
       const user = await this.prisma.user.create({
         data: {
@@ -70,15 +82,19 @@ export class AuthService {
         },
       });
 
-      const invitationSent = await this.emailService.sendInvitation(user.email, invitationToken);
+      const invitationSent = await this.emailService.sendInvitation(
+        user.email,
+        invitationToken,
+        user.id,
+      );
 
       // Si aucun fournisseur e-mail n'est configuré, l'administrateur doit
       // pouvoir transmettre le lien lui-même : on le renvoie alors dans la
-      // réponse. En production (RESEND_API_KEY défini) il est omis, pour ne
+      // réponse. En production il est omis, pour ne
       // jamais exposer un jeton d'activation. Réinitialisez toujours un mot de passe.
       const activationUrl = invitationSent
         ? undefined
-        : `${(process.env.FRONTEND_URL ?? 'http://localhost:5173').replace(/\/$/, '')}/activate-account?token=${encodeURIComponent(invitationToken)}`;
+        : `${(process.env.FRONTEND_URL ?? 'http://localhost:5173').replace(/\/$/, '')}/auth/activate?token=${encodeURIComponent(invitationToken)}`;
 
       return {
         ...this.sanitizeUser(user),
@@ -91,10 +107,15 @@ export class AuthService {
     }
 
     if (!dto.password) {
-      throw new BadRequestException('Le mot de passe est requis lorsque sendInvite est désactivé');
+      throw new BadRequestException(
+        'Le mot de passe est requis lorsque sendInvite est désactivé',
+      );
     }
 
-    const hashedPassword = await bcrypt.hash(dto.password, AuthService.BCRYPT_ROUNDS);
+    const hashedPassword = await bcrypt.hash(
+      dto.password,
+      AuthService.BCRYPT_ROUNDS,
+    );
     const user = await this.prisma.user.create({
       data: {
         email,
@@ -124,7 +145,10 @@ export class AuthService {
       throw new BadRequestException('Lien invalide ou expiré');
     }
 
-    const hashedPassword = await bcrypt.hash(dto.password, AuthService.BCRYPT_ROUNDS);
+    const hashedPassword = await bcrypt.hash(
+      dto.password,
+      AuthService.BCRYPT_ROUNDS,
+    );
 
     await this.prisma.$transaction([
       this.prisma.user.update({
@@ -132,6 +156,7 @@ export class AuthService {
         data: {
           password: hashedPassword,
           isActive: true,
+          disabledAt: null,
           invitationTokenHash: null,
           invitationTokenExpires: null,
           tokenVersion: { increment: 1 },
@@ -140,7 +165,9 @@ export class AuthService {
       this.prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
     ]);
 
-    return { message: 'Compte activé avec succès. Vous pouvez vous connecter.' };
+    return {
+      message: 'Compte activé avec succès. Vous pouvez vous connecter.',
+    };
   }
 
   /**
@@ -158,6 +185,7 @@ export class AuthService {
         address: true,
         isActive: true,
         stationId: true,
+        station: { select: { name: true } },
         createdAt: true,
       },
     });
@@ -172,7 +200,13 @@ export class AuthService {
       );
     }
 
-    return { user };
+    return {
+      user: {
+        ...user,
+        stationName: user.station?.name ?? null,
+        station: undefined,
+      },
+    };
   }
 
   /**
@@ -213,16 +247,17 @@ export class AuthService {
     const invitationSent = await this.emailService.sendInvitation(
       user.email,
       invitationToken,
+      user.id,
     );
 
     const activationUrl = invitationSent
       ? undefined
-      : `${(process.env.FRONTEND_URL ?? 'http://localhost:5173').replace(/\/$/, '')}/activate-account?token=${encodeURIComponent(invitationToken)}`;
+      : `${(process.env.FRONTEND_URL ?? 'http://localhost:5173').replace(/\/$/, '')}/auth/activate?token=${encodeURIComponent(invitationToken)}`;
 
     return {
       message: invitationSent
         ? 'Invitation renvoyee.'
-        : 'Invitation regeneree. Le service e-mail n’est pas configure : transmettez le lien ci-dessous.',
+        : 'Invitation regeneree. Le service e-mail n’est pas configuré : transmettez le lien ci-dessous.',
       invitationSent,
       ...(activationUrl ? { activationUrl } : {}),
     };
@@ -248,7 +283,9 @@ export class AuthService {
 
     if (!user.isActive) {
       await this.recordLoginAttempt(email, false);
-      throw new UnauthorizedException('Compte inactif. Veuillez contacter votre administrateur.');
+      throw new UnauthorizedException(
+        'Compte inactif. Veuillez contacter votre administrateur.',
+      );
     }
 
     await this.recordLoginAttempt(email, true);
@@ -270,11 +307,15 @@ export class AuthService {
 
   async refreshAccessToken(dto: RefreshTokenDto) {
     const tokenHash = this.hashToken(dto.refreshToken ?? '');
-    const storedToken = await this.prisma.refreshToken.findUnique({ where: { tokenHash } });
+    const storedToken = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+    });
 
     if (!storedToken || storedToken.expiresAt <= new Date()) {
       if (storedToken) {
-        await this.prisma.refreshToken.delete({ where: { id: storedToken.id } }).catch(() => undefined);
+        await this.prisma.refreshToken
+          .delete({ where: { id: storedToken.id } })
+          .catch(() => undefined);
       }
       throw new UnauthorizedException('Refresh token invalide ou expiré');
     }
@@ -284,7 +325,9 @@ export class AuthService {
       include: { station: { select: { name: true } } },
     });
     if (!user || !user.isActive) {
-      await this.prisma.refreshToken.deleteMany({ where: { userId: storedToken.userId } });
+      await this.prisma.refreshToken.deleteMany({
+        where: { userId: storedToken.userId },
+      });
       throw new UnauthorizedException('Compte introuvable ou inactif');
     }
 
@@ -325,7 +368,10 @@ export class AuthService {
 
   getSessionStatus(exp: number) {
     const expiresAt = new Date(exp * 1000);
-    const expiresInSeconds = Math.max(0, Math.round((expiresAt.getTime() - Date.now()) / 1000));
+    const expiresInSeconds = Math.max(
+      0,
+      Math.round((expiresAt.getTime() - Date.now()) / 1000),
+    );
 
     return {
       expiresAt: expiresAt.toISOString(),
@@ -359,8 +405,10 @@ export class AuthService {
   /** Hard deadline of the current access token, as an ISO string. */
   private sessionExpiresAt(user: { id: string }): string {
     const token = this.issueAccessToken(user as never);
-    const decoded = this.jwtService.decode(token) as { exp?: number } | null;
-    const exp = decoded?.exp ?? Math.floor(Date.now() / 1000) + AuthService.ACCESS_TOKEN_TTL_SECONDS;
+    const decoded = this.jwtService.decode(token);
+    const exp =
+      decoded?.exp ??
+      Math.floor(Date.now() / 1000) + AuthService.ACCESS_TOKEN_TTL_SECONDS;
     return new Date(exp * 1000).toISOString();
   }
 
@@ -377,14 +425,20 @@ export class AuthService {
 
     const resetToken = this.generateOpaqueToken(32);
     const resetTokenHash = this.hashToken(resetToken);
-    const resetTokenExpires = new Date(Date.now() + AuthService.RESET_TOKEN_TTL_MS);
+    const resetTokenExpires = new Date(
+      Date.now() + AuthService.RESET_TOKEN_TTL_MS,
+    );
 
     await this.prisma.user.update({
       where: { id: user.id },
       data: { resetTokenHash, resetTokenExpires },
     });
 
-    const sent = await this.emailService.sendPasswordReset(user.email, resetToken);
+    const sent = await this.emailService.sendPasswordReset(
+      user.email,
+      resetToken,
+      user.id,
+    );
     if (!sent) {
       await this.prisma.user.update({
         where: { id: user.id },
@@ -408,7 +462,10 @@ export class AuthService {
       throw new BadRequestException('Token invalide ou expiré');
     }
 
-    const hashedPassword = await bcrypt.hash(dto.password, AuthService.BCRYPT_ROUNDS);
+    const hashedPassword = await bcrypt.hash(
+      dto.password,
+      AuthService.BCRYPT_ROUNDS,
+    );
 
     await this.prisma.$transaction([
       this.prisma.user.update({
@@ -423,10 +480,18 @@ export class AuthService {
       this.prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
     ]);
 
-    return { message: 'Mot de passe réinitialisé avec succès. Vous pouvez vous connecter.' };
+    return {
+      message:
+        'Mot de passe réinitialisé avec succès. Vous pouvez vous connecter.',
+    };
   }
 
-  private issueAccessToken(user: { id: string; email: string; role: string; tokenVersion: number }) {
+  private issueAccessToken(user: {
+    id: string;
+    email: string;
+    role: string;
+    tokenVersion: number;
+  }) {
     return this.jwtService.sign({
       sub: user.id,
       email: user.email,

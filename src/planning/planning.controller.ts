@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -22,8 +31,8 @@ export class PlanningController {
   }
 
   @Get()
-  findAll() {
-    return this.planningService.findAll();
+  findAll(@Req() req: { user: { id: string } }) {
+    return this.planningService.findAll(req.user.id);
   }
 
   /**
@@ -41,8 +50,8 @@ export class PlanningController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.planningService.findOne(id);
+  findOne(@Param('id') id: string, @Req() req: { user: { id: string } }) {
+    return this.planningService.findOne(id, req.user.id);
   }
 
   @Roles(Role.ADMIN, Role.SUPERVISOR)
@@ -85,7 +94,11 @@ export class PlanningController {
     @Param('id') id: string,
     @Param('occurrenceId') occurrenceId: string,
     @Body()
-    body: { swapperId?: string | null; swapWithId?: string | null; revision?: number },
+    body: {
+      swapperId?: string | null;
+      swapWithId?: string | null;
+      revision?: number;
+    },
     @Req() req: { user: { id: string } },
   ) {
     return this.planningService.updateOccurrence(

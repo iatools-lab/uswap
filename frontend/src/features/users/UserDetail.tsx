@@ -35,6 +35,12 @@ type Detail = {
 };
 
 const statuses: Record<string, string> = {
+  not_sent: "Non envoyée",
+  sent: "Envoyée",
+  expired: "Expirée",
+  activated: "Compte activé",
+  failed: "Envoi échoué",
+  disabled: "Compte désactivé",
   NOT_SENT: "Non envoyée",
   SENT: "Envoyée",
   EXPIRED: "Expirée",
@@ -85,6 +91,11 @@ export function UserDetail({
   const [confirm, setConfirm] = useState(false);
   const [confirmActivate, setConfirmActivate] = useState(false);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [communicationOpen, setCommunicationOpen] = useState(false);
+  const [communications, setCommunications] = useState<Array<{
+    id: string; type: string; recipient: string; subject: string; status: string;
+    errorMessage?: string | null; createdAt: string; actionUrl?: string | null;
+  }> | null>(null);
 
   // Le formulaire a-t-il des modifications non enregistrées
   const isDirty = useMemo(() => {
@@ -116,9 +127,21 @@ export function UserDetail({
     }
   }
 
+  async function loadCommunicationHistory() {
+    try {
+      setCommunications(
+        await api(`/users/${id}/communication-history`),
+      );
+      setCommunicationOpen(true);
+    } catch (e) {
+      notify((e as Error).message, "error");
+    }
+  }
+
   useEffect(() => {
     setUser(null);
     setForm(null);
+    setCommunications(null);
     void load();
   }, [id]);
 
@@ -157,7 +180,6 @@ export function UserDetail({
             phoneNumber: form.phoneNumber || "",
             address: form.address || "",
             stationId: form.stationId || null,
-            updatedAt: form.updatedAt,
           },
           "PATCH"
         ),
@@ -241,6 +263,14 @@ export function UserDetail({
                 >
                   <ClockCounterClockwiseIcon size={15} />
                   <span>Historique ({user.audit?.length || 0})</span>
+                </button>
+                <button
+                  type="button"
+                  className="admin-button secondary small"
+                  onClick={() => void loadCommunicationHistory()}
+                >
+                  <Mail size={15} />
+                  Communications
                 </button>
               </div>
 
@@ -582,6 +612,37 @@ export function UserDetail({
           </Modal>
         </>
       )}
+
+          <Modal
+            open={communicationOpen}
+            onClose={() => setCommunicationOpen(false)}
+            title="Historique de communication"
+            subtitle="Invitations et liens de réinitialisation envoyés pour ce compte."
+          >
+            {!communications?.length ? (
+              <p className="user-detail-history-empty">Aucune communication enregistrée.</p>
+            ) : (
+              <div className="user-detail-history">
+                {communications.map((item) => (
+                  <div key={item.id} className="user-detail-history-entry">
+                    <div className="user-detail-history-entry-head">
+                      <span>{item.type === "INVITATION" ? "Invitation" : "Réinitialisation du mot de passe"}</span>
+                      <time>{formatDate(item.createdAt)}</time>
+                    </div>
+                    <p>
+                      <strong>{item.subject}</strong><br />
+                      Destinataire : {item.recipient}<br />
+                      Statut : {item.status}
+                      {item.errorMessage ? ` · ${item.errorMessage}` : ""}
+                    </p>
+                    {item.actionUrl && (
+                      <a href={item.actionUrl} target="_blank" rel="noreferrer">Voir le lien d’action</a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Modal>
     </div>
   );
 }

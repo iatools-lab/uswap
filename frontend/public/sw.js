@@ -44,3 +44,30 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+self.addEventListener("push", (event) => {
+  const data = event.data ? event.data.json() : {};
+  const title = data.title || "uSwap";
+  const options = {
+    body: data.body || "Vous avez une nouvelle notification.",
+    data: { link: data.link || "/app" },
+    icon: "/icons/app-192.png",
+    badge: "/icons/app-192.png",
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = event.notification.data?.link || "/app";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((client) => "focus" in client);
+      if (existing) {
+        existing.navigate(new URL(target, self.location.origin).href);
+        return existing.focus();
+      }
+      return self.clients.openWindow(new URL(target, self.location.origin).href);
+    }),
+  );
+});
