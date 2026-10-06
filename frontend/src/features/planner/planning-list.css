@@ -44,6 +44,56 @@
   font-size: 15px;
   font-weight: 700;
 }
+.swapper-planning-period-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  max-width: 100%;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #f4f6fa;
+  overflow: hidden;
+}
+.swapper-planning-period-filters button {
+  display: inline-flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #56657e;
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.swapper-planning-period-filters button[aria-pressed="true"] {
+  background: #fff;
+  color: var(--navy);
+  font-weight: 650;
+  box-shadow: 0 2px 8px rgba(18, 40, 77, 0.08);
+}
+.swapper-planning-period-filters button span {
+  min-width: 19px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: #edf1f7;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.swapper-planning-period-filters button[aria-pressed="true"] span {
+  background: #eaf0fc;
+}
 .swapper-planning-directory__list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
@@ -157,7 +207,6 @@
   font-size: 10px;
   font-weight: 600;
 }
-
 @media (max-width: 767px) {
   .swapper-planning-directory__intro {
     align-items: flex-start;
@@ -174,6 +223,11 @@
   .swapper-planning-entry {
     padding: 15px;
     border-radius: 13px;
+  }
+  .swapper-planning-period-filters button {
+    gap: 4px;
+    padding-inline: 3px;
+    font-size: 10.5px;
   }
 }
 

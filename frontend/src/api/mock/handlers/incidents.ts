@@ -118,7 +118,10 @@ export const incidentRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/incidents$/,
     handler: ({ db, user, body, now }) => {
-      const actor = requireRole(requireUser(db, user), ["SUPERVISOR"]);
+      const actor = requireRole(requireUser(db, user), [
+        "SUPERVISOR",
+        "SWAPPER",
+      ]);
       const stationId = String(body.stationId ?? "");
       if (!stationId || !db.stations.some((item) => item.id === stationId))
         throw new MockHttpError(400, "Sélectionnez une station valide.");
@@ -134,6 +137,11 @@ export const incidentRoutes: MockRoute[] = [
         throw new MockHttpError(
           400,
           "Sélectionnez un swappeur actif rattaché ou affecté à cette station.",
+        );
+      if (actor.role === "SWAPPER" && affectedSwapper.id !== actor.id)
+        throw new MockHttpError(
+          403,
+          "Vous pouvez uniquement signaler une situation qui vous concerne.",
         );
       const title = String(body.title ?? "").trim();
       const description = String(body.description ?? "").trim();

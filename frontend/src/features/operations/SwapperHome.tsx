@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { notify } from "../../ui/Toast";
 import { api, usingMock } from "../../api/auth-api";
 import { Modal } from "../../ui/Modal";
+import { SwapperIncidentReport } from "../incidents/SwapperIncidentReport";
+import { SwapperPanel } from "../supervision/SwapperPanel";
 import { CheckCircle, MapPin, Warning, Clock3 } from "../../ui/icons";
 import { formatDate, isInWindow, isOpenShift, pickNextShift } from "./format";
 import type { OperationShift, OperationsViewProps, PunchResult } from "./types";
@@ -83,6 +85,96 @@ function historyStatusClass(shift: OperationShift) {
     return "attendance-status--absent";
   if (shift.attendance?.isLate) return "attendance-status--late";
   return "attendance-status--present";
+}
+
+function historyGroups(shifts: OperationShift[]) {
+  const groups = new Map<
+    string,
+    { id: string; name: string; shifts: OperationShift[] }
+  >();
+  shifts.forEach((shift) => {
+    const id = shift.station?.id || shift.station?.name || "station";
+    const group = groups.get(id) ?? {
+      id,
+      name: shift.station?.name || "Station",
+      shifts: [],
+    };
+    group.shifts.push(shift);
+    groups.set(id, group);
+  });
+  return Array.from(groups.values());
+}
+
+function historyDate(shift: OperationShift) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: shift.station?.timezone || "Africa/Douala",
+  }).format(new Date(shift.startTime));
+}
+
+function historyTime(shift: OperationShift, value: string) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: shift.station?.timezone || "Africa/Douala",
+  }).format(new Date(value));
+}
+
+function sameStationDay(shift: OperationShift) {
+  const timeZone = shift.station?.timezone || "Africa/Douala";
+  const day = (value: string) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date(value));
+  return day(shift.startTime) === day(shift.endTime);
+}
+
+function HistoryRows({
+  shifts,
+  targetId,
+}: {
+  shifts: OperationShift[];
+  targetId?: string | null;
+}) {
+  return (
+    <div className="swapper-history-groups">
+      {historyGroups(shifts).map((group) => (
+        <section className="swapper-history-group" key={group.id}>
+          <header className="swapper-history-group__heading">
+            <strong>{group.name}</strong>
+            <span>
+              {group.shifts.length} shift{group.shifts.length === 1 ? "" : "s"}
+            </span>
+          </header>
+          <div className="swapper-history-group__rows">
+            {group.shifts.map((shift) => (
+              <article
+                key={shift.id}
+                data-attendance-id={shift.id}
+                className={
+                  "swapper-history-row" +
+                  (shift.id === targetId ? " is-notification-target" : "")
+                }
+              >
+                <time dateTime={shift.startTime}>{historyDate(shift)}</time>
+                <span className="swapper-history-row__hours">
+                  {historyTime(shift, shift.startTime)}
+                  <span aria-hidden="true">→</span>
+                  {historyTime(shift, shift.endTime)}
+                  {!sameStationDay(shift) && <small>lendemain</small>}
+                </span>
+                <span
+                  className={`attendance-status ${historyStatusClass(shift)}`}
+                >
+                  {historyStatusLabel(shift)}
+                </span>
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
 }
 
 export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
@@ -688,6 +780,10 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
         </section>
       )}
 
+      <SwapperPanel data={data} onChanged={onChanged} />
+
+      <SwapperIncidentReport user={user} shifts={data.shifts} />
+
       {/* Historique de pointage (Top 5) */}
       <section className="admin-card">
         <div
@@ -725,35 +821,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
             <h3>Aucun pointage antérieur sur cette période</h3>
           </div>
         ) : (
-          <div className="swapper-shifts-cards-list">
-            {recentPointages.map((shift) => (
-              <div key={shift.id} className="swapper-shift-card">
-                <div className="swapper-shift-header">
-                  <div className="swapper-shift-station">
-                    <span className="station-name">{shift.station?.name}</span>
-                  </div>
-                  <span
-                    className={`attendance-status ${historyStatusClass(shift)}`}
-                  >
-                    {historyStatusLabel(shift)}
-                  </span>
-                </div>
-                <div className="swapper-shift-details">
-                  <div className="time-block">
-                    <small>DÉBUT</small>
-                    <strong>{formatDate(shift.startTime)}</strong>
-                  </div>
-                  <div className="time-separator" aria-hidden="true">
-                    →
-                  </div>
-                  <div className="time-block">
-                    <small>FIN</small>
-                    <strong>{formatDate(shift.endTime)}</strong>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <HistoryRows shifts={recentPointages} />
         )}
       </section>
 
@@ -810,54 +878,16 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
           ))}
         </div>
 
-        <div style={{ maxHeight: "55vh", overflowY: "auto", padding: "4px" }}>
-          {!filteredModalShifts.length ? (
-            <div className="admin-empty">
-              <h3>Aucun résultat pour ce filtre</h3>
-            </div>
-          ) : (
-            <div className="swapper-shifts-cards-list">
-              {filteredModalShifts.map((shift) => (
-                <div
-                  key={shift.id}
-                  data-attendance-id={shift.id}
-                  className={
-                    "swapper-shift-card" +
-                    (shift.id === requestedHistoryId
-                      ? " is-notification-target"
-                      : "")
-                  }
-                >
-                  <div className="swapper-shift-header">
-                    <div className="swapper-shift-station">
-                      <span className="station-name">
-                        {shift.station?.name}
-                      </span>
-                    </div>
-                    <span
-                      className={`attendance-status ${historyStatusClass(shift)}`}
-                    >
-                      {historyStatusLabel(shift)}
-                    </span>
-                  </div>
-                  <div className="swapper-shift-details">
-                    <div className="time-block">
-                      <small>DÉBUT</small>
-                      <strong>{formatDate(shift.startTime)}</strong>
-                    </div>
-                    <div className="time-separator" aria-hidden="true">
-                      →
-                    </div>
-                    <div className="time-block">
-                      <small>FIN</small>
-                      <strong>{formatDate(shift.endTime)}</strong>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {!filteredModalShifts.length ? (
+          <div className="admin-empty">
+            <h3>Aucun résultat pour ce filtre</h3>
+          </div>
+        ) : (
+          <HistoryRows
+            shifts={filteredModalShifts}
+            targetId={requestedHistoryId}
+          />
+        )}
       </Modal>
 
       <Modal

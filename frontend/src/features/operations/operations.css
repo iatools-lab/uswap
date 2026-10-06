@@ -742,6 +742,105 @@ button.ops-callout:hover {
   gap: 12px;
   margin-top: 12px;
 }
+.swapper-history-groups {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+.swapper-history-group {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #e5eaf2;
+  border-radius: 11px;
+  background: #fff;
+}
+.swapper-history-group__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-bottom: 1px solid #e9edf3;
+  background: #f7f9fc;
+}
+.swapper-history-group__heading strong {
+  color: #263a59;
+  font-size: 13px;
+  font-weight: 650;
+}
+.swapper-history-group__heading > span {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #edf1f7;
+  color: #8995a8;
+  font-size: 9px;
+  font-weight: 600;
+}
+.swapper-history-group__rows {
+  display: grid;
+}
+.swapper-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 10px;
+  min-width: 0;
+  padding: 7px 12px;
+  border-bottom: 1px solid #eff2f6;
+  transition: background-color 140ms ease;
+}
+.swapper-history-row:hover {
+  background: #fafbfd;
+}
+.swapper-history-row:last-child {
+  border-bottom: 0;
+}
+.swapper-history-row time {
+  grid-column: 1 / -1;
+  color: #5d6c83;
+  font-size: 11px;
+  font-weight: 550;
+}
+.swapper-history-row__hours {
+  display: inline-flex;
+  grid-column: 1;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: #f5f7fa;
+  color: #172944;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.swapper-history-row__hours > span {
+  color: #95a1b3;
+}
+.swapper-history-row__hours small {
+  color: #8490a3;
+  font-size: 9px;
+  font-weight: 500;
+}
+.swapper-history-row > .attendance-status {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: center;
+  justify-self: end;
+  white-space: nowrap;
+}
+.swapper-history-row.is-notification-target {
+  border-radius: 8px;
+  outline: 2px solid #ffc9ae;
+  outline-offset: -2px;
+  background: #fff8f4;
+}
 .shift-table-shell {
   margin-top: 12px;
   overflow: hidden;
@@ -908,6 +1007,20 @@ button.ops-callout:hover {
   .ops-quick-action .admin-button {
     width: 100%;
     justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .swapper-history-group__heading {
+    min-height: 36px;
+    padding-inline: 10px;
+  }
+  .swapper-history-row {
+    padding: 6px 10px;
+  }
+  .swapper-history-row > .attendance-status {
+    padding: 3px 8px;
+    font-size: 10px;
   }
 }
 

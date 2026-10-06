@@ -63,11 +63,20 @@ type Dashboard = {
     to: string | null;
   }>;
 };
+type PublishedPlanning = {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+};
+
 const day = (offset: number) => {
   const d = new Date();
   d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+const datePart = (value: string) => value.slice(0, 10);
 const labels: Record<string, string> = {
   present: "Présents",
   closed: "Terminés",
@@ -85,9 +94,16 @@ const tones: Record<string, string> = {
   expected: "#a9b4c6",
 };
 
-export function OperationsDashboard() {
+export function OperationsDashboard({
+  refreshKey = "",
+}: {
+  refreshKey?: string;
+}) {
   const [from, setFrom] = useState(day(-30));
   const [to, setTo] = useState(day(7));
+  const [planningId, setPlanningId] = useState("");
+  const [plannings, setPlannings] = useState<PublishedPlanning[]>([]);
+  const [planningReady, setPlanningReady] = useState(false);
   const [station, setStation] = useState("");
   const [swapper, setSwapper] = useState("");
   const [detail, setDetail] = useState<
@@ -99,18 +115,55 @@ export function OperationsDashboard() {
   const [reload, setReload] = useState(0);
   useEffect(() => {
     let active = true;
+    api<PublishedPlanning[]>("/plannings")
+      .then((items) => {
+        if (!active) return;
+        const publishedItems = items
+          .filter((item) => item.status === "PUBLISHED")
+          .sort((a, b) => Date.parse(a.startDate) - Date.parse(b.startDate));
+        setPlannings(publishedItems);
+        const today = day(0);
+        const current = publishedItems.find(
+          (item) => datePart(item.startDate) <= today && datePart(item.endDate) >= today,
+        );
+        const next = publishedItems.find((item) => datePart(item.startDate) > today);
+        const selected = current ?? next ?? publishedItems.at(-1);
+        if (selected) {
+          setPlanningId(selected.id);
+          setFrom(datePart(selected.startDate));
+          setTo(datePart(selected.endDate));
+        } else {
+          setPlanningId("ALL");
+        }
+      })
+      .catch(() => {
+        if (active) setPlanningId("ALL");
+      })
+      .finally(() => {
+        if (active) setPlanningReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!planningReady) return;
+    let active = true;
     setLoading(true);
     setError("");
-    api<Dashboard>(
-      `/reports/dashboard?from=${from}&to=${to}${station ? `&stationId=${station}` : ""}${swapper ? `&swapperId=${swapper}` : ""}`,
-    )
+    const query = new URLSearchParams({ from, to });
+    if (planningId && planningId !== "ALL") query.set("planningId", planningId);
+    if (station) query.set("stationId", station);
+    if (swapper) query.set("swapperId", swapper);
+    api<Dashboard>(`/reports/dashboard?${query.toString()}`)
       .then((v) => active && setData(v))
       .catch((reason: Error) => active && setError(reason.message))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [from, to, station, swapper, reload]);
+  }, [from, to, planningId, planningReady, station, swapper, reload, refreshKey]);
   const totalAttendance = useMemo(
     () =>
       data ? Object.values(data.attendance).reduce((a, b) => a + b, 0) : 0,
@@ -119,6 +172,7 @@ export function OperationsDashboard() {
   async function exportReport(format: "CSV" | "XLSX") {
     if (!data) return;
     const query = new URLSearchParams({ from, to, format });
+    if (planningId && planningId !== "ALL") query.set("planningId", planningId);
     if (station) query.set("stationId", station);
     if (swapper) query.set("swapperId", swapper);
     await download(
@@ -161,6 +215,7 @@ export function OperationsDashboard() {
           <input
             type="date"
             value={from}
+            max={to}
             onChange={(e) => setFrom(e.target.value)}
           />
         </label>
@@ -174,12 +229,55 @@ export function OperationsDashboard() {
           />
         </label>
         <label>
+          Planning
+          <Select
+            size="sm"
+            value={planningId || "ALL"}
+            ariaLabel="Planning publié du rapport"
+            onChange={(value) => {
+              const selectedId = String(value);
+              setPlanningId(selectedId);
+              const selected = plannings.find((item) => item.id === selectedId);
+              if (selected) {
+                setFrom(datePart(selected.startDate));
+                setTo(datePart(selected.endDate));
+              } else if (plannings.length) {
+                setFrom(
+                  plannings.reduce(
+                    (earliest, item) =>
+                      datePart(item.startDate) < earliest
+                        ? datePart(item.startDate)
+                        : earliest,
+                    datePart(plannings[0].startDate),
+                  ),
+                );
+                setTo(
+                  plannings.reduce(
+                    (latest, item) =>
+                      datePart(item.endDate) > latest
+                        ? datePart(item.endDate)
+                        : latest,
+                    datePart(plannings[0].endDate),
+                  ),
+                );
+              }
+            }}
+            options={[
+              { value: "ALL", label: "Tous les plannings publiés" },
+              ...plannings.map((item) => ({ value: item.id, label: item.name })),
+            ]}
+          />
+        </label>
+        <label>
           Station
           <Select
             size="sm"
             value={station}
             ariaLabel="Station du rapport"
-            onChange={(value) => setStation(String(value))}
+            onChange={(value) => {
+              setStation(String(value));
+              setSwapper("");
+            }}
             options={[
               { value: "", label: "Toutes les stations" },
               ...(data?.stations.map((item) => ({

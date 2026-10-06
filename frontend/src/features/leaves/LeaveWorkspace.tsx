@@ -15,6 +15,7 @@ import type {
 } from "../../domain/sprint4";
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
+import { notify } from "../../ui/Toast";
 import "./leaves.css";
 
 const TYPES: Record<LeaveRequestView["type"], string> = {
@@ -120,8 +121,14 @@ export function LeaveWorkspace({
   async function submitRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError("");
-    if (!requestedDays) {
+    if (!form.startDate || !form.endDate || !requestedDays) {
       setFormError("Choisissez une période valide.");
+      return;
+    }
+    if (form.reason.trim().length < 8) {
+      setFormError(
+        "Précisez le motif de votre demande (8 caractères minimum).",
+      );
       return;
     }
     if (requestedDays > availableForRequest) {
@@ -136,6 +143,11 @@ export function LeaveWorkspace({
       else await mockLeaveGateway.submitRequest(form);
       setFormOpen(false);
       setEditing(null);
+      notify(
+        editing
+          ? "Votre demande a été mise à jour."
+          : "Votre demande de congé a été envoyée.",
+      );
       onChanged?.();
     } catch (error) {
       setFormError(

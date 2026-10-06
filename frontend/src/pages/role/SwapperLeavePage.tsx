@@ -1,32 +1,23 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../../api/auth-api";
 import { useSession } from "../../app/session";
-import type { OperationData } from "../../features/operations/types";
-import { SwapperPanel } from "../../features/supervision/SwapperPanel";
 import { LeaveWorkspace } from "../../features/leaves/LeaveWorkspace";
 import type { LeaveWorkspaceView } from "../../domain/sprint4";
 import { LoaderCircle } from "../../ui/icons";
 
 export function SwapperLeavePage() {
   const { session, onAccessLost } = useSession();
-  const [data, setData] = useState<OperationData | null>(null);
   const [leaveData, setLeaveData] = useState<LeaveWorkspaceView | null>(null);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
+  const [processOpen, setProcessOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
-    setData(null);
     setError("");
-    Promise.all([
-      api<OperationData>("/workspace"),
-      api<LeaveWorkspaceView>("/leaves/workspace"),
-    ])
-      .then(([value, leaves]) => {
-        if (active) {
-          setData(value);
-          setLeaveData(leaves);
-        }
+    api<LeaveWorkspaceView>("/leaves/workspace")
+      .then((leaves) => {
+        if (active) setLeaveData(leaves);
       })
       .catch((reason) => {
         if (!active) return;
@@ -46,7 +37,7 @@ export function SwapperLeavePage() {
         {error}
       </p>
     );
-  if (!data || !leaveData)
+  if (!leaveData)
     return (
       <div className="admin-loading" role="status">
         <LoaderCircle className="spin" />
@@ -60,75 +51,70 @@ export function SwapperLeavePage() {
         data={leaveData}
         onChanged={() => setRevision((value) => value + 1)}
       />
-      <section
-        className="leave-process-guide"
-        aria-labelledby="leave-process-title"
-      >
-        <div>
-          <span>Cheminement</span>
-          <h2 id="leave-process-title">
-            Comment votre demande est-elle traitée ?
-          </h2>
-          <p>
-            Les congés planifiés et les absences imprévues suivent deux parcours
-            distincts.
-          </p>
-        </div>
-        <div className="leave-process-columns">
-          <article>
-            <strong>Congé planifié</strong>
-            <ol>
-              <li>
-                Vous envoyez votre demande depuis cette page, en précisant la
-                période et le motif.
-              </li>
-              <li>L’administration l’examine et vous notifie sa décision.</li>
-              <li>
-                Si elle est approuvée, vos shifts concernés sont identifiés.
-              </li>
-              <li>
-                Le superviseur organise leur remplacement et le planning est
-                actualisé.
-              </li>
-            </ol>
-          </article>
-          <article>
-            <strong>Absence imprévue</strong>
-            <ol>
-              <li>
-                Vous choisissez un shift futur et signalez votre
-                indisponibilité.
-              </li>
-              <li>Le superviseur est prévenu immédiatement.</li>
-              <li>
-                Le superviseur choisit un remplaçant compatible de la même
-                station.
-              </li>
-              <li>
-                Le planning est mis à jour et les personnes concernées sont
-                notifiées.
-              </li>
-            </ol>
-          </article>
-        </div>
-      </section>
-      <details className="leave-unplanned">
-        <summary>
+      <section className="leave-process-guide">
+        <button
+          type="button"
+          className="leave-process-toggle"
+          aria-expanded={processOpen}
+          aria-controls="leave-process-content"
+          onClick={() => setProcessOpen((value) => !value)}
+        >
           <span>
-            <strong role="heading" aria-level={2}>
-              Absence imprévue
-            </strong>
-            <small>
-              Signaler une indisponibilité liée à un shift déjà planifié
-            </small>
+            <small>Cheminement</small>
+            <strong>Comment votre demande est-elle traitée ?</strong>
           </span>
-        </summary>
-        <SwapperPanel
-          user={session.user}
-          data={data}
-          onChanged={() => setRevision((value) => value + 1)}
-        />
-      </details>
+          <span className="leave-process-toggle__action">
+            {processOpen ? "Masquer" : "Afficher"}
+          </span>
+        </button>
+        {processOpen && (
+          <div id="leave-process-content" className="leave-process-content">
+            <p>
+              Les congés planifiés et les absences imprévues suivent deux
+              parcours distincts.
+            </p>
+            <div className="leave-process-columns">
+              <article>
+                <strong>Congé planifié</strong>
+                <ol>
+                  <li>
+                    Vous envoyez votre demande depuis cette page, en précisant
+                    la période et le motif.
+                  </li>
+                  <li>
+                    L’administration l’examine et vous notifie sa décision.
+                  </li>
+                  <li>
+                    Si elle est approuvée, vos shifts concernés sont identifiés.
+                  </li>
+                  <li>
+                    Le superviseur organise leur remplacement et le planning est
+                    actualisé.
+                  </li>
+                </ol>
+              </article>
+              <article>
+                <strong>Absence imprévue</strong>
+                <ol>
+                  <li>
+                    Depuis l’accueil, vous choisissez un shift publié et
+                    signalez votre indisponibilité.
+                  </li>
+                  <li>Le superviseur est prévenu immédiatement.</li>
+                  <li>
+                    Le superviseur choisit un remplaçant compatible de la même
+                    station.
+                  </li>
+                  <li>
+                    Le planning est mis à jour et les personnes concernées sont
+                    notifiées.
+                  </li>
+                </ol>
+              </article>
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

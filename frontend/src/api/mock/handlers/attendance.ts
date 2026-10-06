@@ -359,6 +359,108 @@ export const attendanceRoutes: MockRoute[] = [
   },
   {
     method: "GET",
+    pattern: /^\/shifts$/,
+    handler: (ctx) => {
+      const user = requireRole(requireUser(ctx.db, ctx.user), [
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
+      const scope = scopeStationId(user);
+      return ctx.db.occurrences
+        .filter((item) => (scope ? item.stationId === scope : true))
+        .map((item) => {
+          const station = stationOf(ctx.db, item.stationId);
+          const swapper = item.swapperId
+            ? (ctx.db.users.find((entry) => entry.id === item.swapperId) ??
+              null)
+            : null;
+          const record = recordOf(ctx, item.id);
+          return {
+            id: item.id,
+            startTime: item.startTime,
+            endTime: item.endTime,
+            publishedAt:
+              ctx.db.plannings.find(
+                (planning) => planning.id === item.planningId,
+              )?.publishedAt ?? null,
+            station: {
+              id: station.id,
+              name: station.name,
+              timezone: station.timezone,
+              latenessToleranceMinutes: station.latenessToleranceMinutes,
+            },
+            swapper: swapper
+              ? { id: swapper.id, fullName: swapper.fullName }
+              : null,
+            templateVersion: { label: item.label },
+            attendance: record
+              ? {
+                  checkedInAt: record.checkedInAt,
+                  checkedOutAt: record.checkedOutAt,
+                  isLate: record.isLate,
+                  isAbsent: record.status === "ABSENT",
+                }
+              : null,
+          };
+        });
+    },
+  },
+  {
+    method: "GET",
+    pattern: /^\/attendance$/,
+    handler: (ctx) => {
+      const user = requireUser(ctx.db, ctx.user);
+      requireRole(user, ["ADMIN", "SUPERVISOR"]);
+      const stationScope = scopeStationId(user);
+      const published = publishedPlanningIds(ctx);
+      return ctx.db.occurrences
+        .filter((item) => published.has(item.planningId))
+        .filter((item) => Date.parse(item.startTime) <= ctx.now)
+        .filter((item) => item.swapperId)
+        .filter((item) =>
+          stationScope ? item.stationId === stationScope : true,
+        )
+        .sort((a, b) => Date.parse(b.startTime) - Date.parse(a.startTime))
+        .map((item) => {
+          const station = stationOf(ctx.db, item.stationId);
+          const swapper = ctx.db.users.find(
+            (entry) => entry.id === item.swapperId,
+          )!;
+          const record = recordOf(ctx, item.id);
+          return {
+            id: `attendance-${item.id}`,
+            shiftId: item.id,
+            status: attendanceStatus(ctx.db, item),
+            checkInAt: record?.checkedInAt ?? null,
+            checkOutAt: record?.checkedOutAt ?? null,
+            isLate: record?.isLate ?? false,
+            correctedAt: record?.correction?.at ?? null,
+            correctionReason: record?.correction?.reason ?? null,
+            station: {
+              id: station.id,
+              name: station.name,
+              timezone: station.timezone,
+              latenessToleranceMinutes: station.latenessToleranceMinutes,
+            },
+            swapper: { id: swapper.id, fullName: swapper.fullName },
+            shift: {
+              startTime: item.startTime,
+              endTime: item.endTime,
+              template: { label: item.label },
+              station: {
+                id: station.id,
+                name: station.name,
+                timezone: station.timezone,
+                latenessToleranceMinutes: station.latenessToleranceMinutes,
+              },
+              swapper: { id: swapper.id, fullName: swapper.fullName },
+            },
+          };
+        });
+    },
+  },
+  {
+    method: "GET",
     pattern: /^\/attendance\/monitor$/,
     handler: (ctx) => {
       const user = requireUser(ctx.db, ctx.user);
@@ -420,14 +522,26 @@ export const attendanceRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/attendance\/history$/,
     handler: (ctx) => {
-      const user = requireRole(requireUser(ctx.db, ctx.user), ["SWAPPER"]);
+      const user = requireRole(requireUser(ctx.db, ctx.user), [
+        "SWAPPER",
+        "SUPERVISOR",
+        "ADMIN",
+      ]);
       const fromValue = asText(ctx.query.get("from"));
       const toValue = asText(ctx.query.get("to"));
-      const from = fromValue ? Date.parse(fromValue) : ctx.now - 30 * 86400000;
-      const to = toValue ? Date.parse(toValue) : ctx.now + 7 * 86400000;
+      const from = fromValue
+        ? Date.parse(fromValue)
+        : user.role === "SWAPPER"
+          ? ctx.now - 30 * 86400000
+          : Number.NEGATIVE_INFINITY;
+      const to = toValue
+        ? Date.parse(toValue)
+        : user.role === "SWAPPER"
+          ? ctx.now + 7 * 86400000
+          : Number.POSITIVE_INFINITY;
       const stationScope = scopeStationId(user);
       // US 2040 : un swappeur ne consulte que ses propres pointages.
-      const swapperFilter = user.id;
+      const swapperFilter = user.role === "SWAPPER" ? user.id : null;
       const published = publishedPlanningIds(ctx);
       return ctx.db.occurrences
         .filter((item) => published.has(item.planningId))
