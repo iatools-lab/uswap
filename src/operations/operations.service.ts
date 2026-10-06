@@ -17,6 +17,26 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SchedulingEngineService } from '../scheduling/scheduling-engine.service';
 import { getDurationInHours } from '../scheduling/scheduling.utils';
 import { NotificationsService } from '../notifications/notifications.service';
+import { randomUUID } from 'crypto';
+import { mkdir, writeFile } from 'fs/promises';
+import { join } from 'path';
+
+/** Types de justificatifs acceptés pour une déclaration d'absence (v5.3). */
+const ABSENCE_ALLOWED_MIME = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+
+const ABSENCE_MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+
+export type UploadedAbsenceAttachment = {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+};
 
 export const REPLACEMENT_SOURCE = {
   DECLARATION: 'DECLARATION',
@@ -39,6 +59,49 @@ export class OperationsService {
     private readonly schedulingEngine: SchedulingEngineService,
     private readonly notifications: NotificationsService,
   ) {}
+
+  /**
+   * v5.3 : enregistre le justificatif d'une déclaration d'absence.
+   * Mêmes règles que les corrections : PDF/image, 5 Mo maximum.
+   */
+  async saveAbsenceAttachment(file?: UploadedAbsenceAttachment) {
+    if (!file) {
+      throw new BadRequestException('Un justificatif est requis.');
+    }
+
+    if (!ABSENCE_ALLOWED_MIME.has(file.mimetype)) {
+      throw new BadRequestException(
+        'Seuls les documents PDF, JPEG, PNG ou WebP sont acceptés.',
+      );
+    }
+
+    if (file.size > ABSENCE_MAX_ATTACHMENT_BYTES) {
+      throw new BadRequestException(
+        'Le justificatif dépasse la limite de 5 Mo.',
+      );
+    }
+
+    const id = randomUUID();
+    const extension =
+      file.mimetype === 'application/pdf'
+        ? 'pdf'
+        : file.mimetype.split('/')[1];
+    const directory = join(process.cwd(), 'uploads', 'absences');
+
+    await mkdir(directory, { recursive: true });
+
+    const filename = `${id}.${extension}`;
+
+    await writeFile(join(directory, filename), file.buffer);
+
+    return {
+      id,
+      filename: file.originalname,
+      size: file.size,
+      mimeType: file.mimetype,
+      url: `/uploads/absences/${filename}`,
+    };
+  }
 
   // ============================================================
   // ACCESS CONTROL HELPERS
@@ -302,6 +365,7 @@ export class OperationsService {
     shiftId: string;
     reason: string;
     clientRef?: string;
+    attachmentId?: string;
   }) {
     const shift = await this.prisma.shift.findUnique({
       where: { id: params.shiftId },

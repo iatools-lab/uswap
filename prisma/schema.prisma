@@ -86,6 +86,8 @@ model Station {
   isActive                 Boolean            @default(true)
   latitude                 Float?
   longitude                Float?
+  /// Rayon du périmètre de pointage GPS, en mètres (v5.3).
+  geofenceRadiusMeters     Int                @default(150)
   /// Street address and city as captured by the station form. `location` is
   /// kept for older rows; these are what the station card displays.
   address                  String?

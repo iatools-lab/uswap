@@ -261,6 +261,102 @@ export class LeaveService {
     return { ok: true };
   }
 
+  // ---------- Administration (v5.3, inbox de validation) ----------
+
+  /** Demandes en attente, les plus anciennes d'abord, pour l'inbox admin. */
+  async pendingForAdmin() {
+    const requests = await this.prisma.leaveRequest.findMany({
+      where: { status: LeaveStatus.PENDING },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        user: { select: { id: true, fullName: true } },
+        syncOperations: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+
+    return requests.map((request) => ({
+      ...this.toView(request),
+      userId: request.userId,
+      swapperId: request.userId,
+      swapperName: request.user?.fullName ?? 'Compte inconnu',
+    }));
+  }
+
+  /** Décision d'un administrateur : APPROVED ou REJECTED sur une demande en attente. */
+  async decide(
+    id: string,
+    decision: string,
+    reason?: string,
+  ) {
+    const normalized = (decision ?? '').toUpperCase();
+
+    if (normalized !== 'APPROVED' && normalized !== 'REJECTED') {
+      throw new BadRequestException('Choisissez une décision valide.');
+    }
+
+    if (normalized === 'REJECTED' && (reason ?? '').trim().length < 5) {
+      throw new BadRequestException(
+        'Indiquez le motif du refus (5 caractères minimum).',
+      );
+    }
+
+    const request = await this.prisma.leaveRequest.findUnique({
+      where: { id },
+      include: { syncOperations: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    });
+
+    if (!request || request.status !== LeaveStatus.PENDING) {
+      throw new NotFoundException("Cette demande n'est plus en attente.");
+    }
+
+    const days = this.daysBetween(request.startDate, request.endDate);
+    const status =
+      normalized === 'APPROVED'
+        ? LeaveStatus.APPROVED
+        : LeaveStatus.REJECTED;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const [result] = await Promise.all([
+        tx.leaveRequest.update({
+          where: { id },
+          data: { status },
+          include: {
+            syncOperations: { orderBy: { createdAt: 'desc' }, take: 1 },
+          },
+        }),
+        tx.leaveBalance.updateMany({
+          where: { swapperId: request.userId },
+          data: { pendingDays: { decrement: days } },
+        }),
+      ]);
+
+      if (normalized === 'APPROVED') {
+        await tx.leaveBalance.updateMany({
+          where: { swapperId: request.userId },
+          data: { usedDays: { increment: days } },
+        });
+      }
+
+      return result;
+    });
+
+    await this.notifications.notify({
+      userId: request.userId,
+      kind: NotificationKind.LEAVE,
+      title:
+        normalized === 'APPROVED'
+          ? 'Congé approuvé'
+          : 'Demande de congé refusée',
+      body:
+        normalized === 'APPROVED'
+          ? `Votre demande de ${days} jour${days > 1 ? 's' : ''} a été approuvée.`
+          : (reason ?? '').trim(),
+      link: '/app/mon-espace/conges',
+    });
+
+    return this.toView(updated);
+  }
+
   /** Legacy read used by /leave-requests/mine. */
   async findMine(userId: string) {
     const requests = await this.prisma.leaveRequest.findMany({

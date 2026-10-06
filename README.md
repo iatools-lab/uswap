@@ -18,6 +18,10 @@ réparties sur plusieurs stations.
 > **Nouveautés et API de la version 5.3.0** :
 > [`docs/V5.3.0-NOUVELLE-VERSION-ET-API.md`](docs/V5.3.0-NOUVELLE-VERSION-ET-API.md)
 > (changements détaillés + documentation complète des routes).
+>
+> **Intégration du frontend sprint 5.2.0** :
+> [`docs/V5.3.0-INTEGRATION-FRONTEND-S5.2.0.md`](docs/V5.3.0-INTEGRATION-FRONTEND-S5.2.0.md)
+> (réalignement backend ↔ frontend, pointage GPS, inbox congés, vérifications).
 
 ---
 
@@ -44,6 +48,22 @@ Cette version intègre le frontend et le backend et complète les User Stories
 - Poste de shift **vacant** possible (`Shift.swapperId` nullable).
 - Anti-doublon hors ligne via `clientRef` (`ReplacementRequest`).
 - Préférences de notification alignées avec le contrat backend.
+
+### Intégration frontend sprint 5.2.0
+
+Le tag `uswap-frontend-s5.2.0` remplace le pointage par QR code par un **pointage
+par géolocalisation GPS** et ajoute l'**inbox de validation des congés** côté
+administrateur. Le backend a été réaligné en conséquence :
+
+- `POST /attendance` — pointage GPS vérifié dans le périmètre de la station
+  (`Station.geofenceRadiusMeters`, formule de Haversine).
+- `GET /admin/leaves/pending` et `PATCH /admin/leaves/:id/decision` — inbox admin.
+- `PATCH /leaves/:id/cancel` — annulation (en plus du `POST`).
+- `POST /operations/absences/attachments` — justificatif d'absence.
+- `POST /plannings/:id/occurrences/:oid/remove` — suppression d'occurrence (en plus du `PATCH`).
+
+Vérifications : audit de contrat **94/94**, e2e **70/70**, builds backend et
+frontend OK, backend (3000) et frontend (5173) connectés.
 
 ---
 
