@@ -6,7 +6,7 @@ import {
   type OperationData,
 } from "../../features/operations/Operations";
 import type { OperationShift } from "../../features/operations/types";
-import { Building2, LoaderCircle } from "../../ui/icons";
+import { LoaderCircle } from "../../ui/icons";
 
 type BackendWorkspace = {
   station: OperationData["station"];
@@ -18,6 +18,9 @@ type BackendWorkspace = {
     publishedAt: string | null;
     station: NonNullable<OperationData["station"]> & {
       latenessToleranceMinutes?: number;
+      geofenceRadiusMeters?: number;
+      latitude?: number | null;
+      longitude?: number | null;
     };
     swapper: { fullName: string };
     attendance: {
@@ -64,6 +67,10 @@ function adaptWorkspace(payload: BackendWorkspace): OperationData {
         id: shift.station.id,
         name: shift.station.name,
         timezone,
+        latitude: shift.station.latitude ?? null,
+        longitude: shift.station.longitude ?? null,
+        geofenceRadiusMeters: shift.station.geofenceRadiusMeters,
+        latenessToleranceMinutes: shift.station.latenessToleranceMinutes,
       },
       swapper: shift.swapper,
       attendance: shift.attendance
@@ -132,15 +139,6 @@ export function OperationsPage() {
         <LoaderCircle className="spin" />
         Chargement de votre espace…
       </div>
-    );
-
-  if (session.user.role === "STATION_CHIEF" && !data.station)
-    return (
-      <section className="admin-card admin-empty">
-        <Building2 size={36} />
-        <h2>Aucune station rattachée</h2>
-        <p>Votre administrateur doit rattacher votre compte à une station.</p>
-      </section>
     );
 
   return (

@@ -81,6 +81,39 @@ export class AttendanceController {
     };
   }
 
+  /**
+   * v5.3 : pointage GPS sans QR. Le swappeur envoie sa position pendant le
+   * créneau ; le service vérifie le périmètre de la station
+   * (`Station.geofenceRadiusMeters`).
+   */
+  @Post()
+  @Roles(Role.SWAPPER)
+  async punch(
+    @Req()
+    req: {
+      user: {
+        id: string;
+      };
+    },
+    @Body()
+    body: {
+      shiftId: string;
+      kind: 'CHECKIN' | 'CHECKOUT';
+      latitude: number;
+      longitude: number;
+      accuracyMeters?: number;
+    },
+  ) {
+    return this.attendanceService.punch(
+      req.user.id,
+      body.shiftId,
+      body.kind,
+      body.latitude,
+      body.longitude,
+      body.accuracyMeters,
+    );
+  }
+
   @Post('check-in')
   @Roles(Role.SWAPPER)
   async checkIn(

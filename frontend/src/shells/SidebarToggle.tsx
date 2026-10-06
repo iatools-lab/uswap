@@ -7,7 +7,7 @@ export function SidebarToggle({
   collapsed: boolean;
   onToggle: () => void;
 }) {
-  const label = collapsed ? "Afficher la navigation" : "Masquer la navigation";
+  const label = collapsed ? "Afficher la navigation" : "Réduire la navigation";
   return (
     <button
       type="button"

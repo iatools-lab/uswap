@@ -165,7 +165,7 @@ export function UserDetail({
   function save(e: FormEvent) {
     e.preventDefault();
     if (!form) return;
-    if ((form.role === "SWAPPER" || form.role === "STATION_CHIEF") && !form.stationId) {
+    if (form.role === "SWAPPER" && !form.stationId) {
       setError("Sélectionnez la station rattachée à ce collaborateur.");
       return;
     }
@@ -346,7 +346,7 @@ export function UserDetail({
                     />
                   </div>
 
-                  {(form.role === "SWAPPER" || form.role === "STATION_CHIEF") && (
+                  {form.role === "SWAPPER" && (
                     <div className="user-detail-field is-wide">
                       <label>STATION RATTACHÉE <span className="required">*</span></label>
                       <StationPicker
@@ -383,7 +383,7 @@ export function UserDetail({
                     disabled={
                       busy ||
                       !isDirty ||
-                      ((form.role === "SWAPPER" || form.role === "STATION_CHIEF") && !form.stationId)
+                      (form.role === "SWAPPER" && !form.stationId)
                     }
                   >
                     {busy && <LoaderCircle className="spin" size={16} />}

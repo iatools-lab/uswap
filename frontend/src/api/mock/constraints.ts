@@ -142,6 +142,7 @@ export function runAutomation(db: MockDb, now: number): void {
         ? `${swapper?.fullName ?? "Un swappeur"} n'a pas enregistré sa fin de service à ${station.name} (${occurrence.label}).`
         : `${swapper?.fullName ?? "Un swappeur"} n'a pas pointé à ${station.name} (${occurrence.label}).`,
       [occurrence.swapperId],
+      occurrence.id,
     );
   }
 }

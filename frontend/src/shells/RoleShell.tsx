@@ -10,7 +10,7 @@ import {
   CalendarBlank,
   Clock3,
   LayoutDashboard,
-  Scan,
+  MapPin,
   UserRound,
   Zap,
 } from "../ui/icons";
@@ -34,11 +34,7 @@ export function RoleShell() {
   const leave = location.pathname.endsWith("/conges");
   const account = location.pathname.endsWith("/compte");
   const title =
-    session?.user.role === "SUPERVISOR"
-      ? "Supervision"
-      : session?.user.role === "STATION_CHIEF"
-        ? "Ma station"
-        : "Mon espace";
+    session?.user.role === "SUPERVISOR" ? "Supervision" : "Mon espace";
   const homePath = session ? rolePaths[session.user.role] : "/auth/login";
 
   useEffect(() => {
@@ -85,28 +81,30 @@ export function RoleShell() {
         Aller au contenu
       </a>
       <aside className="admin-sidebar">
-        <SidebarToggle
-          collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed((value) => !value)}
-        />
-        <a
-          className="brand"
-          href={homePath}
-          onClick={goHome}
-          aria-label={`uSwap, accueil ${roles[session.user.role].toLowerCase()}`}
-        >
-          <span className="brand-symbol">
-            <Zap weight="fill" />
-          </span>
-          <span className="brand-lockup">
-            <span className="brand-name">
-              uSwap<span className="brand-dot">.</span>
+        <div className="admin-sidebar-header">
+          <a
+            className="brand"
+            href={homePath}
+            onClick={goHome}
+            aria-label={`uSwap, accueil ${roles[session.user.role].toLowerCase()}`}
+          >
+            <span className="brand-symbol">
+              <Zap weight="fill" />
             </span>
-            <span className="brand-endorsement">
-              Powered by <strong>uPowa</strong>
+            <span className="brand-lockup">
+              <span className="brand-name">
+                uSwap<span className="brand-dot">.</span>
+              </span>
+              <span className="brand-endorsement">
+                Powered by <strong>uPowa</strong>
+              </span>
             </span>
-          </span>
-        </a>
+          </a>
+          <SidebarToggle
+            collapsed={sidebarCollapsed}
+            onToggle={() => setSidebarCollapsed((value) => !value)}
+          />
+        </div>
         <nav aria-label={`Navigation ${roles[session.user.role]}`}>
           <a
             href={homePath}
@@ -117,7 +115,7 @@ export function RoleShell() {
                 : undefined
             }
           >
-            {session.user.role === "SWAPPER" ? <Scan /> : <LayoutDashboard />}
+            {session.user.role === "SWAPPER" ? <MapPin /> : <LayoutDashboard />}
             <span>{session.user.role === "SWAPPER" ? "Pointage" : title}</span>
           </a>
           {session.user.role === "SUPERVISOR" && (
@@ -126,7 +124,7 @@ export function RoleShell() {
               onClick={goAttendance}
               aria-current={attendance ? "page" : undefined}
             >
-              <Scan />
+              <Clock3 />
               <span>Pointages</span>
             </a>
           )}
@@ -188,9 +186,7 @@ export function RoleShell() {
                     ? "Contrôlez les présences, corrigez les pointages et consultez leur historique."
                     : session.user.role === "SUPERVISOR"
                       ? "Supervisez les présences, les absences et les remplacements du réseau."
-                      : session.user.role === "STATION_CHIEF"
-                        ? "Pilotez les opérations et les pointages de votre station."
-                        : "Retrouvez vos prochains shifts et effectuez vos pointages."
+                      : "Retrouvez vos prochains shifts et effectuez vos pointages."
           }
           headingRef={headingRef}
           actions={

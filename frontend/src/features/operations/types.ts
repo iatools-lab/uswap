@@ -8,7 +8,15 @@ export type OperationShift = {
   startTime: string;
   endTime: string;
   publishedAt: string | null;
-  station: { id?: string; name: string; timezone?: string };
+  station: {
+    id?: string;
+    name: string;
+    timezone?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    geofenceRadiusMeters?: number;
+    latenessToleranceMinutes?: number;
+  };
   swapper: { fullName: string };
   attendance: {
     status: "PRESENT" | "LATE" | "CLOSED" | "JUSTIFIED" | "ABSENT";
@@ -24,29 +32,23 @@ export type OperationData = {
     name: string;
     location: string | null;
     timezone?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    geofenceRadiusMeters?: number;
+    latenessToleranceMinutes?: number;
   } | null;
   limit: number;
   shifts: OperationShift[];
 };
 
-export type ScanResult = {
+export type PunchResult = {
   kind: "CHECKIN" | "CHECKOUT";
   status: "PRESENT" | "LATE" | "CLOSED";
   checkedInAt: string;
   checkedOutAt?: string | null;
   toleranceMinutes?: number;
   timezone: string;
-};
-
-export type Qr = {
-  token: string;
-  kind: string;
-  shiftId: string;
-  stationName: string;
-  createdAt: string;
-  expiresAt: string;
-  ttlSeconds: number;
-  timezone: string;
+  distanceMeters?: number;
 };
 
 export type OperationsViewProps = {

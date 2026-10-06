@@ -46,7 +46,7 @@
   }
 
   .admin-heading-text {
-    gap: 0;
+    display: none;
   }
 
   .admin-breadcrumb {
@@ -80,6 +80,10 @@
   .admin-sidebar {
     height: calc(68px + env(safe-area-inset-bottom)) !important;
     padding-bottom: env(safe-area-inset-bottom) !important;
+  }
+
+  .admin-sidebar-header {
+    display: none !important;
   }
 
   .admin-sidebar nav a,

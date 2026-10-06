@@ -44,12 +44,11 @@ export type StationData = {
   contactPhone: string | null;
   isActive: boolean;
   latenessToleranceMinutes: number;
+  geofenceRadiusMeters: number;
   enforceMinRest: boolean;
   minRestHours: number;
   weeklyHoursLimit: number;
   blockPublishingWithVacancies: boolean;
-  checkinQrTtl: number;
-  checkoutQrTtl: number;
 };
 
 const emptyForm = {
@@ -63,12 +62,11 @@ const emptyForm = {
   contactName: "",
   contactPhone: "",
   latenessToleranceMinutes: 0,
+  geofenceRadiusMeters: 150,
   enforceMinRest: true,
   minRestHours: 8,
   weeklyHoursLimit: 48,
   blockPublishingWithVacancies: false,
-  checkinQrTtl: 300,
-  checkoutQrTtl: 300,
 };
 
 const blankStationForm: typeof emptyForm = {
@@ -82,12 +80,11 @@ const blankStationForm: typeof emptyForm = {
   contactName: "",
   contactPhone: "",
   latenessToleranceMinutes: "" as unknown as number,
+  geofenceRadiusMeters: "" as unknown as number,
   enforceMinRest: false,
   minRestHours: "" as unknown as number,
   weeklyHoursLimit: "" as unknown as number,
   blockPublishingWithVacancies: false,
-  checkinQrTtl: "" as unknown as number,
-  checkoutQrTtl: "" as unknown as number,
 };
 
 const blankSharedShift = {
@@ -631,6 +628,7 @@ export function StationManager({
             location: station.location || "",
             contactName: station.contactName || "",
             contactPhone: station.contactPhone || "",
+            geofenceRadiusMeters: station.geofenceRadiusMeters ?? 150,
             enforceMinRest: station.enforceMinRest !== false,
           }
         : { ...blankStationForm },
@@ -654,6 +652,9 @@ export function StationManager({
         contactName: form.contactName.trim() || null,
         contactPhone: form.contactPhone.trim() || null,
         latenessToleranceMinutes: Number(form.latenessToleranceMinutes),
+        ...(usingMock
+          ? { geofenceRadiusMeters: Number(form.geofenceRadiusMeters) }
+          : {}),
         minRestHours: Number(form.minRestHours),
         weeklyHoursLimit: Number(form.weeklyHoursLimit),
         ...(usingMock
@@ -664,8 +665,6 @@ export function StationManager({
               ),
             }
           : {}),
-        checkinQrTtl: Number(form.checkinQrTtl),
-        checkoutQrTtl: Number(form.checkoutQrTtl),
       };
 
       await api(
@@ -948,13 +947,14 @@ export function StationManager({
           isValid: () =>
             String(form.latenessToleranceMinutes).trim() !== "" &&
             Number(form.latenessToleranceMinutes) >= 0 &&
+            (!usingMock ||
+              (String(form.geofenceRadiusMeters).trim() !== "" &&
+                Number(form.geofenceRadiusMeters) >= 25)) &&
             (!form.enforceMinRest ||
               (String(form.minRestHours).trim() !== "" &&
                 Number(form.minRestHours) > 0)) &&
             String(form.weeklyHoursLimit).trim() !== "" &&
-            Number(form.weeklyHoursLimit) > 0 &&
-            String(form.checkinQrTtl).trim() !== "" &&
-            Number(form.checkinQrTtl) > 0,
+            Number(form.weeklyHoursLimit) > 0,
           content: (
             <div className="stepper-form-layout">
               <div className="user-form-grid-2">
@@ -1015,24 +1015,26 @@ export function StationManager({
                 </div>
 
                 <div className="stepper-field-group">
-                  <label>VALIDITÉ QR DEB/FIN (MINUTES)</label>
+                  <label>PÉRIMÈTRE DE POINTAGE (MÈTRES)</label>
                   <input
                     type="number"
                     required
-                    min={1}
+                    min={25}
                     step={1}
-                    value={
-                      form?.checkinQrTtl ? Number(form.checkinQrTtl) / 60 : ""
+                    disabled={!usingMock}
+                    value={form?.geofenceRadiusMeters ?? 150}
+                    onChange={(e) =>
+                      set(
+                        "geofenceRadiusMeters",
+                        e.target.value === "" ? "" : Number(e.target.value),
+                      )
                     }
-                    onChange={(e) => {
-                      const val =
-                        e.target.value === ""
-                          ? ""
-                          : Number(e.target.value) * 60;
-                      set("checkinQrTtl", val);
-                      set("checkoutQrTtl", val);
-                    }}
                   />
+                  <small>
+                    {usingMock
+                      ? "Le swappeur doit se trouver dans ce rayon pour pointer."
+                      : "Ce réglage sera enregistrable lorsque l’API prendra en charge le périmètre de géolocalisation."}
+                  </small>
                 </div>
               </div>
 
@@ -1067,6 +1069,14 @@ export function StationManager({
                   </small>
                 </span>
               </label>
+              {usingMock && (
+                <p className="planner-form-note">
+                  Les règles et le périmètre de pointage mis à jour s’appliquent
+                  aussi aux shifts déjà créés. Les horaires et pauses déjà
+                  planifiés restent inchangés ; vérifiez les plannings publiés
+                  si vous durcissez une règle.
+                </p>
+              )}
             </div>
           ),
         },

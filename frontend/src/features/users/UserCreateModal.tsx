@@ -26,7 +26,7 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const requiresStation = role === "SWAPPER" || role === "STATION_CHIEF";
+  const requiresStation = role === "SWAPPER";
 
   const resetForm = () => {
     setFullName("");
@@ -152,7 +152,7 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
               onChange={(value) => {
                 const nextRole = String(value);
                 setRole(nextRole);
-                if (nextRole !== "SWAPPER" && nextRole !== "STATION_CHIEF") {
+                if (nextRole !== "SWAPPER") {
                   setStationId("");
                 }
               }}

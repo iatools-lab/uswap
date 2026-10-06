@@ -24,6 +24,9 @@ import {
   type MockUser,
 } from "../types";
 
+/** Une place initiale par shift ; l'affectation ajoute les places nécessaires. */
+const GENERATED_POSITIONS_PER_SHIFT = 1;
+
 const asText = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
 
@@ -69,6 +72,294 @@ type Candidate = {
   breakMinutes: number;
 };
 
+function localDayKey(value: string, timezone: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+}
+
+function assignPlanningByShift(ctx: MockCtx, planning: MockPlanning) {
+  const shiftGroups = new Map<string, MockOccurrence[]>();
+  for (const occurrence of ctx.db.occurrences.filter(
+    (item) => item.planningId === planning.id,
+  )) {
+    const key = `${occurrence.stationId}|${occurrence.templateId}`;
+    shiftGroups.set(key, [...(shiftGroups.get(key) ?? []), occurrence]);
+  }
+
+  let assigned = 0;
+  const planningHours = (swapperId: string) =>
+    ctx.db.occurrences
+      .filter(
+        (item) => item.planningId === planning.id && item.swapperId === swapperId,
+      )
+      .reduce((total, item) => total + durationHours(ctx.db, item), 0);
+  const totalHours = (swapperId: string) =>
+    ctx.db.occurrences
+      .filter((item) => item.swapperId === swapperId)
+      .reduce((total, item) => total + durationHours(ctx.db, item), 0);
+  const activeSwappers = ctx.db.users.filter(
+    (user) => user.role === "SWAPPER" && user.isActive,
+  );
+  const lockedTemplates = new Map<string, Set<string>>();
+  for (const occurrence of ctx.db.occurrences.filter(
+    (item) => item.planningId === planning.id && item.swapperId,
+  )) {
+    const templates = lockedTemplates.get(occurrence.swapperId!) ?? new Set();
+    templates.add(occurrence.templateId);
+    lockedTemplates.set(occurrence.swapperId!, templates);
+  }
+
+  for (const group of shiftGroups.values()) {
+    const station = stationOf(ctx.db, group[0].stationId);
+    const days = new Map<string, MockOccurrence[]>();
+    for (const occurrence of group) {
+      const key = localDayKey(occurrence.startTime, station.timezone);
+      days.set(key, [...(days.get(key) ?? []), occurrence]);
+    }
+    const orderedDays = [...days.entries()].sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    const dbOrder = new Map(
+      ctx.db.occurrences.map((item, index) => [item.id, index]),
+    );
+    orderedDays.forEach(([, rows]) =>
+      rows.sort((a, b) => (dbOrder.get(a.id) ?? 0) - (dbOrder.get(b.id) ?? 0)),
+    );
+    const roster = activeSwappers.filter((user) => user.stationId === station.id);
+    const stationHours = ctx.db.occurrences
+      .filter(
+        (item) =>
+          item.planningId === planning.id && item.stationId === station.id,
+      )
+      .reduce((total, item) => total + durationHours(ctx.db, item), 0);
+    const fairHoursPerSwapper = stationHours / Math.max(roster.length, 1);
+    const groupHours = group.reduce(
+      (total, item) => total + durationHours(ctx.db, item),
+      0,
+    );
+    const minimumDailyTeam = Math.max(
+      1,
+      ...orderedDays.map(([, rows]) => rows.length),
+    );
+    const targetTeamSize = Math.max(
+      minimumDailyTeam,
+      Math.ceil(groupHours / Math.max(fairHoursPerSwapper, 0.01)),
+    );
+    const team = new Set(
+      group
+        .map((item) => item.swapperId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const eligibleTeam = roster
+      .filter((user) => {
+        const locked = lockedTemplates.get(user.id);
+        return !locked?.size || locked.has(group[0].templateId);
+      })
+      .sort(
+        (a, b) =>
+          planningHours(a.id) - planningHours(b.id) ||
+          totalHours(a.id) - totalHours(b.id) ||
+          Math.random() - 0.5,
+      );
+    for (const userId of team) {
+      if (!lockedTemplates.has(userId))
+        lockedTemplates.set(userId, new Set([group[0].templateId]));
+    }
+    for (const candidate of eligibleTeam) {
+      if (team.size >= targetTeamSize) break;
+      team.add(candidate.id);
+      const templates = lockedTemplates.get(candidate.id) ?? new Set<string>();
+      templates.add(group[0].templateId);
+      lockedTemplates.set(candidate.id, templates);
+    }
+    for (const [, rows] of orderedDays) {
+      for (const occurrence of rows) {
+        if (occurrence.swapperId) continue;
+        const candidates = roster
+          .filter((user) => team.has(user.id))
+          .sort(
+            (a, b) =>
+              planningHours(a.id) - planningHours(b.id) ||
+              totalHours(a.id) - totalHours(b.id) ||
+              Math.random() - 0.5,
+          );
+
+        for (const candidate of candidates) {
+          occurrence.swapperId = candidate.id;
+          const report = constraintReport(ctx.db, {
+            stationId: occurrence.stationId,
+            swapperId: candidate.id,
+            startTime: occurrence.startTime,
+            endTime: occurrence.endTime,
+            hours: durationHours(ctx.db, occurrence),
+            ignoreOccurrenceId: occurrence.id,
+          });
+          if (report.valid) {
+            assigned += 1;
+            break;
+          }
+          occurrence.swapperId = null;
+        }
+      }
+    }
+  }
+
+  const assignedIds = new Set(
+    ctx.db.occurrences
+      .filter((item) => item.planningId === planning.id && item.swapperId)
+      .map((item) => item.swapperId!),
+  );
+  const planningStations = [
+    ...new Set(
+      ctx.db.occurrences
+        .filter((item) => item.planningId === planning.id)
+        .map((item) => item.stationId),
+    ),
+  ];
+  const addBalancedShift = (user: MockUser, stationId: string) => {
+    const sources = ctx.db.occurrences
+      .filter(
+        (item) =>
+          item.planningId === planning.id && item.stationId === stationId,
+      )
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const preferredTemplates = new Set(
+      ctx.db.occurrences
+        .filter(
+          (item) =>
+            item.planningId === planning.id && item.swapperId === user.id,
+        )
+        .map((item) => item.templateId),
+    );
+    const locked = lockedTemplates.get(user.id);
+    const options: {
+      source: MockOccurrence;
+      score: number;
+      preferred: boolean;
+    }[] = [];
+    for (const source of sources) {
+      if (locked?.size && !locked.has(source.templateId)) continue;
+      const preview: MockOccurrence = {
+        ...source,
+        id: `auto-preview-${user.id}-${source.id}`,
+        swapperId: user.id,
+      };
+      const report = constraintReport(ctx.db, {
+        stationId: preview.stationId,
+        swapperId: user.id,
+        startTime: preview.startTime,
+        endTime: preview.endTime,
+        hours: durationHours(ctx.db, preview),
+        ignoreOccurrenceId: preview.id,
+      });
+      if (!report.valid) continue;
+
+      const roster = activeSwappers.filter(
+        (item) => item.stationId === stationId,
+      );
+      const projected = roster.map(
+        (item) =>
+          planningHours(item.id) +
+          (item.id === user.id ? durationHours(ctx.db, preview) : 0),
+      );
+      const mean = projected.reduce((sum, value) => sum + value, 0) /
+        Math.max(projected.length, 1);
+      options.push({
+        source,
+        score: projected.reduce(
+          (sum, value) => sum + (value - mean) ** 2,
+          0,
+        ),
+        preferred:
+          preferredTemplates.size === 0 || preferredTemplates.has(source.templateId),
+      });
+    }
+    options.sort(
+      (a, b) =>
+        Number(b.preferred) - Number(a.preferred) ||
+        a.score - b.score ||
+        Math.random() - 0.5,
+    );
+    const source = options[0]?.source;
+    if (!source) return false;
+    ctx.db.occurrences.push({
+      ...source,
+      id: nextId("shift"),
+      swapperId: user.id,
+    });
+    assigned += 1;
+    assignedIds.add(user.id);
+    const templates = lockedTemplates.get(user.id) ?? new Set<string>();
+    templates.add(source.templateId);
+    lockedTemplates.set(user.id, templates);
+    return true;
+  };
+
+  // Garantit une première affectation à chaque personne éligible, même si le
+  // nombre de postes générés au départ est inférieur à la taille de l'équipe.
+  const stationWorkers = activeSwappers.filter(
+    (user) => user.stationId && planningStations.includes(user.stationId),
+  );
+  for (const stationId of planningStations) {
+    const roster = stationWorkers
+      .filter((user) => user.stationId === stationId)
+      .sort(
+        (a, b) =>
+          planningHours(a.id) - planningHours(b.id) ||
+          totalHours(a.id) - totalHours(b.id) ||
+          Math.random() - 0.5,
+      );
+    for (const user of roster) {
+      if (!assignedIds.has(user.id)) addBalancedShift(user, stationId);
+    }
+
+    // Les postes supplémentaires rapprochent les heures de travail au plus
+    // près possible sans dépasser les limites hebdomadaires ou le repos requis.
+    const blocked = new Set<string>();
+    const maxIterations = Math.max(roster.length * 16, 16);
+    for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+      const current = roster
+        .filter((user) => !blocked.has(user.id))
+        .sort(
+          (a, b) =>
+            planningHours(a.id) - planningHours(b.id) ||
+            totalHours(a.id) - totalHours(b.id),
+        );
+      const user = current[0];
+      if (!user || !roster.length) break;
+      const target = Math.max(...roster.map((item) => planningHours(item.id)));
+      if (planningHours(user.id) >= target - 0.01) break;
+      if (!addBalancedShift(user, stationId)) blocked.add(user.id);
+    }
+  }
+
+  const finalUnassigned = stationWorkers.filter(
+    (user) => !assignedIds.has(user.id),
+  );
+  const workloadSpreads = planningStations.map((stationId) => {
+    const values = stationWorkers
+      .filter((user) => user.stationId === stationId)
+      .map((user) => planningHours(user.id));
+    return values.length ? Math.max(...values) - Math.min(...values) : 0;
+  });
+  const workloadSpread = workloadSpreads.length
+    ? Math.round(Math.max(...workloadSpreads) * 100) / 100
+    : 0;
+  return {
+    assigned,
+    vacant: ctx.db.occurrences.filter(
+      (item) => item.planningId === planning.id && !item.swapperId,
+    ).length,
+    coveredSwappers: stationWorkers.length - finalUnassigned.length,
+    unassignedSwappers: finalUnassigned.length,
+    workloadSpread,
+  };
+}
+
 /** Occurrences que la génération produirait pour la sélection demandée. */
 function candidateWindows(
   ctx: MockCtx,
@@ -79,7 +370,10 @@ function candidateWindows(
   if (!planning) throw new MockHttpError(404, "Planning introuvable.");
   const station = stationOf(ctx.db, asText(body.stationId));
   if (!station.isActive)
-    throw new MockHttpError(409, "Cette station est inactive : aucun shift ne peut être généré.");
+    throw new MockHttpError(
+      409,
+      "Cette station est inactive : aucun shift ne peut être généré.",
+    );
   const templateIds = Array.isArray(body.templateIds)
     ? body.templateIds.map((value) => String(value))
     : [];
@@ -155,7 +449,8 @@ function planningValidation(db: MockDb, planning: MockPlanning) {
     (item) => item.planningId === planning.id,
   );
   const errors: { code: string; message: string; occurrenceId?: string }[] = [];
-  const warnings: { code: string; message: string; occurrenceId?: string }[] = [];
+  const warnings: { code: string; message: string; occurrenceId?: string }[] =
+    [];
   if (!occurrences.length)
     errors.push({
       code: "EMPTY",
@@ -166,7 +461,9 @@ function planningValidation(db: MockDb, planning: MockPlanning) {
     const blockingStations = Array.from(
       new Set(
         vacant
-          .map((item) => db.stations.find((station) => station.id === item.stationId))
+          .map((item) =>
+            db.stations.find((station) => station.id === item.stationId),
+          )
           .filter((station) => station?.blockPublishingWithVacancies)
           .map((station) => station!.name),
       ),
@@ -222,23 +519,23 @@ function planningValidation(db: MockDb, planning: MockPlanning) {
       vacant: vacant.length,
       hours:
         Math.round(
-          occurrences.reduce(
-            (sum, item) => sum + durationHours(db, item),
-            0,
-          ) * 100,
+          occurrences.reduce((sum, item) => sum + durationHours(db, item), 0) *
+            100,
         ) / 100,
-      byStation: Array.from(new Set(occurrences.map((item) => item.stationId))).map(
-        (stationId) => {
-          const stationOccurrences = occurrences.filter((item) => item.stationId === stationId);
-          return {
-            stationId,
-            stationName: stationOf(db, stationId).name,
-            total: stationOccurrences.length,
-            assigned: stationOccurrences.filter((item) => item.swapperId).length,
-            vacant: stationOccurrences.filter((item) => !item.swapperId).length,
-          };
-        },
-      ),
+      byStation: Array.from(
+        new Set(occurrences.map((item) => item.stationId)),
+      ).map((stationId) => {
+        const stationOccurrences = occurrences.filter(
+          (item) => item.stationId === stationId,
+        );
+        return {
+          stationId,
+          stationName: stationOf(db, stationId).name,
+          total: stationOccurrences.length,
+          assigned: stationOccurrences.filter((item) => item.swapperId).length,
+          vacant: stationOccurrences.filter((item) => !item.swapperId).length,
+        };
+      }),
     },
   };
 }
@@ -285,7 +582,10 @@ export const planningRoutes: MockRoute[] = [
       const startDate = asText(ctx.body.startDate);
       const name = asText(ctx.body.name);
       if (!name || name.length > 100)
-        throw new MockHttpError(400, "Indiquez un nom de planning de 1 à 100 caractères.");
+        throw new MockHttpError(
+          400,
+          "Indiquez un nom de planning de 1 à 100 caractères.",
+        );
       const endDate = asText(ctx.body.endDate);
       if (!startDate || !endDate)
         throw new MockHttpError(400, "Période incomplète.");
@@ -314,49 +614,28 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/auto-assign$/,
     handler: (ctx) => {
-      const actor = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
-      const planning = ctx.db.plannings.find((item) => item.id === ctx.params[0]);
+      const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
+      const planning = ctx.db.plannings.find(
+        (item) => item.id === ctx.params[0],
+      );
       if (!planning) throw new MockHttpError(404, "Planning introuvable.");
       assertCanMutatePlanning(actor, planning);
-      const occurrences = ctx.db.occurrences
-        .filter((item) => item.planningId === planning.id && !item.swapperId)
-        .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
-      let assigned = 0;
-      for (const occurrence of occurrences) {
-        const candidates = ctx.db.users
-          .filter(
-            (user) =>
-              user.role === "SWAPPER" &&
-              user.isActive &&
-              user.stationId === occurrence.stationId,
-          )
-          .map((user) => ({
-            user,
-            hours: ctx.db.occurrences
-              .filter((item) => item.swapperId === user.id)
-              .reduce((total, item) => total + durationHours(ctx.db, item), 0),
-            randomOrder: Math.random(),
-          }))
-          // Une charge plus faible reste prioritaire ; à charge égale, l'ordre
-          // aléatoire évite d'affecter systématiquement les mêmes personnes.
-          .sort((a, b) => a.hours - b.hours || a.randomOrder - b.randomOrder);
-        const selected = candidates.find(({ user }) =>
-          constraintReport(ctx.db, {
-            stationId: occurrence.stationId,
-            swapperId: user.id,
-            startTime: occurrence.startTime,
-            endTime: occurrence.endTime,
-            hours: durationHours(ctx.db, occurrence),
-            ignoreOccurrenceId: occurrence.id,
-          }).valid,
+      if (planning.status !== "DRAFT")
+        throw new MockHttpError(
+          409,
+          "L’affectation automatique est réservée aux brouillons.",
         );
-        if (selected) {
-          occurrence.swapperId = selected.user.id;
-          assigned += 1;
-        }
-      }
-      if (assigned) planning.revision += 1;
-      return { assigned, vacant: occurrences.length - assigned, planning: planningView(ctx.db, planning.id) };
+      if (ctx.body.revision !== planning.revision)
+        throw new MockHttpError(
+          409,
+          "Ce planning a été modifié. Rechargez-le avant l’affectation automatique.",
+        );
+      const result = assignPlanningByShift(ctx, planning);
+      if (result.assigned) planning.revision += 1;
+      return { ...result, planning: planningView(ctx.db, planning.id) };
     },
   },
   {
@@ -392,7 +671,10 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/preview$/,
     handler: (ctx) => {
-      const actor = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
+      const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
       const { planning, occurrences, duplicates } = candidateWindows(
         ctx,
         ctx.params[0],
@@ -402,6 +684,7 @@ export const planningRoutes: MockRoute[] = [
       return {
         previewHash: nextId("prev"),
         occurrences,
+        positionsPerShift: GENERATED_POSITIONS_PER_SHIFT,
         duplicates,
         outside: [],
       };
@@ -411,7 +694,10 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/generate$/,
     handler: (ctx) => {
-      const actor = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
+      const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
       const { planning, occurrences } = candidateWindows(
         ctx,
         ctx.params[0],
@@ -430,21 +716,27 @@ export const planningRoutes: MockRoute[] = [
         (item) => item.planningId === planning.id,
       ).length;
       for (const candidate of occurrences) {
-        ctx.db.occurrences.push({
-          id: `${planning.id}-occ-${sequence++}`,
-          planningId: planning.id,
-          stationId: ctx.db.templates.find(
-            (item) => item.id === candidate.templateId,
-          )!.stationId,
-          templateId: candidate.templateId,
-          label: candidate.label,
-          breakStart: candidate.breakStart,
-          breakEnd: candidate.breakEnd,
-          breakMinutes: candidate.breakMinutes,
-          swapperId: null,
-          startTime: candidate.startTime,
-          endTime: candidate.endTime,
-        } as MockOccurrence);
+        for (
+          let position = 0;
+          position < GENERATED_POSITIONS_PER_SHIFT;
+          position += 1
+        ) {
+          ctx.db.occurrences.push({
+            id: `${planning.id}-occ-${sequence++}`,
+            planningId: planning.id,
+            stationId: ctx.db.templates.find(
+              (item) => item.id === candidate.templateId,
+            )!.stationId,
+            templateId: candidate.templateId,
+            label: candidate.label,
+            breakStart: candidate.breakStart,
+            breakEnd: candidate.breakEnd,
+            breakMinutes: candidate.breakMinutes,
+            swapperId: null,
+            startTime: candidate.startTime,
+            endTime: candidate.endTime,
+          } as MockOccurrence);
+        }
       }
       planning.revision += 1;
       return planningView(ctx.db, planning.id);
@@ -469,7 +761,10 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/occurrences\/([^/]+)\/duplicate$/,
     handler: (ctx) => {
-      const actor = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
+      const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
       const planning = ctx.db.plannings.find(
         (item) => item.id === ctx.params[0],
       );
@@ -499,7 +794,10 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/occurrences\/([^/]+)\/remove$/,
     handler: (ctx) => {
-      const actor = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
+      const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
       const planning = ctx.db.plannings.find(
         (item) => item.id === ctx.params[0],
       );
@@ -531,28 +829,25 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/occurrences\/([^/]+)\/validate$/,
     handler: (ctx) => {
-      const actor = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
+      const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
       const occurrence = ctx.db.occurrences.find(
         (item) =>
           item.id === ctx.params[1] && item.planningId === ctx.params[0],
       );
       if (!occurrence) throw new MockHttpError(404, "Poste introuvable.");
-      const planning = ctx.db.plannings.find((item) => item.id === occurrence.planningId);
+      const planning = ctx.db.plannings.find(
+        (item) => item.id === occurrence.planningId,
+      );
       if (!planning) throw new MockHttpError(404, "Planning introuvable.");
       assertCanMutatePlanning(actor, planning);
       const swapperId = asText(ctx.body.swapperId);
       if (!swapperId) throw new MockHttpError(400, "Sélectionnez un swappeur.");
       const swapper = ctx.db.users.find((item) => item.id === swapperId);
-      if (
-        !swapper ||
-        swapper.role !== "SWAPPER" ||
-        !swapper.isActive ||
-        swapper.stationId !== occurrence.stationId
-      )
-        throw new MockHttpError(
-          409,
-          "Ce swappeur actif n’est pas rattaché à la station du shift.",
-        );
+      if (!swapper || swapper.role !== "SWAPPER" || !swapper.isActive)
+        throw new MockHttpError(409, "Sélectionnez un swappeur actif.");
       return constraintReport(ctx.db, {
         stationId: occurrence.stationId,
         swapperId,
@@ -630,15 +925,12 @@ export const planningRoutes: MockRoute[] = [
         ? (ctx.db.users.find((item) => item.id === swapperId) ?? null)
         : null;
       if (afterUser && afterUser.role !== "SWAPPER")
-        throw new MockHttpError(409, "Le collaborateur sélectionné n’est pas un swappeur.");
-      if (
-        afterUser &&
-        (!afterUser.isActive || afterUser.stationId !== occurrence.stationId)
-      )
         throw new MockHttpError(
           409,
-          "Ce swappeur actif n’est pas rattaché à la station du shift.",
+          "Le collaborateur sélectionné n’est pas un swappeur.",
         );
+      if (afterUser && !afterUser.isActive)
+        throw new MockHttpError(409, "Sélectionnez un swappeur actif.");
       occurrence.swapperId = swapperId;
       if (counterpart) counterpart.swapperId = beforeUser?.id ?? null;
       planning.revision += 1;
@@ -673,6 +965,7 @@ export const planningRoutes: MockRoute[] = [
             "ASSIGNMENT",
             "Nouvelle affectation",
             `${station.name} · ${occurrence.label} le ${new Date(occurrence.startTime).toLocaleDateString("fr-FR")}.`,
+            occurrence.planningId,
           );
         notifyStaff(
           ctx.db,
@@ -683,6 +976,7 @@ export const planningRoutes: MockRoute[] = [
             ? `${beforeUser.fullName} remplacé par ${afterUser.fullName} (${occurrence.label}).`
             : `${afterUser?.fullName ?? "Affectation retirée"} · ${occurrence.label}.`,
           [beforeUser?.id ?? "", afterUser?.id ?? ""].filter(Boolean),
+          occurrence.planningId,
         );
         // Un planning déjà publié reste modifiable : les personnes concernées
         // sont averties de la mise à jour de leurs horaires.
@@ -690,9 +984,9 @@ export const planningRoutes: MockRoute[] = [
           const stamp = new Date().toISOString();
           for (const user of ctx.db.users) {
             const concerned =
+              user.role === "SUPERVISOR" ||
               (user.role === "SWAPPER" &&
-                [beforeUser?.id, afterUser?.id].includes(user.id)) ||
-              (user.role === "STATION_CHIEF" && user.stationId === station.id);
+                [beforeUser?.id, afterUser?.id].includes(user.id));
             if (!concerned) continue;
             ctx.db.notices.unshift({
               id: nextId("ntc"),
@@ -707,6 +1001,7 @@ export const planningRoutes: MockRoute[] = [
               "PLANNING_UPDATED",
               "Planning mis à jour",
               `Vos horaires ont changé sur le planning publié du ${new Date(planning.startDate).toLocaleDateString("fr-FR")} au ${new Date(planning.endDate).toLocaleDateString("fr-FR")}.`,
+              planning.id,
             );
           }
         }
@@ -721,7 +1016,7 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/validate$/,
     handler: (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["SUPERVISOR"]);
+      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
       const planning = ctx.db.plannings.find(
         (item) => item.id === ctx.params[0],
       );
@@ -733,7 +1028,10 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/publish$/,
     handler: (ctx) => {
-      const actor = requireRole(requireUser(ctx.db, ctx.user), ["SUPERVISOR"]);
+      const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
       const planning = ctx.db.plannings.find(
         (item) => item.id === ctx.params[0],
       );
@@ -753,7 +1051,8 @@ export const planningRoutes: MockRoute[] = [
       if (!validation.valid)
         throw new MockHttpError(
           409,
-          validation.errors[0]?.message ?? "Le planning contient une erreur bloquante.",
+          validation.errors[0]?.message ??
+            "Le planning contient une erreur bloquante.",
           { validation },
         );
       // Une publication peut concerner un brouillon comme un planning déjà
@@ -763,15 +1062,10 @@ export const planningRoutes: MockRoute[] = [
       planning.status = "PUBLISHED";
       planning.publishedAt = new Date().toISOString();
       planning.revision += 1;
-      const stationIds = Array.from(
-        new Set(occurrences.map((item) => item.stationId)),
-      );
       const period = `du ${new Date(planning.startDate).toLocaleDateString("fr-FR")} au ${new Date(planning.endDate).toLocaleDateString("fr-FR")}`;
       for (const user of ctx.db.users) {
         const concerned =
           user.role === "SUPERVISOR" ||
-          (user.role === "STATION_CHIEF" &&
-            stationIds.includes(user.stationId ?? "")) ||
           (user.role === "SWAPPER" &&
             occurrences.some((item) => item.swapperId === user.id));
         if (!concerned) continue;
@@ -790,6 +1084,7 @@ export const planningRoutes: MockRoute[] = [
           republishing
             ? `Le planning ${period} a été révisé : vérifiez vos horaires à jour.`
             : `Le planning ${period} est disponible.`,
+          planning.id,
         );
       }
       return { ...planningView(ctx.db, planning.id), author: actor.id };

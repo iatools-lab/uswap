@@ -290,6 +290,28 @@
   font-weight: 600;
   color: #18243e;
 }
+.assignment-home-station {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #64748b;
+  font-size: 11px;
+}
+.assignment-cross-station {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  width: fit-content;
+  color: #3e4b63;
+  font-size: 12px;
+  cursor: pointer;
+}
+.assignment-cross-station input {
+  width: 17px;
+  height: 17px;
+  accent-color: #001a70;
+}
 .assignment-contact {
   display: grid;
   gap: 2px;

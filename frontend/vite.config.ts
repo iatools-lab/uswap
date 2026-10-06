@@ -32,7 +32,6 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes("node_modules/xlsx")) return "xlsx";
-          if (id.includes("node_modules/qrcode")) return "qrcode";
           if (id.includes("node_modules/@phosphor-icons")) return "icons";
           if (id.includes("node_modules/@fontsource")) return "fonts";
           if (id.includes("node_modules/@dnd-kit")) return "dnd";

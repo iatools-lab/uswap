@@ -77,7 +77,6 @@ export const reportRoutes: MockRoute[] = [
       const actor = requireRole(requireUser(db, user), [
         "ADMIN",
         "SUPERVISOR",
-        "STATION_CHIEF",
       ]);
       const from = Date.parse(
         query.get("from") || isoFromMs(now - 30 * 86400000),
@@ -86,9 +85,7 @@ export const reportRoutes: MockRoute[] = [
       const requestedStation = text(query.get("stationId"));
       const requestedSwapper = text(query.get("swapperId"));
       const stationId =
-        actor.role === "STATION_CHIEF"
-          ? actor.stationId
-          : requestedStation || null;
+        actor.stationId || requestedStation || null;
       const scopeStations = actor.stationId
         ? [actor.stationId]
         : db.stations.map((item) => item.id);
@@ -297,7 +294,7 @@ export const reportRoutes: MockRoute[] = [
   {
     method: "GET",
     pattern: /^\/reports\/export$/,
-    handler: ({ user, db }) => requireRole(requireUser(db, user), ["ADMIN", "SUPERVISOR", "STATION_CHIEF"]),
+    handler: ({ user, db }) => requireRole(requireUser(db, user), ["ADMIN", "SUPERVISOR"]),
   },
   {
     method: "GET",

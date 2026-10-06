@@ -109,7 +109,7 @@ export async function mockDownload(
       {
         "Nom complet": "Paul Nguema",
         "Adresse e-mail": `paul.nguema@${FICTITIOUS_DOMAIN}`,
-        Rôle: "Chef de station",
+        Rôle: "Superviseur",
         Station: "Obobogo",
       },
       {

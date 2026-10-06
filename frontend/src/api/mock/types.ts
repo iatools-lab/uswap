@@ -6,7 +6,7 @@
  * connaître la différence entre les données fictives et un vrai service.
  */
 
-export type Role = "ADMIN" | "SUPERVISOR" | "STATION_CHIEF" | "SWAPPER";
+export type Role = "ADMIN" | "SUPERVISOR" | "SWAPPER";
 
 export type AttendanceStatus =
   "EXPECTED" | "PRESENT" | "LATE" | "CLOSED" | "ABSENT" | "JUSTIFIED";
@@ -24,12 +24,11 @@ export type MockStation = {
   contactPhone: string | null;
   isActive: boolean;
   latenessToleranceMinutes: number;
+  geofenceRadiusMeters: number;
   enforceMinRest: boolean;
   minRestHours: number;
   weeklyHoursLimit: number;
   blockPublishingWithVacancies: boolean;
-  checkinQrTtl: number;
-  checkoutQrTtl: number;
 };
 
 export type AuditEntry = {
@@ -298,6 +297,8 @@ export type MockNotification = {
   body: string;
   readAt: string | null;
   createdAt: string;
+  targetId?: string | null;
+  targetUrl?: string | null;
 };
 
 export type MockGlobalSettings = {
@@ -327,17 +328,6 @@ export type MockNotice = {
   planningId: string;
   readAt: string | null;
   createdAt: string;
-};
-
-export type MockQr = {
-  token: string;
-  kind: "CHECKIN" | "CHECKOUT";
-  stationId: string;
-  shiftId: string;
-  createdBy: string;
-  createdAt: string;
-  expiresAt: string;
-  consumedBy: string[];
 };
 
 export type MockImportRow = {
@@ -388,7 +378,6 @@ export type MockDb = {
   globalSettings: MockGlobalSettings;
   settingsHistory: MockSettingsRevision[];
   notices: MockNotice[];
-  qrTokens: MockQr[];
   importBatches: MockImportBatch[];
   attachments: MockAttachment[];
   /** Dernière occurrence traitée par l'automatisation des absences. */

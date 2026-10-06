@@ -19,7 +19,20 @@ export type LeaveRequestView = {
   editable: boolean;
   cancellable: boolean;
   syncStatus: SyncOperationStatus | null;
+  decisionReason?: string | null;
   updatedAt: string;
+};
+
+export type LeaveRequestInput = {
+  startDate: string;
+  endDate: string;
+  type: LeaveType;
+  reason: string;
+};
+
+export type LeaveReviewItem = LeaveRequestView & {
+  swapperId: string;
+  swapperName: string;
 };
 
 export type LeaveBalanceView = {
@@ -86,7 +99,6 @@ export const sprint4Permissions: Record<
   >
 > = {
   SWAPPER: ["LEAVE_SELF"],
-  STATION_CHIEF: ["INCIDENT_REPORT", "DASHBOARD_SCOPE"],
   SUPERVISOR: ["INCIDENT_MANAGE", "DASHBOARD_SCOPE"],
   ADMIN: ["INTEGRATION_HEALTH", "SCHEDULE_REPORT"],
 };

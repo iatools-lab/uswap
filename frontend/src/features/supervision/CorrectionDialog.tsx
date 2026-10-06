@@ -112,7 +112,7 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
       <p className="operations-hint">
         Le motif est obligatoire. Vous pouvez joindre un justificatif si la
         correction en nécessite un. L’ancienne valeur reste dans l’audit ; le
-        swappeur et le chef de station sont notifiés.
+        swappeur et le superviseur sont notifiés.
       </p>
 
       {error && (
@@ -162,7 +162,7 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             rows={3}
-            placeholder="Pointage oublié, présence confirmée par le chef de station…"
+            placeholder="Pointage oublié, présence confirmée par le superviseur…"
           />
         </label>
 

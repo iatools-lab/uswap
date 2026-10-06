@@ -172,8 +172,8 @@ function issueText(issue: { code: string; message: string }, report: Report) {
     const actual = values?.[1]?.replace('.', ',') ?? 'moins que prévu';
     const minimum = values?.[2]?.replace('.', ',') ?? 'le minimum requis';
     return {
-      title: 'Le temps de repos obligatoire n’est pas respecté.',
-      detail: `Ce shift ne laisserait que ${actual} h de repos avant ou après un autre service. La station exige au moins ${minimum} h. Choisissez un autre swappeur ou décalez l’un des shifts.`,
+      title: 'Le repos minimal défini pour la station n’est pas respecté.',
+      detail: `Ce shift ne laisserait que ${actual} h de repos avant ou après un autre service. La règle de repos de cette station fixe un minimum de ${minimum} h. Elle peut être désactivée dans ses paramètres.`,
     };
   }
   if (issue.code === 'OVERLAP') {

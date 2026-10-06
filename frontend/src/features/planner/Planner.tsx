@@ -51,55 +51,6 @@ type PlanningSwapper = User & {
   phoneNumber?: string | null;
 };
 
-async function autoAssignBackendPlanning(
-  planningId: string,
-  candidates: PlanningSwapper[],
-) {
-  const planning = await api<Planning>(`/plannings/${planningId}`);
-  const eligible = candidates.filter((candidate) => candidate.isActive);
-  const assignedPerSwapper = new Map(eligible.map((candidate) => [candidate.id, 0]));
-  let assigned = 0;
-  let vacant = 0;
-
-  for (const occurrence of planning.occurrences.filter((item) => !item.swapper)) {
-    const ordered = [...eligible];
-    for (let index = ordered.length - 1; index > 0; index -= 1) {
-      const target = Math.floor(Math.random() * (index + 1));
-      [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
-    }
-    ordered.sort(
-      (left, right) =>
-        (assignedPerSwapper.get(left.id) ?? 0) -
-        (assignedPerSwapper.get(right.id) ?? 0),
-    );
-
-    let placed = false;
-    for (const swapper of ordered) {
-      const check = await api<{ valid: boolean }>(
-        `/plannings/${planningId}/occurrences/${occurrence.id}/validate`,
-        { swapperId: swapper.id, revision: planning.revision },
-      );
-      if (!check.valid) continue;
-
-      const updated = await api<Planning>(
-        `/plannings/${planningId}/occurrences/${occurrence.id}`,
-        { swapperId: swapper.id, revision: planning.revision },
-        "PATCH",
-      );
-      planning.revision = updated.revision;
-      assignedPerSwapper.set(
-        swapper.id,
-        (assignedPerSwapper.get(swapper.id) ?? 0) + 1,
-      );
-      assigned += 1;
-      placed = true;
-      break;
-    }
-    if (!placed) vacant += 1;
-  }
-
-  return { assigned, vacant };
-}
 type Template = {
   id: string;
   label: string;
@@ -139,6 +90,7 @@ type ViewScale = "day" | "week" | "month" | "year";
 
 type Preview = {
   previewHash: string;
+  positionsPerShift?: number;
   occurrences: {
     label: string;
     stationName: string;
@@ -434,21 +386,24 @@ export function Planner({ user }: { user: User }) {
 
   const [stations, setStations] = useState<Station[]>([]);
   const [stationSwappers, setStationSwappers] = useState<PlanningSwapper[]>([]);
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [stationId, setStationId] = useState("");
-  const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
+  const [templatesByStation, setTemplatesByStation] = useState<
+    Record<string, Template[]>
+  >({});
+  const [stationIds, setStationIds] = useState<string[]>([]);
+  const [selectedTemplatesByStation, setSelectedTemplatesByStation] = useState<
+    Record<string, string[]>
+  >({});
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
-  const [publishDirectly, setPublishDirectly] = useState(false);
 
   function openCreate(mode: "manual" | "automatic" = "manual") {
     setCreationMode(mode);
     setPlanningName("");
     setStart("");
     setEnd("");
-    setStationId("");
-    setSelectedTemplates([]);
+    setStationIds([]);
+    setSelectedTemplatesByStation({});
+    setTemplatesByStation({});
     setSelectedDays([]);
-    setPublishDirectly(false);
     setError("");
     setCreating(true);
   }
@@ -516,13 +471,21 @@ export function Planner({ user }: { user: User }) {
   }, [writable]);
 
   useEffect(() => {
-    setTemplates([]);
-    setSelectedTemplates([]);
-    if (!stationId) return;
+    setTemplatesByStation({});
+    setSelectedTemplatesByStation((current) =>
+      Object.fromEntries(stationIds.map((id) => [id, current[id] ?? []])),
+    );
+    if (!stationIds.length) return;
     let active = true;
-    api<Template[]>(`/stations/${stationId}/shift-templates`)
-      .then((t) => {
-        if (active) setTemplates(t.filter((tpl) => tpl.isActive));
+    Promise.all(
+      stationIds.map((id) =>
+        api<Template[]>(`/stations/${id}/shift-templates`).then(
+          (rows) => [id, rows.filter((tpl) => tpl.isActive)] as const,
+        ),
+      ),
+    )
+      .then((entries) => {
+        if (active) setTemplatesByStation(Object.fromEntries(entries));
       })
       .catch((e) => {
         if (active) setError(e.message);
@@ -530,12 +493,12 @@ export function Planner({ user }: { user: User }) {
     return () => {
       active = false;
     };
-  }, [stationId]);
+  }, [stationIds.join("|")]);
 
-  const selectedStation = stations.find((station) => station.id === stationId);
-  const availableSwappers = stationSwappers.filter(
-    (swapper) => swapper.stationId === stationId,
+  const selectedStations = stations.filter((station) =>
+    stationIds.includes(station.id),
   );
+  const selectedTemplates = Object.values(selectedTemplatesByStation).flat();
 
   async function open(id: string) {
     setBusy(true);
@@ -582,65 +545,31 @@ export function Planner({ user }: { user: User }) {
         endDate: end + "T23:59:59.999Z",
       });
 
-      let automaticAssignment: { assigned: number; vacant: number } | null =
-        null;
-      if (
-        stationId &&
-        selectedTemplates.length > 0 &&
-        selectedDays.length > 0
-      ) {
+      let latestPlan = p;
+      for (const targetStationId of stationIds) {
+        const templateIds = selectedTemplatesByStation[targetStationId] ?? [];
+        if (!templateIds.length) continue;
         const payload = {
-          stationId,
-          templateIds: selectedTemplates,
+          stationId: targetStationId,
+          templateIds,
           weekdays: selectedDays,
-          revision: p.revision,
+          revision: latestPlan.revision,
         };
         const previewRes = await api<Preview>(
           `/plannings/${p.id}/preview`,
           payload,
         );
-        await api(`/plannings/${p.id}/generate`, {
+        if (!previewRes.occurrences.length) continue;
+        latestPlan = await api<Planning>(`/plannings/${p.id}/generate`, {
           ...payload,
           previewHash: previewRes.previewHash,
         });
-        if (creationMode === "automatic") {
-          automaticAssignment = usingMock
-            ? await api<{ assigned: number; vacant: number }>(
-                `/plannings/${p.id}/auto-assign`,
-                {},
-              )
-            : await autoAssignBackendPlanning(
-                p.id,
-                stationSwappers.filter(
-                  (swapper) => swapper.stationId === stationId,
-                ),
-              );
-        }
       }
-
-      const canPublishAutomatically =
-        user.role === "SUPERVISOR" &&
-        creationMode === "automatic" &&
-        publishDirectly &&
-        automaticAssignment?.vacant === 0;
-
-      if (canPublishAutomatically) {
-        const latestPlan = await api<Planning>("/plannings/" + p.id);
-        await api(`/plannings/${p.id}/publish`, {
-          revision: latestPlan.revision,
-        });
-        notify("Planning créé et publié avec succès.");
-      } else if (creationMode === "automatic" && automaticAssignment) {
-        notify(
-          automaticAssignment.vacant > 0
-            ? `Planning généré en brouillon : ${automaticAssignment.assigned} poste(s) affecté(s), ${automaticAssignment.vacant} à compléter.`
-            : `Planning généré : ${automaticAssignment.assigned} poste(s) affecté(s) automatiquement.`,
-        );
-      } else {
-        notify(
-          "Planning créé en brouillon. Les postes peuvent maintenant être affectés depuis le calendrier.",
-        );
-      }
+      notify(
+        creationMode === "automatic"
+          ? "Shifts générés. Utilisez « Assigner automatiquement » pour répartir les swappeurs."
+          : "Planning créé en brouillon. Vous pouvez maintenant affecter les postes.",
+      );
 
       await open(p.id);
       setCreating(false);
@@ -692,7 +621,7 @@ export function Planner({ user }: { user: User }) {
         key={current.id}
         planning={current}
         writable={user.role === "SUPERVISOR" || user.role === "ADMIN"}
-        canPublish={user.role === "SUPERVISOR"}
+        canPublish={user.role === "SUPERVISOR" || user.role === "ADMIN"}
         onUpdate={setCurrent}
         onBack={() => {
           setCurrent(null);
@@ -749,125 +678,67 @@ export function Planner({ user }: { user: User }) {
     {
       id: "station",
       label: "Choisir la station",
-      isValid: () => !!stationId,
+      isValid: () => stationIds.length > 0,
       content: (
         <div className="stepper-form-layout">
           <div className="stepper-field-group">
-            <label>STATION CIBLE *</label>
-            <StationPicker
-              value={stationId}
-              onChange={(val: string) => setStationId(val)}
-              stations={stations}
-              placeholder="Sélectionner une station"
-              allowEmpty={false}
-            />
+            <label>STATIONS CIBLES *</label>
+            <p className="planner-muted">
+              Choisissez une ou plusieurs stations. Les shifts seront regroupés
+              dans le même planning.
+            </p>
+            <div className="planner-multi-station-grid">
+              {stations.map((station) => (
+                <label
+                  key={station.id}
+                  className="planner-multi-station-option"
+                >
+                  <input
+                    type="checkbox"
+                    checked={stationIds.includes(station.id)}
+                    onChange={(event) => {
+                      setStationIds((current) =>
+                        event.target.checked
+                          ? [...current, station.id]
+                          : current.filter((id) => id !== station.id),
+                      );
+                    }}
+                  />
+                  <span>
+                    <strong>{station.name}</strong>
+                    <small>
+                      {station.city || station.address || "Station active"}
+                    </small>
+                  </span>
+                  <span className="admin-badge active">
+                    {
+                      stationSwappers.filter(
+                        (swapper) => swapper.stationId === station.id,
+                      ).length
+                    }{" "}
+                    swappeurs
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
-          {selectedStation && (
-            <section
-              className="planner-station-summary"
-              aria-label="Informations de la station sélectionnée"
-            >
-              <div className="planner-station-summary__panel">
-                <div className="planner-station-summary__head">
-                  <div>
-                    <span>Station sélectionnée</span>
-                    <h3>{selectedStation.name}</h3>
-                  </div>
-                  <span className="admin-badge active">Active</span>
-                </div>
-                <dl className="planner-station-facts">
-                  <div>
-                    <dt>Adresse</dt>
-                    <dd>
-                      {selectedStation.latitude != null &&
-                      selectedStation.longitude != null ? (
-                        <a
-                          href={`https://www.openstreetmap.org/?mlat=${selectedStation.latitude}&mlon=${selectedStation.longitude}#map=16/${selectedStation.latitude}/${selectedStation.longitude}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {selectedStation.address ||
-                            selectedStation.city ||
-                            "Voir sur la carte"}
-                        </a>
-                      ) : (
-                        selectedStation.address ||
-                        selectedStation.city ||
-                        "Non renseignée"
-                      )}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Responsable</dt>
-                    <dd>{selectedStation.contactName || "Non renseigné"}</dd>
-                  </div>
-                  <div>
-                    <dt>Repos minimal</dt>
-                    <dd>
-                      {selectedStation.enforceMinRest === false
-                        ? "Non contrôlé"
-                        : `${selectedStation.minRestHours ?? 8} h`}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Limite hebdomadaire</dt>
-                    <dd>{selectedStation.weeklyHoursLimit ?? 48} h</dd>
-                  </div>
-                  <div>
-                    <dt>Modèles actifs</dt>
-                    <dd>{templates.length}</dd>
-                  </div>
-                  <div>
-                    <dt>Postes vacants</dt>
-                    <dd>
-                      {selectedStation.blockPublishingWithVacancies
-                        ? "Publication bloquée"
-                        : "Avertissement"}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-              <div className="planner-station-summary__panel">
-                <div className="planner-station-summary__head">
-                  <div>
-                    <span>Équipe mobilisable</span>
-                    <h3>
-                      {availableSwappers.length} swappeur
-                      {availableSwappers.length > 1 ? "s" : ""}
-                    </h3>
-                  </div>
-                </div>
-                {availableSwappers.length ? (
-                  <ul className="planner-station-team">
-                    {availableSwappers.map((swapper) => (
-                      <li key={swapper.id}>
-                        <span
-                          className="planner-station-team__avatar"
-                          aria-hidden="true"
-                        >
-                          {swapper.fullName
-                            .split(" ")
-                            .map((part) => part[0])
-                            .slice(0, 2)
-                            .join("")}
-                        </span>
-                        <span>
-                          <strong>{swapper.fullName}</strong>
-                          <small>
-                            {swapper.stationName || "Aucune station habituelle"}{" "}
-                            · {swapper.email}
-                          </small>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="planner-muted">
-                    Aucun swappeur actif n’est disponible.
-                  </p>
-                )}
-              </div>
-            </section>
+          {!!selectedStations.length && (
+            <div className="planner-multi-station-summary">
+              {selectedStations.map((station) => (
+                <article key={station.id}>
+                  <strong>{station.name}</strong>
+                  <span>
+                    {templatesByStation[station.id]?.length ?? "…"} modèles
+                    actifs
+                  </span>
+                  <span>
+                    {station.enforceMinRest === false
+                      ? "Repos minimum désactivé"
+                      : `${station.minRestHours ?? 8} h de repos minimum`}
+                  </span>
+                </article>
+              ))}
+            </div>
           )}
         </div>
       ),
@@ -875,40 +746,68 @@ export function Planner({ user }: { user: User }) {
     {
       id: "shift",
       label: "Choix du shift",
-      isValid: () => selectedTemplates.length > 0 && selectedDays.length > 0,
+      isValid: () =>
+        selectedStations.length > 0 &&
+        selectedStations.every(
+          (station) =>
+            (selectedTemplatesByStation[station.id] ?? []).length > 0,
+        ) &&
+        selectedDays.length > 0,
       content: (
         <div className="stepper-form-layout">
           <div className="stepper-field-group">
-            <label>MODÈLES DE SHIFT DISPONIBLES</label>
-            {templates.length === 0 ? (
+            <label>MODÈLES DE SHIFT PAR STATION</label>
+            {!selectedStations.length ? (
               <p className="planner-muted">
-                Aucun modèle actif pour cette station.
+                Sélectionnez d’abord au moins une station.
               </p>
             ) : (
-              <div className="planner-options">
-                {templates.map((t) => (
-                  <label key={t.id} className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={selectedTemplates.includes(t.id)}
-                      onChange={(e) => {
-                        setSelectedTemplates(
-                          e.target.checked
-                            ? [...selectedTemplates, t.id]
-                            : selectedTemplates.filter((id) => id !== t.id),
-                        );
-                      }}
-                    />
-                    <span>
-                      {t.label} (
-                      <strong>
-                        {t?.startTime}–{t?.endTime}
-                      </strong>
-                      )
-                    </span>
-                  </label>
-                ))}
-              </div>
+              selectedStations.map((station) => (
+                <section
+                  className="planner-station-template-group"
+                  key={station.id}
+                >
+                  <h3>{station.name}</h3>
+                  {!templatesByStation[station.id]?.length ? (
+                    <p className="planner-muted">
+                      Aucun modèle actif pour cette station.
+                    </p>
+                  ) : (
+                    <div className="planner-options">
+                      {templatesByStation[station.id].map((template) => (
+                        <label key={template.id} className="checkbox-label">
+                          <input
+                            type="checkbox"
+                            checked={(
+                              selectedTemplatesByStation[station.id] ?? []
+                            ).includes(template.id)}
+                            onChange={(event) =>
+                              setSelectedTemplatesByStation((current) => ({
+                                ...current,
+                                [station.id]: event.target.checked
+                                  ? [
+                                      ...(current[station.id] ?? []),
+                                      template.id,
+                                    ]
+                                  : (current[station.id] ?? []).filter(
+                                      (id) => id !== template.id,
+                                    ),
+                              }))
+                            }
+                          />
+                          <span>
+                            {template.label} (
+                            <strong>
+                              {template.startTime}–{template.endTime}
+                            </strong>
+                            )
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              ))
             )}
           </div>
           <div className="stepper-field-group">
@@ -953,9 +852,9 @@ export function Planner({ user }: { user: User }) {
               </strong>
             </div>
             <div className="summary-row">
-              <span>Station :</span>
+              <span>Stations :</span>
               <strong>
-                {stations.find((s) => s.id === stationId)?.name ||
+                {selectedStations.map((station) => station.name).join(", ") ||
                   "Non spécifiée"}
               </strong>
             </div>
@@ -964,35 +863,19 @@ export function Planner({ user }: { user: User }) {
               <strong>{selectedTemplates.length} sélectionné(s)</strong>
             </div>
             <div className="summary-row">
-              <span>Affectation :</span>
+              <span>Effectif par créneau :</span>
               <strong>
-                {creationMode === "automatic"
-                  ? "Répartition automatique entre les swappeurs actifs de la station"
-                  : "Postes laissés libres pour une affectation depuis le calendrier"}
+                {usingMock
+                  ? "1 poste minimum par créneau ; renforts selon l’effectif"
+                  : "Postes à pourvoir depuis le planning"}
               </strong>
             </div>
           </div>
-
-          {creationMode === "automatic" && user.role === "SUPERVISOR" ? (
-            <div className="planner-publish-toggle">
-              <input
-                type="checkbox"
-                id="publishDirectly"
-                checked={publishDirectly}
-                onChange={(e) => setPublishDirectly(e.target.checked)}
-              />
-              <label htmlFor="publishDirectly">
-                Publier si tous les postes peuvent être affectés ; sinon
-                conserver le brouillon
-              </label>
-            </div>
-          ) : (
-            <p className="planner-form-note">
-              {user.role === "ADMIN"
-                ? "Le planning sera enregistré en brouillon. Vous pourrez préparer les postes ; le contrôle final et la publication reviennent au superviseur."
-                : "Le planning sera enregistré en brouillon. Vous pourrez affecter les postes, contrôler les contraintes puis le publier depuis son calendrier."}
-            </p>
-          )}
+          <p className="planner-form-note">
+            {creationMode === "automatic"
+              ? "Le planning sera créé en brouillon. L’affectation automatique sera disponible sur le calendrier, avant le contrôle et la publication."
+              : "Le planning sera créé en brouillon. Les postes pourront être affectés depuis le calendrier."}
+          </p>
         </div>
       ),
     },
@@ -1029,7 +912,7 @@ export function Planner({ user }: { user: User }) {
         steps={createSteps}
         submitLabel={
           creationMode === "automatic"
-            ? "Générer et affecter"
+            ? "Générer le planning"
             : "Créer le brouillon"
         }
         busy={busy}
@@ -1045,13 +928,18 @@ function ValidationIssue({
   actionLabel,
   onOpen,
 }: {
-  issue: { message: string; occurrenceId?: string };
+  issue: { message: string; occurrenceId?: string; count?: number };
   actionLabel: string;
   onOpen: () => void;
 }) {
   return (
     <div className="planner-validation-issue">
-      <p>{issue.message}</p>
+      <p>
+        {issue.message}
+        {!!issue.count && issue.count > 1 && (
+          <small> · {issue.count} shifts concernés</small>
+        )}
+      </p>
       {issue.occurrenceId && (
         <button type="button" className="text-button" onClick={onOpen}>
           {actionLabel}
@@ -1141,6 +1029,39 @@ function PlanningEditor({
     } catch (e) {
       setError((e as Error).message);
       setPublication(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function assignAutomatically() {
+    if (!canEdit || p.status !== "DRAFT" || busy) return;
+    if (!usingMock) {
+      setError(
+        "L’API connectée ne garantit pas encore un shift stable ni l’équité des heures. Utilisez l’affectation manuelle jusqu’à l’alignement du service.",
+      );
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{
+        assigned: number;
+        vacant: number;
+        coveredSwappers: number;
+        unassignedSwappers: number;
+        workloadSpread: number;
+      }>(
+        `/plannings/${p.id}/auto-assign`,
+        { revision: p.revision, grouping: "STATION_AND_SHIFT" },
+      );
+      await refresh();
+      notify(
+        `${result.assigned} affectation${result.assigned > 1 ? "s" : ""} réalisée${result.assigned > 1 ? "s" : ""} · ${result.coveredSwappers} swappeur${result.coveredSwappers > 1 ? "s" : ""} affecté${result.coveredSwappers > 1 ? "s" : ""} · écart d’heures : ${result.workloadSpread} h.${result.unassignedSwappers ? ` ${result.unassignedSwappers} personne${result.unassignedSwappers > 1 ? "s" : ""} sans shift compatible.` : " Toute l’équipe éligible est affectée."}${result.vacant ? ` ${result.vacant} poste${result.vacant > 1 ? "s" : ""} reste${result.vacant > 1 ? "nt" : ""} à couvrir.` : ""}`,
+      );
+    } catch (cause) {
+      setError((cause as Error).message);
+      await refresh().catch(() => undefined);
     } finally {
       setBusy(false);
     }
@@ -1447,7 +1368,9 @@ function PlanningEditor({
           ) : (
             <div className="planner-preview is-inline">
               <h3>
-                {preview.occurrences.length} shifts à ajouter au brouillon
+                {preview.occurrences.length} créneaux ·{" "}
+                {preview.occurrences.length * (preview.positionsPerShift ?? 1)}{" "}
+                postes à ajouter
               </h3>
               {preview.duplicates.length > 0 && (
                 <p>{preview.duplicates.length} doublons ignorés.</p>
@@ -1474,6 +1397,14 @@ function PlanningEditor({
   const stationOptions = Array.from(
     new Map(occurrences.map((o) => [o.station?.id, o.station])).values(),
   ).filter((s): s is Station => Boolean(s?.id));
+  const groupedWarnings = Array.from(
+    (report?.warnings ?? []).reduce((groups, issue) => {
+      const existing = groups.get(issue.message);
+      if (existing) existing.count += 1;
+      else groups.set(issue.message, { ...issue, count: 1 });
+      return groups;
+    }, new Map<string, { message: string; occurrenceId?: string; count: number }>()),
+  ).map(([, issue]) => issue);
 
   return (
     <div className="planner">
@@ -1513,6 +1444,19 @@ function PlanningEditor({
         </div>
 
         <div className="planner-actions">
+          {canEdit &&
+            p.status === "DRAFT" &&
+            occurrences.length > 0 && (
+              <button
+                type="button"
+                className="admin-button secondary"
+                disabled={busy}
+                title="Répartir les postes vacants de toutes les stations du planning"
+                onClick={() => void assignAutomatically()}
+              >
+                Assigner automatiquement
+              </button>
+            )}
           {occurrences.length > 0 && (
             <button
               type="button"
@@ -1694,6 +1638,12 @@ function PlanningEditor({
                 {report?.totals?.vacant ?? vacantShifts} à pourvoir
               </span>
             </div>
+            {report?.valid && !!report.warnings.length && (
+              <p className="planner-form-note">
+                Les avertissements attirent votre attention sur des points à
+                vérifier ; ils ne bloquent pas la publication.
+              </p>
+            )}
             {!!report?.errors.length && (
               <section className="planner-validation-section is-error">
                 <h3>Erreurs bloquantes ({report.errors.length})</h3>
@@ -1715,10 +1665,13 @@ function PlanningEditor({
                 ))}
               </section>
             )}
-            {!!report?.warnings.length && (
+            {!!groupedWarnings.length && (
               <section className="planner-validation-section is-warning">
-                <h3>Avertissements ({report.warnings.length})</h3>
-                {report.warnings.map((issue, index) => (
+                <h3>
+                  Avertissements · {report?.warnings.length} shift
+                  {report?.warnings.length === 1 ? "" : "s"}
+                </h3>
+                {groupedWarnings.map((issue, index) => (
                   <ValidationIssue
                     key={`warning-${index}`}
                     issue={issue}
@@ -2484,6 +2437,7 @@ function Assignment({
       o.swapper ? [o.swapper.id] : [],
     ),
     [query, setQuery] = useState(""),
+    [includeOtherStations, setIncludeOtherStations] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [activeInfoId, setActiveInfoId] = useState<string | null>(null),
@@ -2533,7 +2487,8 @@ function Assignment({
     if (!users) return;
     let active = true;
     const candidates = users.filter(
-      (userItem) => userItem.stationId === o.station.id,
+      (userItem) =>
+        userItem.stationId === o.station.id || userItem.id === o.swapper?.id,
     );
     setReports((current) => {
       const next = { ...current };
@@ -2572,7 +2527,7 @@ function Assignment({
     return () => {
       active = false;
     };
-  }, [users, o.id, o.station.id, p.id, p.revision]);
+  }, [users, o.id, o.station.id, o.swapper?.id, p.id, p.revision]);
 
   function toggleSwapper(id: string, checked: boolean) {
     setSelectedIds((current) =>
@@ -2618,10 +2573,13 @@ function Assignment({
 
   const needle = query.trim().toLocaleLowerCase();
   const stationUsers = (users || []).filter(
-    (u) => u.stationId === o.station.id,
+    (u) =>
+      includeOtherStations ||
+      u.stationId === o.station.id ||
+      selectedIds.includes(u.id),
   );
   const filteredUsers = stationUsers.filter((u) =>
-    [u.fullName, u.email, u.phoneNumber || "", o.station.name]
+    [u.fullName, u.email, u.phoneNumber || "", u.stationName || ""]
       .join(" ")
       .toLocaleLowerCase()
       .includes(needle),
@@ -2663,12 +2621,20 @@ function Assignment({
             aria-label="Rechercher un swappeur"
           />
         </label>
+        <label className="assignment-cross-station">
+          <input
+            type="checkbox"
+            checked={includeOtherStations}
+            onChange={(event) => setIncludeOtherStations(event.target.checked)}
+          />
+          <span>Inclure les swappeurs des autres stations</span>
+        </label>
         <fieldset className="assignment-table-wrap" disabled={busy}>
           <legend className="sr-only">Choisir un ou plusieurs swappeurs</legend>
           {!users && !error && <p role="status">Chargement des swappeurs…</p>}
           {users && !filteredUsers.length && (
             <p className="assignment-empty">
-              Aucun swappeur trouvé dans cette station.
+              Aucun swappeur ne correspond à cette recherche.
             </p>
           )}
           {!!filteredUsers.length && (
@@ -2710,6 +2676,11 @@ function Assignment({
                               .join("")}
                           </span>
                           <strong>{u.fullName}</strong>
+                          {u.stationId !== o.station.id && (
+                            <small className="assignment-home-station">
+                              {u.stationName || "Autre station"}
+                            </small>
+                          )}
                         </div>
                       </td>
                       <td data-label="Contact">

@@ -1,7 +1,6 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { rolePaths, type Role } from "../api/auth-api";
-import { captureQrToken, qrHomePath } from "../features/operations/qrToken";
 import { RequireAuth } from "./RequireAuth";
 import { RouteFallback } from "./RouteFallback";
 import { useSession } from "./session";
@@ -86,7 +85,7 @@ function page(node: ReactNode) {
   );
 }
 
-const ROLE_SPACES: Role[] = ["SUPERVISOR", "STATION_CHIEF", "SWAPPER"];
+const ROLE_SPACES: Role[] = ["SUPERVISOR", "SWAPPER"];
 
 function AccountRoute({ mode }: { mode: "forgot" | "activate" | "reset" }) {
   return (
@@ -98,12 +97,11 @@ function AccountRoute({ mode }: { mode: "forgot" | "activate" | "reset" }) {
 
 function CatchAll() {
   const { session, checking } = useSession();
-  captureQrToken();
   if (checking) return <RouteFallback />;
   if (session)
     return (
       <Navigate
-        to={qrHomePath(rolePaths[session.user.role], session.user.role)}
+        to={rolePaths[session.user.role]}
         replace
       />
     );
@@ -111,8 +109,7 @@ function CatchAll() {
 }
 
 function RoleCatchAll({ role }: { role: Role }) {
-  captureQrToken();
-  return <Navigate to={qrHomePath(rolePaths[role], role)} replace />;
+  return <Navigate to={rolePaths[role]} replace />;
 }
 
 export function AppRoutes() {

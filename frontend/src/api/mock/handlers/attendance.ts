@@ -10,35 +10,10 @@ import {
   scopeStationId,
   stationOf,
 } from "../shared";
-import {
-  MockHttpError,
-  type MockCtx,
-  type MockQr,
-  type MockRoute,
-} from "../types";
+import { MockHttpError, type MockCtx, type MockRoute } from "../types";
 
 const asText = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
-const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
-
-function randomToken(): string {
-  const bytes = new Uint8Array(32);
-  if (typeof crypto !== "undefined" && crypto.getRandomValues)
-    crypto.getRandomValues(bytes);
-  else
-    for (let index = 0; index < bytes.length; index += 1)
-      bytes[index] = Math.floor(Math.random() * 256);
-  return Array.from(bytes)
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-const pruneTokens = (ctx: MockCtx) => {
-  ctx.db.qrTokens = ctx.db.qrTokens.filter(
-    (item) => Date.parse(item.expiresAt) > ctx.now - 3600000,
-  );
-};
-
 /** Pointage enregistré d'une affectation, s'il existe. */
 const recordOf = (ctx: MockCtx, shiftId: string) =>
   ctx.db.attendance.find((item) => item.shiftId === shiftId) ?? null;
@@ -86,6 +61,10 @@ export const attendanceRoutes: MockRoute[] = [
                 id: station.id,
                 name: station.name,
                 timezone: station.timezone,
+                latitude: station.latitude,
+                longitude: station.longitude,
+                geofenceRadiusMeters: station.geofenceRadiusMeters,
+                latenessToleranceMinutes: station.latenessToleranceMinutes,
               },
               swapper: { fullName: user.fullName },
               attendance: record?.checkedInAt
@@ -132,6 +111,10 @@ export const attendanceRoutes: MockRoute[] = [
               id: target.id,
               name: target.name,
               timezone: target.timezone,
+              latitude: target.latitude,
+              longitude: target.longitude,
+              geofenceRadiusMeters: target.geofenceRadiusMeters,
+              latenessToleranceMinutes: target.latenessToleranceMinutes,
             },
             swapper: { fullName: swapper?.fullName ?? "Poste vacant" },
             attendance: record?.checkedInAt
@@ -151,6 +134,10 @@ export const attendanceRoutes: MockRoute[] = [
               name: station.name,
               location: station.location,
               timezone: station.timezone,
+              latitude: station.latitude,
+              longitude: station.longitude,
+              geofenceRadiusMeters: station.geofenceRadiusMeters,
+              latenessToleranceMinutes: station.latenessToleranceMinutes,
             }
           : null,
         limit,
@@ -163,7 +150,7 @@ export const attendanceRoutes: MockRoute[] = [
     pattern: /^\/shifts\/validate$/,
     handler: (ctx) => {
       const user = requireUser(ctx.db, ctx.user);
-      requireRole(user, ["ADMIN", "SUPERVISOR", "STATION_CHIEF"]);
+      requireRole(user, ["ADMIN", "SUPERVISOR"]);
       const startTime = asText(ctx.body.startTime);
       const endTime = asText(ctx.body.endTime);
       const stationId = asText(ctx.body.stationId);
@@ -187,180 +174,114 @@ export const attendanceRoutes: MockRoute[] = [
   },
   {
     method: "POST",
-    pattern: /^\/attendance\/qr$/,
-    handler: (ctx) => {
-      const user = requireRole(requireUser(ctx.db, ctx.user), [
-        "STATION_CHIEF",
-      ]);
-      const occurrence = occurrenceOf(ctx.db, asText(ctx.body.shiftId));
-      const requestedStationId = asText(ctx.body.stationId);
-      const kind =
-        asText(ctx.body.kind).toUpperCase() === "CHECKOUT"
-          ? "CHECKOUT"
-          : "CHECKIN";
-      const planning = ctx.db.plannings.find(
-        (item) => item.id === occurrence.planningId,
-      );
-      if (planning?.status !== "PUBLISHED")
-        throw new MockHttpError(
-          409,
-          "Ce shift n'est pas publié : aucun QR possible.",
-        );
-      if (requestedStationId && requestedStationId !== occurrence.stationId)
-        throw new MockHttpError(
-          409,
-          "La station sélectionnée ne correspond pas à ce shift.",
-        );
-      if (!occurrence.swapperId)
-        throw new MockHttpError(
-          409,
-          "Ce poste est vacant : aucun pointage ne peut être généré.",
-        );
-      if (occurrence.stationId !== user.stationId)
-        throw new MockHttpError(
-          403,
-          "Ce shift n'appartient pas à votre station.",
-        );
-      const station = stationOf(ctx.db, occurrence.stationId);
-      const ttl =
-        (kind === "CHECKIN" ? station.checkinQrTtl : station.checkoutQrTtl) *
-        1000;
-      const start = Date.parse(occurrence.startTime);
-      const end = Date.parse(occurrence.endTime);
-      if (kind === "CHECKIN" && (ctx.now < start || ctx.now > end))
-        throw new MockHttpError(
-          409,
-          "Le QR de prise de service n’est disponible que pendant le créneau du shift.",
-        );
-      if (kind === "CHECKOUT" && (ctx.now < start || ctx.now > end + ttl))
-        throw new MockHttpError(
-          409,
-          "Le QR de fin n’est pas disponible en dehors de la fenêtre du shift.",
-        );
-      if (kind === "CHECKIN" && ctx.now > end)
-        throw new MockHttpError(
-          409,
-          "La fenêtre de prise de service est terminée pour ce shift.",
-        );
-      if (kind === "CHECKOUT" && ctx.now > start + 86400000)
-        throw new MockHttpError(
-          409,
-          "Ce shift est trop ancien pour une fin de service.",
-        );
-      pruneTokens(ctx);
-      const active = ctx.db.qrTokens.find(
-        (item) =>
-          item.shiftId === occurrence.id &&
-          item.kind === kind &&
-          Date.parse(item.expiresAt) > ctx.now,
-      );
-      if (active)
-        return {
-          token: active.token,
-          kind: active.kind,
-          shiftId: active.shiftId,
-          stationName: station.name,
-          createdAt: active.createdAt,
-          expiresAt: active.expiresAt,
-          ttlSeconds: Math.max(
-            0,
-            Math.round((Date.parse(active.expiresAt) - ctx.now) / 1000),
-          ),
-          timezone: station.timezone,
-        };
-      // Fenêtres distinctes : le QR de fin reste utilisable après la fin prévue,
-      // dans la limite de validité configurée sur la station.
-      const limit =
-        kind === "CHECKIN"
-          ? Math.min(end, ctx.now + ttl)
-          : Math.min(end + ttl, ctx.now + ttl);
-      const created: MockQr = {
-        token: randomToken(),
-        kind,
-        stationId: station.id,
-        shiftId: occurrence.id,
-        createdBy: user.id,
-        createdAt: isoFromMs(ctx.now),
-        expiresAt: isoFromMs(limit),
-        consumedBy: [],
-      };
-      if (limit <= ctx.now)
-        throw new MockHttpError(
-          409,
-          "La fenêtre de validité est déjà écoulée : aucun QR ne peut être généré.",
-        );
-      ctx.db.qrTokens.push(created);
-      return {
-        token: created.token,
-        kind: created.kind,
-        shiftId: created.shiftId,
-        stationName: station.name,
-        createdAt: created.createdAt,
-        expiresAt: created.expiresAt,
-        ttlSeconds: Math.round((limit - ctx.now) / 1000),
-        timezone: station.timezone,
-      };
-    },
-  },
-  {
-    method: "POST",
     pattern: /^\/attendance$/,
     handler: (ctx) => {
       const user = requireRole(requireUser(ctx.db, ctx.user), ["SWAPPER"]);
-      const raw = asText(ctx.body.token);
-      const askedShiftId = asText(ctx.body.shiftId);
-      if (!TOKEN_PATTERN.test(raw))
-        throw new MockHttpError(400, "QR invalide : le jeton est illisible.");
-      const token = ctx.db.qrTokens.find((item) => item.token === raw);
-      if (!token)
+      const shiftId = asText(ctx.body.shiftId);
+      const rawKind = asText(ctx.body.kind).toUpperCase();
+      if (rawKind !== "CHECKIN" && rawKind !== "CHECKOUT")
         throw new MockHttpError(
           400,
-          "Ce QR est inconnu. Demandez un nouveau code au chef de station.",
+          "Choisissez une prise ou une fin de service valide.",
         );
-      if (Date.parse(token.expiresAt) < ctx.now)
-        throw new MockHttpError(410, "Ce QR a expiré. Demandez-en un nouveau.");
-      const qrOccurrence = occurrenceOf(ctx.db, token.shiftId);
-      const occurrence = ctx.db.occurrences.find(
-        (item) =>
-          item.planningId === qrOccurrence.planningId &&
-          item.stationId === qrOccurrence.stationId &&
-          item.templateId === qrOccurrence.templateId &&
-          item.startTime === qrOccurrence.startTime &&
-          item.endTime === qrOccurrence.endTime &&
-          item.swapperId === user.id,
+      const kind = rawKind;
+      const latitude = Number(ctx.body.latitude);
+      const longitude = Number(ctx.body.longitude);
+      const accuracyMeters = Number(ctx.body.accuracyMeters);
+      if (
+        !Number.isFinite(latitude) ||
+        latitude < -90 ||
+        latitude > 90 ||
+        !Number.isFinite(longitude) ||
+        longitude < -180 ||
+        longitude > 180
+      )
+        throw new MockHttpError(
+          400,
+          "La position n’a pas pu être vérifiée. Autorisez la localisation puis réessayez.",
+        );
+
+      const occurrence = occurrenceOf(ctx.db, shiftId);
+      const planning = ctx.db.plannings.find(
+        (item) => item.id === occurrence.planningId,
       );
-      if (!occurrence)
-        throw new MockHttpError(403, "Ce shift ne vous est pas affecté.");
-      if (askedShiftId && askedShiftId !== occurrence.id)
+      if (planning?.status !== "PUBLISHED" || occurrence.swapperId !== user.id)
         throw new MockHttpError(
-          409,
-          "Ce QR correspond à un autre shift que celui sélectionné.",
-        );
-      if (token.consumedBy.includes(user.id))
-        throw new MockHttpError(
-          409,
-          "Ce QR a déjà été utilisé pour ce service.",
+          403,
+          "Ce shift publié ne vous est pas affecté.",
         );
       const station = stationOf(ctx.db, occurrence.stationId);
-      const tolerance = station.latenessToleranceMinutes;
-      const record = recordOf(ctx, occurrence.id);
-      const start = Date.parse(occurrence.startTime);
-      const end = Date.parse(occurrence.endTime);
-
-      if (ctx.now < start || ctx.now > end)
+      if (
+        station.latitude === null ||
+        station.longitude === null ||
+        !Number.isFinite(station.latitude) ||
+        station.latitude < -90 ||
+        station.latitude > 90 ||
+        !Number.isFinite(station.longitude) ||
+        station.longitude < -180 ||
+        station.longitude > 180
+      )
         throw new MockHttpError(
           409,
-          "Ce QR est valide, mais ce shift n’est pas dans sa fenêtre de pointage.",
+          "La position de cette station n’est pas configurée. Contactez le superviseur.",
         );
 
-      if (token.kind === "CHECKIN") {
+      const radians = (degrees: number) => (degrees * Math.PI) / 180;
+      const earthRadius = 6_371_000;
+      const deltaLat = radians(latitude - station.latitude);
+      const deltaLng = radians(longitude - station.longitude);
+      const haversine = Math.min(
+        1,
+        Math.max(
+          0,
+          Math.sin(deltaLat / 2) ** 2 +
+            Math.cos(radians(station.latitude)) *
+              Math.cos(radians(latitude)) *
+              Math.sin(deltaLng / 2) ** 2,
+        ),
+      );
+      const distanceMeters = Math.round(
+        earthRadius *
+          2 *
+          Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine)),
+      );
+      const radius = station.geofenceRadiusMeters;
+      if (!Number.isFinite(radius) || radius < 25)
+        throw new MockHttpError(
+          409,
+          "Le périmètre de pointage de cette station est invalide. Contactez le superviseur.",
+        );
+      if (
+        !Number.isFinite(accuracyMeters) ||
+        accuracyMeters < 0 ||
+        accuracyMeters > radius
+      )
+        throw new MockHttpError(
+          409,
+          "Votre position manque de précision pour vérifier le périmètre. Réessayez avec le GPS activé.",
+        );
+      if (distanceMeters + accuracyMeters > radius)
+        throw new MockHttpError(
+          403,
+          `Pointage refusé : votre position est estimée à ${distanceMeters} m de ${station.name}; le périmètre autorisé est de ${radius} m et la précision GPS ne permet pas de confirmer que vous êtes dedans.`,
+        );
+
+      const start = Date.parse(occurrence.startTime);
+      const end = Date.parse(occurrence.endTime);
+      const record = recordOf(ctx, occurrence.id);
+      const tolerance = station.latenessToleranceMinutes;
+      if (kind === "CHECKIN") {
+        if (ctx.now < start || ctx.now > end)
+          throw new MockHttpError(
+            409,
+            "La prise de service est possible uniquement pendant le créneau prévu.",
+          );
         if (record?.checkedInAt)
           throw new MockHttpError(
             409,
-            "La prise de service est déjà enregistrée pour ce service.",
+            "La prise de service est déjà enregistrée pour ce shift.",
           );
-        const late =
-          ctx.now > Date.parse(occurrence.startTime) + tolerance * 60000;
+        const late = ctx.now > start + tolerance * 60_000;
         const created = {
           shiftId: occurrence.id,
           swapperId: user.id,
@@ -372,8 +293,6 @@ export const attendanceRoutes: MockRoute[] = [
           correction: null,
         };
         ctx.db.attendance.push(created);
-        token.consumedBy.push(user.id);
-        // Un pointage lève l'absence automatique encore ouverte.
         ctx.db.absences = ctx.db.absences.filter(
           (item) =>
             !(
@@ -383,7 +302,7 @@ export const attendanceRoutes: MockRoute[] = [
             ),
         );
         ctx.db.automatedAbsences = ctx.db.automatedAbsences.filter(
-          (shiftId) => shiftId !== occurrence.id,
+          (id) => id !== occurrence.id,
         );
         notifyStaff(
           ctx.db,
@@ -392,26 +311,32 @@ export const attendanceRoutes: MockRoute[] = [
           "Prise de service enregistrée",
           `${user.fullName} · ${occurrence.label} (${late ? "en retard" : "à l'heure"}).`,
           [user.id],
+          occurrence.id,
         );
         return {
-          kind: "CHECKIN",
+          kind,
           status: created.status,
           checkedInAt: created.checkedInAt,
           toleranceMinutes: tolerance,
           timezone: station.timezone,
+          distanceMeters,
         };
       }
 
       if (!record?.checkedInAt)
         throw new MockHttpError(
           409,
-          "Aucune prise de service n'est enregistrée : la fin de service est refusée.",
+          "La fin de service nécessite une prise de service enregistrée.",
         );
       if (record.checkedOutAt)
         throw new MockHttpError(409, "La fin de service est déjà enregistrée.");
+      if (ctx.now > end + 5 * 60_000)
+        throw new MockHttpError(
+          409,
+          "La fenêtre de fin de service est dépassée. Le superviseur peut corriger le pointage.",
+        );
       record.checkedOutAt = isoFromMs(ctx.now);
       record.status = "CLOSED";
-      token.consumedBy.push(user.id);
       notifyStaff(
         ctx.db,
         occurrence.stationId,
@@ -419,14 +344,16 @@ export const attendanceRoutes: MockRoute[] = [
         "Fin de service enregistrée",
         `${user.fullName} · ${occurrence.label}.`,
         [user.id],
+        occurrence.id,
       );
       return {
-        kind: "CHECKOUT",
+        kind,
         status: "CLOSED",
         checkedInAt: record.checkedInAt,
         checkedOutAt: record.checkedOutAt,
         toleranceMinutes: tolerance,
         timezone: station.timezone,
+        distanceMeters,
       };
     },
   },
@@ -435,7 +362,7 @@ export const attendanceRoutes: MockRoute[] = [
     pattern: /^\/attendance\/monitor$/,
     handler: (ctx) => {
       const user = requireUser(ctx.db, ctx.user);
-      requireRole(user, ["SUPERVISOR", "STATION_CHIEF"]);
+      requireRole(user, ["SUPERVISOR"]);
       const stationScope = scopeStationId(user);
       const rows = publishedShiftsOfDay(ctx.db, ctx.now, stationScope)
         .filter((item) => item.swapperId)

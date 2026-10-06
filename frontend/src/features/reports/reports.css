@@ -400,12 +400,29 @@
   font-size: 10px;
 }
 .scheduled-report-list article > button {
-  border: 0;
-  background: transparent;
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid #d8e1ef;
+  border-radius: 8px;
+  background: #fff;
   color: #17499f;
   font: inherit;
-  font-size: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.scheduled-report-list article > button:hover {
+  border-color: #b7c9e4;
+  background: #f5f8fd;
+}
+.scheduled-report-list article > button:focus-visible {
+  outline: 3px solid rgb(23 73 159 / 22%);
+  outline-offset: 2px;
 }
 .scheduled-empty {
   padding: 0 20px 17px !important;

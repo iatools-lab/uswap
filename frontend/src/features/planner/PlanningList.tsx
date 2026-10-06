@@ -307,7 +307,7 @@ export function PlanningList({
               className="admin-button secondary planner-generate-btn"
               onClick={onGenerate}
               disabled={busy}
-              title="Crée les shifts puis répartit automatiquement les swappeurs de la station"
+              title="Crée les shifts des stations choisies puis répartit les swappeurs de chacune"
             >
               <LightningIcon size={18} aria-hidden="true" />
               Générer automatiquement

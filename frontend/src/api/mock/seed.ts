@@ -92,12 +92,11 @@ const stations: MockStation[] = [
     contactPhone: "+237 6XX 00 00 01",
     isActive: true,
     latenessToleranceMinutes: 5,
+    geofenceRadiusMeters: 150,
     enforceMinRest: true,
     minRestHours: 8,
     weeklyHoursLimit: 48,
     blockPublishingWithVacancies: false,
-    checkinQrTtl: 300,
-    checkoutQrTtl: 300,
   },
   {
     id: "st-obobogo",
@@ -112,12 +111,11 @@ const stations: MockStation[] = [
     contactPhone: "+237 6XX 00 00 02",
     isActive: true,
     latenessToleranceMinutes: 5,
+    geofenceRadiusMeters: 150,
     enforceMinRest: true,
     minRestHours: 8,
     weeklyHoursLimit: 48,
     blockPublishingWithVacancies: true,
-    checkinQrTtl: 300,
-    checkoutQrTtl: 300,
   },
   {
     id: "st-bonapriso",
@@ -132,12 +130,11 @@ const stations: MockStation[] = [
     contactPhone: "+237 6XX 00 00 03",
     isActive: true,
     latenessToleranceMinutes: 10,
+    geofenceRadiusMeters: 150,
     enforceMinRest: true,
     minRestHours: 8,
     weeklyHoursLimit: 48,
     blockPublishingWithVacancies: false,
-    checkinQrTtl: 300,
-    checkoutQrTtl: 300,
   },
   {
     id: "st-akwa",
@@ -152,12 +149,11 @@ const stations: MockStation[] = [
     contactPhone: "+237 6XX 00 00 04",
     isActive: false,
     latenessToleranceMinutes: 5,
+    geofenceRadiusMeters: 150,
     enforceMinRest: true,
     minRestHours: 8,
     weeklyHoursLimit: 48,
     blockPublishingWithVacancies: false,
-    checkinQrTtl: 300,
-    checkoutQrTtl: 300,
   },
 ];
 
@@ -174,7 +170,7 @@ export const FICTITIOUS_DOMAIN = "uswap.example.com";
  * referme aussi les sessions en cours (comportement attendu lors d'un
  * changement de schéma, jamais lors d'un simple rechargement).
  */
-export const DB_VERSION = 11;
+export const DB_VERSION = 14;
 
 /** Mot de passe commun aux comptes de démonstration (fictifs). */
 export const DEMO_PASSWORD = "uswap2026";
@@ -220,9 +216,38 @@ function user(
 }
 
 export const SWAPPER_POOL: Record<string, string[]> = {
-  "st-bastos": ["sw-01", "sw-02", "sw-03", "sw-04"],
-  "st-obobogo": ["sw-05", "sw-06", "sw-07", "sw-08"],
-  "st-bonapriso": ["sw-09", "sw-10", "sw-11", "sw-12"],
+  "st-bastos": [
+    "sw-01",
+    "sw-02",
+    "sw-03",
+    "sw-04",
+    "sw-13",
+    "sw-14",
+    "sw-21",
+    "sw-22",
+  ],
+  "st-obobogo": [
+    "sw-05",
+    "sw-06",
+    "sw-07",
+    "sw-08",
+    "sw-15",
+    "sw-16",
+    "sw-23",
+    "sw-24",
+  ],
+  "st-bonapriso": [
+    "sw-09",
+    "sw-10",
+    "sw-11",
+    "sw-12",
+    "sw-17",
+    "sw-18",
+    "sw-19",
+    "sw-20",
+    "sw-25",
+    "sw-26",
+  ],
 };
 
 const swapperNames: [string, string][] = [
@@ -238,6 +263,20 @@ const swapperNames: [string, string][] = [
   ["sw-10", "Yves Ndjock"],
   ["sw-11", "Mireille Essomba"],
   ["sw-12", "Pascal Mbarga"],
+  ["sw-13", "Nathalie Abena"],
+  ["sw-14", "Marcelle Tchoumi"],
+  ["sw-15", "Francis Etoa"],
+  ["sw-16", "Brigitte Muna"],
+  ["sw-17", "Arlette Kouam"],
+  ["sw-18", "Lucien Biloa"],
+  ["sw-19", "Clémence Simo"],
+  ["sw-20", "David Ngassa"],
+  ["sw-21", "Sonia Biloa"],
+  ["sw-22", "Armand Talla"],
+  ["sw-23", "Irène Mvondo"],
+  ["sw-24", "Patrick Nguemo"],
+  ["sw-25", "Florence Nguema"],
+  ["sw-26", "Cédric Mbassi"],
 ];
 
 const stationOfSwapper = (id: string) =>
@@ -273,16 +312,16 @@ const users: MockUser[] = [
   user(
     "us-chief-bastos",
     "Sam Kotto",
-    `chef@${FICTITIOUS_DOMAIN}`,
-    "STATION_CHIEF",
-    "st-bastos",
+    `superviseur.bastos@${FICTITIOUS_DOMAIN}`,
+    "SUPERVISOR",
+    null,
   ),
   user(
     "us-chief-obobogo",
     "Ariane Tchana",
-    `chef.obobogo@${FICTITIOUS_DOMAIN}`,
-    "STATION_CHIEF",
-    "st-obobogo",
+    `superviseur.obobogo@${FICTITIOUS_DOMAIN}`,
+    "SUPERVISOR",
+    null,
   ),
   ...swapperNames.map(([id, fullName], index) => {
     const disabled = index === 11;
@@ -309,6 +348,19 @@ const users: MockUser[] = [
     );
   }),
 ];
+
+/** Comptes fictifs actifs proposés dans le sélecteur de connexion démo. */
+export const MOCK_LOGIN_PROFILES = users
+  .filter((item) => item.isActive && !item.disabledAt)
+  .map((item) => ({
+    id: item.id,
+    email: item.email,
+    fullName: item.fullName,
+    role: item.role,
+    stationId: item.stationId,
+    stationName:
+      stations.find((station) => station.id === item.stationId)?.name ?? null,
+  }));
 
 /* ------------------------------------------------------------------ */
 /* Modèles de shift                                                    */
@@ -639,8 +691,8 @@ export function createSeed(nowMs: number): MockDb {
     {
       id: "leave-approved-sw02",
       swapperId: "sw-02",
-      startTime: isoFromMs(nowMs + 20 * 3600000),
-      endTime: isoFromMs(nowMs + 44 * 3600000),
+      startTime: isoFromMs(nowMs - 10 * 86400000),
+      endTime: isoFromMs(nowMs - 7 * 86400000),
       type: "ANNUAL",
       status: "APPROVED",
       reason: "Congé personnel approuvé",
@@ -659,7 +711,7 @@ export function createSeed(nowMs: number): MockDb {
       id: "leave-pending-sw01",
       swapperId: "sw-01",
       startTime: isoFromMs(nowMs + 35 * 86400000),
-      endTime: isoFromMs(nowMs + 39 * 86400000),
+      endTime: isoFromMs(nowMs + 36 * 86400000),
       type: "ANNUAL",
       status: "PENDING",
       reason: "Repos annuel planifié avec anticipation",
@@ -962,6 +1014,7 @@ export function createSeed(nowMs: number): MockDb {
     body: string,
     minutesAgo: number,
     read = false,
+    targetId?: string | null,
   ) => {
     notifications.push({
       id: `ntf-${notificationSeq++}`,
@@ -971,6 +1024,7 @@ export function createSeed(nowMs: number): MockDb {
       body,
       readAt: read ? isoFromMs(nowMs - (minutesAgo - 1) * 60000) : null,
       createdAt: isoFromMs(nowMs - minutesAgo * 60000),
+      targetId: targetId ?? null,
     });
   };
 
@@ -980,6 +1034,8 @@ export function createSeed(nowMs: number): MockDb {
     "Accès à valider",
     "Un compte attend votre activation.",
     10,
+    false,
+    users.find((item) => item.invitationStatus === "SENT")?.id,
   );
   pushNotification(
     "us-supervisor",
@@ -987,6 +1043,8 @@ export function createSeed(nowMs: number): MockDb {
     "Planning publié",
     "La semaine en cours est publiée pour Bastos, Obobogo et Bonapriso.",
     480,
+    false,
+    "pl-courant",
   );
   pushNotification(
     "us-supervisor",
@@ -994,6 +1052,8 @@ export function createSeed(nowMs: number): MockDb {
     "Retard détecté",
     "Un swappeur a pointé en retard à Obobogo.",
     35,
+    false,
+    occurrences.find((item) => item.stationId === "st-obobogo")?.id,
   );
   pushNotification(
     "us-supervisor",
@@ -1001,6 +1061,8 @@ export function createSeed(nowMs: number): MockDb {
     "Besoin de remplacement",
     "Une absence sans remplaçant à Bonapriso doit être couverte.",
     20,
+    false,
+    occurrences.find((item) => item.stationId === "st-bonapriso")?.id,
   );
   pushNotification(
     "us-chief-bastos",
@@ -1009,6 +1071,7 @@ export function createSeed(nowMs: number): MockDb {
     "Le planning de votre station est disponible.",
     480,
     true,
+    "pl-courant",
   );
   pushNotification(
     "us-chief-bastos",
@@ -1016,6 +1079,8 @@ export function createSeed(nowMs: number): MockDb {
     "Prise de service enregistrée",
     "Léa Meka a pointé à l'heure.",
     12,
+    false,
+    occurrences.find((item) => item.swapperId === "sw-01")?.id,
   );
   pushNotification(
     "us-chief-obobogo",
@@ -1023,6 +1088,8 @@ export function createSeed(nowMs: number): MockDb {
     "Retard détecté",
     "Un swappeur a pointé après la tolérance.",
     35,
+    false,
+    occurrences.find((item) => item.stationId === "st-obobogo")?.id,
   );
   pushNotification(
     "sw-01",
@@ -1031,13 +1098,16 @@ export function createSeed(nowMs: number): MockDb {
     "Vos affectations de la semaine sont à jour.",
     480,
     true,
+    "pl-courant",
   );
   pushNotification(
     "sw-01",
     "CHECKIN_REMINDER",
     "Rappel de prise de service",
-    "Pensez à scanner le QR de début à votre arrivée.",
+    "Pensez à enregistrer votre prise de service à votre arrivée.",
     300,
+    false,
+    occurrences.find((item) => item.swapperId === "sw-01")?.id,
   );
   pushNotification(
     "sw-01",
@@ -1046,6 +1116,9 @@ export function createSeed(nowMs: number): MockDb {
     "Votre demande pour événement familial a été approuvée et votre disponibilité mise à jour.",
     1440,
     true,
+    leaves.find(
+      (item) => item.swapperId === "sw-01" && item.status === "APPROVED",
+    )?.id,
   );
   pushNotification(
     "us-supervisor",
@@ -1053,6 +1126,8 @@ export function createSeed(nowMs: number): MockDb {
     "Incident critique pris en charge",
     "La zone de circulation d’Obobogo a été balisée dans l’attente de l’intervention.",
     75,
+    false,
+    incidents[0]?.id,
   );
   pushNotification(
     "sw-09",
@@ -1060,6 +1135,8 @@ export function createSeed(nowMs: number): MockDb {
     "Absence enregistrée",
     "Votre absence a été classée automatiquement, en attente de traitement.",
     25,
+    false,
+    occurrences.find((item) => item.swapperId === "sw-09")?.id,
   );
 
   const notices: MockNotice[] = [
@@ -1122,7 +1199,6 @@ export function createSeed(nowMs: number): MockDb {
     },
     settingsHistory: [],
     notices,
-    qrTokens: [],
     importBatches: [],
     attachments: [
       {

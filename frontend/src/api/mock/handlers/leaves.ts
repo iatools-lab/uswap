@@ -1,18 +1,104 @@
-import type { LeaveRequestView, LeaveWorkspaceView } from "../../../domain/sprint4";
-import { nextId, notifyUser, requireRole, requireUser } from "../shared";
-import { isoFromMs } from "../seed";
-import { MockHttpError, type MockDb, type MockLeave, type MockRoute } from "../types";
+import type {
+  LeaveRequestView,
+  LeaveWorkspaceView,
+} from "../../../domain/sprint4";
+import { requireRole, requireUser } from "../shared";
+import {
+  MockHttpError,
+  type MockDb,
+  type MockLeave,
+  type MockRoute,
+} from "../types";
+import { nextId, notifyUser } from "../shared";
 
-const DAY = 86_400_000;
+const asText = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
 
-function daysBetween(start: string, end: string) {
-  return Math.max(1, Math.ceil((Date.parse(end) - Date.parse(start)) / DAY) + 1);
+const LEAVE_TYPES = ["ANNUAL", "SICK", "FAMILY", "UNPAID", "OTHER"] as const;
+const ACTIVE_STATUSES = new Set(["PENDING", "APPROVED"]);
+
+function dayNumber(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+
+function isValidDay(value: string) {
+  const time = Date.parse(`${value}T00:00:00.000Z`);
+  return (
+    Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value
+  );
+}
+
+function dayCount(startTime: string, endTime: string) {
+  return (
+    Math.floor(
+      (dayNumber(endTime.slice(0, 10)) - dayNumber(startTime.slice(0, 10))) /
+        86_400_000,
+    ) + 1
+  );
+}
+
+function requestPeriod(body: Record<string, unknown>, now: number) {
+  const startDate = asText(body.startDate);
+  const endDate = asText(body.endDate);
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
+  )
+    throw new MockHttpError(
+      400,
+      "Choisissez une date de début et de fin valides.",
+    );
+  const start = dayNumber(startDate);
+  const end = dayNumber(endDate);
+  const validDates = isValidDay(startDate) && isValidDay(endDate);
+  const today = dayNumber(new Date(now).toISOString().slice(0, 10));
+  if (
+    !validDates ||
+    !Number.isFinite(start) ||
+    !Number.isFinite(end) ||
+    start < today ||
+    end < start
+  )
+    throw new MockHttpError(
+      400,
+      "La période doit être future et sa fin ne peut pas précéder son début.",
+    );
+  return {
+    startTime: `${startDate}T00:00:00.000Z`,
+    endTime: `${endDate}T23:59:59.999Z`,
+  };
+}
+
+function validateOverlap(
+  db: MockDb,
+  swapperId: string,
+  startTime: string,
+  endTime: string,
+  exceptId?: string,
+) {
+  const overlap = db.leaves.some(
+    (leave) =>
+      leave.swapperId === swapperId &&
+      leave.id !== exceptId &&
+      ACTIVE_STATUSES.has(leave.status) &&
+      Date.parse(leave.startTime) <= Date.parse(endTime) &&
+      Date.parse(leave.endTime) >= Date.parse(startTime),
+  );
+  if (overlap)
+    throw new MockHttpError(
+      409,
+      "Une demande ou un congé approuvé chevauche déjà cette période.",
+    );
 }
 
 function latestOperation(db: MockDb, leaveId: string) {
-  return db.leaveSyncOperations
-    .filter((item) => item.leaveId === leaveId)
-    .sort((a, b) => Date.parse(b.queuedAt) - Date.parse(a.queuedAt))[0] ?? null;
+  return (
+    db.leaveSyncOperations
+      .filter((item) => item.leaveId === leaveId)
+      .sort((a, b) => Date.parse(b.queuedAt) - Date.parse(a.queuedAt))[0] ??
+    null
+  );
 }
 
 function view(db: MockDb, leave: MockLeave): LeaveRequestView {
@@ -29,7 +115,10 @@ function view(db: MockDb, leave: MockLeave): LeaveRequestView {
     attachmentName: attachment?.name ?? null,
     editable: leave.editable,
     cancellable: leave.cancellable,
-    syncStatus: latestOperation(db, leave.id)?.status ?? null,
+    syncStatus:
+      latestOperation(db, leave.id)?.status ??
+      (leave.status === "APPROVED" ? "SYNCED" : null),
+    decisionReason: leave.decisionReason,
     updatedAt: leave.updatedAt,
   };
 }
@@ -37,10 +126,13 @@ function view(db: MockDb, leave: MockLeave): LeaveRequestView {
 function workspace(db: MockDb, swapperId: string): LeaveWorkspaceView {
   const balance = db.leaveBalances.find((item) => item.swapperId === swapperId);
   if (!balance) throw new MockHttpError(404, "Solde de congés introuvable.");
-  const operations = db.leaveSyncOperations.filter((item) => item.userId === swapperId);
+  const operations = db.leaveSyncOperations.filter(
+    (item) => item.userId === swapperId,
+  );
   const lastSync = operations
     .filter((item) => item.completedAt)
     .sort((a, b) => Date.parse(b.completedAt!) - Date.parse(a.completedAt!))[0];
+
   return {
     balance: { ...balance },
     requests: db.leaves
@@ -57,131 +149,253 @@ function workspace(db: MockDb, swapperId: string): LeaveWorkspaceView {
   };
 }
 
-function validate(db: MockDb, swapperId: string, body: Record<string, unknown>, ignoredId?: string) {
-  const startTime = String(body.startTime ?? "");
-  const endTime = String(body.endTime ?? "");
-  const reason = String(body.reason ?? "").trim();
-  const type = String(body.type ?? "ANNUAL") as MockLeave["type"];
-  if (!Number.isFinite(Date.parse(startTime)) || !Number.isFinite(Date.parse(endTime)))
-    throw new MockHttpError(400, "Renseignez une période valide.");
-  if (Date.parse(endTime) < Date.parse(startTime))
-    throw new MockHttpError(400, "La fin du congé doit suivre son début.");
-  if (reason.length < 8)
-    throw new MockHttpError(400, "Précisez le motif en au moins 8 caractères.");
-  if (!(["ANNUAL", "SICK", "FAMILY", "UNPAID", "OTHER"] as string[]).includes(type))
-    throw new MockHttpError(400, "Type de congé inconnu.");
-  const overlaps = db.leaves.some((item) =>
-    item.swapperId === swapperId && item.id !== ignoredId &&
-    !["REJECTED", "CANCELLED"].includes(item.status) &&
-    Date.parse(item.startTime) <= Date.parse(endTime) && Date.parse(item.endTime) >= Date.parse(startTime));
-  if (overlaps) throw new MockHttpError(409, "Une demande couvre déjà tout ou partie de cette période.");
-  return { startTime, endTime, reason, type };
-}
-
-function syncOperation(db: MockDb, leave: MockLeave, action: "CREATE" | "UPDATE" | "CANCEL", key: string, now: number) {
-  const existing = db.leaveSyncOperations.find((item) => item.idempotencyKey === key);
-  if (existing) return existing;
-  const operation = {
-    id: nextId("leave-sync"), leaveId: leave.id, userId: leave.swapperId, action,
-    status: "SYNCED" as const, idempotencyKey: key, attempts: 1,
-    queuedAt: isoFromMs(now), lastAttemptAt: isoFromMs(now), nextAttemptAt: null,
-    completedAt: isoFromMs(now), lastError: null,
-  };
-  db.leaveSyncOperations.unshift(operation);
-  return operation;
-}
-
 export const leaveRoutes: MockRoute[] = [
   {
-    method: "GET", pattern: /^\/leaves\/workspace$/,
+    method: "GET",
+    pattern: /^\/leaves\/workspace$/,
     handler: ({ db, user }) => {
       const actor = requireRole(requireUser(db, user), ["SWAPPER"]);
       return workspace(db, actor.id);
     },
   },
   {
-    method: "POST", pattern: /^\/leaves$/,
+    method: "POST",
+    pattern: /^\/leaves$/,
     handler: ({ db, user, body, now }) => {
       const actor = requireRole(requireUser(db, user), ["SWAPPER"]);
-      const key = String(body.idempotencyKey ?? "");
-      const replay = db.leaves.find((item) => item.clientRef === key);
-      if (replay) return view(db, replay);
-      if (!key) throw new MockHttpError(400, "Référence de synchronisation manquante.");
-      const values = validate(db, actor.id, body);
-      const leave: MockLeave = {
-        id: nextId("leave"), swapperId: actor.id, ...values,
-        status: "PENDING", attachmentId: String(body.attachmentId ?? "") || null,
-        externalId: nextId("LV"), clientRef: key, createdAt: isoFromMs(now),
-        updatedAt: isoFromMs(now), submittedAt: isoFromMs(now), decidedAt: null,
-        decisionReason: null, cancellable: true, editable: true,
+      const type = asText(body.type);
+      const reason = asText(body.reason);
+      if (!LEAVE_TYPES.includes(type as (typeof LEAVE_TYPES)[number]))
+        throw new MockHttpError(400, "Choisissez un type de congé valide.");
+      if (reason.length < 8)
+        throw new MockHttpError(
+          400,
+          "Précisez le motif de votre demande (8 caractères minimum).",
+        );
+      const period = requestPeriod(body, now);
+      validateOverlap(db, actor.id, period.startTime, period.endTime);
+      const balance = db.leaveBalances.find(
+        (item) => item.swapperId === actor.id,
+      );
+      if (!balance)
+        throw new MockHttpError(404, "Solde de congés introuvable.");
+      const days = dayCount(period.startTime, period.endTime);
+      if (days > balance.remainingDays - balance.pendingDays)
+        throw new MockHttpError(
+          409,
+          "Cette demande dépasse votre solde disponible après prise en compte des demandes en attente.",
+        );
+
+      const created: MockLeave = {
+        id: nextId("leave"),
+        swapperId: actor.id,
+        ...period,
+        type: type as MockLeave["type"],
+        status: "PENDING",
+        reason,
+        attachmentId: null,
+        externalId: null,
+        clientRef: nextId("request"),
+        createdAt: new Date(now).toISOString(),
+        updatedAt: new Date(now).toISOString(),
+        submittedAt: new Date(now).toISOString(),
+        decidedAt: null,
+        decisionReason: null,
+        cancellable: true,
+        editable: true,
       };
-      db.leaves.unshift(leave);
-      syncOperation(db, leave, "CREATE", key, now);
-      const balance = db.leaveBalances.find((item) => item.swapperId === actor.id);
-      if (balance) balance.pendingDays += daysBetween(leave.startTime, leave.endTime);
-      notifyUser(db, actor.id, "LEAVE", "Demande transmise", "Votre demande de congé est en cours d’étude.");
-      return view(db, leave);
+      db.leaves.unshift(created);
+      balance.pendingDays += days;
+      for (const admin of db.users.filter(
+        (item) => item.role === "ADMIN" && item.isActive,
+      ))
+        notifyUser(
+          db,
+          admin.id,
+          "LEAVE_SUBMITTED",
+          "Nouvelle demande de congé",
+          `${actor.fullName} · ${days} jour${days > 1 ? "s" : ""} demandé${days > 1 ? "s" : ""}.`,
+          created.id,
+        );
+      return view(db, created);
     },
   },
   {
-    method: "PATCH", pattern: /^\/leaves\/([^/]+)$/,
-    handler: ({ db, user, body, params, now }) => {
+    method: "PATCH",
+    pattern: /^\/leaves\/([^/]+)$/,
+    handler: ({ db, user, params, body, now }) => {
       const actor = requireRole(requireUser(db, user), ["SWAPPER"]);
-      const leave = db.leaves.find((item) => item.id === params[0] && item.swapperId === actor.id);
-      if (!leave) throw new MockHttpError(404, "Demande introuvable.");
-      if (!leave.editable) throw new MockHttpError(409, "Cette demande ne peut plus être modifiée.");
-      const values = validate(db, actor.id, body, leave.id);
-      const oldDays = daysBetween(leave.startTime, leave.endTime);
-      Object.assign(leave, values, { updatedAt: isoFromMs(now) });
-      const balance = db.leaveBalances.find((item) => item.swapperId === actor.id);
-      if (balance) balance.pendingDays = Math.max(0, balance.pendingDays - oldDays + daysBetween(leave.startTime, leave.endTime));
-      syncOperation(db, leave, "UPDATE", String(body.idempotencyKey ?? nextId("idem")), now);
+      const leave = db.leaves.find((item) => item.id === params[0]);
+      if (!leave || leave.swapperId !== actor.id)
+        throw new MockHttpError(404, "Demande de congé introuvable.");
+      if (leave.status !== "PENDING" || !leave.editable)
+        throw new MockHttpError(409, "Cette demande n’est plus modifiable.");
+      const type = asText(body.type);
+      const reason = asText(body.reason);
+      if (!LEAVE_TYPES.includes(type as (typeof LEAVE_TYPES)[number]))
+        throw new MockHttpError(400, "Choisissez un type de congé valide.");
+      if (reason.length < 8)
+        throw new MockHttpError(
+          400,
+          "Précisez le motif de votre demande (8 caractères minimum).",
+        );
+      const period = requestPeriod(body, now);
+      validateOverlap(db, actor.id, period.startTime, period.endTime, leave.id);
+      const balance = db.leaveBalances.find(
+        (item) => item.swapperId === actor.id,
+      );
+      if (!balance)
+        throw new MockHttpError(404, "Solde de congés introuvable.");
+      const previousDays = dayCount(leave.startTime, leave.endTime);
+      const nextDays = dayCount(period.startTime, period.endTime);
+      if (nextDays > balance.remainingDays - balance.pendingDays + previousDays)
+        throw new MockHttpError(
+          409,
+          "Cette demande dépasse votre solde disponible après prise en compte des demandes en attente.",
+        );
+      Object.assign(leave, period, {
+        type: type as MockLeave["type"],
+        reason,
+        updatedAt: new Date(now).toISOString(),
+      });
+      balance.pendingDays = Math.max(
+        0,
+        balance.pendingDays - previousDays + nextDays,
+      );
       return view(db, leave);
     },
   },
   {
-    method: "POST", pattern: /^\/leaves\/([^/]+)\/cancel$/,
-    handler: ({ db, user, body, params, now }) => {
-      const actor = requireRole(requireUser(db, user), ["SWAPPER"]);
-      const leave = db.leaves.find((item) => item.id === params[0] && item.swapperId === actor.id);
-      if (!leave) throw new MockHttpError(404, "Demande introuvable.");
-      if (!leave.cancellable) throw new MockHttpError(409, "Cette demande ne peut plus être annulée.");
-      const balance = db.leaveBalances.find((item) => item.swapperId === actor.id);
-      if (balance && ["PENDING", "QUEUED", "SYNCING", "SYNC_FAILED"].includes(leave.status))
-        balance.pendingDays = Math.max(0, balance.pendingDays - daysBetween(leave.startTime, leave.endTime));
-      leave.status = "CANCELLED"; leave.cancellable = false; leave.editable = false; leave.updatedAt = isoFromMs(now);
-      syncOperation(db, leave, "CANCEL", String(body.idempotencyKey ?? nextId("idem")), now);
-      return view(db, leave);
-    },
-  },
-  {
-    method: "POST", pattern: /^\/leaves\/sync\/([^/]+)\/retry$/,
+    method: "PATCH",
+    pattern: /^\/leaves\/([^/]+)\/cancel$/,
     handler: ({ db, user, params, now }) => {
-      const actor = requireUser(db, user);
-      const operation = db.leaveSyncOperations.find((item) => item.id === params[0]);
-      if (!operation || (actor.role === "SWAPPER" && operation.userId !== actor.id))
-        throw new MockHttpError(404, "Synchronisation introuvable.");
-      operation.status = "SYNCED"; operation.attempts += 1; operation.lastAttemptAt = isoFromMs(now);
-      operation.completedAt = isoFromMs(now); operation.nextAttemptAt = null; operation.lastError = null;
-      const leave = db.leaves.find((item) => item.id === operation.leaveId);
-      if (leave?.status === "SYNC_FAILED") leave.status = "PENDING";
-      return { ok: true };
+      const actor = requireRole(requireUser(db, user), ["SWAPPER"]);
+      const leave = db.leaves.find((item) => item.id === params[0]);
+      if (!leave || leave.swapperId !== actor.id)
+        throw new MockHttpError(404, "Demande de congé introuvable.");
+      if (leave.status !== "PENDING" || !leave.cancellable)
+        throw new MockHttpError(
+          409,
+          "Cette demande ne peut plus être annulée.",
+        );
+      const balance = db.leaveBalances.find(
+        (item) => item.swapperId === actor.id,
+      );
+      if (balance)
+        balance.pendingDays = Math.max(
+          0,
+          balance.pendingDays - dayCount(leave.startTime, leave.endTime),
+        );
+      Object.assign(leave, {
+        status: "CANCELLED" as const,
+        cancellable: false,
+        editable: false,
+        updatedAt: new Date(now).toISOString(),
+      });
+      return view(db, leave);
     },
   },
   {
-    method: "GET", pattern: /^\/admin\/integrations\/leaves$/,
+    method: "GET",
+    pattern: /^\/admin\/leaves\/pending$/,
     handler: ({ db, user }) => {
       requireRole(requireUser(db, user), ["ADMIN"]);
-      const failed = db.leaveSyncOperations.filter((item) => item.status === "FAILED");
+      return db.leaves
+        .filter((leave) => leave.status === "PENDING")
+        .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
+        .map((leave) => ({
+          ...view(db, leave),
+          swapperId: leave.swapperId,
+          swapperName:
+            db.users.find((item) => item.id === leave.swapperId)?.fullName ??
+            "Compte inconnu",
+        }));
+    },
+  },
+  {
+    method: "PATCH",
+    pattern: /^\/admin\/leaves\/([^/]+)\/decision$/,
+    handler: ({ db, user, params, body, now }) => {
+      const actor = requireRole(requireUser(db, user), ["ADMIN"]);
+      const leave = db.leaves.find((item) => item.id === params[0]);
+      const decision = asText(body.decision);
+      const reason = asText(body.reason);
+      if (!leave || leave.status !== "PENDING")
+        throw new MockHttpError(404, "Cette demande n’est plus en attente.");
+      if (decision !== "APPROVED" && decision !== "REJECTED")
+        throw new MockHttpError(400, "Choisissez une décision valide.");
+      if (decision === "REJECTED" && reason.length < 5)
+        throw new MockHttpError(
+          400,
+          "Indiquez le motif du refus (5 caractères minimum).",
+        );
+      const balance = db.leaveBalances.find(
+        (item) => item.swapperId === leave.swapperId,
+      );
+      if (balance)
+        balance.pendingDays = Math.max(
+          0,
+          balance.pendingDays - dayCount(leave.startTime, leave.endTime),
+        );
+      Object.assign(leave, {
+        status: decision,
+        decisionReason: decision === "REJECTED" ? reason : "Demande approuvée.",
+        decidedAt: new Date(now).toISOString(),
+        updatedAt: new Date(now).toISOString(),
+        cancellable: false,
+        editable: false,
+      });
+      const dayTotal = dayCount(leave.startTime, leave.endTime);
+      const swapper = db.users.find((item) => item.id === leave.swapperId);
+      if (swapper)
+        notifyUser(
+          db,
+          swapper.id,
+          decision === "APPROVED" ? "LEAVE_APPROVED" : "LEAVE_REJECTED",
+          decision === "APPROVED"
+            ? "Congé approuvé"
+            : "Demande de congé refusée",
+          decision === "APPROVED"
+            ? `Votre demande de ${dayTotal} jour${dayTotal > 1 ? "s" : ""} a été approuvée.`
+            : `Votre demande de congé a été refusée : ${reason}`,
+          leave.id,
+        );
+      return { ...view(db, leave), decidedBy: actor.fullName };
+    },
+  },
+  {
+    method: "GET",
+    pattern: /^\/admin\/integrations\/leaves$/,
+    handler: ({ db, user }) => {
+      requireRole(requireUser(db, user), ["ADMIN"]);
+      const failed = db.leaveSyncOperations.filter(
+        (item) => item.status === "FAILED",
+      );
       return {
         status: failed.length ? "DEGRADED" : "OPERATIONAL",
-        lastSyncAt: db.leaveBalances.map((item) => item.syncedAt).sort().at(-1) ?? null,
-        pending: db.leaveSyncOperations.filter((item) => ["QUEUED", "PROCESSING"].includes(item.status)).length,
+        lastSyncAt:
+          db.leaveBalances
+            .map((item) => item.syncedAt)
+            .sort()
+            .at(-1) ?? null,
+        pending: db.leaveSyncOperations.filter((item) =>
+          ["QUEUED", "PROCESSING"].includes(item.status),
+        ).length,
         failed: failed.length,
         successRate: db.leaveSyncOperations.length
-          ? Math.round((db.leaveSyncOperations.filter((item) => item.status === "SYNCED").length / db.leaveSyncOperations.length) * 100)
+          ? Math.round(
+              (db.leaveSyncOperations.filter((item) => item.status === "SYNCED")
+                .length /
+                db.leaveSyncOperations.length) *
+                100,
+            )
           : 100,
-        operations: db.leaveSyncOperations.slice(0, 8).map((item) => ({ ...item, userName: db.users.find((u) => u.id === item.userId)?.fullName ?? "Compte inconnu" })),
+        operations: db.leaveSyncOperations.slice(0, 8).map((item) => ({
+          ...item,
+          userName:
+            db.users.find((u) => u.id === item.userId)?.fullName ??
+            "Compte inconnu",
+        })),
       };
     },
   },

@@ -70,6 +70,37 @@ export class LeaveController {
     return this.leaveService.cancel(req.user.id, id, dto);
   }
 
+  /** Alias PATCH utilisé par le frontend sprint 5.2. */
+  @Patch('leaves/:id/cancel')
+  @Roles(Role.SWAPPER)
+  @ApiOperation({ summary: 'Annuler une demande de conge (PATCH, sprint 5.2)' })
+  cancelPatch(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: CancelLeaveDto,
+  ) {
+    return this.leaveService.cancel(req.user.id, id, dto);
+  }
+
+  // ---------- Validation administrateur (v5.3) ----------
+
+  @Get('admin/leaves/pending')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Demandes de conge en attente (inbox admin)' })
+  pendingForAdmin() {
+    return this.leaveService.pendingForAdmin();
+  }
+
+  @Patch('admin/leaves/:id/decision')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Approuver ou refuser une demande de conge' })
+  decide(
+    @Param('id') id: string,
+    @Body() body: { decision: string; reason?: string },
+  ) {
+    return this.leaveService.decide(id, body.decision, body.reason);
+  }
+
   @Post('leaves/sync/:operationId/retry')
   @Roles(Role.SWAPPER)
   @ApiOperation({ summary: 'Relancer une synchronisation de conge echouee' })

@@ -47,17 +47,7 @@
 .detail-section + .text-button {
   margin-top: 24px;
 }
-.qr-image {
-  display: block;
-  width: 240px;
-  max-width: 100%;
-  margin: 10px auto;
-}
-.qr-window {
-  text-align: center;
-  line-height: 1.8;
-  color: #53647e;
-}
+
 .operations-actions {
   display: flex;
   flex-wrap: wrap;
