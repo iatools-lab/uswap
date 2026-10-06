@@ -4,6 +4,11 @@
 Application web de planification et de supervision des équipes de *swapping*
 réparties sur plusieurs stations.
 
+> **Vous découvrez ce dépôt ?** Suivez le guide
+> [`GETTING-STARTED.md`](GETTING-STARTED.md) : il va de zéro à une application
+> fonctionnelle en local (base de données, backend, frontend, comptes de démo).
+
+
 - **Base backend** : `uswap-v5.3.0` — backend intégré du sprint 5
 - **Frontend Dylane** : `uswap-frontend-s5.2.0` — interface et mocks livrés séparément
 - **Backend** : NestJS 11 + Prisma 6 + PostgreSQL
