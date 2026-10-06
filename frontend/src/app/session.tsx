@@ -9,8 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { api, forgetSession, login, logout, refresh, rolePaths, type Session, type User } from "../api/auth-api";
-import { captureQrToken, qrHomePath } from "../features/operations/qrToken";
+import { api, forgetSession, login, logout, normalizeUserRole, refresh, rolePaths, type Session, type User } from "../api/auth-api";
 import { isAccountPath, isSessionPath } from "./paths";
 
 type SessionContextValue = {
@@ -61,11 +60,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setDeadline(idleDeadline.current);
       setWarning(false);
       document.title = "Mon espace · uSwap";
-      captureQrToken();
       const stay =
         preservePath &&
         (isSessionPath(data.user, location.pathname) || isAccountPath(location.pathname));
-      if (!stay) navigate(qrHomePath(rolePaths[data.user.role], data.user.role), { replace: true });
+      if (!stay) navigate(rolePaths[data.user.role], { replace: true });
     },
     [location.pathname, navigate],
   );
@@ -78,7 +76,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setDeadline(0);
     setWarning(false);
     document.title = "Connexion · uSwap";
-    captureQrToken();
     if (location.pathname !== "/auth/login" && !isAccountPath(location.pathname))
       navigate("/auth/login", { replace: true });
   }, [location.pathname, navigate]);
@@ -90,12 +87,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const restore = (event: PageTransitionEvent) => {
       if (event.persisted) window.location.reload();
     };
-    const openToken = () => {
-      if (new URLSearchParams(window.location.hash.slice(1)).has("token")) window.location.reload();
-    };
     window.addEventListener("pagehide", hide);
     window.addEventListener("pageshow", restore);
-    window.addEventListener("hashchange", openToken);
     const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("uswap-session");
     if (channel)
       channel.onmessage = (event) => {
@@ -107,17 +100,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener("pagehide", hide);
       window.removeEventListener("pageshow", restore);
-      window.removeEventListener("hashchange", openToken);
       channel?.close();
     };
   }, [clear]);
 
   useLayoutEffect(() => {
-    captureQrToken();
   }, [location.pathname, location.search, location.hash]);
 
   useEffect(() => {
-    captureQrToken();
     const keepForgot = location.pathname === "/auth/forgot-password";
     if (accountMode && !keepForgot) {
       setChecking(false);
@@ -196,10 +186,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       tick();
       if (document.visibilityState === "visible" && idleDeadline.current > Date.now() && !renewing.current)
         api<{ user: User }>("/auth/me")
-          .then(({ user }) => {
+          .then((response) => {
+            const user = normalizeUserRole(response.user);
             setSession((current) => (current ? { ...current, user } : null));
             if (!isSessionPath(user, window.location.pathname) && !isAccountPath(window.location.pathname))
-              navigate(qrHomePath(rolePaths[user.role], user.role), { replace: true });
+              navigate(rolePaths[user.role], { replace: true });
           })
           .catch(() => clear());
     };

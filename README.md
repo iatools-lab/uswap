@@ -4,12 +4,16 @@
 Application web de planification et de supervision des équipes de *swapping*
 réparties sur plusieurs stations.
 
-- **Version courante** : `uswap-v5.3.0` — sprint 5 intégré (frontend + backend)
+- **Base backend** : `uswap-v5.3.0` — backend intégré du sprint 5
+- **Frontend Dylane** : `uswap-frontend-s5.2.0` — interface et mocks livrés séparément
 - **Backend** : NestJS 11 + Prisma 6 + PostgreSQL
 - **Frontend** : React 19 + Vite + TypeScript
 
 > Documentation détaillée : [`docs/FONCTIONNEMENT-SPRINTS-1-A-5.md`](docs/FONCTIONNEMENT-SPRINTS-1-A-5.md)
 > (fonctionnement du projet et rôle de chaque API, sprint par sprint).
+>
+> Le tag `uswap-v5.3.0` décrit la base full-stack publiée avant l’overlay frontend
+> Dylane. Le code backend n’a pas été modifié par la livraison `s5.2.0`.
 >
 > **Nouveautés et API de la version 5.3.0** :
 > [`docs/V5.3.0-NOUVELLE-VERSION-ET-API.md`](docs/V5.3.0-NOUVELLE-VERSION-ET-API.md)
@@ -49,15 +53,15 @@ L'application couvre le cycle complet d'une journée de travail :
 
 1. **Planifier** — créer un planning, générer les créneaux depuis les modèles
    de la station, publier.
-2. **Pointer** — le chef de station génère un QR de prise/fin de service, le
-   swapper le scanne.
+2. **Pointer** — l’interface Dylane prépare un pointage par proximité GPS en
+   mode mock; l’API V5.3 conserve son parcours QR.
 3. **Suivre** — retards, absences, corrections, journal des mouvements.
 4. **Couvrir** — une absence ouvre une demande de remplacement, le superviseur
    arbitre.
 5. **Piloter** — rapports consolidés, réglages réseau, administration des accès.
 
 Modules fonctionnels : utilisateurs et rôles, stations, congés, plannings et
-créneaux, pointage QR, remplacements, incidents, notifications, rapports,
+créneaux, pointage, remplacements, incidents, notifications, rapports,
 réglages globaux.
 
 ---
@@ -142,7 +146,7 @@ LEAVE_API_URL=""
 **Frontend** — copier `frontend/.env.example` vers `frontend/.env` :
 
 ```bash
-VITE_API_URL=/api
+VITE_API_URL=http://127.0.0.1:3000
 ```
 
 > Ne mettez pas `http://localhost:3000` ici : l'appel direct étant *cross-site*,
@@ -255,6 +259,7 @@ haut, puis marquée par un tag.
 |---|---|
 | `uswap-frontend-s4.1.0` | Frontend sprint 4 |
 | `uswap-frontend-s5.1.0` | Frontend sprint 5 |
+| `uswap-frontend-s5.2.0` | Frontend Dylane sprint 5.2, mock et interface |
 | `uswap-v5.3.0` | **Sprint 5 intégré : frontend + backend raccordés** |
 
 ---
@@ -275,3 +280,6 @@ Ces valeurs vivent uniquement dans les fichiers `.env` locaux, exclus par
 La version 5.3 complète le socle 5.2 avec le reporting exportable CSV/XLSX, l’audit des exports, les rapports périodiques avec aperçu et historique d’exécution, le calcul des heures par station/semaine/mois, la visibilité de la synchronisation externe des congés et l’amélioration du parcours offline/PWA (file d’absences annulable avant synchronisation et horodatage de synchronisation).
 
 Voir `US-2069-2078-COMPLIANCE.md` pour la matrice de conformité détaillée.
+## Livraison frontend Dylane - sprint 5.2.0
+
+Le tag `uswap-frontend-s5.2.0` publie la version de l’interface développée côté Dylane, avec ses parcours mock et les écarts API documentés. La [note de livraison illustrée (PDF)](output/pdf/uswap-frontend-s5.2.0-livraison.pdf) contient les captures du frontend, les schémas métier et les vérifications effectuées. Le code backend existant n’est pas modifié par cette livraison.

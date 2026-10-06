@@ -12,6 +12,11 @@ const asNumber = (value: unknown, fallback: number) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+const coordinate = (value: unknown, current: number | null | undefined) => {
+  if (value === undefined) return current ?? null;
+  if (value === null || value === "") return null;
+  return Number(value);
+};
 
 function stationPayload(
   body: Record<string, unknown>,
@@ -21,14 +26,8 @@ function stationPayload(
     name: asText(body.name) || current?.name,
     address: asText(body.address) || null,
     city: asText(body.city) || null,
-    latitude:
-      body.latitude === null || body.latitude === ""
-        ? null
-        : asNumber(body.latitude, current?.latitude ?? 0),
-    longitude:
-      body.longitude === null || body.longitude === ""
-        ? null
-        : asNumber(body.longitude, current?.longitude ?? 0),
+    latitude: coordinate(body.latitude, current?.latitude),
+    longitude: coordinate(body.longitude, current?.longitude),
     location: asText(body.location) || null,
     timezone: asText(body.timezone) || current?.timezone || "Africa/Douala",
     contactName: asText(body.contactName) || null,
@@ -36,6 +35,10 @@ function stationPayload(
     latenessToleranceMinutes: asNumber(
       body.latenessToleranceMinutes,
       current?.latenessToleranceMinutes ?? 5,
+    ),
+    geofenceRadiusMeters: Math.max(
+      25,
+      asNumber(body.geofenceRadiusMeters, current?.geofenceRadiusMeters ?? 150),
     ),
     enforceMinRest:
       typeof body.enforceMinRest === "boolean"
@@ -50,15 +53,39 @@ function stationPayload(
       typeof body.blockPublishingWithVacancies === "boolean"
         ? body.blockPublishingWithVacancies
         : (current?.blockPublishingWithVacancies ?? false),
-    checkinQrTtl: Math.max(
-      30,
-      asNumber(body.checkinQrTtl, current?.checkinQrTtl ?? 300),
-    ),
-    checkoutQrTtl: Math.max(
-      30,
-      asNumber(body.checkoutQrTtl, current?.checkoutQrTtl ?? 300),
-    ),
   };
+}
+
+function validateStationGeolocation(payload: Partial<MockStation>) {
+  const hasLatitude = payload.latitude != null;
+  const hasLongitude = payload.longitude != null;
+  if (hasLatitude !== hasLongitude)
+    throw new MockHttpError(
+      400,
+      "Renseignez la latitude et la longitude ensemble, ou laissez les deux coordonnées vides.",
+    );
+  if (
+    (hasLatitude &&
+      (!Number.isFinite(payload.latitude) ||
+        payload.latitude! < -90 ||
+        payload.latitude! > 90)) ||
+    (hasLongitude &&
+      (!Number.isFinite(payload.longitude) ||
+        payload.longitude! < -180 ||
+        payload.longitude! > 180))
+  )
+    throw new MockHttpError(
+      400,
+      "Les coordonnées GPS de la station ne sont pas valides.",
+    );
+  if (
+    !Number.isFinite(payload.geofenceRadiusMeters) ||
+    (payload.geofenceRadiusMeters ?? 0) < 25
+  )
+    throw new MockHttpError(
+      400,
+      "Le périmètre de pointage doit être d’au moins 25 mètres.",
+    );
 }
 
 const templatePayload = (body: Record<string, unknown>) => ({
@@ -184,6 +211,7 @@ export const stationRoutes: MockRoute[] = [
     handler: (ctx) => {
       requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
       const payload = stationPayload(ctx.body);
+      validateStationGeolocation(payload);
       if (!payload.name)
         throw new MockHttpError(400, "Le nom de la station est obligatoire.");
       if (
@@ -205,13 +233,12 @@ export const stationRoutes: MockRoute[] = [
         contactPhone: payload.contactPhone ?? null,
         isActive: true,
         latenessToleranceMinutes: payload.latenessToleranceMinutes ?? 5,
+        geofenceRadiusMeters: payload.geofenceRadiusMeters ?? 150,
         enforceMinRest: payload.enforceMinRest ?? true,
         minRestHours: payload.minRestHours ?? 8,
         weeklyHoursLimit: payload.weeklyHoursLimit ?? 48,
         blockPublishingWithVacancies:
           payload.blockPublishingWithVacancies ?? false,
-        checkinQrTtl: payload.checkinQrTtl ?? 300,
-        checkoutQrTtl: payload.checkoutQrTtl ?? 300,
       };
       ctx.db.stations.push(created);
       return created;
@@ -247,6 +274,7 @@ export const stationRoutes: MockRoute[] = [
       requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
       const station = stationOf(ctx.db, ctx.params[0]);
       const payload = stationPayload(ctx.body, station);
+      validateStationGeolocation(payload);
       if (!payload.name)
         throw new MockHttpError(400, "Le nom de la station est obligatoire.");
       if (

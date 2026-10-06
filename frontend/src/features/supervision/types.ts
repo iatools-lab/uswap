@@ -18,6 +18,7 @@ export type Candidate = {
   id: string;
   fullName: string;
   email: string;
+  homeStationName?: string | null;
   eligible: boolean;
   issues: { code: string; message: string }[];
 };

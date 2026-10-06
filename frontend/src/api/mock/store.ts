@@ -1,5 +1,5 @@
 import { ADMIN_PASSWORD, DB_VERSION, createSeed } from "./seed";
-import type { MockDb, MockIncident, MockUser } from "./types";
+import type { MockDb, MockIncident, MockLeave, MockUser } from "./types";
 import { assertDbInvariants } from "./invariants";
 
 const STORAGE_KEY = `uswap.mock.db.v${DB_VERSION}`;
@@ -8,6 +8,82 @@ const LEGACY_STORAGE_KEYS = Array.from(
   (_, index) => `uswap.mock.db.v${DB_VERSION - 1 - index}`,
 );
 const ADMIN_ACCESS_REPAIR_KEY = `uswap.mock.admin-access-restored.v1`;
+const DAY_MS = 86_400_000;
+
+function utcDay(iso: string | number): number {
+  const date = new Date(iso);
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+/** Le solde simulé et son historique doivent toujours raconter la même chose. */
+function ensureConsumedLeaveHistory(current: MockDb): MockDb {
+  const now = Date.now();
+  const today = utcDay(now);
+  const leaves = [...current.leaves];
+
+  current.leaveBalances.forEach((balance, index) => {
+    const yearStart = Date.UTC(balance.year, 0, 1);
+    const yearEnd = Date.UTC(balance.year + 1, 0, 1) - DAY_MS;
+    const consumedDays = leaves
+      .filter(
+        (leave) =>
+          leave.swapperId === balance.swapperId &&
+          leave.status === "APPROVED" &&
+          Date.parse(leave.endTime) < now,
+      )
+      .reduce((total, leave) => {
+        const start = Math.max(utcDay(leave.startTime), yearStart);
+        const end = Math.min(utcDay(leave.endTime), yearEnd, today);
+        return end >= start ? total + (end - start) / DAY_MS + 1 : total;
+      }, 0);
+    const missingDays = Math.max(0, balance.usedDays - consumedDays);
+    if (!missingDays) return;
+
+    let end = today - (14 + index * 2) * DAY_MS;
+    let start = end - (missingDays - 1) * DAY_MS;
+    while (start >= yearStart) {
+      const overlap = leaves.find((leave) => {
+        if (
+          leave.swapperId !== balance.swapperId ||
+          leave.status !== "APPROVED"
+        )
+          return false;
+        const leaveStart = utcDay(leave.startTime);
+        const leaveEnd = utcDay(leave.endTime);
+        return start <= leaveEnd && end >= leaveStart;
+      });
+      if (!overlap) break;
+      end = utcDay(overlap.startTime) - DAY_MS;
+      start = end - (missingDays - 1) * DAY_MS;
+    }
+    if (start < yearStart || end >= today) return;
+
+    const periodStart = new Date(start).toISOString();
+    const periodEnd = new Date(end).toISOString();
+    const createdAt = new Date(start - 21 * DAY_MS).toISOString();
+    leaves.push({
+      id: `leave-consumed-${balance.swapperId}`,
+      swapperId: balance.swapperId,
+      startTime: periodStart,
+      endTime: periodEnd,
+      type: "ANNUAL",
+      status: "APPROVED",
+      reason: "Congé pris et validé par l’administration.",
+      attachmentId: null,
+      externalId: `LV-HIST-${balance.swapperId}`,
+      clientRef: `leave-history-${balance.swapperId}`,
+      createdAt,
+      updatedAt: periodEnd,
+      submittedAt: createdAt,
+      decidedAt: new Date(start - 7 * DAY_MS).toISOString(),
+      decisionReason: "Période approuvée par l’administration.",
+      cancellable: false,
+      editable: false,
+    } satisfies MockLeave);
+  });
+
+  return { ...current, leaves };
+}
 
 /** Latence simulée : rend visibles les états de chargement des écrans. */
 export const MOCK_LATENCY_MS = 150;
@@ -50,8 +126,8 @@ function storage(): Storage | null {
 
 /**
  * Un incident de démonstration n'est réutilisable que si son déclarant et le
- * swappeur concerné appartiennent toujours à la station enregistrée. Les
- * rattachements peuvent avoir changé dans une base locale plus ancienne.
+ * swappeur concerné existent toujours. Une affectation ponctuelle dans une
+ * autre station doit rester dans l'historique même après sa fin.
  */
 function incidentFitsCurrentScope(
   incident: MockIncident,
@@ -64,11 +140,83 @@ function incidentFitsCurrentScope(
   );
   return Boolean(
     stationIds.has(incident.stationId) &&
-    reporter?.role === "STATION_CHIEF" &&
-    reporter.stationId === incident.stationId &&
-    affectedSwapper?.role === "SWAPPER" &&
-    affectedSwapper.stationId === incident.stationId,
+    reporter?.role === "SUPERVISOR" &&
+    affectedSwapper?.role === "SWAPPER",
   );
+}
+
+/** Ne conserve qu'un planning de démonstration et ses données dépendantes. */
+function retainTestPlanning(current: MockDb): MockDb {
+  const source =
+    current.plannings.find(
+      (item) => item.name?.trim().toLocaleLowerCase("fr") === "test",
+    ) ??
+    current.plannings.find((item) => item.status === "PUBLISHED") ??
+    current.plannings[0];
+
+  if (!source) {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    const retained = {
+      id: "pl-test",
+      name: "Test",
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      status: "DRAFT" as const,
+      revision: 1,
+      createdAt: now.toISOString(),
+      publishedAt: null,
+    };
+    return {
+      ...current,
+      plannings: [retained],
+      occurrences: [],
+      attendance: [],
+      absences: [],
+      changes: [],
+      automatedAbsences: [],
+      notices: [],
+      notifications: current.notifications.filter((item) => !item.targetId),
+    };
+  }
+
+  const retained = { ...source, name: "Test" };
+  const retainedOccurrences = current.occurrences.filter(
+    (item) => item.planningId === retained.id,
+  );
+  const retainedShiftIds = new Set(retainedOccurrences.map((item) => item.id));
+  const removedIds = new Set([
+    ...current.plannings
+      .filter((item) => item.id !== retained.id)
+      .map((item) => item.id),
+    ...current.occurrences
+      .filter((item) => item.planningId !== retained.id)
+      .map((item) => item.id),
+  ]);
+
+  return {
+    ...current,
+    plannings: [retained],
+    occurrences: retainedOccurrences,
+    attendance: current.attendance.filter((item) =>
+      retainedShiftIds.has(item.shiftId),
+    ),
+    absences: current.absences.filter((item) =>
+      retainedShiftIds.has(item.shiftId),
+    ),
+    changes: current.changes.filter((item) =>
+      retainedShiftIds.has(item.shiftId),
+    ),
+    automatedAbsences: current.automatedAbsences.filter((id) =>
+      retainedShiftIds.has(id),
+    ),
+    notices: current.notices.filter((item) => item.planningId === retained.id),
+    notifications: current.notifications.filter(
+      (item) => !item.targetId || !removedIds.has(item.targetId),
+    ),
+  };
 }
 
 /**
@@ -83,9 +231,43 @@ function migrateDb(candidate: unknown): MockDb | null {
     return null;
 
   const seed = createSeed(Date.now());
-  const currentUsers = previous.users;
-  const currentStations = previous.stations;
-  const previousLeaves = previous.leaves ?? [];
+  const currentUsers = previous.users.map((item) =>
+    (item as MockUser).role === ("STATION_CHIEF" as MockUser["role"])
+      ? { ...(item as MockUser), role: "SUPERVISOR" as const, stationId: null }
+      : (item as MockUser),
+  );
+  const currentStations = previous.stations.map((item) => ({
+    ...item,
+    geofenceRadiusMeters:
+      Number((item as MockDb["stations"][number]).geofenceRadiusMeters) || 150,
+  }));
+  const activeStationIds = new Set(
+    currentStations
+      .filter((station) => station.isActive)
+      .map((station) => station.id),
+  );
+  const existingUserIds = new Set(currentUsers.map((item) => item.id));
+  const addedSeedSwappers = seed.users.filter(
+    (item) =>
+      item.role === "SWAPPER" &&
+      item.isActive &&
+      !existingUserIds.has(item.id) &&
+      item.stationId !== null &&
+      activeStationIds.has(item.stationId),
+  );
+  const previousLeaves = (previous.leaves ?? []).map((leave) => {
+    const seedLeave = seed.leaves.find((item) => item.id === leave.id);
+    return seedLeave
+      ? {
+          ...leave,
+          startTime: seedLeave.startTime,
+          endTime: seedLeave.endTime,
+        }
+      : leave;
+  });
+  const previousLeaveBalances = previous.leaveBalances ?? [];
+  const previousNotificationPreferences =
+    previous.notificationPreferences ?? [];
   const sprint4DemoLeaves = seed.leaves.filter(
     (item) =>
       item.id.startsWith("leave-") &&
@@ -99,11 +281,24 @@ function migrateDb(candidate: unknown): MockDb | null {
   const compatibleSeedIncidents = seed.incidents.filter((incident) =>
     incidentFitsCurrentScope(incident, currentUsers, currentStationIds),
   );
+  const { qrTokens: _obsoleteQrTokens, ...previousWithoutQr } =
+    previous as Partial<MockDb> & { qrTokens?: unknown };
   const migrated = {
     ...seed,
-    ...previous,
+    ...previousWithoutQr,
     version: DB_VERSION,
-    leaveBalances: previous.leaveBalances ?? seed.leaveBalances,
+    // Ajoute les nouveaux profils fictifs sans écraser les comptes locaux :
+    // les plannings, pointages et préférences déjà enregistrés les conservent.
+    users: [...currentUsers, ...addedSeedSwappers],
+    leaveBalances: [
+      ...previousLeaveBalances,
+      ...seed.leaveBalances.filter(
+        (item) =>
+          !previousLeaveBalances.some(
+            (saved) => saved.swapperId === item.swapperId,
+          ),
+      ),
+    ],
     leaveSyncOperations: [
       ...previousLeaveOperations,
       ...seed.leaveSyncOperations.filter(
@@ -117,8 +312,15 @@ function migrateDb(candidate: unknown): MockDb | null {
         (item) => !previousIncidents.some((saved) => saved.id === item.id),
       ),
     ],
-    notificationPreferences:
-      previous.notificationPreferences ?? seed.notificationPreferences,
+    notificationPreferences: [
+      ...previousNotificationPreferences,
+      ...seed.notificationPreferences.filter(
+        (item) =>
+          !previousNotificationPreferences.some(
+            (saved) => saved.userId === item.userId,
+          ),
+      ),
+    ],
     scheduledReports: previous.scheduledReports ?? [],
     globalSettings: previous.globalSettings ?? seed.globalSettings,
     settingsHistory: previous.settingsHistory ?? [],
@@ -145,7 +347,7 @@ function migrateDb(candidate: unknown): MockDb | null {
     })),
   } as MockDb;
 
-  return migrated;
+  return ensureConsumedLeaveHistory(retainTestPlanning(migrated));
 }
 
 /** Base courante : relue depuis le stockage local, sinon recréée. */
@@ -179,9 +381,11 @@ export function loadDb(): MockDb {
       /* donnée illisible : on repart de la graine */
     }
   }
-  // Le jeu initial contient un planning publié cohérent afin que les parcours
-  // QR, pointage, absence et remplacement soient utilisables immédiatement.
-  db = restoreAdminAccess(createSeed(Date.now()));
+  // Le jeu initial contient un planning publié cohérent pour tester les parcours
+  // pointage, absence et remplacement dès la première ouverture.
+  db = ensureConsumedLeaveHistory(
+    restoreAdminAccess(retainTestPlanning(createSeed(Date.now()))),
+  );
   saveDb();
   localStorage?.setItem(ADMIN_ACCESS_REPAIR_KEY, "done");
   return db;
@@ -205,7 +409,9 @@ export function replaceDb(next: MockDb): void {
 
 /** Réinitialise la maquette (démonstration, recette). */
 export function resetDb(): MockDb {
-  db = restoreAdminAccess(createSeed(Date.now()));
+  db = ensureConsumedLeaveHistory(
+    restoreAdminAccess(retainTestPlanning(createSeed(Date.now()))),
+  );
   saveDb();
   return db;
 }

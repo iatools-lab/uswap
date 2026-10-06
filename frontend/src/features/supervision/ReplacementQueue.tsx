@@ -89,8 +89,8 @@ export function ReplacementQueue({
             n’est confirmé.
           </li>
           <li>
-            « Affecter » propose uniquement les swappeurs actifs de la même
-            station et vérifie leurs contraintes.
+            « Affecter » propose les swappeurs actifs du réseau et vérifie leurs
+            contraintes, y compris pour un renfort entre stations.
           </li>
           <li>
             Après confirmation, les deux swappeurs sont notifiés et le shift
@@ -278,6 +278,11 @@ export function ReplacementDialog({
                     <span>
                       <strong>{candidate.fullName}</strong>
                       <small>{candidate.email}</small>
+                      {candidate.homeStationName && (
+                        <small>
+                          Station de rattachement : {candidate.homeStationName}
+                        </small>
+                      )}
                     </span>
                     <span>
                       <span

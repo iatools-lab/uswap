@@ -223,6 +223,7 @@ export const coverageRoutes: MockRoute[] = [
         "Absence déclarée",
         `${user.fullName} · ${occurrence.label} : ${reason}`,
         [user.id],
+        occurrence.id,
       );
       return { id: created.id, replayed: false };
     },
@@ -243,18 +244,16 @@ export const coverageRoutes: MockRoute[] = [
       requireRole(requireUser(ctx.db, ctx.user), ["SUPERVISOR"]);
       const occurrence = occurrenceOf(ctx.db, ctx.params[0]);
       const candidates = ctx.db.users
-        .filter(
-          (item) =>
-            item.role === "SWAPPER" &&
-            item.isActive &&
-            item.stationId === occurrence.stationId,
-        )
+        .filter((item) => item.role === "SWAPPER" && item.isActive)
         .map((item) => {
           if (item.id === occurrence.swapperId)
             return {
               id: item.id,
               fullName: item.fullName,
               email: item.email,
+              homeStationName:
+                ctx.db.stations.find((station) => station.id === item.stationId)
+                  ?.name ?? null,
               eligible: true,
               issues: [] as { code: string; message: string }[],
             };
@@ -270,6 +269,9 @@ export const coverageRoutes: MockRoute[] = [
             id: item.id,
             fullName: item.fullName,
             email: item.email,
+            homeStationName:
+              ctx.db.stations.find((station) => station.id === item.stationId)
+                ?.name ?? null,
             eligible: report.valid,
             issues: [...report.errors, ...report.warnings].map((issue) => ({
               code: issue.code,
@@ -293,16 +295,8 @@ export const coverageRoutes: MockRoute[] = [
       const occurrence = occurrenceOf(ctx.db, ctx.params[0]);
       const swapperId = asText(ctx.body.swapperId);
       const swapper = ctx.db.users.find((item) => item.id === swapperId);
-      if (
-        !swapper ||
-        swapper.role !== "SWAPPER" ||
-        !swapper.isActive ||
-        swapper.stationId !== occurrence.stationId
-      )
-        throw new MockHttpError(
-          400,
-          "Sélectionnez un swappeur actif rattaché à cette station.",
-        );
+      if (!swapper || swapper.role !== "SWAPPER" || !swapper.isActive)
+        throw new MockHttpError(400, "Sélectionnez un swappeur actif.");
       const report = constraintReport(ctx.db, {
         stationId: occurrence.stationId,
         swapperId,
@@ -358,6 +352,7 @@ export const coverageRoutes: MockRoute[] = [
         "Remplacement confirmé",
         `${swapper.fullName} couvre ${occurrence.label} à ${station.name}.`,
         [swapper.id, previous?.id ?? ""].filter(Boolean),
+        occurrence.id,
       );
       return {
         ok: true,
@@ -536,6 +531,7 @@ export const coverageRoutes: MockRoute[] = [
         justified ? "Absence requalifiée en justifiée" : "Pointage corrigé",
         `${occurrence.label} : ${reason}`,
         [occurrence.swapperId],
+        occurrence.id,
       );
       return { ok: true, status, correction };
     },
@@ -569,7 +565,8 @@ export const coverageRoutes: MockRoute[] = [
     handler: (ctx) => {
       const user = requireUser(ctx.db, ctx.user);
       for (const item of ctx.db.notifications)
-        if (item.userId === user.id && !item.readAt) item.readAt = isoFromMs(ctx.now);
+        if (item.userId === user.id && !item.readAt)
+          item.readAt = isoFromMs(ctx.now);
       return { ok: true };
     },
   },
@@ -578,8 +575,14 @@ export const coverageRoutes: MockRoute[] = [
     pattern: /^\/notifications\/preferences$/,
     handler: (ctx) => {
       const user = requireUser(ctx.db, ctx.user);
-      const preferences = ctx.db.notificationPreferences.find((item) => item.userId === user.id);
-      if (!preferences) throw new MockHttpError(404, "Préférences de notification introuvables.");
+      const preferences = ctx.db.notificationPreferences.find(
+        (item) => item.userId === user.id,
+      );
+      if (!preferences)
+        throw new MockHttpError(
+          404,
+          "Préférences de notification introuvables.",
+        );
       return preferences;
     },
   },
@@ -588,18 +591,28 @@ export const coverageRoutes: MockRoute[] = [
     pattern: /^\/notifications\/preferences$/,
     handler: (ctx) => {
       const user = requireUser(ctx.db, ctx.user);
-      const preferences = ctx.db.notificationPreferences.find((item) => item.userId === user.id);
-      if (!preferences) throw new MockHttpError(404, "Préférences de notification introuvables.");
+      const preferences = ctx.db.notificationPreferences.find(
+        (item) => item.userId === user.id,
+      );
+      if (!preferences)
+        throw new MockHttpError(
+          404,
+          "Préférences de notification introuvables.",
+        );
       preferences.emailEnabled = ctx.body.emailEnabled !== false;
       preferences.pushEnabled = ctx.body.pushEnabled === true;
       if (ctx.body.categories && typeof ctx.body.categories === "object") {
-        const requested = ctx.body.categories as Record<string, { email?: boolean; push?: boolean }>;
+        const requested = ctx.body.categories as Record<
+          string,
+          { email?: boolean; push?: boolean }
+        >;
         for (const category of Object.keys(preferences.categories)) {
           const next = requested[category];
-          if (next) preferences.categories[category] = {
-            email: preferences.emailEnabled && next.email === true,
-            push: preferences.pushEnabled && next.push === true,
-          };
+          if (next)
+            preferences.categories[category] = {
+              email: preferences.emailEnabled && next.email === true,
+              push: preferences.pushEnabled && next.push === true,
+            };
         }
       }
       preferences.updatedAt = isoFromMs(ctx.now);

@@ -10,9 +10,26 @@ import {
   MockHttpError,
   type IncidentSeverity,
   type IncidentStatus,
+  type MockDb,
   type MockIncident,
+  type MockUser,
   type MockRoute,
 } from "../types";
+
+function servesStation(db: MockDb, user: MockUser, stationId: string) {
+  return (
+    user.stationId === stationId ||
+    db.occurrences.some(
+      (shift) =>
+        shift.stationId === stationId &&
+        shift.swapperId === user.id &&
+        db.plannings.some(
+          (planning) =>
+            planning.id === shift.planningId && planning.status === "PUBLISHED",
+        ),
+    )
+  );
+}
 
 function serialize(
   db: Parameters<MockRoute["handler"]>[0]["db"],
@@ -46,14 +63,8 @@ export const incidentRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/incidents$/,
     handler: ({ db, user, query }) => {
-      const actor = requireRole(requireUser(db, user), [
-        "SUPERVISOR",
-        "STATION_CHIEF",
-      ]);
-      const stationId =
-        actor.role === "STATION_CHIEF"
-          ? actor.stationId
-          : query.get("stationId");
+      const actor = requireRole(requireUser(db, user), ["SUPERVISOR"]);
+      const stationId = query.get("stationId");
       const rows = db.incidents
         .filter((item) => (stationId ? item.stationId === stationId : true))
         .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
@@ -73,7 +84,9 @@ export const incidentRoutes: MockRoute[] = [
         : 0;
       const swappers = db.users
         .filter((item) => item.role === "SWAPPER" && item.isActive)
-        .filter((item) => (stationId ? item.stationId === stationId : true))
+        .filter((item) =>
+          stationId ? servesStation(db, item, stationId) : true,
+        )
         .map((item) => ({
           id: item.id,
           fullName: item.fullName,
@@ -105,8 +118,8 @@ export const incidentRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/incidents$/,
     handler: ({ db, user, body, now }) => {
-      const actor = requireRole(requireUser(db, user), ["STATION_CHIEF"]);
-      const stationId = actor.stationId;
+      const actor = requireRole(requireUser(db, user), ["SUPERVISOR"]);
+      const stationId = String(body.stationId ?? "");
       if (!stationId || !db.stations.some((item) => item.id === stationId))
         throw new MockHttpError(400, "Sélectionnez une station valide.");
       const affectedSwapperId = String(body.affectedSwapperId ?? "");
@@ -115,12 +128,12 @@ export const incidentRoutes: MockRoute[] = [
           item.id === affectedSwapperId &&
           item.role === "SWAPPER" &&
           item.isActive &&
-          item.stationId === stationId,
+          servesStation(db, item, stationId),
       );
       if (!affectedSwapper)
         throw new MockHttpError(
           400,
-          "Sélectionnez un swappeur actif rattaché à cette station.",
+          "Sélectionnez un swappeur actif rattaché ou affecté à cette station.",
         );
       const title = String(body.title ?? "").trim();
       const description = String(body.description ?? "").trim();
@@ -171,6 +184,7 @@ export const incidentRoutes: MockRoute[] = [
         `Nouvel incident · ${incident.severity}`,
         `${affectedSwapper.fullName} · ${title} à ${stationNameOf(db, stationId)}.`,
         [actor.id],
+        incident.id,
       );
       return serialize(db, incident);
     },
@@ -234,6 +248,7 @@ export const incidentRoutes: MockRoute[] = [
         `Incident ${nextStatus.toLowerCase()}`,
         `${incident.title} · ${comment || "Suivi mis à jour"}`,
         [incident.reporterId],
+        incident.id,
       );
       return serialize(db, incident);
     },

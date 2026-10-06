@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ActivityIcon,
   ArrowRightIcon,
@@ -84,6 +85,9 @@ export function IncidentCenter({
   canReport?: boolean;
   stationId?: string | null;
 }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const targetIncidentId = new URLSearchParams(location.search).get("incident");
   const [data, setData] = useState<Data | null>(null);
   const [revision, setRevision] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
@@ -98,6 +102,18 @@ export function IncidentCenter({
       active = false;
     };
   }, [revision, stationId]);
+  useEffect(() => {
+    if (!data || !targetIncidentId) return;
+    const target = data.incidents.find((item) => item.id === targetIncidentId);
+    if (target) {
+      setFilter("ALL");
+      setSelected(target);
+    }
+  }, [data, targetIncidentId]);
+  const closeIncident = () => {
+    setSelected(null);
+    if (targetIncidentId) navigate(location.pathname, { replace: true });
+  };
   const rows = useMemo(
     () =>
       data?.incidents.filter(
@@ -123,7 +139,7 @@ export function IncidentCenter({
           <h2>Incidents concernant les swappeurs</h2>
           <p>
             {canReport
-              ? "Déclarez les situations constatées dans votre station et suivez leur prise en charge."
+              ? "Choisissez la station et le swappeur concernés, puis suivez la prise en charge."
               : "Analysez les signalements des stations, documentez les actions menées et clôturez leur traitement."}
           </p>
         </div>
@@ -259,9 +275,9 @@ export function IncidentCenter({
         key={selected?.id}
         incident={selected}
         canManage={canManage}
-        onClose={() => setSelected(null)}
+        onClose={closeIncident}
         onSaved={() => {
-          setSelected(null);
+          closeIncident();
           setRevision((v) => v + 1);
         }}
       />

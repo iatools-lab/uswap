@@ -67,10 +67,10 @@ export function SwapperLeavePage() {
         <div>
           <span>Cheminement</span>
           <h2 id="leave-process-title">
-            Que se passe-t-il après un signalement ?
+            Comment votre demande est-elle traitée ?
           </h2>
           <p>
-            Le congé planifié et l’absence liée à un shift suivent deux circuits
+            Les congés planifiés et les absences imprévues suivent deux parcours
             distincts.
           </p>
         </div>
@@ -78,16 +78,17 @@ export function SwapperLeavePage() {
           <article>
             <strong>Congé planifié</strong>
             <ol>
-              <li>La demande est transmise au service RH avec sa période.</li>
               <li>
-                Elle reste modifiable tant qu’aucune décision n’est rendue.
+                Vous envoyez votre demande depuis cette page, en précisant la
+                période et le motif.
+              </li>
+              <li>L’administration l’examine et vous notifie sa décision.</li>
+              <li>
+                Si elle est approuvée, vos shifts concernés sont identifiés.
               </li>
               <li>
-                Une approbation met à jour le solde et repère les shifts
-                concernés.
-              </li>
-              <li>
-                Ces shifts rejoignent la file de remplacement du superviseur.
+                Le superviseur organise leur remplacement et le planning est
+                actualisé.
               </li>
             </ol>
           </article>
@@ -95,13 +96,10 @@ export function SwapperLeavePage() {
             <strong>Absence imprévue</strong>
             <ol>
               <li>
-                Vous choisissez un shift futur et joignez le justificatif
-                demandé.
+                Vous choisissez un shift futur et signalez votre
+                indisponibilité.
               </li>
-              <li>
-                Le chef de station et le superviseur sont prévenus
-                immédiatement.
-              </li>
+              <li>Le superviseur est prévenu immédiatement.</li>
               <li>
                 Le superviseur choisit un remplaçant compatible de la même
                 station.

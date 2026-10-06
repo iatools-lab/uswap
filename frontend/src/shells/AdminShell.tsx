@@ -116,28 +116,30 @@ export function AdminShell() {
         Aller au contenu
       </a>
       <aside className="admin-sidebar">
-        <SidebarToggle
-          collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed((value) => !value)}
-        />
-        <a
-          className="brand"
-          {...link("/app/admin")}
-          aria-label="uSwap, accueil administrateur"
-        >
-          <span className="brand-symbol">
-            <Zap fill="currentColor" />
-          </span>
-          <span className="brand-lockup">
-            <span className="brand-name">
-              u<span className="brand-swap">Swap</span>
-              <span className="brand-dot">.</span>
+        <div className="admin-sidebar-header">
+          <a
+            className="brand"
+            {...link("/app/admin")}
+            aria-label="uSwap, accueil administrateur"
+          >
+            <span className="brand-symbol">
+              <Zap fill="currentColor" />
             </span>
-            <span className="brand-endorsement">
-              Powered by <strong>uPowa</strong>
+            <span className="brand-lockup">
+              <span className="brand-name">
+                u<span className="brand-swap">Swap</span>
+                <span className="brand-dot">.</span>
+              </span>
+              <span className="brand-endorsement">
+                Powered by <strong>uPowa</strong>
+              </span>
             </span>
-          </span>
-        </a>
+          </a>
+          <SidebarToggle
+            collapsed={sidebarCollapsed}
+            onToggle={() => setSidebarCollapsed((value) => !value)}
+          />
+        </div>
 
         <nav aria-label="Navigation administrateur">
           {sections

@@ -204,10 +204,7 @@ export function ChangeHistory({ user }: SupervisionProps) {
           className="ops-table"
         />
       )}
-      <p className="operations-hint">
-        Historique en lecture seule.{" "}
-        {user.role === "STATION_CHIEF" ? "Limité à votre station." : ""}
-      </p>
+      <p className="operations-hint">Historique en lecture seule.</p>
     </section>
   );
 }

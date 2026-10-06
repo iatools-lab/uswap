@@ -256,13 +256,11 @@ export function UserImport({
                   <div className="code-chips">
                     <code>ADMIN</code>
                     <code>SUPERVISOR</code>
-                    <code>STATION_CHIEF</code>
                     <code>SWAPPER</code>
                   </div>
                 </li>
                 <li className="note-item">
-                  La station est obligatoire pour les swappeurs et chefs de
-                  station. Les comptes seront créés en attente d'activation.
+                  La station est obligatoire pour les swappeurs. Les comptes seront créés en attente d'activation.
                 </li>
               </ul>
             </div>

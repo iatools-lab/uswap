@@ -1,17 +1,11 @@
 import { useEffect, useState, useMemo, type FormEvent } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { notify } from "../../ui/Toast";
-import { api } from "../../api/auth-api";
+import { api, usingMock } from "../../api/auth-api";
 import { Modal } from "../../ui/Modal";
-import { CheckCircle, Scan, Warning, Clock3 } from "../../ui/icons";
-import { QrScanner } from "./QrScanner";
-import {
-  captureQrToken,
-  clearQrToken,
-  isValidQrToken,
-  parseQrToken,
-} from "./qrToken";
+import { CheckCircle, MapPin, Warning, Clock3 } from "../../ui/icons";
 import { formatDate, isInWindow, isOpenShift, pickNextShift } from "./format";
-import type { OperationShift, OperationsViewProps, ScanResult } from "./types";
+import type { OperationShift, OperationsViewProps, PunchResult } from "./types";
 import type { AttendanceHistoryRow } from "../supervision/types";
 
 function attendanceShiftFromHistory(row: AttendanceHistoryRow): OperationShift {
@@ -92,18 +86,29 @@ function historyStatusClass(shift: OperationShift) {
 }
 
 export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const openShifts = data.shifts.filter(isOpenShift);
   const liveShifts = openShifts.filter((shift) => isInWindow(shift));
   const next = pickNextShift(data.shifts);
+  const searchParams = new URLSearchParams(location.search);
+  const requestedPunchShiftId = searchParams.get("shift");
+  const requestedHistoryId = searchParams.get("pointage");
+  const shouldOpenHistory =
+    searchParams.get("historique") === "pointages" || !!requestedHistoryId;
 
   // Détermination automatique du shift le plus proche (en cours ou prochain)
-  const targetShift = liveShifts[0] || next;
+  const requestedPunchShift = data.shifts.find(
+    (shift) => shift.id === requestedPunchShiftId && isOpenShift(shift),
+  );
+  const targetShift = requestedPunchShift || liveShifts[0] || next;
 
   const [error, setError] = useState("");
-  const [result, setResult] = useState<ScanResult | null>(null);
+  const [result, setResult] = useState<PunchResult | null>(null);
   const [busy, setBusy] = useState(false);
-  const [token, setToken] = useState(() => captureQrToken());
-  const [scanning, setScanning] = useState(false);
+  const [punchKind, setPunchKind] = useState<"CHECKIN" | "CHECKOUT" | null>(
+    null,
+  );
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [historyRows, setHistoryRows] = useState<OperationShift[] | null>(null);
   const [historyError, setHistoryError] = useState("");
@@ -112,17 +117,17 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
   >("ALL");
 
   useEffect(() => {
-    const receive = () => {
-      const nextToken = captureQrToken();
-      if (nextToken && targetShift) {
-        setToken(nextToken);
-        void executePunch(nextToken, targetShift.id);
-      }
-    };
-    receive();
-    window.addEventListener("hashchange", receive);
-    return () => window.removeEventListener("hashchange", receive);
-  }, [targetShift]);
+    if (!shouldOpenHistory || historyRows === null) return;
+    setHistoryFilter("ALL");
+    setHistoryModalOpen(true);
+  }, [historyRows, shouldOpenHistory]);
+
+  useEffect(() => {
+    if (!requestedPunchShift) return;
+    setPunchKind(
+      requestedPunchShift.attendance?.checkedInAt ? "CHECKOUT" : "CHECKIN",
+    );
+  }, [requestedPunchShift]);
 
   useEffect(() => {
     let active = true;
@@ -243,37 +248,53 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
       );
   }, [completedShifts, historyFilter]);
 
-  async function executePunch(rawToken: string, shiftToPunchId: string) {
-    const raw = parseQrToken(rawToken) || rawToken.trim();
-    if (!isValidQrToken(raw)) {
+  useEffect(() => {
+    if (!historyModalOpen || !requestedHistoryId) return;
+    const frame = window.requestAnimationFrame(() => {
+      const target = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          ".modal-panel .modal-body [data-attendance-id]",
+        ),
+      ).find((element) => element.dataset.attendanceId === requestedHistoryId);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [filteredModalShifts, historyModalOpen, requestedHistoryId]);
+
+  async function executePunch() {
+    if (!targetShift || !punchKind) return;
+    if (!usingMock) {
       setError(
-        "Scannez le QR ou collez le lien fourni par le chef de station.",
+        "Le pointage par géolocalisation attend la prise en charge de cette règle par l’API.",
       );
       return;
     }
-    if (!targetShift) {
-      setError("Aucun shift éligible pour le pointage actuellement.");
+    if (!navigator.geolocation) {
+      setError("La géolocalisation n’est pas disponible sur cet appareil.");
       return;
     }
     setBusy(true);
     setError("");
     try {
-      // Le même contrat est implémenté par le mock et le backend : le serveur
-      // déduit la station et le type de pointage du jeton QR consommé.
-      const response = await api<
-        Omit<ScanResult, "status"> & {
-          status: "ON_TIME" | "PRESENT" | "LATE" | "CLOSED";
-        }
-      >("/attendance", {
-        shiftId: shiftToPunchId,
-        token: raw,
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 15_000,
+            maximumAge: 0,
+          });
+        },
+      );
+      const response = await api<PunchResult>("/attendance", {
+        shiftId: targetShift.id,
+        kind: punchKind,
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracyMeters: Math.round(position.coords.accuracy),
       });
-      const scan: ScanResult = {
+      const scan: PunchResult = {
         ...response,
-        status: response.status === "ON_TIME" ? "PRESENT" : response.status,
       };
-      setToken("");
-      clearQrToken();
       setError("");
       setResult(scan);
       notify(
@@ -283,24 +304,46 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
             : "Prise de service enregistrée avec succès."
           : "Fin de service enregistrée avec succès.",
       );
-      setScanning(false);
+      setPunchKind(null);
       onChanged();
     } catch (err) {
       setResult(null);
-      setError((err as Error).message);
+      const positionError = err as GeolocationPositionError;
+      setError(
+        positionError.code
+          ? positionError.code === 1
+            ? "Autorisez la localisation dans votre navigateur pour pointer."
+            : positionError.code === 3
+              ? "La localisation prend trop de temps. Réessayez dans un endroit dégagé."
+              : "Votre position n’a pas pu être déterminée. Vérifiez les réglages de localisation."
+          : (err as Error).message,
+      );
     } finally {
       setBusy(false);
     }
   }
 
-  const handleDirectAction = () => {
+  const handleDirectAction = (kind: "CHECKIN" | "CHECKOUT") => {
     if (!targetShift) {
       setError("Aucun shift disponible pour l'action de pointage.");
       return;
     }
     setError("");
-    setScanning(true);
+    setPunchKind(kind);
   };
+
+  const shiftNow = Date.now();
+  const canCheckIn = Boolean(
+    targetShift &&
+    !targetShift.attendance?.checkedInAt &&
+    shiftNow >= Date.parse(targetShift.startTime) &&
+    shiftNow <= Date.parse(targetShift.endTime),
+  );
+  const canCheckOut = Boolean(
+    targetShift?.attendance?.checkedInAt &&
+    !targetShift.attendance.checkedOutAt &&
+    shiftNow <= Date.parse(targetShift.endTime) + 5 * 60_000,
+  );
 
   return (
     <>
@@ -323,6 +366,12 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
                 : `Prise de service à ${formatDate(result.checkedInAt, result.timezone, true)} · À l’heure.`
               : `Fin de service à ${formatDate(result.checkedOutAt || result.checkedInAt, result.timezone, true)}.`}
           </span>
+          {typeof result.distanceMeters === "number" && (
+            <small className="ops-location-confirmation">
+              <MapPin size={14} /> Vérifié à {result.distanceMeters} m de la
+              station
+            </small>
+          )}
         </p>
       )}
 
@@ -545,33 +594,6 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
         )}
       </section>
 
-      {/* Scanner QR toujours visible dans l’espace swappeur */}
-      <section className="admin-card operations-scanner-card">
-        <div className="ops-quick-action">
-          <div>
-            <span className="admin-eyebrow">Pointage QR</span>
-            <h2>Scanner le QR de la station</h2>
-            <p>
-              Utilisez la caméra pour enregistrer votre prise ou fin de service.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="admin-button secondary"
-            onClick={() => {
-              if (!targetShift) {
-                setError("Aucun shift publié et affecté n’est disponible pour le pointage.");
-                return;
-              }
-              setError("");
-              setScanning(true);
-            }}
-          >
-            <Scan size={18} /> Ouvrir le scanner
-          </button>
-        </div>
-      </section>
-
       {/* --- CARTE UNIQUE UNIFIÉE : Shift Cible & Actions de Service --- */}
       {targetShift ? (
         <section className="admin-card operations-unified-card">
@@ -616,20 +638,33 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
           <div className="operations-unified-divider" />
 
           <div className="operations-unified-actions">
-            <button
-              type="button"
-              className="admin-button primary-cta"
-              onClick={handleDirectAction}
-            >
-              <Scan size={18} /> Prise de service
-            </button>
-            <button
-              type="button"
-              className="admin-button secondary"
-              onClick={handleDirectAction}
-            >
-              <CheckCircle size={18} /> Fin de service
-            </button>
+            {canCheckIn && (
+              <button
+                type="button"
+                className="admin-button primary-cta"
+                onClick={() => handleDirectAction("CHECKIN")}
+              >
+                <MapPin size={18} /> Prendre mon service
+              </button>
+            )}
+            {canCheckOut && (
+              <button
+                type="button"
+                className="admin-button secondary"
+                onClick={() => handleDirectAction("CHECKOUT")}
+              >
+                <CheckCircle size={18} /> Terminer mon service
+              </button>
+            )}
+            {!canCheckIn && !canCheckOut && (
+              <p className="operations-hint">
+                {targetShift.attendance?.checkedOutAt
+                  ? "Ce shift est clôturé."
+                  : Date.now() < Date.parse(targetShift.startTime)
+                    ? "Le pointage sera disponible à l’heure de début du shift."
+                    : "Le pointage de ce shift n’est plus disponible. Contactez le superviseur en cas de correction nécessaire."}
+              </p>
+            )}
           </div>
         </section>
       ) : (
@@ -727,9 +762,23 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
         open={historyModalOpen}
         size="lg"
         title="Historique de pointage complet"
-        subtitle="Retrouvez l'ensemble de vos pointages avec filtres intelligents."
-        onClose={() => setHistoryModalOpen(false)}
+        subtitle={
+          requestedHistoryId
+            ? "Le pointage concerné par la notification est mis en évidence."
+            : "Retrouvez l'ensemble de vos pointages."
+        }
+        onClose={() => {
+          setHistoryModalOpen(false);
+          if (shouldOpenHistory) navigate(location.pathname, { replace: true });
+        }}
       >
+        {requestedHistoryId &&
+          !completedShifts.some((shift) => shift.id === requestedHistoryId) && (
+            <p className="attendance-target-notice" role="status">
+              Ce pointage n’est plus présent dans l’historique chargé. Les
+              autres pointages restent consultables ci-dessous.
+            </p>
+          )}
         <div
           style={{
             display: "flex",
@@ -769,7 +818,16 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
           ) : (
             <div className="swapper-shifts-cards-list">
               {filteredModalShifts.map((shift) => (
-                <div key={shift.id} className="swapper-shift-card">
+                <div
+                  key={shift.id}
+                  data-attendance-id={shift.id}
+                  className={
+                    "swapper-shift-card" +
+                    (shift.id === requestedHistoryId
+                      ? " is-notification-target"
+                      : "")
+                  }
+                >
                   <div className="swapper-shift-header">
                     <div className="swapper-shift-station">
                       <span className="station-name">
@@ -802,16 +860,97 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
         </div>
       </Modal>
 
-      {/* Scanner QR direct */}
-      <QrScanner
-        open={scanning}
-        onClose={() => setScanning(false)}
-        onDetected={(detectedToken) => {
-          if (targetShift) {
-            void executePunch(detectedToken, targetShift.id);
-          }
-        }}
-      />
+      <Modal
+        open={punchKind !== null}
+        size="md"
+        title={
+          punchKind === "CHECKOUT"
+            ? "Terminer le service"
+            : "Prendre le service"
+        }
+        subtitle={targetShift?.station.name ?? "Station du shift"}
+        onClose={() => !busy && setPunchKind(null)}
+        footer={
+          <>
+            <button
+              className="admin-button secondary"
+              type="button"
+              disabled={busy}
+              onClick={() => setPunchKind(null)}
+            >
+              Annuler
+            </button>
+            <button
+              className="admin-button primary-cta"
+              type="button"
+              disabled={busy || !usingMock}
+              onClick={() => void executePunch()}
+            >
+              {busy
+                ? "Vérification…"
+                : usingMock
+                  ? "Vérifier ma position et pointer"
+                  : "API requise"}
+            </button>
+          </>
+        }
+      >
+        <div className="ops-geolocation-prompt">
+          <span className="ops-geolocation-prompt__icon">
+            <MapPin size={22} />
+          </span>
+          <div>
+            {usingMock ? (
+              <>
+                <strong>
+                  Votre position sera vérifiée au moment du pointage.
+                </strong>
+                <p>
+                  Vous devez être à moins{" "}
+                  {targetShift?.station.geofenceRadiusMeters ??
+                    data.station?.geofenceRadiusMeters ??
+                    150}{" "}
+                  m de {targetShift?.station.name ?? "la station"}. Le pointage
+                  est refusé hors de ce périmètre.{" "}
+                  {punchKind === "CHECKIN" ? (
+                    <>
+                      Sans prise de service après{" "}
+                      {targetShift?.station.latenessToleranceMinutes ??
+                        data.station?.latenessToleranceMinutes ??
+                        5}{" "}
+                      min de tolérance, l’absence est enregistrée
+                      automatiquement.
+                    </>
+                  ) : (
+                    "Votre position sera vérifiée à nouveau pour enregistrer la fin du service."
+                  )}
+                </p>
+              </>
+            ) : (
+              <>
+                <strong>
+                  Le pointage géolocalisé n’est pas encore disponible.
+                </strong>
+                <p>
+                  L’API actuellement branchée ne vérifie pas encore la distance
+                  à la station. Aucun pointage n’a été transmis.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+        {usingMock && (
+          <p className="operations-hint">
+            La localisation est demandée uniquement pour cette action. Si elle
+            est refusée, aucun pointage n’est enregistré.
+          </p>
+        )}
+        {error && (
+          <p className="error-message" role="alert">
+            {error}
+          </p>
+        )}
+      </Modal>
     </>
   );
 }

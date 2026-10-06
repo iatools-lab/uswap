@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   CalendarIcon,
   CaretRight,
@@ -18,10 +18,15 @@ import { IncidentCenter } from "../incidents/IncidentCenter";
 import { OperationsDashboard } from "../reports/OperationsDashboard";
 
 export function SupervisorHome({ data }: OperationsViewProps) {
+  const location = useLocation();
   const navigate = useNavigate();
   const [replacementShift, setReplacementShift] = useState<string | null>(null);
   const [selectedStation, setSelectedStation] = useState<string | null>(null);
   const [queueKey, setQueueKey] = useState(0);
+  useEffect(() => {
+    const targetShift = new URLSearchParams(location.search).get("replacement");
+    if (targetShift) setReplacementShift(targetShift);
+  }, [location.search]);
   const published = data.shifts
     .filter(
       (shift) => shift.publishedAt && Date.parse(shift.endTime) >= Date.now(),
@@ -29,6 +34,11 @@ export function SupervisorHome({ data }: OperationsViewProps) {
     .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
   const plannerPath = "/app/supervision/plannings";
   const pointagesPath = "/app/supervision/pointages";
+  const closeReplacement = () => {
+    setReplacementShift(null);
+    if (new URLSearchParams(location.search).has("replacement"))
+      navigate(location.pathname, { replace: true });
+  };
   const stationGroups = useMemo(() => {
     const groups = new Map<string, typeof published>();
     published.forEach((shift) => {
@@ -64,9 +74,9 @@ export function SupervisorHome({ data }: OperationsViewProps) {
       {replacementShift && (
         <ReplacementDialog
           shiftId={replacementShift}
-          onClose={() => setReplacementShift(null)}
+          onClose={closeReplacement}
           onReplaced={() => {
-            setReplacementShift(null);
+            closeReplacement();
             setQueueKey((value) => value + 1);
           }}
         />
@@ -251,7 +261,7 @@ export function SupervisorHome({ data }: OperationsViewProps) {
         </section>
       </div>
 
-      <IncidentCenter canManage />
+      <IncidentCenter canManage canReport />
     </div>
   );
 }

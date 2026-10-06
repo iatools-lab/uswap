@@ -17,9 +17,9 @@ const ROLE_ALIASES: Record<string, MockUser["role"]> = {
   administrateur: "ADMIN",
   superviseur: "SUPERVISOR",
   supervisor: "SUPERVISOR",
-  "chef de station": "STATION_CHIEF",
-  chef: "STATION_CHIEF",
-  station_chief: "STATION_CHIEF",
+  "chef de station": "SUPERVISOR",
+  chef: "SUPERVISOR",
+  station_chief: "SUPERVISOR",
   swappeur: "SWAPPER",
   swapper: "SWAPPER",
 };
@@ -162,9 +162,9 @@ export const userRoutes: MockRoute[] = [
           return { line, fullName, email, role: roleRaw, stationId, stationName, status: "REJECTED", reason: "Adresse e-mail invalide." };
         if (!role)
           return { line, fullName, email, role: roleRaw, stationId, stationName, status: "REJECTED", reason: "Rôle non reconnu." };
-        if ((role === "SWAPPER" || role === "STATION_CHIEF") && !stationRaw)
+        if (role === "SWAPPER" && !stationRaw)
           return { line, fullName, email, role, stationId: null, stationName: "", status: "REJECTED", reason: "Station obligatoire pour ce rôle." };
-        if ((role === "SWAPPER" || role === "STATION_CHIEF") && !station)
+        if (role === "SWAPPER" && !station)
           return { line, fullName, email, role, stationId: null, stationName, status: "REJECTED", reason: "Station inconnue." };
         if (seen.has(email) || ctx.db.users.some((item) => item.email.toLowerCase() === email))
           return { line, fullName, email, role, stationId, stationName, status: "IGNORED", reason: "Adresse déjà connue." };
@@ -280,10 +280,10 @@ export const userRoutes: MockRoute[] = [
           throw new MockHttpError(409, "Un autre compte utilise déjà cette adresse.");
       }
       const role = (asText(ctx.body.role).toUpperCase() || target.role) as MockUser["role"];
-      if (!["ADMIN", "SUPERVISOR", "STATION_CHIEF", "SWAPPER"].includes(role))
+      if (!["ADMIN", "SUPERVISOR", "SWAPPER"].includes(role))
         throw new MockHttpError(400, "Choisissez un rôle valide.");
       const stationId = asText(ctx.body.stationId) || null;
-      if ((role === "SWAPPER" || role === "STATION_CHIEF") && !stationId)
+      if (role === "SWAPPER" && !stationId)
         throw new MockHttpError(400, "Sélectionnez la station rattachée à ce collaborateur.");
       if (stationId && !ctx.db.stations.some((station) => station.id === stationId))
         throw new MockHttpError(400, "La station sélectionnée est introuvable.");
@@ -301,9 +301,7 @@ export const userRoutes: MockRoute[] = [
       target.phoneNumber = asText(ctx.body.phoneNumber) || null;
       target.address = asText(ctx.body.address) || null;
       target.stationId =
-        role === "SWAPPER" || role === "STATION_CHIEF"
-          ? stationId
-          : null;
+        role === "SWAPPER" ? stationId : null;
       target.updatedAt = new Date().toISOString();
       target.audit.unshift({
         id: nextId("aud"),

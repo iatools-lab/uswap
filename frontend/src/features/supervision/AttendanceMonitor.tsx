@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/auth-api";
 import { LoaderCircle, RefreshCw, Search } from "../../ui/icons";
 import { Select } from "../../ui/Select";
@@ -40,6 +41,9 @@ export function AttendanceMonitor({
   user,
   onCorrect,
 }: SupervisionProps & { onCorrect?: (row: MonitorRow) => void }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const targetShiftId = new URLSearchParams(location.search).get("shift");
   const [data, setData] = useState<MonitorData | null>(null);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -77,13 +81,14 @@ export function AttendanceMonitor({
     if (!data) return [];
     const needle = query.trim().toLowerCase();
     return data.rows.filter((row) => {
+      if (targetShiftId && row.shiftId !== targetShiftId) return false;
       if (stationId !== "ALL" && row.station.id !== stationId) return false;
       if (!needle) return true;
       return `${row.swapper.fullName} ${row.station.name} ${row.template || ""}`
         .toLowerCase()
         .includes(needle);
     });
-  }, [data, query, stationId]);
+  }, [data, query, stationId, targetShiftId]);
 
   const rows = useMemo(
     () =>
@@ -211,6 +216,19 @@ export function AttendanceMonitor({
         </button>
       </div>
 
+      {targetShiftId && (
+        <div className="attendance-target-notice" role="status">
+          <span>Pointage concerné par la notification</span>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => navigate(location.pathname, { replace: true })}
+          >
+            Voir tout le suivi
+          </button>
+        </div>
+      )}
+
       <div className="attendance-smart-filters">
         <label className="attendance-smart-search">
           <Search size={16} />
@@ -258,7 +276,11 @@ export function AttendanceMonitor({
             border: "1px solid var(--line)",
           }}
         >
-          <h3>Aucun pointage pour ce filtre</h3>
+          <h3>
+            {targetShiftId
+              ? "Ce pointage n’est plus disponible"
+              : "Aucun pointage pour ce filtre"}
+          </h3>
         </div>
       ) : (
         <div

@@ -2,7 +2,7 @@ import { useEffect, useState, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckIcon, CompassIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
 import { UserCreateModal } from "../../features/users/UserCreateModal";
-import { LeaveIntegrationHealth } from "../../features/leaves/LeaveIntegrationHealth";
+import { LeaveRequestInbox } from "../../features/leaves/LeaveRequestInbox";
 import { ScheduledReports } from "../../features/reports/ScheduledReports";
 import { greetingFor } from "../../utils/greeting";
 import { interceptNav } from "../../app/spaNav";
@@ -93,7 +93,7 @@ export function AdminHomePage() {
     {
       id: 2,
       title: "Ajoutez vos collaborateurs",
-      description: "Invitez les chefs de station et vos swappeurs terrain.",
+      description: "Invitez les superviseurs et vos swappeurs terrain.",
       completed: counts.all > 0,
       ctaLabel: "Créer un utilisateur",
       action: () => setShowCreateModal(true),
@@ -374,15 +374,14 @@ export function AdminHomePage() {
       <section className="home-section" aria-labelledby="services-title">
         <div className="home-section-heading">
           <div>
-            <h2 id="services-title">Automatisations administratives</h2>
+            <h2 id="services-title">Congés et rapports</h2>
             <p>
-              Contrôlez la remontée des congés et les rapports envoyés
-              automatiquement.
+              Traitez les demandes de congé et gérez les rapports planifiés.
             </p>
           </div>
         </div>
         <div className="home-service-stack">
-          <LeaveIntegrationHealth />
+          <LeaveRequestInbox />
           <ScheduledReports />
         </div>
       </section>

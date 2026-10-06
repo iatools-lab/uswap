@@ -117,9 +117,9 @@ export function findUserOr404(db: MockDb, id: string): MockUser {
   return found;
 }
 
-/** Un chef ne voit et n'agit que sur sa station ; les autres rôles sont globaux. */
+/** Les rôles opérationnels globaux couvrent l'ensemble des stations. */
 export function scopeStationId(user: MockUser): string | null {
-  return user.role === "STATION_CHIEF" ? user.stationId : null;
+  return null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -132,6 +132,7 @@ export function notifyUser(
   kind: string,
   title: string,
   body: string,
+  targetId?: string,
 ) {
   db.notificationSeq += 1;
   db.notifications.unshift({
@@ -142,6 +143,7 @@ export function notifyUser(
     body,
     readAt: null,
     createdAt: isoFromMs(Date.now()),
+    targetId: targetId ?? null,
   });
   db.notifications = db.notifications.slice(0, 200);
 }
@@ -154,18 +156,13 @@ export function notifyStaff(
   title: string,
   body: string,
   extraUserIds: string[] = [],
+  targetId?: string,
 ) {
   const targets = new Set<string>(extraUserIds);
   for (const user of db.users) {
     if (user.role === "SUPERVISOR") targets.add(user.id);
-    if (
-      user.role === "STATION_CHIEF" &&
-      stationId &&
-      user.stationId === stationId
-    )
-      targets.add(user.id);
   }
-  targets.forEach((id) => notifyUser(db, id, kind, title, body));
+  targets.forEach((id) => notifyUser(db, id, kind, title, body, targetId));
 }
 
 /* ------------------------------------------------------------------ */
@@ -185,14 +182,13 @@ export function occurrenceOf(db: MockDb, id: string): MockOccurrence {
 }
 
 /** Heures retenues = durée prévue moins la pause (RM-13). */
-export function durationHours(db: MockDb, occurrence: MockOccurrence) {
-  const template = db.templates.find(
-    (item) => item.id === occurrence.templateId,
-  );
+export function durationHours(_db: MockDb, occurrence: MockOccurrence) {
   const gross =
     (Date.parse(occurrence.endTime) - Date.parse(occurrence.startTime)) /
     3600000;
-  const pause = (template?.breakMinutes ?? 0) / 60;
+  // Les horaires et la pause sont figés dans le poste généré. Les règles de
+  // station, elles, sont relues à chaque contrôle du planning.
+  const pause = occurrence.breakMinutes / 60;
   return Math.max(0, Math.round((gross - pause) * 100) / 100);
 }
 
@@ -231,21 +227,17 @@ export function occurrenceView(db: MockDb, occurrence: MockOccurrence) {
 /**
  * Périmètre de lecture d'un planning selon l'utilisateur (US : confidentialité).
  *
- * - Swappeur : uniquement les plannings **publiés** couvrant **sa station**, et
- *   seulement **ses propres** affectations. Les autres stations et les postes
- *   vacants ne le concernent pas.
- * - Chef de station : uniquement **sa station** (toutes les affectations).
+ * - Swappeur : uniquement les plannings **publiés** contenant **ses propres**
+ *   affectations, y compris un renfort ponctuel dans une autre station.
  * - Superviseur / administrateur : tout, sans restriction.
  */
 export function planningScopeOf(user: MockUser) {
   if (user.role === "SWAPPER")
     return {
       publishedOnly: true,
-      stationId: user.stationId,
+      stationId: null,
       swapperId: user.id,
     };
-  if (user.role === "STATION_CHIEF")
-    return { publishedOnly: true, stationId: user.stationId, swapperId: null };
   return { publishedOnly: false, stationId: null, swapperId: null };
 }
 

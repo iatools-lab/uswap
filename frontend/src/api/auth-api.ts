@@ -1,8 +1,9 @@
 import { mockDownload, mockRequest } from "./mock";
-import { DEMO_PASSWORD, FICTITIOUS_DOMAIN, MOCK_LATENCY_MS, delay } from "./mock";
+import { DEMO_PASSWORD, MOCK_LATENCY_MS, delay } from "./mock";
+import { FICTITIOUS_DOMAIN, MOCK_LOGIN_PROFILES } from "./mock/seed";
 import { MockHttpError, type MockCtx } from "./mock/types";
 
-export type Role = "ADMIN" | "SUPERVISOR" | "STATION_CHIEF" | "SWAPPER";
+export type Role = "ADMIN" | "SUPERVISOR" | "SWAPPER";
 
 export type UserIcon = {
   id: string;
@@ -28,55 +29,16 @@ export type Session = {
 export const roles: Record<Role, string> = {
   ADMIN: "Administrateur",
   SUPERVISOR: "Superviseur",
-  STATION_CHIEF: "Chef de station",
   SWAPPER: "Swappeur",
 };
 
 export const rolePaths: Record<Role, string> = {
   ADMIN: "/app/admin",
   SUPERVISOR: "/app/supervision",
-  STATION_CHIEF: "/app/station",
   SWAPPER: "/app/mon-espace",
 };
 
-export const mockPeople: User[] = [
-  {
-    id: "us-admin",
-    email: `admin@${FICTITIOUS_DOMAIN}`,
-    fullName: "Administrateur uSwap",
-    role: "ADMIN",
-  },
-  {
-    id: "us-supervisor",
-    email: `superviseur@${FICTITIOUS_DOMAIN}`,
-    fullName: "Camille Nola",
-    role: "SUPERVISOR",
-  },
-  {
-    id: "us-chief-bastos",
-    email: `chef@${FICTITIOUS_DOMAIN}`,
-    fullName: "Sam Kotto",
-    role: "STATION_CHIEF",
-    stationId: "st-bastos",
-    stationName: "Station Bastos",
-  },
-  {
-    id: "us-chief-obobogo",
-    email: `chef.obobogo@${FICTITIOUS_DOMAIN}`,
-    fullName: "Ariane Tchana",
-    role: "STATION_CHIEF",
-    stationId: "st-obobogo",
-    stationName: "Obobogo",
-  },
-  {
-    id: "sw-01",
-    email: `swappeur@${FICTITIOUS_DOMAIN}`,
-    fullName: "Léa Meka",
-    role: "SWAPPER",
-    stationId: "st-bastos",
-    stationName: "Station Bastos",
-  },
-];
+export const mockPeople: User[] = MOCK_LOGIN_PROFILES;
 
 export { DEMO_PASSWORD, FICTITIOUS_DOMAIN, MOCK_LATENCY_MS };
 
@@ -315,6 +277,12 @@ export async function api<T>(
 function remember(
   data: Session,
 ): Session {
+  if ((data.user?.role as string) === "STATION_CHIEF") {
+    data = {
+      ...data,
+      user: { ...data.user, role: "SUPERVISOR", stationId: null, stationName: null },
+    };
+  }
   if (
     !data.user ||
     !Object.prototype.hasOwnProperty.call(
@@ -345,6 +313,12 @@ function remember(
   );
 
   return data;
+}
+
+export function normalizeUserRole(user: UserIcon): UserIcon {
+  return (user.role as string) === "STATION_CHIEF"
+    ? { ...user, role: "SUPERVISOR", stationId: null, stationName: null }
+    : user;
 }
 
 export async function login(

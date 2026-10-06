@@ -105,11 +105,11 @@ export const authRoutes: MockRoute[] = [
       const active = asText(ctx.body.accountStatus).toUpperCase() === "ACTIVE";
       if (!fullName || !email.includes("@"))
         throw new MockHttpError(400, "Nom complet et adresse e-mail valides requis.");
-      if (!["ADMIN", "SUPERVISOR", "STATION_CHIEF", "SWAPPER"].includes(role))
+      if (!["ADMIN", "SUPERVISOR", "SWAPPER"].includes(role))
         throw new MockHttpError(400, "Choisissez un rôle valide.");
-      if (role !== "SWAPPER" && role !== "STATION_CHIEF" && stationId)
+      if (role !== "SWAPPER" && stationId)
         throw new MockHttpError(400, "Ce rôle ne se rattache pas à une station.");
-      if ((role === "SWAPPER" || role === "STATION_CHIEF") && !stationId)
+      if (role === "SWAPPER" && !stationId)
         throw new MockHttpError(400, "Sélectionnez la station rattachée à ce collaborateur.");
       if (stationId && !ctx.db.stations.some((station) => station.id === stationId))
         throw new MockHttpError(400, "La station sélectionnée est introuvable.");
@@ -125,7 +125,7 @@ export const authRoutes: MockRoute[] = [
         role,
         phoneNumber,
         address,
-        stationId: role === "SWAPPER" || role === "STATION_CHIEF" ? stationId : null,
+        stationId: role === "SWAPPER" ? stationId : null,
         isActive: active,
         disabledAt: null,
         updatedAt: now,
