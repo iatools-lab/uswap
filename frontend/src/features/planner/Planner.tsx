@@ -371,16 +371,6 @@ export function Planner({ user }: { user: User }) {
     "manual",
   );
   const [offlineCopy, setOfflineCopy] = useState(false);
-  const [lastSyncAt, setLastSyncAt] = useState<string | null>(() => {
-    try {
-      const value = localStorage.getItem("uswap:last-sync");
-      return value
-        ? ((JSON.parse(value) as { syncedAt?: string }).syncedAt ?? null)
-        : null;
-    } catch {
-      return null;
-    }
-  });
 
   const [start, setStart] = useState(""),
     [end, setEnd] = useState(""),
@@ -419,7 +409,6 @@ export function Planner({ user }: { user: User }) {
           setPlans(p);
           setError("");
           setOfflineCopy(false);
-          setLastSyncAt(new Date().toISOString());
           if (user.role === "SWAPPER")
             localStorage.setItem(`${cacheKey}:list`, JSON.stringify(p));
         }
@@ -885,11 +874,9 @@ export function Planner({ user }: { user: User }) {
 
   return (
     <>
-      {(offlineCopy || lastSyncAt) && (
+      {offlineCopy && (
         <div className="planner-offline-copy" role="status">
-          {offlineCopy
-            ? `Hors connexion · dernière synchro ${lastSyncAt ? new Date(lastSyncAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "inconnue"}`
-            : `Synchronisé · ${lastSyncAt ? new Date(lastSyncAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "à l’instant"}`}
+          Hors connexion · copie locale du planning affichée
         </div>
       )}
       <PlanningList

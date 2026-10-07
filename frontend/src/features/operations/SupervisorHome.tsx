@@ -78,7 +78,8 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
       }))
       .sort(
         (a, b) =>
-          Date.parse(a.shifts[0].startTime) - Date.parse(b.shifts[0].startTime) ||
+          Date.parse(a.shifts[0].startTime) -
+            Date.parse(b.shifts[0].startTime) ||
           a.station.name.localeCompare(b.station.name, "fr"),
       );
   }, [published]);
@@ -119,7 +120,7 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
           open
           size="lg"
           title={`Prochains shifts · ${activeGroup.station.name}`}
-          subtitle={`${activeGroup.shifts.length} service${activeGroup.shifts.length > 1 ? "s" : ""} publié${activeGroup.shifts.length > 1 ? "s" : ""}`}
+          subtitle="Horaires publiés et personnes affectées"
           onClose={() => setSelectedStation(null)}
           footer={
             <>
@@ -202,13 +203,13 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
         aria-labelledby="supervisor-overview-title"
       >
         <div>
-          <span className="premium-eyebrow">Vue réseau</span>
+          <span className="premium-eyebrow">Pilotage des opérations</span>
           <h2 id="supervisor-overview-title">
-            Les opérations essentielles, au même endroit
+            Votre périmètre, en un coup d’œil
           </h2>
           <p>
-            Surveillez les besoins de couverture, puis accédez directement aux
-            pointages ou aux plannings de votre périmètre.
+            Repérez les shifts à couvrir, puis suivez les présences, incidents
+            et services à venir par station.
           </p>
         </div>
         <div className="supervisor-overview__actions">

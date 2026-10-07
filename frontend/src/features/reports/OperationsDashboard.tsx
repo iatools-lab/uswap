@@ -124,9 +124,13 @@ export function OperationsDashboard({
         setPlannings(publishedItems);
         const today = day(0);
         const current = publishedItems.find(
-          (item) => datePart(item.startDate) <= today && datePart(item.endDate) >= today,
+          (item) =>
+            datePart(item.startDate) <= today &&
+            datePart(item.endDate) >= today,
         );
-        const next = publishedItems.find((item) => datePart(item.startDate) > today);
+        const next = publishedItems.find(
+          (item) => datePart(item.startDate) > today,
+        );
         const selected = current ?? next ?? publishedItems.at(-1);
         if (selected) {
           setPlanningId(selected.id);
@@ -163,7 +167,16 @@ export function OperationsDashboard({
     return () => {
       active = false;
     };
-  }, [from, to, planningId, planningReady, station, swapper, reload, refreshKey]);
+  }, [
+    from,
+    to,
+    planningId,
+    planningReady,
+    station,
+    swapper,
+    reload,
+    refreshKey,
+  ]);
   const totalAttendance = useMemo(
     () =>
       data ? Object.values(data.attendance).reduce((a, b) => a + b, 0) : 0,
@@ -187,8 +200,8 @@ export function OperationsDashboard({
           <span>Analyse opérationnelle</span>
           <h2>Tableau de bord du réseau</h2>
           <p>
-            Présences, couverture, mouvements et charge de travail sur la
-            période choisie.
+            Les indicateurs suivent la période et les filtres sélectionnés.
+            Ouvrez un indicateur pour consulter les détails.
           </p>
         </div>
         <div className="ops-dashboard-export-actions">
@@ -264,7 +277,10 @@ export function OperationsDashboard({
             }}
             options={[
               { value: "ALL", label: "Tous les plannings publiés" },
-              ...plannings.map((item) => ({ value: item.id, label: item.name })),
+              ...plannings.map((item) => ({
+                value: item.id,
+                label: item.name,
+              })),
             ]}
           />
         </label>
@@ -350,8 +366,22 @@ export function OperationsDashboard({
               </div>
             ) : detail === "hours" ? (
               <div className="kpi-detail-list">
-                <article><strong>Par semaine</strong><span>{data.hoursByWeek.map((row) => `${row.week}: ${row.hours} h`).join(" · ") || "Aucune donnée"}</span></article>
-                <article><strong>Par mois</strong><span>{data.hoursByMonth.map((row) => `${row.month}: ${row.hours} h`).join(" · ") || "Aucune donnée"}</span></article>
+                <article>
+                  <strong>Par semaine</strong>
+                  <span>
+                    {data.hoursByWeek
+                      .map((row) => `${row.week}: ${row.hours} h`)
+                      .join(" · ") || "Aucune donnée"}
+                  </span>
+                </article>
+                <article>
+                  <strong>Par mois</strong>
+                  <span>
+                    {data.hoursByMonth
+                      .map((row) => `${row.month}: ${row.hours} h`)
+                      .join(" · ") || "Aucune donnée"}
+                  </span>
+                </article>
                 {data.hoursByStation.map((row) => (
                   <article key={row.station}>
                     <strong>{row.station}</strong>
@@ -434,7 +464,6 @@ export function OperationsDashboard({
                 <small>Charge planifiée</small>
                 <strong>{Math.round(data.kpis.totalHours)} h</strong>
                 <span>{data.kpis.approvedLeaves} congé(s) approuvé(s)</span>
-                <em>{data.kpis.leavesSynced} synchronisé(s) · {data.kpis.leavesPendingSync} en attente</em>
               </div>
             </button>
             <button

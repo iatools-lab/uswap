@@ -436,6 +436,22 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
     !targetShift.attendance.checkedOutAt &&
     shiftNow <= Date.parse(targetShift.endTime) + 5 * 60_000,
   );
+  const hourInDouala = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      hourCycle: "h23",
+      timeZone: "Africa/Douala",
+    })
+      .formatToParts(new Date())
+      .find((part) => part.type === "hour")?.value ?? 12,
+  );
+  const greeting =
+    hourInDouala < 12
+      ? "Bonjour"
+      : hourInDouala < 18
+        ? "Bon après-midi"
+        : "Bonsoir";
+  const firstName = user.fullName.trim().split(/\s+/)[0] || "";
 
   return (
     <>
@@ -477,211 +493,72 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
         </p>
       )}
 
-      {/* KPI Interactifs & Diagramme Circulaire */}
-      <section className="admin-card" style={{ padding: "20px" }}>
-        <h3
-          style={{
-            margin: "0 0 16px",
-            fontSize: "15px",
-            fontWeight: 600,
-            color: "var(--navy)",
-          }}
-        >
-          Indicateurs de performance
-        </h3>
+      <section className="admin-card swapper-welcome">
+        <span className="admin-eyebrow">Espace personnel</span>
+        <h2>
+          {greeting}
+          {firstName ? `, ${firstName}` : ""}
+        </h2>
+        <p>Retrouvez ici votre présence et vos prochains services.</p>
+      </section>
 
+      <section className="admin-card swapper-performance">
+        <header className="swapper-performance__heading">
+          <div>
+            <h2>Votre présence</h2>
+            <p>Sur vos shifts terminés</p>
+          </div>
+        </header>
         {kpiStats.total > 0 ? (
-          <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+          <div className="swapper-performance__body">
             <div
+              className="swapper-performance__ring"
               style={{
-                position: "relative",
-                width: "110px",
-                height: "110px",
-                borderRadius: "50%",
-                background: `conic-gradient(
-                  #10b981 0% ${kpiStats.onTimePct}%,
-                  #f59e0b ${kpiStats.onTimePct}% ${kpiStats.onTimePct + kpiStats.latePct}%,
-                  #ef4444 ${kpiStats.onTimePct + kpiStats.latePct}% 100%
-                )`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                background: `conic-gradient(#10a66a 0% ${kpiStats.onTimePct}%, #e99a16 ${kpiStats.onTimePct}% ${kpiStats.onTimePct + kpiStats.latePct}%, #e24c4c ${kpiStats.onTimePct + kpiStats.latePct}% 100%)`,
               }}
+              role="img"
+              aria-label={`Présence ${kpiStats.presenceRate} %, ${kpiStats.onTime} à l’heure, ${kpiStats.late} en retard et ${kpiStats.absent} absences`}
             >
-              <div
-                style={{
-                  width: "82px",
-                  height: "82px",
-                  backgroundColor: "#ffffff",
-                  borderRadius: "50%",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "inset 0 2px 4px rgba(0,0,0,0.04)",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "18px",
-                    fontWeight: 800,
-                    color: "var(--navy)",
-                    lineHeight: "1.1",
-                  }}
-                >
-                  {kpiStats.presenceRate}%
-                </span>
-                <span
-                  style={{
-                    fontSize: "9px",
-                    fontWeight: 600,
-                    color: "var(--muted)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                  }}
-                >
-                  Présence
-                </span>
-              </div>
+              <span>
+                <strong>{kpiStats.presenceRate}%</strong>
+                <small>Présence</small>
+              </span>
             </div>
-
-            <div
-              style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  fontSize: "13px",
-                }}
-              >
-                <span
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    color: "var(--muted)",
-                    fontWeight: 500,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: "10px",
-                      height: "10px",
-                      borderRadius: "50%",
-                      backgroundColor: "#10b981",
-                    }}
-                  />
-                  À l'heure
+            <div className="swapper-performance__legend">
+              <div>
+                <span>
+                  <i className="is-present" />À l’heure
                 </span>
-                <strong style={{ color: "var(--ink)" }}>
-                  {kpiStats.onTime}{" "}
-                  <span
-                    style={{
-                      color: "var(--muted)",
-                      fontSize: "11px",
-                      marginLeft: "4px",
-                    }}
-                  >
-                    ({kpiStats.onTimePct}%)
-                  </span>
+                <strong>
+                  {kpiStats.onTime}
+                  <small>{kpiStats.onTimePct}%</small>
                 </strong>
               </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  fontSize: "13px",
-                }}
-              >
-                <span
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    color: "var(--muted)",
-                    fontWeight: 500,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: "10px",
-                      height: "10px",
-                      borderRadius: "50%",
-                      backgroundColor: "#f59e0b",
-                    }}
-                  />
+              <div>
+                <span>
+                  <i className="is-late" />
                   En retard
                 </span>
-                <strong style={{ color: "var(--ink)" }}>
-                  {kpiStats.late}{" "}
-                  <span
-                    style={{
-                      color: "var(--muted)",
-                      fontSize: "11px",
-                      marginLeft: "4px",
-                    }}
-                  >
-                    ({kpiStats.latePct}%)
-                  </span>
+                <strong>
+                  {kpiStats.late}
+                  <small>{kpiStats.latePct}%</small>
                 </strong>
               </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  fontSize: "13px",
-                }}
-              >
-                <span
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    color: "var(--muted)",
-                    fontWeight: 500,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: "10px",
-                      height: "10px",
-                      borderRadius: "50%",
-                      backgroundColor: "#ef4444",
-                    }}
-                  />
+              <div>
+                <span>
+                  <i className="is-absent" />
                   Absent
                 </span>
-                <strong style={{ color: "var(--ink)" }}>
-                  {kpiStats.absent}{" "}
-                  <span
-                    style={{
-                      color: "var(--muted)",
-                      fontSize: "11px",
-                      marginLeft: "4px",
-                    }}
-                  >
-                    ({kpiStats.absentPct}%)
-                  </span>
+                <strong>
+                  {kpiStats.absent}
+                  <small>{kpiStats.absentPct}%</small>
                 </strong>
               </div>
             </div>
           </div>
         ) : (
-          <p style={{ margin: 0, fontSize: "13px", color: "var(--muted)" }}>
-            Aucune donnée de performance disponible pour le moment.
+          <p className="swapper-performance__empty">
+            Vos indicateurs apparaîtront après votre premier shift terminé.
           </p>
         )}
       </section>

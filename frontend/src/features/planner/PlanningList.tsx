@@ -177,10 +177,6 @@ export function PlanningList({
     const publishedPlans = plans.filter(
       (plan) => plan.status === "PUBLISHED" && plan.occurrences.length > 0,
     );
-    const activeCount = publishedPlans.filter(
-      (plan) => !planningHasEnded(plan.endDate),
-    ).length;
-    const completedCount = publishedPlans.length - activeCount;
     return (
       <section
         className="swapper-planning-directory"
@@ -192,9 +188,6 @@ export function PlanningList({
             <h2>Mes plannings</h2>
             <p>Consultez vos services à venir et vos périodes terminées.</p>
           </div>
-          <span className="swapper-planning-directory__count">
-            {visiblePlans.length}
-          </span>
         </header>
 
         {publishedPlans.length > 0 && (
@@ -205,11 +198,11 @@ export function PlanningList({
           >
             {(
               [
-                ["ALL", "Tous", publishedPlans.length],
-                ["ACTIVE", "En cours", activeCount],
-                ["COMPLETED", "Terminés", completedCount],
-              ] as [SwapperPeriodFilter, string, number][]
-            ).map(([value, label, count]) => (
+                ["ALL", "Tous"],
+                ["ACTIVE", "En cours"],
+                ["COMPLETED", "Terminés"],
+              ] as [SwapperPeriodFilter, string][]
+            ).map(([value, label]) => (
               <button
                 key={value}
                 type="button"
@@ -217,7 +210,6 @@ export function PlanningList({
                 onClick={() => setSwapperPeriod(value)}
               >
                 {label}
-                <span>{count}</span>
               </button>
             ))}
           </div>
@@ -302,14 +294,19 @@ export function PlanningList({
                   </span>
 
                   <span className="swapper-planning-entry__meta">
-                    <span>
-                      <MapPinIcon size={14} />{" "}
-                      {stations.join(", ") || "Station"}
+                    <span className="swapper-planning-entry__station">
+                      <MapPinIcon size={14} aria-hidden="true" />
+                      <span>{stations.join(", ") || "Station"}</span>
                     </span>
                     <span>
                       <CalendarBlankIcon size={14} /> {plan.occurrences.length}{" "}
                       shift{plan.occurrences.length > 1 ? "s" : ""}
                     </span>
+                    {completed && (
+                      <span className="swapper-planning-entry__complete">
+                        Terminé
+                      </span>
+                    )}
                   </span>
 
                   {nextShift && !completed ? (
@@ -333,15 +330,7 @@ export function PlanningList({
                         </strong>
                       </span>
                     </span>
-                  ) : completed ? (
-                    <span className="swapper-planning-entry__complete">
-                      Période terminée
-                    </span>
-                  ) : (
-                    <span className="swapper-planning-entry__complete">
-                      Aucun service à venir
-                    </span>
-                  )}
+                  ) : null}
                 </button>
               );
             })}
