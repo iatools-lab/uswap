@@ -136,7 +136,8 @@ export function RoleShell() {
             <Clock3 />
             <span>Planning</span>
           </a>
-          {session.user.role === "SWAPPER" && (
+          {(session.user.role === "SWAPPER" ||
+            session.user.role === "SUPERVISOR") && (
             <a
               href={`${homePath}/conges`}
               onClick={goLeave}
@@ -179,7 +180,9 @@ export function RoleShell() {
             account
               ? "Gérez vos informations personnelles et la sécurité de votre compte."
               : leave
-                ? "Signalez une absence ou un congé pour un shift à venir."
+                ? session.user.role === "SUPERVISOR"
+                  ? "Examinez les demandes et anticipez les remplacements de votre périmètre."
+                  : "Consultez votre solde et suivez vos demandes de congé."
                 : planning
                   ? "Consultez les horaires publiés et les affectations de votre périmètre."
                   : attendance

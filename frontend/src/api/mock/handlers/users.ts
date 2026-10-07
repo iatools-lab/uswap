@@ -197,7 +197,7 @@ export const userRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/users\/imports\/([^/]+)\/confirm$/,
     handler: (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
+      const admin = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
       const batch = ctx.db.importBatches.find((item) => item.id === ctx.params[0]);
       if (!batch) throw new MockHttpError(410, "Ce lot d'import est introuvable.");
       if (Date.parse(batch.expiresAt) < Date.now())
@@ -225,6 +225,7 @@ export const userRoutes: MockRoute[] = [
             {
               id: nextId("aud"),
               action: "IMPORTED",
+              actorId: admin.id,
               createdAt: now,
               before: {},
               after: { fullName: row.fullName, email: row.email, role: row.role, stationId: row.stationId },
@@ -306,6 +307,7 @@ export const userRoutes: MockRoute[] = [
       target.audit.unshift({
         id: nextId("aud"),
         action: "UPDATED",
+        actorId: admin.id,
         createdAt: target.updatedAt,
         before,
         after: {
@@ -324,7 +326,7 @@ export const userRoutes: MockRoute[] = [
     method: "PATCH",
     pattern: /^\/users\/([^/]+)\/status$/,
     handler: (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
+      const admin = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
       const target = ctx.db.users.find((item) => item.id === ctx.params[0]);
       if (!target) throw new MockHttpError(404, "Compte introuvable.");
       const expected = asText(ctx.body.updatedAt);
@@ -342,6 +344,7 @@ export const userRoutes: MockRoute[] = [
       target.audit.unshift({
         id: nextId("aud"),
         action: enabled ? "REACTIVATED" : "DISABLED",
+        actorId: admin.id,
         createdAt: target.updatedAt,
         before,
         after: { isActive: target.isActive, disabledAt: target.disabledAt },
@@ -354,7 +357,7 @@ export const userRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/users\/([^/]+)\/activate$/,
     handler: (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
+      const admin = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
       const target = ctx.db.users.find((item) => item.id === ctx.params[0]);
       if (!target) throw new MockHttpError(404, "Compte introuvable.");
       if (target.isActive)
@@ -369,6 +372,7 @@ export const userRoutes: MockRoute[] = [
       target.audit.unshift({
         id: nextId("aud"),
         action: "ACTIVATED",
+        actorId: admin.id,
         createdAt: target.updatedAt,
         before,
         after: { isActive: true, invitationStatus: "SENT" },

@@ -383,6 +383,41 @@
   font-weight: 400;
 }
 
+.supervision-attachment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.supervision-attachment-remove {
+  display: grid;
+  width: 48px;
+  min-height: 70px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.supervision-attachment-remove:hover,
+.supervision-attachment-remove:focus-visible {
+  border-color: #efb6b6;
+  background: #fff7f7;
+  color: #b42318;
+}
+
+.supervision-attachment-remove:focus-visible {
+  outline: 3px solid #b4231830;
+  outline-offset: 2px;
+}
+
 .modal-body > .ops-form .ops-toggles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1043,6 +1078,7 @@
 
 /* --- Responsive mobile --- */
 @media (max-width: 760px) {
+
   .modal-body > .ops-form .user-form-grid,
   .modal-body > .ops-form .ops-toggles {
     grid-template-columns: 1fr;
@@ -1377,6 +1413,135 @@
   white-space: nowrap;
 }
 
+
+
+.modal-body > .correction-identity {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 11px 13px;
+  border: 1px solid #dbe4f2;
+  border-left: 3px solid var(--navy);
+  border-radius: 10px;
+  background: #f6f8fd;
+}
+
+.correction-identity__eyebrow {
+  color: #60708a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.correction-identity__main {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+}
+
+.correction-identity__main strong {
+  color: #15284d;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.correction-identity__main time {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+/* --- Correction compacte --- */
+.modal-body > .correction-hint {
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.modal-body > .correction-form {
+  gap: 12px;
+}
+
+.modal-body > .correction-form .user-form-grid {
+  gap: 12px;
+}
+
+.modal-body > .correction-form .user-form-grid label,
+.modal-body > .correction-form .ops-field {
+  font-size: 12px;
+}
+
+.modal-body > .correction-form .user-form-grid label {
+  gap: 5px;
+}
+
+.modal-body > .correction-form input[type="datetime-local"] {
+  min-height: 42px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.modal-body > .correction-form textarea {
+  min-height: 78px;
+  margin-top: 5px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  line-height: 1.4;
+}
+
+.modal-body > .correction-form .correction-attachment {
+  min-height: 54px;
+  padding: 9px 12px;
+  gap: 10px;
+  border-radius: 10px;
+}
+
+.modal-body > .correction-form .correction-attachment svg {
+  width: 18px;
+  height: 18px;
+}
+
+.modal-body > .correction-form .correction-attachment strong {
+  font-size: 12.5px;
+}
+
+.modal-body > .correction-form .correction-attachment small {
+  font-size: 11px;
+}
+
+.modal-body > .correction-form .supervision-attachment-remove {
+  width: 40px;
+  min-height: 54px;
+  border-radius: 10px;
+}
+
+.modal-body > .correction-form .ops-toggles {
+  gap: 8px;
+}
+
+.modal-body > .correction-form .ops-toggles label {
+  min-height: 40px;
+  padding: 7px 10px;
+  gap: 8px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.modal-body > .correction-form .ops-toggles input {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+}
+
+.modal-body > .correction-form .ops-toggles span {
+  display: block;
+}
+
+.modal-body > .correction-form .ops-toggles strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
 .supervisor-upcoming-dialog__state.is-live {
   background: #e6f7ee;
   color: #137b4d !important;
@@ -1394,6 +1559,10 @@
 }
 
 @media (max-width: 760px) {
+  .modal-body > .correction-identity {
+    margin-bottom: 12px;
+    padding: 10px 11px;
+  }
   .supervisor-dashboard {
     gap: 14px;
   }
