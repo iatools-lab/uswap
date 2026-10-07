@@ -29,6 +29,7 @@ export class StationsService {
         weeklyHoursLimit: dto.weeklyHoursLimit,
         checkinQrTtl: dto.checkinQrTtl,
         checkoutQrTtl: dto.checkoutQrTtl,
+        geofenceRadiusMeters: dto.geofenceRadiusMeters,
       },
     });
   }
@@ -73,6 +74,7 @@ export class StationsService {
       weeklyHoursLimit?: number;
       checkinQrTtl?: number;
       checkoutQrTtl?: number;
+      geofenceRadiusMeters?: number;
     } = {};
 
     if (dto.name !== undefined) {
@@ -121,6 +123,10 @@ export class StationsService {
 
     if (dto.weeklyHoursLimit !== undefined) {
       data.weeklyHoursLimit = dto.weeklyHoursLimit;
+    }
+
+    if (dto.geofenceRadiusMeters !== undefined) {
+      data.geofenceRadiusMeters = dto.geofenceRadiusMeters;
     }
 
     if (dto.checkinQrTtl !== undefined) {
