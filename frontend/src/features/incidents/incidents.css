@@ -380,6 +380,105 @@
 .incident-timeline > div:last-child i:after {
   display: none;
 }
+.swapper-incident-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 66px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #fff;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+.swapper-incident-entry:hover,
+.swapper-incident-entry:focus-visible {
+  border-color: #a8b7dc;
+  background: #fbfcff;
+}
+.swapper-incident-entry__icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 11px;
+  background: #fff1eb;
+  color: #dc4b1b;
+}
+.swapper-incident-entry__copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.swapper-incident-entry__copy strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+.swapper-incident-entry__copy small,
+.swapper-incident-private {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.swapper-incident-entry__action {
+  flex: 0 0 auto;
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 650;
+}
+.swapper-incident-api-note {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #f1d49a;
+  border-radius: 9px;
+  background: #fff9eb;
+  color: #795300;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.swapper-incident-self {
+  display: grid;
+  gap: 3px;
+  padding: 11px 13px;
+  border: 1px solid #e3e9f2;
+  border-radius: 10px;
+  background: #f8faff;
+}
+.swapper-incident-self span,
+.swapper-incident-self small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.swapper-incident-self strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+.swapper-incident-form .incident-form-row {
+  align-items: start;
+}
+.absence-no-eligible {
+  padding: 14px 15px;
+  border: 1px solid #dce5f3;
+  border-radius: 11px;
+  background: #f7f9fd;
+  color: #253856;
+}
+.absence-no-eligible strong {
+  font-size: 13px;
+}
+.absence-no-eligible p {
+  margin: 5px 0 0;
+  color: #6c7a91;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .incident-timeline strong {
   font-size: 11px;
 }
@@ -432,6 +531,12 @@
   }
   .incident-card {
     min-height: 205px;
+  }
+  .swapper-incident-entry {
+    padding-inline: 12px;
+  }
+  .swapper-incident-entry__action {
+    font-size: 11px;
   }
   .incident-filters button {
     min-height: 44px;

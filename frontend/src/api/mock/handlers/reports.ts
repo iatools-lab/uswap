@@ -4,6 +4,7 @@ import {
   requireRole,
   requireUser,
   stationNameOf,
+  weekKeyOf,
 } from "../shared";
 import { isoFromMs } from "../seed";
 import { MockHttpError, type MockRoute } from "../types";
@@ -78,10 +79,17 @@ export const reportRoutes: MockRoute[] = [
         "ADMIN",
         "SUPERVISOR",
       ]);
+      const fromValue = text(query.get("from"));
+      const toValue = text(query.get("to"));
       const from = Date.parse(
-        query.get("from") || isoFromMs(now - 30 * 86400000),
+        fromValue ? `${fromValue}T00:00:00` : isoFromMs(now - 30 * 86400000),
       );
-      const to = Date.parse(query.get("to") || isoFromMs(now + 86400000));
+      const to = Date.parse(
+        toValue
+          ? `${toValue}T23:59:59.999`
+          : isoFromMs(now + 86400000),
+      );
+      const planningId = text(query.get("planningId"));
       const requestedStation = text(query.get("stationId"));
       const requestedSwapper = text(query.get("swapperId"));
       const stationId =
@@ -89,14 +97,22 @@ export const reportRoutes: MockRoute[] = [
       const scopeStations = actor.stationId
         ? [actor.stationId]
         : db.stations.map((item) => item.id);
-      const occurrences = db.occurrences
+      const publishedPlanningIds = new Set(
+        db.plannings
+          .filter((item) => item.status === "PUBLISHED")
+          .filter((item) => (planningId ? item.id === planningId : true))
+          .map((item) => item.id),
+      );
+      const scheduleOccurrences = db.occurrences
+        .filter((item) => publishedPlanningIds.has(item.planningId))
         .filter((item) => scopeStations.includes(item.stationId))
         .filter(
           (item) =>
             Date.parse(item.startTime) >= from &&
             Date.parse(item.startTime) <= to,
         )
-        .filter((item) => (stationId ? item.stationId === stationId : true))
+        .filter((item) => (stationId ? item.stationId === stationId : true));
+      const occurrences = scheduleOccurrences
         .filter((item) =>
           requestedSwapper ? item.swapperId === requestedSwapper : true,
         );
@@ -132,7 +148,17 @@ export const reportRoutes: MockRoute[] = [
           label: occurrence.label,
         };
       });
-      const assigned = occurrences.filter((item) => item.swapperId).length;
+      const assigned = scheduleOccurrences.filter((item) => item.swapperId).length;
+      const completedAssigned = occurrences.filter(
+        (item) => item.swapperId && Date.parse(item.endTime) <= now,
+      ).length;
+      const attendedCompleted = attendanceRows.filter(
+        ({ occurrence, record }) =>
+          occurrence.swapperId &&
+          Date.parse(occurrence.endTime) <= now &&
+          record &&
+          ["PRESENT", "LATE", "CLOSED"].includes(record.status),
+      ).length;
       const hoursBySwapper = new Map<
         string,
         { name: string; station: string; hours: number }
@@ -151,7 +177,11 @@ export const reportRoutes: MockRoute[] = [
           Math.round((current.hours + durationHours(db, item)) * 10) / 10;
         hoursBySwapper.set(person.id, current);
       }
+      const scheduleShiftIds = new Set(
+        scheduleOccurrences.map((occurrence) => occurrence.id),
+      );
       const changes = db.changes
+        .filter((item) => scheduleShiftIds.has(item.shiftId))
         .filter(
           (item) =>
             Date.parse(item.createdAt) >= from &&
@@ -161,13 +191,35 @@ export const reportRoutes: MockRoute[] = [
           stationId
             ? item.stationId === stationId
             : scopeStations.includes(item.stationId),
+        )
+        .filter(
+          (item) =>
+            !requestedSwapper ||
+            item.outSwapperId === requestedSwapper ||
+            item.inSwapperId === requestedSwapper,
         );
-      const leaves = db.leaves.filter(
-        (item) =>
-          Date.parse(item.startTime) <= to &&
-          Date.parse(item.endTime) >= from &&
-          item.status === "APPROVED",
-      );
+      const leaves = db.leaves
+        .filter(
+          (item) =>
+            Date.parse(item.startTime) <= to &&
+            Date.parse(item.endTime) >= from &&
+            item.status === "APPROVED",
+        )
+        .filter((item) =>
+          requestedSwapper ? item.swapperId === requestedSwapper : true,
+        )
+        .filter((item) => {
+          if (!stationId) return true;
+          const swapper = db.users.find((candidate) => candidate.id === item.swapperId);
+          return (
+            swapper?.stationId === stationId ||
+            scheduleOccurrences.some(
+              (occurrence) =>
+                occurrence.swapperId === item.swapperId &&
+                occurrence.stationId === stationId,
+            )
+          );
+        });
       const stationRows = db.stations
         .filter(
           (station) =>
@@ -176,7 +228,7 @@ export const reportRoutes: MockRoute[] = [
             (stationId ? station.id === stationId : true),
         )
         .map((station) => {
-          const rows = occurrences.filter(
+          const rows = scheduleOccurrences.filter(
             (item) => item.stationId === station.id,
           );
           const filled = rows.filter((item) => item.swapperId).length;
@@ -205,35 +257,38 @@ export const reportRoutes: MockRoute[] = [
             ).length,
           };
         });
+      const scheduledSwapperIds = new Set(
+        occurrences.map((item) => item.swapperId).filter((id): id is string => Boolean(id)),
+      );
       const swappers = db.users
         .filter(
           (item) =>
             item.role === "SWAPPER" &&
             item.isActive &&
-            scopeStations.includes(item.stationId || ""),
+            scheduledSwapperIds.has(item.id),
         )
-        .filter((item) => (stationId ? item.stationId === stationId : true))
         .map((item) => ({ id: item.id, name: item.fullName }));
       return {
         period: {
           from: new Date(from).toISOString(),
           to: new Date(to).toISOString(),
         },
-        filters: { stationId, swapperId: requestedSwapper || null },
+        filters: {
+          stationId,
+          swapperId: requestedSwapper || null,
+          planningId: planningId || null,
+        },
         stations: db.stations
           .filter((item) => item.isActive && scopeStations.includes(item.id))
           .map((item) => ({ id: item.id, name: item.name })),
         swappers,
         kpis: {
-          shifts: occurrences.length,
-          coverageRate: occurrences.length
-            ? Math.round((assigned / occurrences.length) * 100)
+          shifts: scheduleOccurrences.length,
+          coverageRate: scheduleOccurrences.length
+            ? Math.round((assigned / scheduleOccurrences.length) * 100)
             : 0,
-          attendanceRate: assigned
-            ? Math.round(
-                ((status.present + status.closed + status.late) / assigned) *
-                  100,
-              )
+          attendanceRate: completedAssigned
+            ? Math.round((attendedCompleted / completedAssigned) * 100)
             : 0,
           absences: status.absent,
           late: status.late,
@@ -259,8 +314,31 @@ export const reportRoutes: MockRoute[] = [
           .sort((a, b) => b.hours - a.hours)
           .slice(0, 8),
         hoursByStation: Array.from(new Map(occurrences.filter((row) => row.swapperId).map((row) => [row.stationId, row])).entries()).map(([stationId]) => ({ station: stationNameOf(db, stationId) ?? "—", hours: occurrences.filter((row) => row.stationId === stationId && row.swapperId).reduce((sum, row) => sum + durationHours(db, row), 0) })),
-        hoursByWeek: [],
-        hoursByMonth: [],
+        hoursByWeek: Array.from(
+          occurrences.reduce((totals, item) => {
+            if (!item.swapperId) return totals;
+            const week = weekKeyOf(item.startTime);
+            totals.set(week, (totals.get(week) ?? 0) + durationHours(db, item));
+            return totals;
+          }, new Map<string, number>()),
+        )
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([week, hours]) => ({ week, hours: Math.round(hours * 10) / 10 })),
+        hoursByMonth: Array.from(
+          occurrences.reduce((totals, item) => {
+            if (!item.swapperId) return totals;
+            const station = db.stations.find((row) => row.id === item.stationId);
+            const month = new Intl.DateTimeFormat("en-CA", {
+              year: "numeric",
+              month: "2-digit",
+              timeZone: station?.timezone || "Africa/Douala",
+            }).format(new Date(item.startTime));
+            totals.set(month, (totals.get(month) ?? 0) + durationHours(db, item));
+            return totals;
+          }, new Map<string, number>()),
+        )
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([month, hours]) => ({ month, hours: Math.round(hours * 10) / 10 })),
         changes: changes.map((item) => ({
           date: item.createdAt,
           station: item.station,

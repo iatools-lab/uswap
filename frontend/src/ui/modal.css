@@ -98,7 +98,11 @@
   background: var(--color-surface, #fff);
 }
 .modal-footer button {
+  min-width: 0;
   min-height: 44px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 .modal-panel input,
 .modal-panel select,
@@ -163,6 +167,8 @@
   }
   .modal-footer button {
     flex: 1 1 0;
+    padding-inline: 10px;
+    font-size: 13px;
   }
   .modal-panel .planner-week-grid {
     grid-template-columns: 1fr;

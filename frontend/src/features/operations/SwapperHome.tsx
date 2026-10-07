@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { notify } from "../../ui/Toast";
 import { api, usingMock } from "../../api/auth-api";
 import { Modal } from "../../ui/Modal";
+import { SwapperIncidentReport } from "../incidents/SwapperIncidentReport";
+import { SwapperPanel } from "../supervision/SwapperPanel";
 import { CheckCircle, MapPin, Warning, Clock3 } from "../../ui/icons";
 import { formatDate, isInWindow, isOpenShift, pickNextShift } from "./format";
 import type { OperationShift, OperationsViewProps, PunchResult } from "./types";
@@ -83,6 +85,96 @@ function historyStatusClass(shift: OperationShift) {
     return "attendance-status--absent";
   if (shift.attendance?.isLate) return "attendance-status--late";
   return "attendance-status--present";
+}
+
+function historyGroups(shifts: OperationShift[]) {
+  const groups = new Map<
+    string,
+    { id: string; name: string; shifts: OperationShift[] }
+  >();
+  shifts.forEach((shift) => {
+    const id = shift.station?.id || shift.station?.name || "station";
+    const group = groups.get(id) ?? {
+      id,
+      name: shift.station?.name || "Station",
+      shifts: [],
+    };
+    group.shifts.push(shift);
+    groups.set(id, group);
+  });
+  return Array.from(groups.values());
+}
+
+function historyDate(shift: OperationShift) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: shift.station?.timezone || "Africa/Douala",
+  }).format(new Date(shift.startTime));
+}
+
+function historyTime(shift: OperationShift, value: string) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: shift.station?.timezone || "Africa/Douala",
+  }).format(new Date(value));
+}
+
+function sameStationDay(shift: OperationShift) {
+  const timeZone = shift.station?.timezone || "Africa/Douala";
+  const day = (value: string) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date(value));
+  return day(shift.startTime) === day(shift.endTime);
+}
+
+function HistoryRows({
+  shifts,
+  targetId,
+}: {
+  shifts: OperationShift[];
+  targetId?: string | null;
+}) {
+  return (
+    <div className="swapper-history-groups">
+      {historyGroups(shifts).map((group) => (
+        <section className="swapper-history-group" key={group.id}>
+          <header className="swapper-history-group__heading">
+            <strong>{group.name}</strong>
+            <span>
+              {group.shifts.length} shift{group.shifts.length === 1 ? "" : "s"}
+            </span>
+          </header>
+          <div className="swapper-history-group__rows">
+            {group.shifts.map((shift) => (
+              <article
+                key={shift.id}
+                data-attendance-id={shift.id}
+                className={
+                  "swapper-history-row" +
+                  (shift.id === targetId ? " is-notification-target" : "")
+                }
+              >
+                <time dateTime={shift.startTime}>{historyDate(shift)}</time>
+                <span className="swapper-history-row__hours">
+                  {historyTime(shift, shift.startTime)}
+                  <span aria-hidden="true">→</span>
+                  {historyTime(shift, shift.endTime)}
+                  {!sameStationDay(shift) && <small>lendemain</small>}
+                </span>
+                <span
+                  className={`attendance-status ${historyStatusClass(shift)}`}
+                >
+                  {historyStatusLabel(shift)}
+                </span>
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
 }
 
 export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
@@ -344,6 +436,22 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
     !targetShift.attendance.checkedOutAt &&
     shiftNow <= Date.parse(targetShift.endTime) + 5 * 60_000,
   );
+  const hourInDouala = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      hourCycle: "h23",
+      timeZone: "Africa/Douala",
+    })
+      .formatToParts(new Date())
+      .find((part) => part.type === "hour")?.value ?? 12,
+  );
+  const greeting =
+    hourInDouala < 12
+      ? "Bonjour"
+      : hourInDouala < 18
+        ? "Bon après-midi"
+        : "Bonsoir";
+  const firstName = user.fullName.trim().split(/\s+/)[0] || "";
 
   return (
     <>
@@ -385,211 +493,72 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
         </p>
       )}
 
-      {/* KPI Interactifs & Diagramme Circulaire */}
-      <section className="admin-card" style={{ padding: "20px" }}>
-        <h3
-          style={{
-            margin: "0 0 16px",
-            fontSize: "15px",
-            fontWeight: 600,
-            color: "var(--navy)",
-          }}
-        >
-          Indicateurs de performance
-        </h3>
+      <section className="admin-card swapper-welcome">
+        <span className="admin-eyebrow">Espace personnel</span>
+        <h2>
+          {greeting}
+          {firstName ? `, ${firstName}` : ""}
+        </h2>
+        <p>Retrouvez ici votre présence et vos prochains services.</p>
+      </section>
 
+      <section className="admin-card swapper-performance">
+        <header className="swapper-performance__heading">
+          <div>
+            <h2>Votre présence</h2>
+            <p>Sur vos shifts terminés</p>
+          </div>
+        </header>
         {kpiStats.total > 0 ? (
-          <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+          <div className="swapper-performance__body">
             <div
+              className="swapper-performance__ring"
               style={{
-                position: "relative",
-                width: "110px",
-                height: "110px",
-                borderRadius: "50%",
-                background: `conic-gradient(
-                  #10b981 0% ${kpiStats.onTimePct}%,
-                  #f59e0b ${kpiStats.onTimePct}% ${kpiStats.onTimePct + kpiStats.latePct}%,
-                  #ef4444 ${kpiStats.onTimePct + kpiStats.latePct}% 100%
-                )`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                background: `conic-gradient(#10a66a 0% ${kpiStats.onTimePct}%, #e99a16 ${kpiStats.onTimePct}% ${kpiStats.onTimePct + kpiStats.latePct}%, #e24c4c ${kpiStats.onTimePct + kpiStats.latePct}% 100%)`,
               }}
+              role="img"
+              aria-label={`Présence ${kpiStats.presenceRate} %, ${kpiStats.onTime} à l’heure, ${kpiStats.late} en retard et ${kpiStats.absent} absences`}
             >
-              <div
-                style={{
-                  width: "82px",
-                  height: "82px",
-                  backgroundColor: "#ffffff",
-                  borderRadius: "50%",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "inset 0 2px 4px rgba(0,0,0,0.04)",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "18px",
-                    fontWeight: 800,
-                    color: "var(--navy)",
-                    lineHeight: "1.1",
-                  }}
-                >
-                  {kpiStats.presenceRate}%
-                </span>
-                <span
-                  style={{
-                    fontSize: "9px",
-                    fontWeight: 600,
-                    color: "var(--muted)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                  }}
-                >
-                  Présence
-                </span>
-              </div>
+              <span>
+                <strong>{kpiStats.presenceRate}%</strong>
+                <small>Présence</small>
+              </span>
             </div>
-
-            <div
-              style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  fontSize: "13px",
-                }}
-              >
-                <span
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    color: "var(--muted)",
-                    fontWeight: 500,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: "10px",
-                      height: "10px",
-                      borderRadius: "50%",
-                      backgroundColor: "#10b981",
-                    }}
-                  />
-                  À l'heure
+            <div className="swapper-performance__legend">
+              <div>
+                <span>
+                  <i className="is-present" />À l’heure
                 </span>
-                <strong style={{ color: "var(--ink)" }}>
-                  {kpiStats.onTime}{" "}
-                  <span
-                    style={{
-                      color: "var(--muted)",
-                      fontSize: "11px",
-                      marginLeft: "4px",
-                    }}
-                  >
-                    ({kpiStats.onTimePct}%)
-                  </span>
+                <strong>
+                  {kpiStats.onTime}
+                  <small>{kpiStats.onTimePct}%</small>
                 </strong>
               </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  fontSize: "13px",
-                }}
-              >
-                <span
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    color: "var(--muted)",
-                    fontWeight: 500,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: "10px",
-                      height: "10px",
-                      borderRadius: "50%",
-                      backgroundColor: "#f59e0b",
-                    }}
-                  />
+              <div>
+                <span>
+                  <i className="is-late" />
                   En retard
                 </span>
-                <strong style={{ color: "var(--ink)" }}>
-                  {kpiStats.late}{" "}
-                  <span
-                    style={{
-                      color: "var(--muted)",
-                      fontSize: "11px",
-                      marginLeft: "4px",
-                    }}
-                  >
-                    ({kpiStats.latePct}%)
-                  </span>
+                <strong>
+                  {kpiStats.late}
+                  <small>{kpiStats.latePct}%</small>
                 </strong>
               </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  fontSize: "13px",
-                }}
-              >
-                <span
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    color: "var(--muted)",
-                    fontWeight: 500,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: "10px",
-                      height: "10px",
-                      borderRadius: "50%",
-                      backgroundColor: "#ef4444",
-                    }}
-                  />
+              <div>
+                <span>
+                  <i className="is-absent" />
                   Absent
                 </span>
-                <strong style={{ color: "var(--ink)" }}>
-                  {kpiStats.absent}{" "}
-                  <span
-                    style={{
-                      color: "var(--muted)",
-                      fontSize: "11px",
-                      marginLeft: "4px",
-                    }}
-                  >
-                    ({kpiStats.absentPct}%)
-                  </span>
+                <strong>
+                  {kpiStats.absent}
+                  <small>{kpiStats.absentPct}%</small>
                 </strong>
               </div>
             </div>
           </div>
         ) : (
-          <p style={{ margin: 0, fontSize: "13px", color: "var(--muted)" }}>
-            Aucune donnée de performance disponible pour le moment.
+          <p className="swapper-performance__empty">
+            Vos indicateurs apparaîtront après votre premier shift terminé.
           </p>
         )}
       </section>
@@ -688,6 +657,10 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
         </section>
       )}
 
+      <SwapperPanel data={data} onChanged={onChanged} />
+
+      <SwapperIncidentReport user={user} shifts={data.shifts} />
+
       {/* Historique de pointage (Top 5) */}
       <section className="admin-card">
         <div
@@ -725,35 +698,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
             <h3>Aucun pointage antérieur sur cette période</h3>
           </div>
         ) : (
-          <div className="swapper-shifts-cards-list">
-            {recentPointages.map((shift) => (
-              <div key={shift.id} className="swapper-shift-card">
-                <div className="swapper-shift-header">
-                  <div className="swapper-shift-station">
-                    <span className="station-name">{shift.station?.name}</span>
-                  </div>
-                  <span
-                    className={`attendance-status ${historyStatusClass(shift)}`}
-                  >
-                    {historyStatusLabel(shift)}
-                  </span>
-                </div>
-                <div className="swapper-shift-details">
-                  <div className="time-block">
-                    <small>DÉBUT</small>
-                    <strong>{formatDate(shift.startTime)}</strong>
-                  </div>
-                  <div className="time-separator" aria-hidden="true">
-                    →
-                  </div>
-                  <div className="time-block">
-                    <small>FIN</small>
-                    <strong>{formatDate(shift.endTime)}</strong>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <HistoryRows shifts={recentPointages} />
         )}
       </section>
 
@@ -810,54 +755,16 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
           ))}
         </div>
 
-        <div style={{ maxHeight: "55vh", overflowY: "auto", padding: "4px" }}>
-          {!filteredModalShifts.length ? (
-            <div className="admin-empty">
-              <h3>Aucun résultat pour ce filtre</h3>
-            </div>
-          ) : (
-            <div className="swapper-shifts-cards-list">
-              {filteredModalShifts.map((shift) => (
-                <div
-                  key={shift.id}
-                  data-attendance-id={shift.id}
-                  className={
-                    "swapper-shift-card" +
-                    (shift.id === requestedHistoryId
-                      ? " is-notification-target"
-                      : "")
-                  }
-                >
-                  <div className="swapper-shift-header">
-                    <div className="swapper-shift-station">
-                      <span className="station-name">
-                        {shift.station?.name}
-                      </span>
-                    </div>
-                    <span
-                      className={`attendance-status ${historyStatusClass(shift)}`}
-                    >
-                      {historyStatusLabel(shift)}
-                    </span>
-                  </div>
-                  <div className="swapper-shift-details">
-                    <div className="time-block">
-                      <small>DÉBUT</small>
-                      <strong>{formatDate(shift.startTime)}</strong>
-                    </div>
-                    <div className="time-separator" aria-hidden="true">
-                      →
-                    </div>
-                    <div className="time-block">
-                      <small>FIN</small>
-                      <strong>{formatDate(shift.endTime)}</strong>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {!filteredModalShifts.length ? (
+          <div className="admin-empty">
+            <h3>Aucun résultat pour ce filtre</h3>
+          </div>
+        ) : (
+          <HistoryRows
+            shifts={filteredModalShifts}
+            targetId={requestedHistoryId}
+          />
+        )}
       </Modal>
 
       <Modal

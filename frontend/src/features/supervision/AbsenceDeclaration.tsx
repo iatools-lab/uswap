@@ -4,7 +4,13 @@ import { notify } from "../../ui/Toast";
 import { Modal } from "../../ui/Modal";
 import { LoaderCircle, UploadSimple, Warning, X } from "../../ui/icons";
 import { Select } from "../../ui/Select";
-import { enqueue, pending, discard, startOutboxSync, subscribeOutbox } from "../offline/outbox";
+import {
+  enqueue,
+  pending,
+  discard,
+  startOutboxSync,
+  subscribeOutbox,
+} from "../offline/outbox";
 import { formatDateTime } from "./format";
 import type { OperationShift } from "../operations/types";
 
@@ -25,14 +31,31 @@ export function AbsenceDeclaration({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [online, setOnline] = useState(navigator.onLine);
-  const [queued, setQueued] = useState<Array<{ id: string; queuedAt: string; body: Record<string, unknown> }>>([]);
+  const [queued, setQueued] = useState<
+    Array<{ id: string; queuedAt: string; body: Record<string, unknown> }>
+  >([]);
 
   useEffect(() => {
     const sync = () => setOnline(true);
     const drop = () => setOnline(false);
     window.addEventListener("online", sync);
     window.addEventListener("offline", drop);
-    const refreshQueue = () => void pending().then((rows) => setQueued(rows.filter((row) => row.path === "/operations/absences" && row.status !== "PROCESSING").map((row) => ({ id: row.id, queuedAt: row.queuedAt, body: row.body }))));
+    const refreshQueue = () =>
+      void pending().then((rows) =>
+        setQueued(
+          rows
+            .filter(
+              (row) =>
+                row.path === "/operations/absences" &&
+                row.status !== "PROCESSING",
+            )
+            .map((row) => ({
+              id: row.id,
+              queuedAt: row.queuedAt,
+              body: row.body,
+            })),
+        ),
+      );
     refreshQueue();
     const unsubscribe = subscribeOutbox(refreshQueue);
     const stopSync = startOutboxSync(refreshQueue);
@@ -132,8 +155,6 @@ export function AbsenceDeclaration({
     setOpen(false);
   }
 
-  if (!eligible.length) return null;
-
   return (
     <>
       {queued.length > 0 && (
@@ -141,12 +162,24 @@ export function AbsenceDeclaration({
           <div className="ops-quick-action">
             <div>
               <h2>Déclarations en attente</h2>
-              <p>{queued.length} déclaration(s) hors connexion attend(ent) la synchronisation.</p>
+              <p>
+                {queued.length} déclaration(s) hors connexion attend(ent) la
+                synchronisation.
+              </p>
             </div>
             <div>
               {queued.map((item) => (
-                <button key={item.id} type="button" className="admin-button secondary small" onClick={() => void discard(item.id)}>
-                  Annuler · {new Date(item.queuedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                <button
+                  key={item.id}
+                  type="button"
+                  className="admin-button secondary small"
+                  onClick={() => void discard(item.id)}
+                >
+                  Annuler ·{" "}
+                  {new Date(item.queuedAt).toLocaleTimeString("fr-FR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </button>
               ))}
             </div>
@@ -190,15 +223,17 @@ export function AbsenceDeclaration({
             >
               Annuler
             </button>
-            <button
-              type="submit"
-              form="absence-declaration"
-              className="admin-button primary-cta"
-              disabled={busy || !shiftId || !file}
-            >
-              {busy && <LoaderCircle className="spin" size={16} />}
-              Envoyer
-            </button>
+            {eligible.length > 0 && (
+              <button
+                type="submit"
+                form="absence-declaration"
+                className="admin-button primary-cta"
+                disabled={busy || !shiftId || !file}
+              >
+                {busy && <LoaderCircle className="spin" size={16} />}
+                Envoyer
+              </button>
+            )}
           </>
         }
       >
@@ -214,56 +249,70 @@ export function AbsenceDeclaration({
               {error}
             </p>
           )}
-          <fieldset disabled={busy} className="ops-form">
-            <label>
-              Shift concerné
-              <Select
-                ariaLabel="Shift concerné"
-                value={shiftId}
-                placeholder="Sélectionner"
-                onChange={(value) => setShiftId(String(value))}
-                options={eligible.map((shift) => ({
-                  value: shift.id,
-                  label: `${shift.station?.name} · ${formatDateTime(shift.startTime)}`,
-                }))}
-              />
-            </label>
-            <label className="ops-field">
-              Motif
-              <input
-                required
-                minLength={3}
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                placeholder="Maladie, imprévu personnel…"
-              />
-            </label>
-            <div className="ops-file-row">
-              <label className="ops-file">
-                <input
-                  type="file"
-                  accept="application/pdf,image/jpeg,image/png,image/webp"
-                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                />
-                <UploadSimple size={22} />
-                <span>
-                  <strong>{file ? file.name : "Joindre un justificatif"}</strong>
-                  <small>PDF ou image · 5 Mo max · obligatoire</small>
-                </span>
-              </label>
-              {file && (
-                <button
-                  type="button"
-                  className="ops-file-remove"
-                  aria-label="Retirer le justificatif"
-                  title="Retirer le justificatif"
-                  onClick={() => setFile(null)}
-                >
-                  <X size={18} />
-                </button>
-              )}
+          {!eligible.length ? (
+            <div className="absence-no-eligible" role="status">
+              <strong>Aucun shift à signaler pour le moment</strong>
+              <p>
+                Cette déclaration est disponible pour un shift publié qui n’a
+                pas encore commencé ou qui est en cours.
+              </p>
             </div>
-          </fieldset>
+          ) : (
+            <fieldset disabled={busy} className="ops-form">
+              <label>
+                Shift concerné
+                <Select
+                  ariaLabel="Shift concerné"
+                  value={shiftId}
+                  placeholder="Sélectionner"
+                  onChange={(value) => setShiftId(String(value))}
+                  options={eligible.map((shift) => ({
+                    value: shift.id,
+                    label: `${shift.station?.name} · ${formatDateTime(shift.startTime)}`,
+                  }))}
+                />
+              </label>
+              <label className="ops-field">
+                Motif
+                <input
+                  required
+                  minLength={3}
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  placeholder="Maladie, imprévu personnel…"
+                />
+              </label>
+              <div className="ops-file-row">
+                <label className="ops-file">
+                  <input
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png,image/webp"
+                    onChange={(event) =>
+                      setFile(event.target.files?.[0] ?? null)
+                    }
+                  />
+                  <UploadSimple size={22} />
+                  <span>
+                    <strong>
+                      {file ? file.name : "Joindre un justificatif"}
+                    </strong>
+                    <small>PDF ou image · 5 Mo max · obligatoire</small>
+                  </span>
+                </label>
+                {file && (
+                  <button
+                    type="button"
+                    className="ops-file-remove"
+                    aria-label="Retirer le justificatif"
+                    title="Retirer le justificatif"
+                    onClick={() => setFile(null)}
+                  >
+                    <X size={18} />
+                  </button>
+                )}
+              </div>
+            </fieldset>
+          )}
         </form>
       </Modal>
     </>

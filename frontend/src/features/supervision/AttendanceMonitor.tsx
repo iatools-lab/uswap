@@ -29,8 +29,8 @@ const STATUS_CLASS: Record<MonitorRow["status"], string> = {
 
 const FILTERS: Array<{ key: MonitorRow["status"] | "ALL"; label: string }> = [
   { key: "ALL", label: "Tous" },
-  { key: "EXPECTED", label: "Attendus" },
-  { key: "PRESENT", label: "À l'heure" },
+  { key: "EXPECTED", label: "Non pointés" },
+  { key: "PRESENT", label: "Pointés" },
   { key: "LATE", label: "Retards" },
   { key: "ABSENT", label: "Absences" },
   { key: "JUSTIFIED", label: "Justifiées" },
@@ -80,7 +80,11 @@ export function AttendanceMonitor({
   const scopedRows = useMemo(() => {
     if (!data) return [];
     const needle = query.trim().toLowerCase();
+    const now = Date.now();
     return data.rows.filter((row) => {
+      // Le suivi direct reste centré sur les postes encore en cours ou à venir.
+      if (!row.swapper?.id || (!targetShiftId && Date.parse(row.endTime) <= now))
+        return false;
       if (targetShiftId && row.shiftId !== targetShiftId) return false;
       if (stationId !== "ALL" && row.station.id !== stationId) return false;
       if (!needle) return true;
@@ -195,9 +199,12 @@ export function AttendanceMonitor({
     <div className="operations-stack" style={{ paddingBottom: "24px" }}>
       <div className="premium-list-header">
         <div>
-          <span className="premium-eyebrow">MONITORING</span>
+          <span className="premium-eyebrow">POINTAGES DU JOUR</span>
           <h2>Suivi des pointages</h2>
-          <p>Actualisé toutes les 30s · {formatDateTime(data.generatedAt)}</p>
+          <p>
+            Shifts en cours et à venir · Actualisé à{" "}
+            {formatDateTime(data.generatedAt)}
+          </p>
         </div>
         <button
           type="button"

@@ -2,7 +2,11 @@ import { notify } from "../../ui/Toast";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, roles, type Role } from "../../api/auth-api";
 import { ArrowLeft, LoaderCircle, Mail } from "../../ui/icons";
-import { ClockCounterClockwiseIcon, ShieldCheckIcon, UserCircleIcon } from "@phosphor-icons/react";
+import {
+  ClockCounterClockwiseIcon,
+  ShieldCheckIcon,
+  UserCircleIcon,
+} from "@phosphor-icons/react";
 import { Modal } from "../../ui/Modal";
 import { StationPicker } from "../stations/StationPicker";
 import { Select } from "../../ui/Select";
@@ -91,11 +95,6 @@ export function UserDetail({
   const [confirm, setConfirm] = useState(false);
   const [confirmActivate, setConfirmActivate] = useState(false);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
-  const [communicationOpen, setCommunicationOpen] = useState(false);
-  const [communications, setCommunications] = useState<Array<{
-    id: string; type: string; recipient: string; subject: string; status: string;
-    errorMessage?: string | null; createdAt: string; actionUrl?: string | null;
-  }> | null>(null);
 
   // Le formulaire a-t-il des modifications non enregistrées
   const isDirty = useMemo(() => {
@@ -127,21 +126,9 @@ export function UserDetail({
     }
   }
 
-  async function loadCommunicationHistory() {
-    try {
-      setCommunications(
-        await api(`/users/${id}/communication-history`),
-      );
-      setCommunicationOpen(true);
-    } catch (e) {
-      notify((e as Error).message, "error");
-    }
-  }
-
   useEffect(() => {
     setUser(null);
     setForm(null);
-    setCommunications(null);
     void load();
   }, [id]);
 
@@ -181,9 +168,9 @@ export function UserDetail({
             address: form.address || "",
             stationId: form.stationId || null,
           },
-          "PATCH"
+          "PATCH",
         ),
-      "Modifications enregistrées avec succès."
+      "Modifications enregistrées avec succès.",
     );
   }
 
@@ -191,7 +178,8 @@ export function UserDetail({
     setForm((old) => (old ? { ...old, [field]: value } : old));
 
   const formatCleanValue = (key: string, val: unknown): string => {
-    if (val === null || val === undefined || val === "" || val === "—") return "Aucun";
+    if (val === null || val === undefined || val === "" || val === "—")
+      return "Aucun";
     if (key === "stationId") {
       const found = stations.find((s) => s.id === String(val));
       return found ? found.name : String(val);
@@ -241,7 +229,6 @@ export function UserDetail({
         <>
           {/* Grille principale : Formulaire à gauche, panneau latéral à droite */}
           <div className="user-detail-layout">
-
             {/* Formulaire Informations du profil */}
             <form onSubmit={save} className="admin-card user-detail-card">
               <div className="user-detail-card-head">
@@ -264,19 +251,10 @@ export function UserDetail({
                   <ClockCounterClockwiseIcon size={15} />
                   <span>Historique ({user.audit?.length || 0})</span>
                 </button>
-                <button
-                  type="button"
-                  className="admin-button secondary small"
-                  onClick={() => void loadCommunicationHistory()}
-                >
-                  <Mail size={15} />
-                  Communications
-                </button>
               </div>
 
               <fieldset disabled={busy} className="user-detail-fieldset">
                 <div className="user-detail-grid">
-
                   <div className="user-detail-field">
                     <label htmlFor="fullName">
                       NOM COMPLET <span className="required">*</span>
@@ -348,7 +326,9 @@ export function UserDetail({
 
                   {form.role === "SWAPPER" && (
                     <div className="user-detail-field is-wide">
-                      <label>STATION RATTACHÉE <span className="required">*</span></label>
+                      <label>
+                        STATION RATTACHÉE <span className="required">*</span>
+                      </label>
                       <StationPicker
                         value={form.stationId || ""}
                         onChange={(val) => set("stationId", val || null)}
@@ -358,7 +338,6 @@ export function UserDetail({
                       />
                     </div>
                   )}
-
                 </div>
               </fieldset>
 
@@ -403,19 +382,29 @@ export function UserDetail({
               <div className="user-detail-status-box">
                 <span
                   className={`admin-badge ${
-                    user.disabledAt ? "inactive" : user.isActive ? "active" : "pending"
+                    user.disabledAt
+                      ? "inactive"
+                      : user.isActive
+                        ? "active"
+                        : "pending"
                   }`}
                 >
                   {statuses[user.invitationStatus] || user.invitationStatus}
                 </span>
 
                 {user.invitationSentAt && (
-                  <time>Dernier envoi : {formatDate(user.invitationSentAt)}</time>
+                  <time>
+                    Dernier envoi : {formatDate(user.invitationSentAt)}
+                  </time>
                 )}
 
-                {!user.isActive && user.invitationExpiresAt && user.invitationSentAt && (
-                  <time>Expiration : {formatDate(user.invitationExpiresAt)}</time>
-                )}
+                {!user.isActive &&
+                  user.invitationExpiresAt &&
+                  user.invitationSentAt && (
+                    <time>
+                      Expiration : {formatDate(user.invitationExpiresAt)}
+                    </time>
+                  )}
               </div>
 
               <div className="user-detail-actions">
@@ -427,25 +416,31 @@ export function UserDetail({
                     onClick={() =>
                       action(
                         () => api("/auth/invitations/" + id + "/resend", {}),
-                        "Invitation renvoyée avec succès."
+                        "Invitation renvoyée avec succès.",
                       )
                     }
                   >
                     <Mail size={15} />
-                    <span>{user.invitationSentAt ? "Renvoyer l’invitation" : "Envoyer l’invitation"}</span>
+                    <span>
+                      {user.invitationSentAt
+                        ? "Renvoyer l’invitation"
+                        : "Envoyer l’invitation"}
+                    </span>
                   </button>
                 )}
 
-                {!user.isActive && !user.disabledAt && user.pendingActivation && (
-                  <button
-                    type="button"
-                    className="admin-button"
-                    disabled={busy}
-                    onClick={() => setConfirmActivate(true)}
-                  >
-                    Activer le compte manuellement
-                  </button>
-                )}
+                {!user.isActive &&
+                  !user.disabledAt &&
+                  user.pendingActivation && (
+                    <button
+                      type="button"
+                      className="admin-button"
+                      disabled={busy}
+                      onClick={() => setConfirmActivate(true)}
+                    >
+                      Activer le compte manuellement
+                    </button>
+                  )}
 
                 <button
                   type="button"
@@ -453,15 +448,18 @@ export function UserDetail({
                   disabled={busy}
                   onClick={() => setConfirm(true)}
                 >
-                  {user.disabledAt ? "Réactiver le compte" : "Désactiver le compte"}
+                  {user.disabledAt
+                    ? "Réactiver le compte"
+                    : "Désactiver le compte"}
                 </button>
               </div>
 
               {confirmActivate && (
                 <div className="user-detail-confirm is-info">
                   <p>
-                    Activer le compte de «&nbsp;{user.fullName}&nbsp;» sans que le collaborateur ait ouvert
-                    le lien reçu par e-mail ? Un lien pour définir son mot de passe lui sera envoyé.
+                    Activer le compte de «&nbsp;{user.fullName}&nbsp;» sans que
+                    le collaborateur ait ouvert le lien reçu par e-mail ? Un
+                    lien pour définir son mot de passe lui sera envoyé.
                   </p>
                   <div className="user-detail-confirm-actions">
                     <button
@@ -480,7 +478,7 @@ export function UserDetail({
                         setConfirmActivate(false);
                         void action(
                           () => api("/users/" + id + "/activate", {}),
-                          "Compte activé. Un lien de définition du mot de passe a été envoyé."
+                          "Compte activé. Un lien de définition du mot de passe a été envoyé.",
                         );
                       }}
                     >
@@ -519,9 +517,9 @@ export function UserDetail({
                                 enabled: !!user.disabledAt,
                                 updatedAt: user.updatedAt,
                               },
-                              "PATCH"
+                              "PATCH",
                             ),
-                          "Statut du compte mis à jour."
+                          "Statut du compte mis à jour.",
                         )
                       }
                     >
@@ -531,7 +529,6 @@ export function UserDetail({
                 </div>
               )}
             </aside>
-
           </div>
 
           {/* Modal dédiée à l'historique de modification avec rendu narratif et explicatif */}
@@ -550,7 +547,7 @@ export function UserDetail({
                   const changedEntries = Object.entries(labels).filter(
                     ([key]) =>
                       JSON.stringify(item.before[key]) !==
-                      JSON.stringify(item.after[key])
+                      JSON.stringify(item.after[key]),
                   );
 
                   return (
@@ -561,10 +558,10 @@ export function UserDetail({
                           {item.action === "UPDATE"
                             ? "Mise à jour du profil"
                             : item.action === "DEACTIVATE"
-                            ? "Désactivation du compte"
-                            : item.action === "ACTIVATE"
-                            ? "Activation manuelle du compte"
-                            : "Réactivation du compte"}
+                              ? "Désactivation du compte"
+                              : item.action === "ACTIVATE"
+                                ? "Activation manuelle du compte"
+                                : "Réactivation du compte"}
                         </span>
                         <time>{formatDate(item.createdAt)}</time>
                       </div>
@@ -572,24 +569,37 @@ export function UserDetail({
                       {changedEntries.length > 0 ? (
                         <div className="user-detail-history-changes">
                           {changedEntries.map(([key]) => {
-                            const oldVal = formatCleanValue(key, item.before[key]);
-                            const newVal = formatCleanValue(key, item.after[key]);
+                            const oldVal = formatCleanValue(
+                              key,
+                              item.before[key],
+                            );
+                            const newVal = formatCleanValue(
+                              key,
+                              item.after[key],
+                            );
 
                             let narrativeText = "";
                             if (key === "stationId") {
                               narrativeText = `La station rattachée est passée de « ${oldVal} » à « ${newVal} ».`;
                             } else if (key === "role") {
                               narrativeText = `Le rôle de l'utilisateur a été défini sur « ${newVal} » (anciennement : ${oldVal}).`;
-                            } else if (key === "isActive" || key === "disabledAt") {
-                              narrativeText = newVal === "Oui" || newVal !== "Actif"
-                                ? "Le compte a été activé / rétabli."
-                                : "Le compte a été désactivé.";
+                            } else if (
+                              key === "isActive" ||
+                              key === "disabledAt"
+                            ) {
+                              narrativeText =
+                                newVal === "Oui" || newVal !== "Actif"
+                                  ? "Le compte a été activé / rétabli."
+                                  : "Le compte a été désactivé.";
                             } else {
                               narrativeText = `Le champ « ${labels[key] || key} » a été modifié de « ${oldVal} » à « ${newVal} ».`;
                             }
 
                             return (
-                              <div key={key} className="user-detail-history-change">
+                              <div
+                                key={key}
+                                className="user-detail-history-change"
+                              >
                                 {narrativeText}
                               </div>
                             );
@@ -600,8 +610,8 @@ export function UserDetail({
                           {item.action === "DEACTIVATE"
                             ? "L'accès au compte a été bloqué par un administrateur."
                             : item.action === "ACTIVATED"
-                            ? "L'accès au compte a été rétabli."
-                            : "Aucun détail de modification spécifique enregistré."}
+                              ? "L'accès au compte a été rétabli."
+                              : "Aucun détail de modification spécifique enregistré."}
                         </p>
                       )}
                     </div>
@@ -612,37 +622,6 @@ export function UserDetail({
           </Modal>
         </>
       )}
-
-          <Modal
-            open={communicationOpen}
-            onClose={() => setCommunicationOpen(false)}
-            title="Historique de communication"
-            subtitle="Invitations et liens de réinitialisation envoyés pour ce compte."
-          >
-            {!communications?.length ? (
-              <p className="user-detail-history-empty">Aucune communication enregistrée.</p>
-            ) : (
-              <div className="user-detail-history">
-                {communications.map((item) => (
-                  <div key={item.id} className="user-detail-history-entry">
-                    <div className="user-detail-history-entry-head">
-                      <span>{item.type === "INVITATION" ? "Invitation" : "Réinitialisation du mot de passe"}</span>
-                      <time>{formatDate(item.createdAt)}</time>
-                    </div>
-                    <p>
-                      <strong>{item.subject}</strong><br />
-                      Destinataire : {item.recipient}<br />
-                      Statut : {item.status}
-                      {item.errorMessage ? ` · ${item.errorMessage}` : ""}
-                    </p>
-                    {item.actionUrl && (
-                      <a href={item.actionUrl} target="_blank" rel="noreferrer">Voir le lien d’action</a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </Modal>
     </div>
   );
 }

@@ -6,28 +6,66 @@
 
 .leave-process-guide {
   display: grid;
-  gap: 16px;
-  padding: 20px;
+  gap: 0;
   border: 1px solid #dfe7f2;
   border-radius: 16px;
   background: #fff;
+  overflow: hidden;
 }
 
-.leave-process-guide > div:first-child > span {
+.leave-process-toggle {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 15px 18px;
+  border: 0;
+  background: #fff;
+  color: #15223c;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.leave-process-toggle:hover,
+.leave-process-toggle:focus-visible {
+  background: #f9fbff;
+}
+.leave-process-toggle:focus-visible {
+  outline: 2px solid #1f4baf;
+  outline-offset: -3px;
+}
+.leave-process-toggle > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.leave-process-toggle small {
   color: #ff5a18;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
-
-.leave-process-guide h2 {
-  margin: 4px 0;
+.leave-process-toggle strong {
+  min-width: 0;
   color: #15223c;
-  font-size: 18px;
+  font-size: 14px;
+  line-height: 1.4;
 }
-
-.leave-process-guide p {
+.leave-process-toggle__action {
+  flex: 0 0 auto;
+  color: #0b2b78;
+  font-size: 12px;
+  font-weight: 650;
+}
+.leave-process-content {
+  display: grid;
+  gap: 14px;
+  padding: 0 18px 18px;
+}
+.leave-process-content > p {
   margin: 0;
   color: #75829a;
   font-size: 12px;
@@ -63,6 +101,12 @@
 @media (max-width: 700px) {
   .leave-process-columns {
     grid-template-columns: 1fr;
+  }
+  .leave-process-toggle {
+    padding: 14px 15px;
+  }
+  .leave-process-content {
+    padding: 0 15px 15px;
   }
 }
 .leave-workspace {
@@ -574,24 +618,6 @@
   background: #fff4f1;
   color: #a8342a;
 }
-.leave-unplanned {
-  border: 1px solid #e2e8f2;
-  border-radius: 14px;
-  background: #fff;
-  overflow: hidden;
-}
-.leave-unplanned > summary {
-  padding: 16px 20px;
-  color: #263a59;
-  font-weight: 650;
-  cursor: pointer;
-}
-.leave-unplanned > [class] {
-  padding: 0 20px 20px;
-}
-.leave-unplanned:not([open]) > *:not(summary) {
-  display: none;
-}
 @media (max-width: 950px) {
   .leave-kpis {
     grid-template-columns: 1fr 1fr;
@@ -652,9 +678,6 @@
   }
   .leave-section-head {
     padding: 17px;
-  }
-  .leave-unplanned > summary {
-    min-height: 44px;
   }
   .leave-status-rail {
     top: 12px;
@@ -802,17 +825,4 @@
   .leave-integration-actions {
     justify-content: flex-end;
   }
-}
-
-.leave-unplanned > summary span {
-  display: grid;
-  gap: 3px;
-}
-.leave-unplanned > summary strong {
-  font-size: 14px;
-}
-.leave-unplanned > summary small {
-  color: #7a879d;
-  font-size: 11px;
-  font-weight: 400;
 }
