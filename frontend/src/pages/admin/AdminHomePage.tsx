@@ -379,6 +379,12 @@ export function AdminHomePage() {
               Traitez les demandes de congé et gérez les rapports planifiés.
             </p>
           </div>
+          <a
+            className="admin-button secondary small"
+            {...link("/app/admin/conges")}
+          >
+            Ouvrir la gestion des congés
+          </a>
         </div>
         <div className="home-service-stack">
           <LeaveRequestInbox />

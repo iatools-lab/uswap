@@ -10,9 +10,11 @@ import { SidebarToggle } from "./SidebarToggle";
 import { AppTopbar } from "./AppTopbar";
 import {
   Building2,
+  CalendarBlank,
   Clock3,
   Gear,
   LayoutDashboard,
+  History,
   UserRound,
   Users,
   Zap,
@@ -25,6 +27,8 @@ const sections = [
   { path: "/app/admin/utilisateurs", label: "Utilisateurs", Icon: Users },
   { path: "/app/admin/stations", label: "Stations", Icon: Building2 },
   { path: "/app/admin/plannings", label: "Plannings", Icon: Clock3 },
+  { path: "/app/admin/conges", label: "Congés", Icon: CalendarBlank },
+  { path: "/app/admin/audit", label: "Journal d’audit", Icon: History },
   { path: "/app/admin/parametres", label: "Réglages globaux", Icon: Gear },
   { path: "/app/admin/compte", label: "Paramètres du compte", Icon: UserRound },
 ];
@@ -37,6 +41,9 @@ const sectionDescriptions: Record<string, string> = {
   "/app/admin/stations":
     "Configurez les stations, leurs règles, leurs shifts et leur localisation.",
   "/app/admin/plannings": "Créez, publiez et ajustez les horaires des équipes.",
+  "/app/admin/conges":
+    "Examinez les demandes et suivez les périodes approuvées.",
+  "/app/admin/audit": "Consultez les actions enregistrées et leur contexte.",
   "/app/admin/parametres": "Définissez les règles communes de la plateforme.",
   "/app/admin/compte":
     "Mettez à jour vos informations et vos préférences de compte.",

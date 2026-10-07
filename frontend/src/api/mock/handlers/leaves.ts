@@ -149,6 +149,108 @@ function workspace(db: MockDb, swapperId: string): LeaveWorkspaceView {
   };
 }
 
+function supervisorStationId(userId: string) {
+  if (userId === "us-chief-bastos") return "st-bastos";
+  if (userId === "us-chief-obobogo") return "st-obobogo";
+  return null;
+}
+
+function managementRows(
+  db: MockDb,
+  userId: string,
+  role: "ADMIN" | "SUPERVISOR",
+) {
+  const stationId = role === "SUPERVISOR" ? supervisorStationId(userId) : null;
+  return db.leaves
+    .filter((leave) => {
+      if (!stationId) return true;
+      return (
+        db.users.find((item) => item.id === leave.swapperId)?.stationId ===
+        stationId
+      );
+    })
+    .sort((a, b) => Date.parse(b.startTime) - Date.parse(a.startTime))
+    .map((leave) => {
+      const swapper = db.users.find((item) => item.id === leave.swapperId);
+      const station = db.stations.find(
+        (item) => item.id === swapper?.stationId,
+      );
+      return {
+        ...view(db, leave),
+        swapperId: leave.swapperId,
+        swapperName: swapper?.fullName ?? "Compte inconnu",
+        stationId: swapper?.stationId ?? null,
+        stationName: station?.name ?? "Station non affectée",
+        createdAt: leave.createdAt,
+      };
+    });
+}
+
+function canManageLeave(
+  db: MockDb,
+  userId: string,
+  role: "ADMIN" | "SUPERVISOR",
+  leave: MockLeave,
+) {
+  if (role === "ADMIN") return true;
+  const stationId = supervisorStationId(userId);
+  if (!stationId) return true;
+  return (
+    db.users.find((item) => item.id === leave.swapperId)?.stationId ===
+    stationId
+  );
+}
+
+function decideLeave(
+  db: MockDb,
+  actor: MockDb["users"][number],
+  leave: MockLeave,
+  body: Record<string, unknown>,
+  now: number,
+) {
+  const decision = asText(body.decision);
+  const reason = asText(body.reason);
+  if (leave.status !== "PENDING")
+    throw new MockHttpError(409, "Cette demande n’est plus en attente.");
+  if (decision !== "APPROVED" && decision !== "REJECTED")
+    throw new MockHttpError(400, "Choisissez une décision valide.");
+  if (decision === "REJECTED" && reason.length < 5)
+    throw new MockHttpError(
+      400,
+      "Indiquez le motif du refus (5 caractères minimum).",
+    );
+  const balance = db.leaveBalances.find(
+    (item) => item.swapperId === leave.swapperId,
+  );
+  if (balance)
+    balance.pendingDays = Math.max(
+      0,
+      balance.pendingDays - dayCount(leave.startTime, leave.endTime),
+    );
+  Object.assign(leave, {
+    status: decision,
+    decisionReason: decision === "REJECTED" ? reason : "Demande approuvée.",
+    decidedAt: new Date(now).toISOString(),
+    updatedAt: new Date(now).toISOString(),
+    cancellable: false,
+    editable: false,
+  });
+  const dayTotal = dayCount(leave.startTime, leave.endTime);
+  const swapper = db.users.find((item) => item.id === leave.swapperId);
+  if (swapper)
+    notifyUser(
+      db,
+      swapper.id,
+      decision === "APPROVED" ? "LEAVE_APPROVED" : "LEAVE_REJECTED",
+      decision === "APPROVED" ? "Congé approuvé" : "Demande de congé refusée",
+      decision === "APPROVED"
+        ? `Votre demande de ${dayTotal} jour${dayTotal > 1 ? "s" : ""} a été approuvée.`
+        : `Votre demande de congé a été refusée : ${reason}`,
+      leave.id,
+    );
+  return { ...view(db, leave), decidedBy: actor.fullName };
+}
+
 export const leaveRoutes: MockRoute[] = [
   {
     method: "GET",
@@ -310,6 +412,36 @@ export const leaveRoutes: MockRoute[] = [
             db.users.find((item) => item.id === leave.swapperId)?.fullName ??
             "Compte inconnu",
         }));
+    },
+  },
+  {
+    method: "GET",
+    pattern: /^\/leaves\/management$/,
+    handler: ({ db, user }) => {
+      const actor = requireRole(requireUser(db, user), ["ADMIN", "SUPERVISOR"]);
+      return managementRows(db, actor.id, actor.role as "ADMIN" | "SUPERVISOR");
+    },
+  },
+  {
+    method: "PATCH",
+    pattern: /^\/leaves\/([^/]+)\/decision$/,
+    handler: ({ db, user, params, body, now }) => {
+      const actor = requireRole(requireUser(db, user), ["ADMIN", "SUPERVISOR"]);
+      const leave = db.leaves.find((item) => item.id === params[0]);
+      if (
+        !leave ||
+        !canManageLeave(
+          db,
+          actor.id,
+          actor.role as "ADMIN" | "SUPERVISOR",
+          leave,
+        )
+      )
+        throw new MockHttpError(
+          404,
+          "Cette demande n’est pas accessible dans votre périmètre.",
+        );
+      return decideLeave(db, actor, leave, body, now);
     },
   },
   {
