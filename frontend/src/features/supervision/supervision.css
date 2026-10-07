@@ -72,6 +72,53 @@
   box-shadow: 0 1px 3px #18243e15;
 }
 
+.attendance-history .admin-card-heading {
+  align-items: center;
+  padding: 20px 22px 14px;
+}
+
+.attendance-history-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 210px) minmax(
+      160px,
+      210px
+    ) repeat(2, minmax(135px, 160px));
+  gap: 9px;
+  align-items: end;
+  padding: 0 22px 16px;
+}
+
+.attendance-history-filters .attendance-smart-search {
+  min-width: 0;
+  height: 42px;
+}
+
+.attendance-history-date {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.attendance-history-date input {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.attendance-history .admin-empty {
+  margin: 0 22px 20px;
+}
+
 /* --- Metric row: attendus / présents / retards / absents --- */
 .supervision-metrics {
   display: grid;
@@ -728,6 +775,19 @@
   .attendance-status-filters .admin-button {
     min-height: 44px;
     padding-inline: 11px;
+  }
+
+  .attendance-history-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-inline: 16px;
+  }
+
+  .attendance-history-filters .attendance-smart-search {
+    grid-column: 1 / -1;
+  }
+
+  .attendance-history .admin-card-heading {
+    padding: 17px 16px 12px;
   }
 }
 

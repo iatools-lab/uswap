@@ -87,8 +87,8 @@ export type SupervisionProps = {
 };
 
 export const STATUS_LABEL: Record<MonitorRow["status"], string> = {
-  EXPECTED: "Attendu",
-  PRESENT: "Présent",
+  EXPECTED: "Non pointé",
+  PRESENT: "Pointé",
   LATE: "En retard",
   ABSENT: "Absent",
   JUSTIFIED: "Absence justifiée",

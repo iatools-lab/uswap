@@ -145,14 +145,19 @@ function incidentFitsCurrentScope(
   );
 }
 
-/** Ne conserve qu'un planning de démonstration et ses données dépendantes. */
+/** Conserve le planning de test et l'historique publié nécessaire à la démo. */
 function retainTestPlanning(current: MockDb): MockDb {
   const source =
     current.plannings.find(
       (item) => item.name?.trim().toLocaleLowerCase("fr") === "test",
     ) ??
+    current.plannings.find((item) => item.id === "pl-courant") ??
     current.plannings.find((item) => item.status === "PUBLISHED") ??
     current.plannings[0];
+
+  const history = current.plannings.find(
+    (item) => item.id === "pl-historique" && item.status === "PUBLISHED",
+  );
 
   if (!source) {
     const now = new Date();
@@ -169,36 +174,61 @@ function retainTestPlanning(current: MockDb): MockDb {
       createdAt: now.toISOString(),
       publishedAt: null,
     };
+    const retainedPlans = [retained, ...(history ? [history] : [])];
+    const planningIds = new Set(retainedPlans.map((item) => item.id));
+    const retainedOccurrences = current.occurrences.filter((item) =>
+      planningIds.has(item.planningId),
+    );
+    const retainedShiftIds = new Set(
+      retainedOccurrences.map((item) => item.id),
+    );
     return {
       ...current,
-      plannings: [retained],
-      occurrences: [],
-      attendance: [],
-      absences: [],
-      changes: [],
-      automatedAbsences: [],
-      notices: [],
-      notifications: current.notifications.filter((item) => !item.targetId),
+      plannings: retainedPlans,
+      occurrences: retainedOccurrences,
+      attendance: current.attendance.filter((item) =>
+        retainedShiftIds.has(item.shiftId),
+      ),
+      absences: current.absences.filter((item) =>
+        retainedShiftIds.has(item.shiftId),
+      ),
+      changes: current.changes.filter((item) =>
+        retainedShiftIds.has(item.shiftId),
+      ),
+      automatedAbsences: current.automatedAbsences.filter((id) =>
+        retainedShiftIds.has(id),
+      ),
+      notices: current.notices.filter((item) =>
+        planningIds.has(item.planningId),
+      ),
+      notifications: current.notifications.filter(
+        (item) => !item.targetId || retainedShiftIds.has(item.targetId),
+      ),
     };
   }
 
   const retained = { ...source, name: "Test" };
-  const retainedOccurrences = current.occurrences.filter(
-    (item) => item.planningId === retained.id,
+  const retainedPlans = [
+    retained,
+    ...(history && history.id !== retained.id ? [history] : []),
+  ];
+  const planningIds = new Set(retainedPlans.map((item) => item.id));
+  const retainedOccurrences = current.occurrences.filter((item) =>
+    planningIds.has(item.planningId),
   );
   const retainedShiftIds = new Set(retainedOccurrences.map((item) => item.id));
   const removedIds = new Set([
     ...current.plannings
-      .filter((item) => item.id !== retained.id)
+      .filter((item) => !planningIds.has(item.id))
       .map((item) => item.id),
     ...current.occurrences
-      .filter((item) => item.planningId !== retained.id)
+      .filter((item) => !planningIds.has(item.planningId))
       .map((item) => item.id),
   ]);
 
   return {
     ...current,
-    plannings: [retained],
+    plannings: retainedPlans,
     occurrences: retainedOccurrences,
     attendance: current.attendance.filter((item) =>
       retainedShiftIds.has(item.shiftId),
@@ -212,7 +242,7 @@ function retainTestPlanning(current: MockDb): MockDb {
     automatedAbsences: current.automatedAbsences.filter((id) =>
       retainedShiftIds.has(id),
     ),
-    notices: current.notices.filter((item) => item.planningId === retained.id),
+    notices: current.notices.filter((item) => planningIds.has(item.planningId)),
     notifications: current.notifications.filter(
       (item) => !item.targetId || !removedIds.has(item.targetId),
     ),
@@ -287,6 +317,24 @@ function migrateDb(candidate: unknown): MockDb | null {
     ...seed,
     ...previousWithoutQr,
     version: DB_VERSION,
+    // Garde le planning Test local tout en ajoutant une vraie période publiée
+    // terminée pour que l'archive swappeur soit testable après migration.
+    plannings: [
+      ...(previous.plannings ?? []),
+      ...seed.plannings.filter(
+        (item) =>
+          item.id === "pl-historique" &&
+          !(previous.plannings ?? []).some((saved) => saved.id === item.id),
+      ),
+    ],
+    occurrences: [
+      ...(previous.occurrences ?? []),
+      ...seed.occurrences.filter(
+        (item) =>
+          item.planningId === "pl-historique" &&
+          !(previous.occurrences ?? []).some((saved) => saved.id === item.id),
+      ),
+    ],
     // Ajoute les nouveaux profils fictifs sans écraser les comptes locaux :
     // les plannings, pointages et préférences déjà enregistrés les conservent.
     users: [...currentUsers, ...addedSeedSwappers],

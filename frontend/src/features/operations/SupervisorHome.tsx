@@ -17,12 +17,31 @@ import type { OperationsViewProps } from "./types";
 import { IncidentCenter } from "../incidents/IncidentCenter";
 import { OperationsDashboard } from "../reports/OperationsDashboard";
 
-export function SupervisorHome({ data }: OperationsViewProps) {
+export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [replacementShift, setReplacementShift] = useState<string | null>(null);
   const [selectedStation, setSelectedStation] = useState<string | null>(null);
   const [queueKey, setQueueKey] = useState(0);
+  const dashboardRefreshKey = useMemo(
+    () =>
+      data.shifts
+        .map((shift) =>
+          [
+            shift.id,
+            shift.planningId,
+            shift.startTime,
+            shift.endTime,
+            shift.publishedAt,
+            shift.swapper.fullName,
+            shift.attendance?.status ?? "",
+            shift.attendance?.checkedInAt ?? "",
+            shift.attendance?.checkedOutAt ?? "",
+          ].join("~"),
+        )
+        .join("|"),
+    [data.shifts],
+  );
   useEffect(() => {
     const targetShift = new URLSearchParams(location.search).get("replacement");
     if (targetShift) setReplacementShift(targetShift);
@@ -31,7 +50,13 @@ export function SupervisorHome({ data }: OperationsViewProps) {
     .filter(
       (shift) => shift.publishedAt && Date.parse(shift.endTime) >= Date.now(),
     )
-    .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
+    .sort(
+      (a, b) =>
+        Date.parse(a.startTime) - Date.parse(b.startTime) ||
+        Date.parse(a.endTime) - Date.parse(b.endTime) ||
+        a.station.name.localeCompare(b.station.name, "fr") ||
+        a.id.localeCompare(b.id),
+    );
   const plannerPath = "/app/supervision/plannings";
   const pointagesPath = "/app/supervision/pointages";
   const closeReplacement = () => {
@@ -45,11 +70,18 @@ export function SupervisorHome({ data }: OperationsViewProps) {
       const key = shift.station.id || shift.station.name;
       groups.set(key, [...(groups.get(key) ?? []), shift]);
     });
-    return [...groups.entries()].map(([key, shifts]) => ({
-      key,
-      station: shifts[0].station,
-      shifts,
-    }));
+    return [...groups.entries()]
+      .map(([key, shifts]) => ({
+        key,
+        station: shifts[0].station,
+        shifts,
+      }))
+      .sort(
+        (a, b) =>
+          Date.parse(a.shifts[0].startTime) -
+            Date.parse(b.shifts[0].startTime) ||
+          a.station.name.localeCompare(b.station.name, "fr"),
+      );
   }, [published]);
   const activeGroup = stationGroups.find(
     (group) => group.key === selectedStation,
@@ -78,6 +110,7 @@ export function SupervisorHome({ data }: OperationsViewProps) {
           onReplaced={() => {
             closeReplacement();
             setQueueKey((value) => value + 1);
+            onChanged();
           }}
         />
       )}
@@ -87,7 +120,7 @@ export function SupervisorHome({ data }: OperationsViewProps) {
           open
           size="lg"
           title={`Prochains shifts · ${activeGroup.station.name}`}
-          subtitle={`${activeGroup.shifts.length} service${activeGroup.shifts.length > 1 ? "s" : ""} publié${activeGroup.shifts.length > 1 ? "s" : ""}`}
+          subtitle="Horaires publiés et personnes affectées"
           onClose={() => setSelectedStation(null)}
           footer={
             <>
@@ -103,7 +136,9 @@ export function SupervisorHome({ data }: OperationsViewProps) {
                 className="admin-button primary-cta"
                 onClick={() =>
                   navigate(
-                    `${plannerPath}?planning=${encodeURIComponent(activeGroup.shifts[0].planningId)}`,
+                    activeGroup.shifts[0].planningId
+                      ? `${plannerPath}?planning=${encodeURIComponent(activeGroup.shifts[0].planningId)}`
+                      : plannerPath,
                   )
                 }
               >
@@ -168,13 +203,13 @@ export function SupervisorHome({ data }: OperationsViewProps) {
         aria-labelledby="supervisor-overview-title"
       >
         <div>
-          <span className="premium-eyebrow">Vue réseau</span>
+          <span className="premium-eyebrow">Pilotage des opérations</span>
           <h2 id="supervisor-overview-title">
-            Les opérations essentielles, au même endroit
+            Votre périmètre, en un coup d’œil
           </h2>
           <p>
-            Surveillez les besoins de couverture, puis accédez directement aux
-            pointages ou aux plannings de votre périmètre.
+            Repérez les shifts à couvrir, puis suivez les présences, incidents
+            et services à venir par station.
           </p>
         </div>
         <div className="supervisor-overview__actions">
@@ -195,7 +230,7 @@ export function SupervisorHome({ data }: OperationsViewProps) {
         </div>
       </section>
 
-      <OperationsDashboard />
+      <OperationsDashboard refreshKey={dashboardRefreshKey} />
 
       <div className="supervisor-dashboard__grid">
         <div key={queueKey} className="supervisor-dashboard__coverage">

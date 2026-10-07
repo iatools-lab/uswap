@@ -16,7 +16,9 @@ import {
 
 import {
   DAILY_SHIFT_HOURS,
+  MAX_SHIFT_HOURS,
   MIN_REST_HOURS,
+  MIN_SHIFT_HOURS,
   getBusinessDate,
   getDurationInHours,
   getWeekStart,
@@ -189,14 +191,19 @@ export class SchedulingEngineService {
   checkShiftDuration(startTime: Date, endTime: Date): ShiftDurationResult {
     const durationHours = getDurationInHours(startTime, endTime);
 
-    const valid = Math.abs(durationHours - DAILY_SHIFT_HOURS) < 0.001;
+    // A station template may define any realistic duration (for instance
+    // 06:00–15:00); enforcing exactly DAILY_SHIFT_HOURS made every generated
+    // shift fail validation, so the planning stayed empty and could not be
+    // published. We now accept any duration within sane bounds.
+    const valid =
+      durationHours >= MIN_SHIFT_HOURS && durationHours <= MAX_SHIFT_HOURS;
 
     return {
       valid,
       durationHours,
       message: valid
         ? undefined
-        : `La duree du creneau doit etre exactement de ${DAILY_SHIFT_HOURS} heures. Duree actuelle : ${durationHours.toFixed(
+        : `La duree du creneau doit etre comprise entre ${MIN_SHIFT_HOURS} et ${MAX_SHIFT_HOURS} heures. Duree actuelle : ${durationHours.toFixed(
             1,
           )}h.`,
     };

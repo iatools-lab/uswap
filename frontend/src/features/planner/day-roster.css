@@ -297,20 +297,32 @@
   color: #64748b;
   font-size: 11px;
 }
-.assignment-cross-station {
+.planner .assignment-cross-station {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 10px;
   min-height: 44px;
   width: fit-content;
+  max-width: 100%;
+  margin: 0;
   color: #3e4b63;
   font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
   cursor: pointer;
 }
-.assignment-cross-station input {
+.planner .assignment-cross-station input {
+  flex: 0 0 17px;
   width: 17px;
   height: 17px;
+  margin: 0;
   accent-color: #001a70;
+}
+.planner .assignment-cross-station span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .assignment-contact {
   display: grid;

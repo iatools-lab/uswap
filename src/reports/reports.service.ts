@@ -173,6 +173,7 @@ export class ReportsService {
         stationId: { in: scopeStations },
         ...(scopedStationId ? { stationId: scopedStationId } : {}),
         ...(query.swapperId ? { swapperId: query.swapperId } : {}),
+        ...(query.planningId ? { planningId: query.planningId } : {}),
         startTime: { gte: from, lte: to },
         planning: { status: 'PUBLISHED' },
       },

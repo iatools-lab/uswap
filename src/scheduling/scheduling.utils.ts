@@ -1,5 +1,15 @@
 export const DAILY_SHIFT_HOURS = 8;
 
+/**
+ * Bornes de validation d'un créneau. Les modèles de station définissent leurs
+ * propres horaires (par exemple 06:00–15:00), la durée n'est donc pas censée
+ * être exactement `DAILY_SHIFT_HOURS` : on vérifie seulement qu'elle reste
+ * positive et qu'elle ne dépasse pas un maximum réaliste.
+ */
+export const MIN_SHIFT_HOURS = 1;
+
+export const MAX_SHIFT_HOURS = 12;
+
 export const MIN_REST_HOURS = 8;
 
 export const DEFAULT_WEEKLY_HOURS_LIMIT = 72;

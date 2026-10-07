@@ -18,6 +18,10 @@ export class QueryReportDashboardDto {
   swapperId?: string;
 
   @IsOptional()
+  @IsString()
+  planningId?: string;
+
+  @IsOptional()
   @IsIn(['CSV', 'XLSX'])
   format?: 'CSV' | 'XLSX';
 }

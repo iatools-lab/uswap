@@ -31,6 +31,7 @@
 }
 .ops-dashboard-filters {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 10px;
   padding: 11px 13px;
@@ -40,6 +41,8 @@
 }
 .ops-dashboard-filters label {
   display: grid;
+  flex: 1 1 140px;
+  min-width: 0;
   gap: 4px;
   color: #6c7990;
   font-size: 9px;

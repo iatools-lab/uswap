@@ -31,6 +31,12 @@ export type PlanningListItem = {
 };
 
 type StatusFilter = "ALL" | "PUBLISHED" | "DRAFT";
+type SwapperPeriodFilter = "ALL" | "ACTIVE" | "COMPLETED";
+
+function planningHasEnded(endDate: string, now = Date.now()) {
+  const value = endDate.length === 10 ? `${endDate}T23:59:59.999Z` : endDate;
+  return Date.parse(value) < now;
+}
 
 const dayShort = (value: string) =>
   new Date(value).toLocaleDateString("fr-FR", {
@@ -89,6 +95,8 @@ export function PlanningList({
   onRetry?: () => void;
 }) {
   const [status, setStatus] = useState<StatusFilter>("ALL");
+  const [swapperPeriod, setSwapperPeriod] =
+    useState<SwapperPeriodFilter>("ALL");
   const [query, setQuery] = useState("");
   // Planning en cours d'ouverture : sa ligne passe en état « chargement ».
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -149,7 +157,24 @@ export function PlanningList({
     );
 
   if (isSwapper) {
-    const visiblePlans = plans.filter(
+    const visiblePlans = plans
+      .filter(
+        (plan) => plan.status === "PUBLISHED" && plan.occurrences.length > 0,
+      )
+      .filter((plan) => {
+        if (swapperPeriod === "ALL") return true;
+        const completed = planningHasEnded(plan.endDate);
+        return swapperPeriod === "COMPLETED" ? completed : !completed;
+      })
+      .sort((a, b) => {
+        const aCompleted = planningHasEnded(a.endDate);
+        const bCompleted = planningHasEnded(b.endDate);
+        if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+        return aCompleted
+          ? Date.parse(b.endDate) - Date.parse(a.endDate)
+          : Date.parse(a.startDate) - Date.parse(b.startDate);
+      });
+    const publishedPlans = plans.filter(
       (plan) => plan.status === "PUBLISHED" && plan.occurrences.length > 0,
     );
     return (
@@ -160,30 +185,57 @@ export function PlanningList({
         <header className="swapper-planning-directory__intro">
           <div>
             <span className="admin-eyebrow">Mes affectations</span>
-            <h2>Plannings publiés</h2>
-            <p>
-              Retrouvez uniquement les plannings dans lesquels vous avez un
-              service.
-            </p>
+            <h2>Mes plannings</h2>
+            <p>Consultez vos services à venir et vos périodes terminées.</p>
           </div>
-          <span className="swapper-planning-directory__count">
-            {visiblePlans.length}
-          </span>
         </header>
+
+        {publishedPlans.length > 0 && (
+          <div
+            className="swapper-planning-period-filters"
+            role="group"
+            aria-label="Filtrer mes plannings par période"
+          >
+            {(
+              [
+                ["ALL", "Tous"],
+                ["ACTIVE", "En cours"],
+                ["COMPLETED", "Terminés"],
+              ] as [SwapperPeriodFilter, string][]
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={swapperPeriod === value}
+                onClick={() => setSwapperPeriod(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {!visiblePlans.length ? (
           <section className="admin-card admin-empty">
             <CalendarBlankIcon size={30} />
-            <h3>Aucun planning publié</h3>
+            <h3>
+              {publishedPlans.length > 0
+                ? swapperPeriod === "COMPLETED"
+                  ? "Aucun planning terminé"
+                  : "Aucun planning à venir"
+                : "Aucun planning publié"}
+            </h3>
             <p>
-              Vos plannings apparaîtront ici dès qu’une affectation vous sera
-              publiée.
+              {publishedPlans.length > 0
+                ? "Changez de période pour consulter vos autres plannings."
+                : "Vos plannings apparaîtront ici dès qu’une affectation vous sera publiée."}
             </p>
           </section>
         ) : (
           <div className="swapper-planning-directory__list">
             {visiblePlans.map((plan) => {
               const stations = stationNamesOf(plan);
+              const completed = planningHasEnded(plan.endDate);
               const nextShift = plan.occurrences
                 .filter(
                   (occurrence) =>
@@ -242,17 +294,22 @@ export function PlanningList({
                   </span>
 
                   <span className="swapper-planning-entry__meta">
-                    <span>
-                      <MapPinIcon size={14} />{" "}
-                      {stations.join(", ") || "Station"}
+                    <span className="swapper-planning-entry__station">
+                      <MapPinIcon size={14} aria-hidden="true" />
+                      <span>{stations.join(", ") || "Station"}</span>
                     </span>
                     <span>
                       <CalendarBlankIcon size={14} /> {plan.occurrences.length}{" "}
                       shift{plan.occurrences.length > 1 ? "s" : ""}
                     </span>
+                    {completed && (
+                      <span className="swapper-planning-entry__complete">
+                        Terminé
+                      </span>
+                    )}
                   </span>
 
-                  {nextShift ? (
+                  {nextShift && !completed ? (
                     <span className="swapper-planning-entry__next">
                       <ClockIcon size={15} />
                       <span>
@@ -273,11 +330,7 @@ export function PlanningList({
                         </strong>
                       </span>
                     </span>
-                  ) : (
-                    <span className="swapper-planning-entry__complete">
-                      Période terminée
-                    </span>
-                  )}
+                  ) : null}
                 </button>
               );
             })}

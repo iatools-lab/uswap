@@ -170,7 +170,7 @@ export const FICTITIOUS_DOMAIN = "uswap.example.com";
  * referme aussi les sessions en cours (comportement attendu lors d'un
  * changement de schéma, jamais lors d'un simple rechargement).
  */
-export const DB_VERSION = 14;
+export const DB_VERSION = 15;
 
 /** Mot de passe commun aux comptes de démonstration (fictifs). */
 export const DEMO_PASSWORD = "uswap2026";
@@ -432,10 +432,21 @@ export function createSeed(nowMs: number): MockDb {
   const day = stationDayKey(nowMs);
   const weekStart = weekStartKey(day);
   const nextWeekStart = addDaysKey(weekStart, 7);
+  const historyWeekStart = addDaysKey(weekStart, -7);
   const templates = buildTemplates();
   const activeStations = stations.filter((item) => item.isActive);
 
   const plannings = [
+    {
+      id: "pl-historique",
+      name: "Historique des services",
+      startDate: `${historyWeekStart}T00:00:00.000Z`,
+      endDate: `${addDaysKey(historyWeekStart, 6)}T23:59:59.999Z`,
+      status: "PUBLISHED" as const,
+      revision: 1,
+      createdAt: isoFromMs(nowMs - 16 * 86400000),
+      publishedAt: isoFromMs(nowMs - 15 * 86400000),
+    },
     {
       id: "pl-courant",
       name: "Semaine opérationnelle",
@@ -505,6 +516,12 @@ export function createSeed(nowMs: number): MockDb {
     }
   };
 
+  fillPlanning(
+    "pl-historique",
+    dayKeys(historyWeekStart, 7),
+    activeStations,
+    true,
+  );
   fillPlanning("pl-courant", dayKeys(weekStart, 7), activeStations, true);
   fillPlanning(
     "pl-suivant",
