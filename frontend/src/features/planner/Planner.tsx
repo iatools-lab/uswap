@@ -15,7 +15,7 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import { DownloadSimple, Clock3 } from "../../ui/icons";
-import { api, usingMock, type User } from "../../api/auth-api";
+import { api, ApiError, usingMock, type User } from "../../api/auth-api";
 import { notify } from "../../ui/Toast";
 import {
   ShiftConstraints,
@@ -518,7 +518,26 @@ export function Planner({ user }: { user: User }) {
         setCurrent(JSON.parse(cached) as Planning);
         setOfflineCopy(true);
         setError("");
-      } else setError((e as Error).message);
+        return;
+      }
+      // A 404 means the planning no longer exists (deleted, or the database
+      // was re-seeded so the id in the URL is stale). Clearing the id from the
+      // address bar lets the user pick another planning instead of being stuck
+      // on "Cette ressource est introuvable".
+      if ((e as ApiError).status === 404) {
+        setCurrent(null);
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("planning")) {
+          url.searchParams.delete("planning");
+          window.history.replaceState({}, "", url.toString());
+        }
+        setError(
+          "Ce planning n'existe plus. Il a peut-être été supprimé ; choisissez un planning dans la liste.",
+        );
+        setReload((n) => n + 1);
+        return;
+      }
+      setError((e as Error).message);
     } finally {
       setBusy(false);
     }
