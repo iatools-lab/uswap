@@ -36,6 +36,17 @@ export class ReportsController {
 
   // ---------- Global settings (admin) ----------
 
+  /**
+   * Sprint 6 : journal d'audit consolide (comptes, incidents, affectations,
+   * reglages). Alimente `/admin/audit` cote frontend.
+   */
+  @Get('admin/audit')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @ApiOperation({ summary: "Journal d'audit consolide" })
+  audit() {
+    return this.reportsService.auditLog();
+  }
+
   @Get('admin/settings')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Reglages globaux du reseau et historique' })

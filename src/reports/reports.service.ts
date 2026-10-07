@@ -906,6 +906,157 @@ export class ReportsService {
   }
 
   // ============================================================
+  // SPRINT 6 — JOURNAL D'AUDIT CONSOLIDE
+  // ============================================================
+
+  /**
+   * Agrège les quatre pistes d'audit du réseau en une seule liste
+   * chronologique, avec le vocabulaire attendu par l'écran d'audit :
+   *
+   * - `ACCOUNT`    : modifications de comptes (UserAuditLog)
+   * - `INCIDENT`   : transitions d'incidents (IncidentAction)
+   * - `ASSIGNMENT` : affectations et remplacements (ShiftChange)
+   * - `SETTINGS`   : réglages réseau (GlobalSettingRevision)
+   */
+  async auditLog() {
+    const [accountLogs, incidentActions, shiftChanges, settingsRevisions, people] =
+      await Promise.all([
+        this.prisma.userAuditLog.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 200,
+          include: {
+            user: { select: { id: true, fullName: true } },
+          },
+        }),
+        this.prisma.incidentAction.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 200,
+          include: {
+            author: { select: { id: true, fullName: true } },
+            incident: { select: { id: true, title: true, stationId: true } },
+          },
+        }),
+        this.prisma.shiftChange.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 200,
+          include: {
+            changedBy: { select: { id: true, fullName: true } },
+            newSwapper: { select: { id: true, fullName: true } },
+            previousSwapper: { select: { id: true, fullName: true } },
+          },
+        }),
+        this.prisma.globalSettingRevision.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 200,
+        }),
+        this.prisma.user.findMany({
+          select: { id: true, fullName: true },
+          orderBy: { fullName: 'asc' },
+        }),
+      ]);
+
+    const stationIds = new Set<string>();
+    incidentActions.forEach((action) => {
+      if (action.incident?.stationId) stationIds.add(action.incident.stationId);
+    });
+
+    const stations = stationIds.size
+      ? await this.prisma.station.findMany({
+          where: { id: { in: Array.from(stationIds) } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const stationNames = new Map(stations.map((s) => [s.id, s.name]));
+
+    const events: Array<Record<string, unknown>> = [];
+
+    for (const log of accountLogs) {
+      events.push({
+        id: `account:${log.id}`,
+        category: 'ACCOUNT',
+        action: 'UPDATE_ACCOUNT',
+        title: 'Compte modifié',
+        objectName: log.user?.fullName ?? 'Compte inconnu',
+        actorId: log.changedBy,
+        actorName: null,
+        targetUserId: log.userId,
+        stationId: null,
+        stationName: null,
+        description: 'Modification des informations du compte.',
+        result: 'SUCCESS',
+        createdAt: log.createdAt.toISOString(),
+      });
+    }
+
+    for (const action of incidentActions) {
+      events.push({
+        id: `incident:${action.id}`,
+        category: 'INCIDENT',
+        action: String(action.type),
+        title: 'Incident mis à jour',
+        objectName: action.incident?.title ?? 'Incident',
+        actorId: action.authorId,
+        actorName: action.author?.fullName ?? null,
+        targetUserId: null,
+        stationId: action.incident?.stationId ?? null,
+        stationName: action.incident?.stationId
+          ? (stationNames.get(action.incident.stationId) ?? null)
+          : null,
+        description: action.comment,
+        result: 'SUCCESS',
+        createdAt: action.createdAt.toISOString(),
+      });
+    }
+
+    for (const change of shiftChanges) {
+      events.push({
+        id: `assignment:${change.id}`,
+        category: 'ASSIGNMENT',
+        action: String(change.type),
+        title: 'Affectation modifiée',
+        objectName:
+          change.newSwapper?.fullName ??
+          change.previousSwapper?.fullName ??
+          'Poste',
+        actorId: change.changedById,
+        actorName: change.changedBy?.fullName ?? null,
+        targetUserId: change.newSwapperId ?? change.previousSwapperId ?? null,
+        stationId: null,
+        stationName: null,
+        description: change.reason ?? 'Affectation mise à jour.',
+        result: 'SUCCESS',
+        createdAt: change.createdAt.toISOString(),
+      });
+    }
+
+    for (const revision of settingsRevisions) {
+      events.push({
+        id: `settings:${revision.id}`,
+        category: 'SETTINGS',
+        action: 'UPDATE_SETTINGS',
+        title: 'Réglages mis à jour',
+        objectName: `Révision ${revision.revision}`,
+        actorId: revision.actorId ?? null,
+        actorName: null,
+        targetUserId: null,
+        stationId: null,
+        stationName: null,
+        description: 'Modification des réglages réseau.',
+        result: 'SUCCESS',
+        createdAt: revision.createdAt.toISOString(),
+      });
+    }
+
+    events.sort(
+      (a, b) =>
+        new Date(b.createdAt as string).getTime() -
+        new Date(a.createdAt as string).getTime(),
+    );
+
+    return { events, people };
+  }
+
+  // ============================================================
   // HELPERS
   // ============================================================
 

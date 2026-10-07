@@ -85,6 +85,8 @@ const CALLS = [
   ['POST', '/leaves'],
   ['PATCH', '/leaves/{id}'],
   ['PATCH', '/leaves/{id}/cancel'],
+  ['GET', '/leaves/management'],
+  ['PATCH', '/leaves/{id}/decision'],
   ['GET', '/admin/leaves/pending'],
   ['PATCH', '/admin/leaves/{id}/decision'],
   ['GET', '/admin/integrations/leaves'],
@@ -104,6 +106,7 @@ const CALLS = [
 
   ['GET', '/admin/settings'],
   ['PATCH', '/admin/settings'],
+  ['GET', '/admin/audit'],
   ['GET', '/reports/dashboard'],
   ['GET', '/reports/export'],
   ['GET', '/admin/reports/schedules'],

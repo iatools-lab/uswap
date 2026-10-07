@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, usingMock } from "../../api/auth-api";
+import { api } from "../../api/auth-api";
 import { Select } from "../../ui/Select";
 import { ClockCounterClockwise, MagnifyingGlass } from "../../ui/icons";
 import "./audit-log.css";
@@ -47,7 +47,6 @@ export function AuditLogPage() {
   const [periodFilter, setPeriodFilter] = useState("30");
 
   useEffect(() => {
-    if (!usingMock) return;
     let active = true;
     api<AuditData>("/admin/audit")
       .then((result) => active && setData(result))
@@ -97,20 +96,6 @@ export function AuditLogPage() {
       );
     });
   }, [actionFilter, data, periodFilter, query, userFilter]);
-
-  if (!usingMock) {
-    return (
-      <section className="audit-log-page">
-        <div className="audit-log-notice" role="status">
-          <ClockCounterClockwise size={22} />
-          <div>
-            <strong>Le journal d’audit central n’est pas encore exposé par l’API.</strong>
-            <p>Cette vue est prête pour les données de démonstration et attend la route backend correspondante.</p>
-          </div>
-        </div>
-      </section>
-    );
-  }
 
   if (!data)
     return (

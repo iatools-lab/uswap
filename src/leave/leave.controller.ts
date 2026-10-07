@@ -101,6 +101,28 @@ export class LeaveController {
     return this.leaveService.decide(id, body.decision, body.reason);
   }
 
+  /**
+   * Sprint 6 : espace de gestion des congés (admin et superviseur). Toutes les
+   * demandes, tous statuts, avec le swappeur et sa station.
+   */
+  @Get('leaves/management')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @ApiOperation({ summary: 'Gestion des conges : toutes les demandes' })
+  management() {
+    return this.leaveService.management();
+  }
+
+  /** Alias sprint 6 de la decision, sans le prefixe /admin. */
+  @Patch('leaves/:id/decision')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @ApiOperation({ summary: 'Approuver ou refuser une demande de conge (sprint 6)' })
+  decideAlias(
+    @Param('id') id: string,
+    @Body() body: { decision: string; reason?: string },
+  ) {
+    return this.leaveService.decide(id, body.decision, body.reason);
+  }
+
   @Post('leaves/sync/:operationId/retry')
   @Roles(Role.SWAPPER)
   @ApiOperation({ summary: 'Relancer une synchronisation de conge echouee' })
