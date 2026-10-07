@@ -604,6 +604,8 @@ export class PlanningService {
         const orderedSwapperIds =
           await this.orderSwappersByAvailability(selectedSwapperIds);
 
+        // Reset per day: a swapper may work several days, the per-day reset
+        // only prevents one person from taking two slots of the same day.
         const usedSwapperIds = new Set<string>();
 
         for (const slot of selectedSlots) {
@@ -688,6 +690,31 @@ export class PlanningService {
           }
 
           if (!assigned) {
+            // No eligible swapper for this slot: create it as a vacant shift
+            // instead of dropping it. The planner then shows the slot and the
+            // supervisor can fill it (manual pick or "assigner"). Without this
+            // an over-constrained station produced an empty planning that could
+            // not even be published.
+            const created = await this.prisma.shift.create({
+              data: {
+                planningId,
+                stationId: station.id,
+                swapperId: null,
+                startTime,
+                endTime,
+              },
+              include: {
+                station: true,
+              },
+            });
+
+            createdShifts.push({
+              ...created,
+              swapper: null,
+            } as (typeof createdShifts)[number]);
+
+            existingKeys.add(occurrenceKey);
+
             vacancies.push({
               stationId: station.id,
               stationName: station.name,
