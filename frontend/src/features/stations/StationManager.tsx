@@ -652,9 +652,7 @@ export function StationManager({
         contactName: form.contactName.trim() || null,
         contactPhone: form.contactPhone.trim() || null,
         latenessToleranceMinutes: Number(form.latenessToleranceMinutes),
-        ...(usingMock
-          ? { geofenceRadiusMeters: Number(form.geofenceRadiusMeters) }
-          : {}),
+        geofenceRadiusMeters: Number(form.geofenceRadiusMeters),
         minRestHours: Number(form.minRestHours),
         weeklyHoursLimit: Number(form.weeklyHoursLimit),
         ...(usingMock
@@ -1021,7 +1019,6 @@ export function StationManager({
                     required
                     min={25}
                     step={1}
-                    disabled={!usingMock}
                     value={form?.geofenceRadiusMeters ?? 150}
                     onChange={(e) =>
                       set(
@@ -1031,9 +1028,7 @@ export function StationManager({
                     }
                   />
                   <small>
-                    {usingMock
-                      ? "Le swappeur doit se trouver dans ce rayon pour pointer."
-                      : "Ce réglage sera enregistrable lorsque l’API prendra en charge le périmètre de géolocalisation."}
+                    {"Le swappeur doit se trouver dans ce rayon pour pointer. Au-delà, le pointage est refusé."}
                   </small>
                 </div>
               </div>

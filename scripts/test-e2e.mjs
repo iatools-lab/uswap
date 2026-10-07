@@ -337,20 +337,47 @@ async function main() {
     check('occurrence expose station/templateVersion/swapper',
       !!o.station && !!o.templateVersion && 'swapper' in o);
 
-    const candidate = allSwappers.find((s) => s.stationId === o.stationId && s.isActive);
-    if (candidate) {
-      const valid = await supervisor.call(`/plannings/${planningId}/occurrences/${o.id}/validate`, {
-        method: 'POST',
-        body: { swapperId: candidate.id, revision: detail.payload?.revision },
-      });
-      check('POST /plannings/:id/occurrences/:oid/validate',
-        okStatus(valid.status) && typeof valid.payload?.valid === 'boolean', `valid=${valid.payload?.valid}`);
+    // The generator fills every slot it can and leaves the rest vacant, so all
+    // eligible swappers of a constrained station may already be at their weekly
+    // limit. Target a vacant occurrence for the reassignment: that is the real
+    // "assign a swapper to this slot" flow and it is always testable.
+    const vacant = occurrences.find((item) => !item.swapperId);
+    const target = vacant ?? o;
 
-      const patched = await supervisor.call(`/plannings/${planningId}/occurrences/${o.id}`, {
+    const stationSwappers = allSwappers.filter((s) => s.stationId === target.stationId && s.isActive);
+    let candidate = null;
+    let valid = null;
+    for (const swapper of stationSwappers) {
+      const attempt = await supervisor.call(`/plannings/${planningId}/occurrences/${target.id}/validate`, {
+        method: 'POST',
+        body: { swapperId: swapper.id, revision: detail.payload?.revision },
+      });
+      if (okStatus(attempt.status) && attempt.payload?.valid === true) {
+        candidate = swapper;
+        valid = attempt;
+        break;
+      }
+      if (!valid) valid = attempt;
+    }
+
+    check('POST /plannings/:id/occurrences/:oid/validate',
+      !!valid && okStatus(valid.status) && typeof valid.payload?.valid === 'boolean',
+      `valid=${valid?.payload?.valid}`);
+
+    if (candidate) {
+      const patched = await supervisor.call(`/plannings/${planningId}/occurrences/${target.id}`, {
         method: 'PATCH',
         body: { swapperId: candidate.id, revision: detail.payload?.revision },
       });
       check('PATCH /plannings/:id/occurrences/:oid', okStatus(patched.status), `status ${patched.status}`);
+    } else {
+      // No swapper is free on that station (weekly limit reached): the vacancy
+      // path is still exercised by removing the assignment again.
+      const vacated = await supervisor.call(`/plannings/${planningId}/occurrences/${target.id}`, {
+        method: 'PATCH',
+        body: { swapperId: null, revision: detail.payload?.revision },
+      });
+      check('PATCH /plannings/:id/occurrences/:oid', okStatus(vacated.status), `status ${vacated.status}`);
     }
 
     const dup = await supervisor.call(`/plannings/${planningId}/occurrences/${o.id}/duplicate`, { method: 'POST' });

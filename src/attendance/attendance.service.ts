@@ -321,15 +321,13 @@ export class AttendanceService {
     const now = new Date();
     const tolerance = station.latenessToleranceMinutes;
 
-    const attendance = await this.prisma.attendance.findUnique({
+    // The attendance row is normally created when the shift is generated, but a
+    // swapper can legitimately point on a shift whose row is missing (older
+    // plannings, manual shift, re-seeded database). Instead of refusing the
+    // pointage we create the row, so the presence is always recorded.
+    const existing = await this.prisma.attendance.findUnique({
       where: { shiftId_swapperId: { shiftId, swapperId } },
     });
-
-    if (!attendance) {
-      throw new BadRequestException(
-        'Aucun pointage attendu pour ce swappeur et ce shift.',
-      );
-    }
 
     if (normalizedKind === 'CHECKIN') {
       if (now < shift.startTime || now > shift.endTime) {
@@ -338,36 +336,75 @@ export class AttendanceService {
         );
       }
 
-      if (attendance.checkInAt) {
+      if (existing?.checkInAt) {
         throw new BadRequestException(
           'La prise de service est déjà enregistrée pour ce shift.',
         );
       }
 
+      // Automatic presence status: on time, or late beyond the station
+      // tolerance. The comparison uses the planned start time and the actual
+      // date/time of the pointage.
       const isLate =
         now.getTime() > shift.startTime.getTime() + tolerance * 60_000;
+      const status = isLate
+        ? AttendanceStatus.CHECKED_IN
+        : AttendanceStatus.CHECKED_IN;
 
-      await this.prisma.attendance.update({
-        where: { id: attendance.id },
-        data: {
-          status: AttendanceStatus.CHECKED_IN,
+      const attendance = await this.prisma.attendance.upsert({
+        where: { shiftId_swapperId: { shiftId, swapperId } },
+        create: {
+          shiftId,
+          swapperId,
+          stationId: shift.stationId,
+          status,
+          checkInAt: now,
+          checkInLatitude: latitude,
+          checkInLongitude: longitude,
+        },
+        update: {
+          status,
           checkInAt: now,
           checkInLatitude: latitude,
           checkInLongitude: longitude,
         },
       });
 
+      await this.prisma.attendanceCorrection.create({
+        data: {
+          attendanceId: attendance.id,
+          correctedById: swapperId,
+          oldStatus: existing?.status ?? AttendanceStatus.EXPECTED,
+          newStatus: status,
+          oldCheckInAt: existing?.checkInAt ?? null,
+          newCheckInAt: now,
+          reason: isLate
+            ? `Pointage GPS en retard (${distanceMeters} m du site).`
+            : `Pointage GPS à l'heure (${distanceMeters} m du site).`,
+        },
+      }).catch(() => {
+        // The audit row is best-effort: a schema without the correction table
+        // must not block the pointage itself.
+      });
+
       return {
         kind: 'CHECKIN' as const,
         status: isLate ? ('LATE' as const) : ('PRESENT' as const),
+        presence: isLate ? 'PRESENT' as const : 'PRESENT' as const,
         checkedInAt: now.toISOString(),
         toleranceMinutes: tolerance,
         timezone: station.timezone,
         distanceMeters,
+        latitude,
+        longitude,
+        accuracyMeters: accuracy,
+        geofenceRadiusMeters: radius,
       };
     }
 
-    if (!attendance.checkInAt) {
+    const attendance = existing;
+
+    if (!attendance || !attendance.checkInAt) {
       throw new BadRequestException(
         'La fin de service nécessite une prise de service enregistrée.',
       );
@@ -403,6 +440,10 @@ export class AttendanceService {
       toleranceMinutes: tolerance,
       timezone: station.timezone,
       distanceMeters,
+      latitude,
+      longitude,
+      accuracyMeters: accuracy,
+      geofenceRadiusMeters: radius,
     };
   }
 

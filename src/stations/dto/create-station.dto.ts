@@ -130,4 +130,15 @@ export class CreateStationDto {
   @IsInt()
   @Min(30)
   checkoutQrTtl?: number;
+
+  @ApiProperty({
+    required: false,
+    example: 150,
+    description:
+      'Périmètre de pointage GPS en mètres : distance maximale autorisée entre la position du swappeur et la station lors du pointage.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(25)
+  geofenceRadiusMeters?: number;
 }

@@ -64,13 +64,37 @@ export class PlanningService {
       );
     }
 
-    return this.prisma.planning.create({
+    const created = await this.prisma.planning.create({
       data: {
         startDate,
         endDate,
         createdBy,
       },
+      include: {
+        shifts: {
+          include: {
+            station: true,
+            swapper: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                phoneNumber: true,
+              },
+            },
+            attendances: true,
+          },
+          orderBy: {
+            startTime: 'asc',
+          },
+        },
+      },
     });
+
+    // The planner screen reads `occurrences` and a `revision` from every
+    // planning it receives, including the one just created. Returning the raw
+    // row would leave those undefined and break the next generation call.
+    return this.withOccurrences(created);
   }
 
   async findAll(userId?: string) {
@@ -351,7 +375,9 @@ export class PlanningService {
           });
         }
 
-        return published;
+        // The planner reloads the planning after publishing, so hand back the
+        // full Planning shape (occurrences + revision) rather than the raw row.
+        return this.findOne(id);
       });
   }
 
@@ -578,6 +604,8 @@ export class PlanningService {
         const orderedSwapperIds =
           await this.orderSwappersByAvailability(selectedSwapperIds);
 
+        // Reset per day: a swapper may work several days, the per-day reset
+        // only prevents one person from taking two slots of the same day.
         const usedSwapperIds = new Set<string>();
 
         for (const slot of selectedSlots) {
@@ -662,6 +690,31 @@ export class PlanningService {
           }
 
           if (!assigned) {
+            // No eligible swapper for this slot: create it as a vacant shift
+            // instead of dropping it. The planner then shows the slot and the
+            // supervisor can fill it (manual pick or "assigner"). Without this
+            // an over-constrained station produced an empty planning that could
+            // not even be published.
+            const created = await this.prisma.shift.create({
+              data: {
+                planningId,
+                stationId: station.id,
+                swapperId: null,
+                startTime,
+                endTime,
+              },
+              include: {
+                station: true,
+              },
+            });
+
+            createdShifts.push({
+              ...created,
+              swapper: null,
+            } as (typeof createdShifts)[number]);
+
+            existingKeys.add(occurrenceKey);
+
             vacancies.push({
               stationId: station.id,
               stationName: station.name,
@@ -676,13 +729,11 @@ export class PlanningService {
       }
     }
 
-    return {
-      planningId,
-      createdCount: createdShifts.length,
-      vacancyCount: vacancies.length,
-      createdShifts,
-      vacancies,
-    };
+    // The planner screen reads the generated planning back as a full Planning
+    // (occurrences + revision). Returning the raw counters left `occurrences`
+    // and `revision` undefined on the client, so the freshly generated planning
+    // appeared empty and could not be published.
+    return this.findOne(planningId);
   }
 
   private resolveSwapperIds(
