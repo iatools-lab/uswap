@@ -64,13 +64,37 @@ export class PlanningService {
       );
     }
 
-    return this.prisma.planning.create({
+    const created = await this.prisma.planning.create({
       data: {
         startDate,
         endDate,
         createdBy,
       },
+      include: {
+        shifts: {
+          include: {
+            station: true,
+            swapper: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                phoneNumber: true,
+              },
+            },
+            attendances: true,
+          },
+          orderBy: {
+            startTime: 'asc',
+          },
+        },
+      },
     });
+
+    // The planner screen reads `occurrences` and a `revision` from every
+    // planning it receives, including the one just created. Returning the raw
+    // row would leave those undefined and break the next generation call.
+    return this.withOccurrences(created);
   }
 
   async findAll(userId?: string) {
@@ -351,7 +375,9 @@ export class PlanningService {
           });
         }
 
-        return published;
+        // The planner reloads the planning after publishing, so hand back the
+        // full Planning shape (occurrences + revision) rather than the raw row.
+        return this.findOne(id);
       });
   }
 
@@ -676,13 +702,11 @@ export class PlanningService {
       }
     }
 
-    return {
-      planningId,
-      createdCount: createdShifts.length,
-      vacancyCount: vacancies.length,
-      createdShifts,
-      vacancies,
-    };
+    // The planner screen reads the generated planning back as a full Planning
+    // (occurrences + revision). Returning the raw counters left `occurrences`
+    // and `revision` undefined on the client, so the freshly generated planning
+    // appeared empty and could not be published.
+    return this.findOne(planningId);
   }
 
   private resolveSwapperIds(
