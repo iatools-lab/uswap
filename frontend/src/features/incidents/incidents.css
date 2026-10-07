@@ -85,12 +85,23 @@
 }
 .incident-toolbar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
+  gap: 12px;
 }
 .incident-toolbar > span {
+  flex: 0 0 auto;
   color: #7a879b;
   font-size: 11px;
+  line-height: 38px;
+}
+.incident-filter-controls {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 .incident-filters {
   display: flex;
@@ -521,7 +532,19 @@
     grid-template-columns: 1fr;
   }
   .incident-toolbar {
-    align-items: flex-end;
+    display: grid;
+    gap: 8px;
+  }
+  .incident-filter-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .incident-filter-controls > * {
+    min-width: 0 !important;
+    width: 100%;
+  }
+  .incident-toolbar > span {
+    line-height: 1.4;
   }
   .incident-detail {
     grid-template-columns: 1fr;

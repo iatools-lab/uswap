@@ -35,6 +35,12 @@ export type LeaveReviewItem = LeaveRequestView & {
   swapperName: string;
 };
 
+export type LeaveManagementItem = LeaveReviewItem & {
+  stationId: string | null;
+  stationName: string;
+  createdAt: string;
+};
+
 export type LeaveBalanceView = {
   year: number;
   entitledDays: number;

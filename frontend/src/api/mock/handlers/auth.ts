@@ -137,6 +137,7 @@ export const authRoutes: MockRoute[] = [
           {
             id: nextId("aud"),
             action: "CREATED",
+            actorId: admin.id,
             createdAt: now,
             before: {},
             after: { fullName, email, role, stationId, phoneNumber, address },

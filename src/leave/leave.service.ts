@@ -269,7 +269,14 @@ export class LeaveService {
       where: { status: LeaveStatus.PENDING },
       orderBy: { createdAt: 'asc' },
       include: {
-        user: { select: { id: true, fullName: true } },
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            stationId: true,
+            station: { select: { id: true, name: true } },
+          },
+        },
         syncOperations: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
     });
@@ -279,6 +286,40 @@ export class LeaveService {
       userId: request.userId,
       swapperId: request.userId,
       swapperName: request.user?.fullName ?? 'Compte inconnu',
+      stationId: request.user?.stationId ?? null,
+      stationName: request.user?.station?.name ?? 'Sans station',
+      createdAt: request.createdAt.toISOString(),
+    }));
+  }
+
+  /**
+   * Vue de gestion des congés (sprint 6) : toutes les demandes, tous statuts
+   * confondus, avec le swappeur et sa station. Alimente `/leaves/management`.
+   */
+  async management() {
+    const requests = await this.prisma.leaveRequest.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            stationId: true,
+            station: { select: { id: true, name: true } },
+          },
+        },
+        syncOperations: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+
+    return requests.map((request) => ({
+      ...this.toView(request),
+      userId: request.userId,
+      swapperId: request.userId,
+      swapperName: request.user?.fullName ?? 'Compte inconnu',
+      stationId: request.user?.stationId ?? null,
+      stationName: request.user?.station?.name ?? 'Sans station',
+      createdAt: request.createdAt.toISOString(),
     }));
   }
 

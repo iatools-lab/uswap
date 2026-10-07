@@ -15,6 +15,159 @@ const text = (value: unknown) =>
 export const reportRoutes: MockRoute[] = [
   {
     method: "GET",
+    pattern: /^\/admin\/audit$/,
+    handler: ({ db, user }) => {
+      requireRole(requireUser(db, user), ["ADMIN"]);
+      const users = new Map(db.users.map((item) => [item.id, item]));
+      const stations = new Map(db.stations.map((item) => [item.id, item]));
+      const fieldNames: Record<string, string> = {
+        fullName: "nom",
+        role: "rôle",
+        stationId: "station",
+        phoneNumber: "téléphone",
+        address: "adresse",
+        email: "adresse e-mail",
+        isActive: "statut du compte",
+        disabledAt: "statut du compte",
+        invitationStatus: "invitation",
+        supportEmail: "adresse de support",
+        sessionMinutes: "durée de session",
+        invitationValidityHours: "validité des invitations",
+        maxAttachmentMb: "taille des pièces jointes",
+        notificationRetentionDays: "rétention des notifications",
+        webhookSecretConfigured: "configuration du webhook",
+        passwordUpdated: "mot de passe",
+      };
+      const changedFields = (
+        before: Record<string, unknown>,
+        after: Record<string, unknown>,
+      ) =>
+        [...new Set([...Object.keys(before), ...Object.keys(after)])]
+          .filter((key) => key !== "webhookSecret" && before[key] !== after[key])
+          .map((key) => fieldNames[key] ?? key)
+          .filter((value, index, values) => values.indexOf(value) === index);
+      const actorOf = (id: string | null | undefined) =>
+        (id ? users.get(id)?.fullName : undefined) ?? null;
+      const statusNames: Record<string, string> = {
+        REPORTED: "Signalé",
+        TO_REVIEW: "À analyser",
+        ACKNOWLEDGED: "Pris en charge",
+        IN_PROGRESS: "En traitement",
+        RESOLVED: "Résolu",
+        CLOSED: "Clôturé",
+      };
+      const accountActions: Record<string, string> = {
+        CREATED: "Création de compte",
+        IMPORTED: "Import de compte",
+        UPDATED: "Modification de compte",
+        ACTIVATED: "Activation de compte",
+        REACTIVATED: "Réactivation de compte",
+        DISABLED: "Désactivation de compte",
+        PASSWORD_UPDATED: "Changement de mot de passe",
+        passwordUpdated: "Changement de mot de passe",
+      };
+      const events = [
+        ...db.users.flatMap((target) =>
+          target.audit.map((entry) => ({
+            id: `account:${entry.id}`,
+            category: "ACCOUNT",
+            action: accountActions[entry.action] ?? entry.action,
+            title: accountActions[entry.action] ?? "Action sur un compte",
+            objectName: target.fullName,
+            actorId: entry.actorId ?? null,
+            actorName: actorOf(entry.actorId),
+            targetUserId: target.id,
+            stationId: target.stationId,
+            stationName: target.stationId
+              ? (stations.get(target.stationId)?.name ?? null)
+              : null,
+            description: changedFields(entry.before, entry.after).length
+              ? `Champs concernés : ${changedFields(entry.before, entry.after).join(", ")}.`
+              : "Action enregistrée sur le compte.",
+            result: "Enregistrée",
+            createdAt: entry.createdAt,
+          })),
+        ),
+        ...db.incidents.flatMap((incident) =>
+          incident.actions.map((action) => ({
+            id: `incident:${action.id}`,
+            category: "INCIDENT",
+            action: action.type,
+            title: `Suivi d’incident · ${incident.title}`,
+            objectName: `${users.get(incident.affectedSwapperId)?.fullName ?? "Swappeur"} · ${incident.title}`,
+            actorId: action.authorId,
+            actorName: actorOf(action.authorId),
+            targetUserId: incident.affectedSwapperId,
+            stationId: incident.stationId,
+            stationName: stations.get(incident.stationId)?.name ?? null,
+            description: [
+              action.fromStatus
+                ? `${statusNames[action.fromStatus] ?? action.fromStatus} → ${statusNames[action.toStatus] ?? action.toStatus}`
+                : statusNames[action.toStatus] ?? action.toStatus,
+              action.comment,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            result: "Enregistrée",
+            createdAt: action.createdAt,
+          })),
+        ),
+        ...db.changes.map((change) => ({
+          id: `assignment:${change.id}`,
+          category: "ASSIGNMENT",
+          action:
+            change.type === "REPLACEMENT"
+              ? "Remplacement"
+              : change.type === "PERMUTATION"
+                ? "Permutation"
+                : "Changement d’affectation",
+          title:
+            change.type === "REPLACEMENT"
+              ? "Remplacement de swappeur"
+              : change.type === "PERMUTATION"
+                ? "Permutation de service"
+                : "Changement d’affectation",
+          objectName: change.inSwapper ?? change.outSwapper ?? "Affectation",
+          actorId: change.initiatorId,
+          actorName: change.initiator || actorOf(change.initiatorId),
+          targetUserId: change.inSwapperId ?? change.outSwapperId,
+          stationId: change.stationId,
+          stationName: change.station,
+          description: [
+            [change.outSwapper, change.inSwapper].filter(Boolean).join(" → "),
+            change.reason,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          result: "Enregistrée",
+          createdAt: change.createdAt,
+        })),
+        ...db.settingsHistory.map((revision) => ({
+          id: `settings:${revision.id}`,
+          category: "SETTINGS",
+          action: `Révision ${revision.revision}`,
+          title: "Modification des réglages globaux",
+          objectName: "Réglages globaux",
+          actorId: revision.actorId,
+          actorName: actorOf(revision.actorId),
+          targetUserId: null,
+          stationId: null,
+          stationName: null,
+          description: changedFields(revision.before, revision.after).length
+            ? `Paramètres concernés : ${changedFields(revision.before, revision.after).join(", ")}.`
+            : "Réglages enregistrés.",
+          result: "Enregistrée",
+          createdAt: revision.createdAt,
+        })),
+      ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+      return {
+        events: events.slice(0, 500),
+        people: db.users.map(({ id, fullName }) => ({ id, fullName })),
+      };
+    },
+  },
+  {
+    method: "GET",
     pattern: /^\/admin\/settings$/,
     handler: ({ db, user }) => {
       requireRole(requireUser(db, user), ["ADMIN"]);

@@ -55,6 +55,16 @@ const GlobalSettingsPage = lazy(() =>
     default: m.GlobalSettingsPage,
   })),
 );
+const AuditLogPage = lazy(() =>
+  import("../pages/admin/AuditLogPage").then((m) => ({
+    default: m.AuditLogPage,
+  })),
+);
+const AdminLeaveManagementPage = lazy(() =>
+  import("../pages/admin/LeaveManagementPage").then((m) => ({
+    default: m.LeaveManagementPage,
+  })),
+);
 
 const OperationsPage = lazy(() =>
   import("../pages/role/OperationsPage").then((m) => ({
@@ -74,6 +84,11 @@ const SwapperLeavePage = lazy(() =>
 const SupervisorAttendancePage = lazy(() =>
   import("../pages/role/SupervisorAttendancePage").then((m) => ({
     default: m.SupervisorAttendancePage,
+  })),
+);
+const SupervisorLeaveManagementPage = lazy(() =>
+  import("../pages/admin/LeaveManagementPage").then((m) => ({
+    default: m.LeaveManagementPage,
   })),
 );
 
@@ -98,13 +113,7 @@ function AccountRoute({ mode }: { mode: "forgot" | "activate" | "reset" }) {
 function CatchAll() {
   const { session, checking } = useSession();
   if (checking) return <RouteFallback />;
-  if (session)
-    return (
-      <Navigate
-        to={rolePaths[session.user.role]}
-        replace
-      />
-    );
+  if (session) return <Navigate to={rolePaths[session.user.role]} replace />;
   return <Navigate to="/auth/login" replace />;
 }
 
@@ -137,6 +146,11 @@ export function AppRoutes() {
         <Route path="utilisateurs/:id" element={page(<UserDetailPage />)} />
         <Route path="stations" element={page(<StationsPage />)} />
         <Route path="plannings" element={page(<AdminPlannerPage />)} />
+        <Route path="audit" element={page(<AuditLogPage />)} />
+        <Route
+          path="conges"
+          element={page(<AdminLeaveManagementPage role="ADMIN" />)}
+        />
         <Route path="parametres" element={page(<GlobalSettingsPage />)} />
         <Route path="compte" element={page(<AccountPage />)} />
         <Route path="*" element={<Navigate to={rolePaths.ADMIN} replace />} />
@@ -154,6 +168,14 @@ export function AppRoutes() {
             <Route
               path="pointages"
               element={page(<SupervisorAttendancePage />)}
+            />
+          )}
+          {role === "SUPERVISOR" && (
+            <Route
+              path="conges"
+              element={page(
+                <SupervisorLeaveManagementPage role="SUPERVISOR" />,
+              )}
             />
           )}
           {role === "SWAPPER" && (

@@ -34,6 +34,7 @@ export type MockStation = {
 export type AuditEntry = {
   id: string;
   action: string;
+  actorId?: string;
   createdAt: string;
   before: Record<string, unknown>;
   after: Record<string, unknown>;

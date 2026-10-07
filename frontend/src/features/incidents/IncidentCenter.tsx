@@ -92,7 +92,10 @@ export function IncidentCenter({
   const [revision, setRevision] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [selected, setSelected] = useState<Incident | null>(null);
-  const [filter, setFilter] = useState("OPEN");
+  const [stationFilter, setStationFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("OPEN");
+  const [severityFilter, setSeverityFilter] = useState("ALL");
+  const [periodFilter, setPeriodFilter] = useState("ALL");
   useEffect(() => {
     let active = true;
     api<Data>(`/incidents${stationId ? `?stationId=${stationId}` : ""}`).then(
@@ -103,10 +106,14 @@ export function IncidentCenter({
     };
   }, [revision, stationId]);
   useEffect(() => {
+    setStationFilter(stationId ?? "");
+  }, [stationId]);
+  useEffect(() => {
     if (!data || !targetIncidentId) return;
     const target = data.incidents.find((item) => item.id === targetIncidentId);
     if (target) {
-      setFilter("ALL");
+      setStatusFilter("ALL");
+      setPeriodFilter("ALL");
       setSelected(target);
     }
   }, [data, targetIncidentId]);
@@ -114,17 +121,29 @@ export function IncidentCenter({
     setSelected(null);
     if (targetIncidentId) navigate(location.pathname, { replace: true });
   };
-  const rows = useMemo(
-    () =>
-      data?.incidents.filter(
-        (i) =>
-          filter === "ALL" ||
-          (filter === "OPEN"
-            ? !["RESOLVED", "CLOSED"].includes(i.status)
-            : i.severity === "CRITICAL"),
-      ) ?? [],
-    [data, filter],
-  );
+  const rows = useMemo(() => {
+    const cutoff =
+      periodFilter === "ALL"
+        ? null
+        : Date.now() - Number(periodFilter) * 24 * 60 * 60 * 1000;
+    return (
+      data?.incidents.filter((incident) => {
+        const isOpen = !["RESOLVED", "CLOSED"].includes(incident.status);
+        const matchesStatus =
+          statusFilter === "ALL" ||
+          (statusFilter === "OPEN" ? isOpen : incident.status === statusFilter);
+        const matchesSeverity =
+          severityFilter === "ALL" || incident.severity === severityFilter;
+        const matchesStation =
+          !stationFilter || incident.stationId === stationFilter;
+        const matchesPeriod =
+          cutoff === null || Date.parse(incident.occurredAt) >= cutoff;
+        return (
+          matchesStatus && matchesSeverity && matchesStation && matchesPeriod
+        );
+      }) ?? []
+    );
+  }, [data, periodFilter, severityFilter, stationFilter, statusFilter]);
   if (!data)
     return (
       <div className="incident-loading">
@@ -188,22 +207,76 @@ export function IncidentCenter({
         </article>
       </div>
       <div className="incident-toolbar">
-        <div className="incident-filters">
-          {[
-            ["OPEN", "En cours"],
-            ["CRITICAL", "Critiques"],
-            ["ALL", "Tous"],
-          ].map(([v, l]) => (
-            <button
-              key={v}
-              aria-pressed={filter === v}
-              onClick={() => setFilter(v)}
-            >
-              {l}
-            </button>
-          ))}
+        <div
+          className="incident-filter-controls"
+          aria-label="Filtres des incidents"
+        >
+          {!stationId && data.stations.length > 0 && (
+            <Select
+              value={stationFilter}
+              ariaLabel="Filtrer par station"
+              onChange={(value) => setStationFilter(String(value))}
+              options={[
+                { value: "", label: "Toutes les stations" },
+                ...data.stations.map((station) => ({
+                  value: station.id,
+                  label: station.name,
+                })),
+              ]}
+              size="sm"
+              width="190px"
+              minWidth="160px"
+            />
+          )}
+          <Select
+            value={statusFilter}
+            ariaLabel="Filtrer par statut"
+            onChange={(value) => setStatusFilter(String(value))}
+            options={[
+              { value: "OPEN", label: "Incidents ouverts" },
+              { value: "ALL", label: "Tous les statuts" },
+              ...Object.entries(statusLabels).map(([value, label]) => ({
+                value,
+                label,
+              })),
+            ]}
+            size="sm"
+            width="190px"
+            minWidth="160px"
+          />
+          <Select
+            value={severityFilter}
+            ariaLabel="Filtrer par priorité"
+            onChange={(value) => setSeverityFilter(String(value))}
+            options={[
+              { value: "ALL", label: "Toutes les priorités" },
+              ...Object.entries(severityLabels).map(([value, label]) => ({
+                value,
+                label,
+              })),
+            ]}
+            size="sm"
+            width="165px"
+            minWidth="145px"
+          />
+          <Select
+            value={periodFilter}
+            ariaLabel="Filtrer par période"
+            onChange={(value) => setPeriodFilter(String(value))}
+            options={[
+              { value: "7", label: "7 derniers jours" },
+              { value: "30", label: "30 derniers jours" },
+              { value: "90", label: "90 derniers jours" },
+              { value: "ALL", label: "Toute période" },
+            ]}
+            size="sm"
+            width="165px"
+            minWidth="145px"
+          />
         </div>
-        <span>{rows.length} résultat(s)</span>
+        <span aria-live="polite">
+          {rows.length} résultat{rows.length > 1 ? "s" : ""}
+        </span>
       </div>
       <div className="incident-grid">
         {rows.length ? (
@@ -253,8 +326,20 @@ export function IncidentCenter({
         ) : (
           <div className="incident-empty">
             <ShieldWarningIcon />
-            <h3>Aucun incident dans cette vue</h3>
-            <p>Les événements correspondant au filtre apparaîtront ici.</p>
+            <h3>Aucun incident pour ces filtres</h3>
+            <p>Modifiez les filtres ou affichez tous les statuts.</p>
+            <button
+              type="button"
+              className="admin-button secondary small"
+              onClick={() => {
+                setStationFilter(stationId ?? "");
+                setStatusFilter("ALL");
+                setSeverityFilter("ALL");
+                setPeriodFilter("ALL");
+              }}
+            >
+              Effacer les filtres
+            </button>
           </div>
         )}
       </div>

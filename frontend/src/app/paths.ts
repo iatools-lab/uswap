@@ -5,6 +5,8 @@ const adminExact = [
   "/app/admin/utilisateurs",
   "/app/admin/stations",
   "/app/admin/plannings",
+  "/app/admin/audit",
+  "/app/admin/conges",
   "/app/admin/compte",
   "/app/admin/utilisateurs/nouveau",
   "/app/admin/utilisateurs/import",
@@ -20,7 +22,7 @@ export const isRolePath = (user: User, path: string) =>
     `${rolePaths[user.role]}/compte`,
     `${rolePaths[user.role]}/plannings`,
     ...(user.role === "SUPERVISOR"
-      ? [`${rolePaths[user.role]}/pointages`]
+      ? [`${rolePaths[user.role]}/pointages`, `${rolePaths[user.role]}/conges`]
       : []),
     ...(user.role === "SWAPPER" ? [`${rolePaths[user.role]}/conges`] : []),
   ].includes(path);
