@@ -24,4 +24,12 @@ export class DeclareAbsenceDto {
   @IsOptional()
   @IsString()
   clientRef?: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'Identifiant du justificatif téléversé (v5.3).',
+  })
+  @IsOptional()
+  @IsString()
+  attachmentId?: string;
 }

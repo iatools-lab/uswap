@@ -6,10 +6,14 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
+
+import { FileInterceptor } from '@nestjs/platform-express';
 
 import { Role, ShiftChangeType } from '@prisma/client';
 
@@ -17,7 +21,10 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 
-import { OperationsService } from './operations.service';
+import {
+  OperationsService,
+  type UploadedAbsenceAttachment,
+} from './operations.service';
 
 import { DeclareAbsenceDto } from './dto/declare-absence.dto';
 import { AssignReplacementDto } from './dto/assign-replacement.dto';
@@ -40,6 +47,16 @@ export class OperationsController {
   // BLOC A — SWAPPER DECLARES AN IMPEDIMENT
   // ============================================================
 
+  @Post('absences/attachments')
+  @Roles(Role.SWAPPER)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadAbsenceAttachment(
+    @UploadedFile() file?: UploadedAbsenceAttachment,
+  ) {
+    return this.operationsService.saveAbsenceAttachment(file);
+  }
+
   @Post('absences')
   @Roles(Role.SWAPPER)
   declareAbsence(
@@ -51,6 +68,7 @@ export class OperationsController {
       shiftId: dto.shiftId,
       reason: dto.reason,
       clientRef: dto.clientRef,
+      attachmentId: dto.attachmentId,
     });
   }
 

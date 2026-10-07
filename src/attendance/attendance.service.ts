@@ -203,6 +203,235 @@ export class AttendanceService {
   // CHECK IN
   // ============================================================
 
+  // ============================================================
+  // GPS PUNCH (v5.3)
+  // Pointage par géolocalisation, sans QR : le swappeur envoie sa position
+  // pendant le créneau, le service vérifie le périmètre de la station.
+  // ============================================================
+
+  async punch(
+    swapperId: string,
+    shiftId: string,
+    kind: string,
+    latitude: number,
+    longitude: number,
+    accuracyMeters?: number,
+  ) {
+    const normalizedKind = (kind ?? '').toUpperCase();
+
+    if (normalizedKind !== 'CHECKIN' && normalizedKind !== 'CHECKOUT') {
+      throw new BadRequestException(
+        'Choisissez une prise ou une fin de service valide.',
+      );
+    }
+
+    if (
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      throw new BadRequestException(
+        'La position n’a pas pu être vérifiée. Autorisez la localisation puis réessayez.',
+      );
+    }
+
+    const shift = await this.prisma.shift.findUnique({
+      where: { id: shiftId },
+      select: {
+        id: true,
+        swapperId: true,
+        stationId: true,
+        startTime: true,
+        endTime: true,
+        planning: { select: { status: true } },
+        station: {
+          select: {
+            id: true,
+            name: true,
+            timezone: true,
+            latitude: true,
+            longitude: true,
+            geofenceRadiusMeters: true,
+            latenessToleranceMinutes: true,
+          },
+        },
+      },
+    });
+
+    if (!shift) {
+      throw new NotFoundException('Shift introuvable.');
+    }
+
+    if (
+      shift.planning?.status !== PlanningStatus.PUBLISHED ||
+      shift.swapperId !== swapperId
+    ) {
+      throw new ForbiddenException(
+        'Ce shift publié ne vous est pas affecté.',
+      );
+    }
+
+    const station = shift.station;
+
+    if (
+      station.latitude === null ||
+      station.longitude === null ||
+      !Number.isFinite(station.latitude) ||
+      !Number.isFinite(station.longitude)
+    ) {
+      throw new ForbiddenException(
+        'La position de cette station n’est pas configurée. Contactez le superviseur.',
+      );
+    }
+
+    const radius = station.geofenceRadiusMeters;
+
+    if (!Number.isFinite(radius) || radius < 25) {
+      throw new ForbiddenException(
+        'Le périmètre de pointage de cette station est invalide. Contactez le superviseur.',
+      );
+    }
+
+    const distanceMeters = this.haversineMeters(
+      latitude,
+      longitude,
+      station.latitude,
+      station.longitude,
+    );
+
+    const accuracy = Number.isFinite(accuracyMeters as number)
+      ? Math.max(0, Math.round(accuracyMeters as number))
+      : 0;
+
+    if (accuracy > radius) {
+      throw new ForbiddenException(
+        'Votre position manque de précision pour vérifier le périmètre. Réessayez avec le GPS activé.',
+      );
+    }
+
+    if (distanceMeters + accuracy > radius) {
+      throw new ForbiddenException(
+        `Pointage refusé : votre position est estimée à ${distanceMeters} m de ${station.name}; le périmètre autorisé est de ${radius} m et la précision GPS ne permet pas de confirmer que vous êtes dedans.`,
+      );
+    }
+
+    const now = new Date();
+    const tolerance = station.latenessToleranceMinutes;
+
+    const attendance = await this.prisma.attendance.findUnique({
+      where: { shiftId_swapperId: { shiftId, swapperId } },
+    });
+
+    if (!attendance) {
+      throw new BadRequestException(
+        'Aucun pointage attendu pour ce swappeur et ce shift.',
+      );
+    }
+
+    if (normalizedKind === 'CHECKIN') {
+      if (now < shift.startTime || now > shift.endTime) {
+        throw new BadRequestException(
+          'La prise de service est possible uniquement pendant le créneau prévu.',
+        );
+      }
+
+      if (attendance.checkInAt) {
+        throw new BadRequestException(
+          'La prise de service est déjà enregistrée pour ce shift.',
+        );
+      }
+
+      const isLate =
+        now.getTime() > shift.startTime.getTime() + tolerance * 60_000;
+
+      await this.prisma.attendance.update({
+        where: { id: attendance.id },
+        data: {
+          status: AttendanceStatus.CHECKED_IN,
+          checkInAt: now,
+          checkInLatitude: latitude,
+          checkInLongitude: longitude,
+        },
+      });
+
+      return {
+        kind: 'CHECKIN' as const,
+        status: isLate ? ('LATE' as const) : ('PRESENT' as const),
+        checkedInAt: now.toISOString(),
+        toleranceMinutes: tolerance,
+        timezone: station.timezone,
+        distanceMeters,
+      };
+    }
+
+    if (!attendance.checkInAt) {
+      throw new BadRequestException(
+        'La fin de service nécessite une prise de service enregistrée.',
+      );
+    }
+
+    if (attendance.checkOutAt) {
+      throw new BadRequestException(
+        'La fin de service est déjà enregistrée.',
+      );
+    }
+
+    if (now.getTime() > shift.endTime.getTime() + 5 * 60_000) {
+      throw new BadRequestException(
+        'La fenêtre de fin de service est dépassée. Le superviseur peut corriger le pointage.',
+      );
+    }
+
+    await this.prisma.attendance.update({
+      where: { id: attendance.id },
+      data: {
+        status: AttendanceStatus.CHECKED_OUT,
+        checkOutAt: now,
+        checkOutLatitude: latitude,
+        checkOutLongitude: longitude,
+      },
+    });
+
+    return {
+      kind: 'CHECKOUT' as const,
+      status: 'CLOSED' as const,
+      checkedInAt: attendance.checkInAt.toISOString(),
+      checkedOutAt: now.toISOString(),
+      toleranceMinutes: tolerance,
+      timezone: station.timezone,
+      distanceMeters,
+    };
+  }
+
+  /** Distance de Haversine en mètres. */
+  private haversineMeters(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
+    const toRad = (degrees: number) => (degrees * Math.PI) / 180;
+    const earthRadius = 6_371_000;
+    const deltaLat = toRad(lat2 - lat1);
+    const deltaLon = toRad(lon2 - lon1);
+    const a = Math.min(
+      1,
+      Math.max(
+        0,
+        Math.sin(deltaLat / 2) ** 2 +
+          Math.cos(toRad(lat1)) *
+            Math.cos(toRad(lat2)) *
+            Math.sin(deltaLon / 2) ** 2,
+      ),
+    );
+    return Math.round(
+      earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)),
+    );
+  }
+
   async checkIn(
     token: string,
     swapperId: string,

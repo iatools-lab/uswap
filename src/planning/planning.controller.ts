@@ -136,4 +136,17 @@ export class PlanningController {
   ) {
     return this.planningService.removeOccurrence(id, occurrenceId);
   }
+
+  /**
+   * Sprint 5.2 : le frontend appelle POST avec `{ revision }` pour supprimer un
+   * poste vacant. Même comportement que le PATCH ci-dessus.
+   */
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @Post(':id/occurrences/:occurrenceId/remove')
+  removeOccurrencePost(
+    @Param('id') id: string,
+    @Param('occurrenceId') occurrenceId: string,
+  ) {
+    return this.planningService.removeOccurrence(id, occurrenceId);
+  }
 }
