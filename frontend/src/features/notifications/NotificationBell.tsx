@@ -12,7 +12,7 @@ import {
   CaretRightIcon,
   SlidersHorizontalIcon,
 } from "@phosphor-icons/react";
-import { api, usingMock } from "../../api/auth-api";
+import { api } from "../../api/auth-api";
 import { useSession } from "../../app/session";
 import { formatDateTime } from "../supervision/format";
 
@@ -258,23 +258,8 @@ export function NotificationBell() {
 
   async function markAllRead() {
     const pending = unread;
-    if (usingMock) {
-      await api("/notifications/read-all", {}, "PATCH").catch(() => {});
-      const readAt = new Date().toISOString();
-      setItems((rows) =>
-        rows.map((row) => ({ ...row, readAt: row.readAt ?? readAt })),
-      );
-      return;
-    }
-
-    const results = await Promise.allSettled(
-      pending.map((item) => api(`/notifications/${item.id}/read`, {}, "PATCH")),
-    );
-    const readIds = new Set(
-      results.flatMap((result, index) =>
-        result.status === "fulfilled" ? [pending[index].id] : [],
-      ),
-    );
+    await api("/notifications/read-all", {}, "PATCH");
+    const readIds = new Set(pending.map((item) => item.id));
     const readAt = new Date().toISOString();
     setItems((rows) =>
       rows.map((row) =>

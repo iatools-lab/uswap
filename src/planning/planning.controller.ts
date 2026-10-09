@@ -62,7 +62,31 @@ export class PlanningController {
 
   @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Patch(':id/publish')
-  publish(@Param('id') id: string) {
+  publish(
+    @Param('id') id: string,
+    // Le planificateur envoie `{ revision }` pour détecter une édition
+    // concurrente. Sans `@Body()` déclaré, la validation globale (whitelist +
+    // forbidNonWhitelisted) rejetait la requête en 400 et la publication
+    // échouait toujours.
+    @Body() _body: { revision?: number } = {},
+  ) {
+    return this.planningService.publish(id);
+  }
+
+  /**
+   * Même action en POST.
+   *
+   * L'écran de planning appelle `api(path, { revision })` sans méthode : son
+   * utilitaire en déduit POST dès qu'un corps est présent. La route n'existant
+   * qu'en PATCH renvoyait « Cannot POST /plannings/:id/publish » (404), donc la
+   * publication échouait depuis l'interface alors qu'elle marchait en PATCH.
+   */
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @Post(':id/publish')
+  publishPost(
+    @Param('id') id: string,
+    @Body() _body: { revision?: number } = {},
+  ) {
     return this.planningService.publish(id);
   }
 
@@ -78,13 +102,30 @@ export class PlanningController {
 
   @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Patch(':id/validate')
-  validate(@Param('id') id: string) {
+  validate(
+    @Param('id') id: string,
+    // Même correctif que `publish` : le corps `{ revision }` doit être accepté.
+    @Body() _body: { revision?: number } = {},
+  ) {
+    return this.planningService.validatePlanning(id);
+  }
+
+  /** Même contrôle en POST (voir `publishPost` pour l'explication). */
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @Post(':id/validate')
+  validatePost(
+    @Param('id') id: string,
+    @Body() _body: { revision?: number } = {},
+  ) {
     return this.planningService.validatePlanning(id);
   }
 
   @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Post(':id/auto-assign')
-  autoAssign(@Param('id') id: string) {
+  autoAssign(
+    @Param('id') id: string,
+    @Body() _body: { revision?: number; grouping?: string } = {},
+  ) {
     return this.planningService.autoAssign(id);
   }
 
@@ -114,6 +155,7 @@ export class PlanningController {
   duplicateOccurrence(
     @Param('id') id: string,
     @Param('occurrenceId') occurrenceId: string,
+    @Body() _body: { revision?: number } = {},
   ) {
     return this.planningService.duplicateOccurrence(id, occurrenceId);
   }
@@ -133,6 +175,7 @@ export class PlanningController {
   removeOccurrence(
     @Param('id') id: string,
     @Param('occurrenceId') occurrenceId: string,
+    @Body() _body: { revision?: number } = {},
   ) {
     return this.planningService.removeOccurrence(id, occurrenceId);
   }
@@ -146,6 +189,7 @@ export class PlanningController {
   removeOccurrencePost(
     @Param('id') id: string,
     @Param('occurrenceId') occurrenceId: string,
+    @Body() _body: { revision?: number } = {},
   ) {
     return this.planningService.removeOccurrence(id, occurrenceId);
   }

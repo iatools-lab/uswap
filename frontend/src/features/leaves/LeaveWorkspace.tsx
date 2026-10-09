@@ -7,7 +7,7 @@ import {
   PencilSimpleIcon,
   XCircleIcon,
 } from "@phosphor-icons/react";
-import { mockLeaveGateway } from "../../api/gateways/mock-leave-gateway";
+import { leaveApiGateway } from "../../api/gateways/leave-api-gateway";
 import type {
   LeaveRequestInput,
   LeaveRequestView,
@@ -139,8 +139,8 @@ export function LeaveWorkspace({
     }
     setBusy(true);
     try {
-      if (editing) await mockLeaveGateway.updateRequest(editing.id, form);
-      else await mockLeaveGateway.submitRequest(form);
+      if (editing) await leaveApiGateway.updateRequest(editing.id, form);
+      else await leaveApiGateway.submitRequest(form);
       setFormOpen(false);
       setEditing(null);
       notify(
@@ -163,7 +163,7 @@ export function LeaveWorkspace({
     setBusy(true);
     setCancelError("");
     try {
-      await mockLeaveGateway.cancelRequest(cancelTarget.id);
+      await leaveApiGateway.cancelRequest(cancelTarget.id);
       setCancelTarget(null);
       onChanged?.();
     } catch (error) {
@@ -420,6 +420,22 @@ export function LeaveWorkspace({
               {requestedDays} jour{requestedDays > 1 ? "s" : ""} demandé
               {requestedDays > 1 ? "s" : ""} · {availableForRequest} disponible
               {availableForRequest > 1 ? "s" : ""}
+            </p>
+          )}
+          {/* Explication de l'état du bouton : sans ce message, un formulaire
+              dont le bouton reste grisé semble ne « rien faire » au clic. */}
+          {!requestedDays && (
+            <p className="leave-form-note" role="status">
+              Choisissez une date de début et une date de fin pour activer
+              l’envoi de la demande.
+            </p>
+          )}
+          {!!requestedDays && requestedDays > availableForRequest && (
+            <p className="leave-form-note" role="alert">
+              Votre solde disponible ({availableForRequest} jour
+              {availableForRequest > 1 ? "s" : ""}) ne couvre pas ces{" "}
+              {requestedDays} jours. Réduisez la période ou contactez
+              l’administration pour un ajustement de solde.
             </p>
           )}
           <div className="leave-form-field">

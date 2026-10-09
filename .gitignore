@@ -18,3 +18,11 @@ git-diff-stat.txt
 .devin/
 .windsurf/
 skills-lock.json
+
+# Version de travail locale (copie du projet), non versionnée
+Uswap-V6.1/
+
+
+# Archives de distribution
+*.zip
+

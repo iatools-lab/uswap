@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { notify } from "../../ui/Toast";
-import { api, usingMock } from "../../api/auth-api";
+import { api } from "../../api/auth-api";
 import { Modal } from "../../ui/Modal";
 import { SwapperIncidentReport } from "../incidents/SwapperIncidentReport";
 import { SwapperPanel } from "../supervision/SwapperPanel";
@@ -11,16 +11,29 @@ import type { OperationShift, OperationsViewProps, PunchResult } from "./types";
 import type { AttendanceHistoryRow } from "../supervision/types";
 
 function attendanceShiftFromHistory(row: AttendanceHistoryRow): OperationShift {
+  // Un créneau à venir n'a pas encore de pointage : son statut est EXPECTED.
+  // Sans ce cas, il retombait sur « PRESENT », donc l'écran annonçait un
+  // pointage déjà effectué pour un service qui n'avait pas commencé.
   const status: NonNullable<OperationShift["attendance"]>["status"] =
-    row.isJustified
-      ? "JUSTIFIED"
-      : row.isAbsent
-        ? "ABSENT"
-        : row.checkedOutAt
-          ? "CLOSED"
-          : row.isLate
-            ? "LATE"
-            : "PRESENT";
+    row.status === "EXPECTED" || row.isExpected
+      ? "EXPECTED"
+      : row.isJustified
+        ? "JUSTIFIED"
+        : row.isAbsent
+          ? "ABSENT"
+          : row.checkedOutAt
+            ? "CLOSED"
+            : row.isLate
+              ? "LATE"
+              : row.status === "CLOSED"
+                ? "CLOSED"
+                : "PRESENT";
+  const hasAttendance = Boolean(
+    row.checkedInAt ||
+      row.checkedOutAt ||
+      row.isAbsent ||
+      row.isJustified,
+  );
   return {
     id: row.shiftId,
     planningId: "",
@@ -32,11 +45,7 @@ function attendanceShiftFromHistory(row: AttendanceHistoryRow): OperationShift {
     station: row.station,
     swapper: { fullName: "" },
     attendance:
-      row.checkedInAt ||
-      row.checkedOutAt ||
-      row.isAbsent ||
-      row.isJustified ||
-      row.corrected
+      hasAttendance
         ? {
             status,
             checkedInAt: row.checkedInAt ?? "",
@@ -48,6 +57,9 @@ function attendanceShiftFromHistory(row: AttendanceHistoryRow): OperationShift {
 }
 
 function belongsInHistory(shift: OperationShift, now = Date.now()) {
+  // Un créneau n'entre dans l'historique qu'une fois terminé, ou s'il porte un
+  // pointage réel. Sans le test sur la date de fin, un service à venir
+  // apparaissait dans l'historique et était présenté comme absent.
   return (
     Date.parse(shift.endTime) < now ||
     Boolean(
@@ -61,15 +73,14 @@ function belongsInHistory(shift: OperationShift, now = Date.now()) {
 }
 
 function historyStatusLabel(shift: OperationShift) {
+  const ended = Date.parse(shift.endTime) < Date.now();
   if (shift.attendance?.status === "JUSTIFIED") return "Absence justifiée";
-  if (
-    shift.attendance?.status === "ABSENT" ||
-    (!shift.attendance && Date.parse(shift.endTime) < Date.now())
-  )
-    return "Absent";
+  if (shift.attendance?.status === "ABSENT") return "Absent";
   if (shift.attendance?.checkedOutAt) return "Terminé";
   if (shift.attendance?.isLate) return "En retard";
-  return shift.attendance ? "À l’heure" : "Non pointé";
+  if (shift.attendance?.checkedInAt) return "À l’heure";
+  // Non pointé : le service est passé (absence constatée) ou à venir.
+  return ended ? "Absent" : "Non pointé";
 }
 
 function historyStatusClass(shift: OperationShift) {
@@ -80,10 +91,11 @@ function historyStatusClass(shift: OperationShift) {
     return "attendance-status--closed";
   if (
     shift.attendance?.status === "ABSENT" ||
-    (!shift.attendance && Date.parse(shift.endTime) < Date.now())
+    (!shift.attendance?.checkedInAt && Date.parse(shift.endTime) < Date.now())
   )
     return "attendance-status--absent";
   if (shift.attendance?.isLate) return "attendance-status--late";
+  if (!shift.attendance?.checkedInAt) return "attendance-status--expected";
   return "attendance-status--present";
 }
 
@@ -355,12 +367,6 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
 
   async function executePunch() {
     if (!targetShift || !punchKind) return;
-    if (!usingMock) {
-      setError(
-        "Le pointage par géolocalisation attend la prise en charge de cette règle par l’API.",
-      );
-      return;
-    }
     if (!navigator.geolocation) {
       setError("La géolocalisation n’est pas disponible sur cet appareil.");
       return;
@@ -425,10 +431,12 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
   };
 
   const shiftNow = Date.now();
+  // Même marge que le backend : le pointage ouvre 15 min avant le début.
+  const earlyCheckInMs = 15 * 60_000;
   const canCheckIn = Boolean(
     targetShift &&
     !targetShift.attendance?.checkedInAt &&
-    shiftNow >= Date.parse(targetShift.startTime) &&
+    shiftNow >= Date.parse(targetShift.startTime) - earlyCheckInMs &&
     shiftNow <= Date.parse(targetShift.endTime),
   );
   const canCheckOut = Boolean(
@@ -583,18 +591,16 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
               className={`attendance-status ${
                 targetShift.attendance?.checkedOutAt
                   ? "attendance-status--closed"
-                  : targetShift.attendance
+                  : targetShift.attendance?.checkedInAt
                     ? targetShift.attendance.isLate
                       ? "attendance-status--late"
                       : "attendance-status--present"
-                    : isInWindow(targetShift)
-                      ? "attendance-status--present"
-                      : "attendance-status--expected"
+                    : "attendance-status--expected"
               }`}
             >
               {targetShift.attendance?.checkedOutAt
                 ? "Terminé"
-                : targetShift.attendance
+                : targetShift.attendance?.checkedInAt
                   ? targetShift.attendance.isLate
                     ? "Présent · en retard"
                     : "Début déjà pointé"
@@ -629,8 +635,8 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
               <p className="operations-hint">
                 {targetShift.attendance?.checkedOutAt
                   ? "Ce shift est clôturé."
-                  : Date.now() < Date.parse(targetShift.startTime)
-                    ? "Le pointage sera disponible à l’heure de début du shift."
+                  : Date.now() < Date.parse(targetShift.startTime) - earlyCheckInMs
+                    ? `Le pointage s’ouvrira 15 min avant le début du shift, soit à ${formatDate(new Date(Date.parse(targetShift.startTime) - earlyCheckInMs).toISOString(), targetShift.station.timezone, true)}.`
                     : "Le pointage de ce shift n’est plus disponible. Contactez le superviseur en cas de correction nécessaire."}
               </p>
             )}
@@ -647,12 +653,20 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
           </span>
           <div>
             <span className="admin-eyebrow">Pointage</span>
-            <h2>Aucun shift à venir</h2>
+            <h2>Aucun shift publié à venir</h2>
             <p>
-              Les prochains shifts publiés et affectés à votre compte
-              apparaîtront ici. Vos anciens services restent consultables dans
-              l’historique.
+              Un shift doit d’abord être publié par le superviseur puis vous être
+              affecté pour que le pointage apparaisse ici. Si vous attendez un
+              service, vérifiez vos plannings ou contactez votre superviseur.
+              Vos anciens services restent consultables dans l’historique.
             </p>
+            <button
+              type="button"
+              className="admin-button secondary"
+              onClick={() => navigate("/app/mon-espace/plannings")}
+            >
+              Voir mes plannings publiés
+            </button>
           </div>
         </section>
       )}
@@ -790,14 +804,10 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
             <button
               className="admin-button primary-cta"
               type="button"
-              disabled={busy || !usingMock}
+              disabled={busy}
               onClick={() => void executePunch()}
             >
-              {busy
-                ? "Vérification…"
-                : usingMock
-                  ? "Vérifier ma position et pointer"
-                  : "API requise"}
+              {busy ? "Vérification…" : "Vérifier ma position et pointer"}
             </button>
           </>
         }
@@ -807,51 +817,18 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
             <MapPin size={22} />
           </span>
           <div>
-            {usingMock ? (
-              <>
-                <strong>
-                  Votre position sera vérifiée au moment du pointage.
-                </strong>
-                <p>
-                  Vous devez être à moins{" "}
-                  {targetShift?.station.geofenceRadiusMeters ??
-                    data.station?.geofenceRadiusMeters ??
-                    150}{" "}
-                  m de {targetShift?.station.name ?? "la station"}. Le pointage
-                  est refusé hors de ce périmètre.{" "}
-                  {punchKind === "CHECKIN" ? (
-                    <>
-                      Sans prise de service après{" "}
-                      {targetShift?.station.latenessToleranceMinutes ??
-                        data.station?.latenessToleranceMinutes ??
-                        5}{" "}
-                      min de tolérance, l’absence est enregistrée
-                      automatiquement.
-                    </>
-                  ) : (
-                    "Votre position sera vérifiée à nouveau pour enregistrer la fin du service."
-                  )}
-                </p>
-              </>
-            ) : (
-              <>
-                <strong>
-                  Le pointage géolocalisé n’est pas encore disponible.
-                </strong>
-                <p>
-                  L’API actuellement branchée ne vérifie pas encore la distance
-                  à la station. Aucun pointage n’a été transmis.
-                </p>
-              </>
-            )}
+            <>
+              <strong>Votre position sera vérifiée au moment du pointage.</strong>
+              <p>
+                Vous devez être à moins {targetShift?.station.geofenceRadiusMeters ?? data.station?.geofenceRadiusMeters ?? 150} m de {targetShift?.station.name ?? "la station"}. Le pointage est refusé hors de ce périmètre. {punchKind === "CHECKIN" ? <>Sans prise de service après {targetShift?.station.latenessToleranceMinutes ?? data.station?.latenessToleranceMinutes ?? 5} min de tolérance, l’absence est enregistrée automatiquement.</> : "Votre position sera vérifiée à nouveau pour enregistrer la fin du service."}
+              </p>
+            </>
           </div>
         </div>
-        {usingMock && (
-          <p className="operations-hint">
-            La localisation est demandée uniquement pour cette action. Si elle
-            est refusée, aucun pointage n’est enregistré.
-          </p>
-        )}
+        <p className="operations-hint">
+          La localisation est demandée uniquement pour cette action. Si elle
+          est refusée, aucun pointage n’est enregistré.
+        </p>
         {error && (
           <p className="error-message" role="alert">
             {error}

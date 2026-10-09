@@ -11,7 +11,7 @@ import {
   WarningDiamondIcon,
 } from "@phosphor-icons/react";
 import { api } from "../../api/auth-api";
-import type { IncidentSeverity, IncidentStatus } from "../../api/mock/types";
+import type { IncidentSeverity, IncidentStatus } from "../../domain/sprint4";
 import type { IncidentView } from "../../domain/sprint4";
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";

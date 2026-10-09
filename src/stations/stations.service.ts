@@ -27,8 +27,6 @@ export class StationsService {
         latenessToleranceMinutes: dto.latenessToleranceMinutes,
         minRestHours: dto.minRestHours,
         weeklyHoursLimit: dto.weeklyHoursLimit,
-        checkinQrTtl: dto.checkinQrTtl,
-        checkoutQrTtl: dto.checkoutQrTtl,
         geofenceRadiusMeters: dto.geofenceRadiusMeters,
       },
     });
@@ -72,8 +70,6 @@ export class StationsService {
       latenessToleranceMinutes?: number;
       minRestHours?: number;
       weeklyHoursLimit?: number;
-      checkinQrTtl?: number;
-      checkoutQrTtl?: number;
       geofenceRadiusMeters?: number;
     } = {};
 
@@ -127,14 +123,6 @@ export class StationsService {
 
     if (dto.geofenceRadiusMeters !== undefined) {
       data.geofenceRadiusMeters = dto.geofenceRadiusMeters;
-    }
-
-    if (dto.checkinQrTtl !== undefined) {
-      data.checkinQrTtl = dto.checkinQrTtl;
-    }
-
-    if (dto.checkoutQrTtl !== undefined) {
-      data.checkoutQrTtl = dto.checkoutQrTtl;
     }
 
     return this.prisma.station.update({

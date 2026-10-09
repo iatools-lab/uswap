@@ -7,7 +7,7 @@ import type {
   LeaveWorkspaceView,
 } from "../../domain/sprint4";
 
-export const mockLeaveGateway: LeaveGateway = {
+export const leaveApiGateway: LeaveGateway = {
   getWorkspace: () => api<LeaveWorkspaceView>("/leaves/workspace"),
   async getBalance() {
     return (await this.getWorkspace()).balance;

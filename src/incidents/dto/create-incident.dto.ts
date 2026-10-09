@@ -14,6 +14,16 @@ export class CreateIncidentDto {
   @MinLength(1)
   affectedSwapperId!: string;
 
+  /**
+   * Station concernée envoyée par l'écran de signalement. Le service déduit de
+   * toute façon la station du déclarant (swappeur) ou de son rattachement
+   * (superviseur) ; le champ est donc accepté pour ne pas rejeter la requête en
+   * 400 « propriété non autorisée ».
+   */
+  @IsOptional()
+  @IsString()
+  stationId?: string;
+
   @IsString()
   @MinLength(5)
   @MaxLength(140)

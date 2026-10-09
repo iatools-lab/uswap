@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+﻿import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
@@ -15,7 +15,7 @@ import {
   XIcon,
 } from "@phosphor-icons/react";
 import { DownloadSimple, Clock3 } from "../../ui/icons";
-import { api, ApiError, usingMock, type User } from "../../api/auth-api";
+import { api, ApiError, type User } from "../../api/auth-api";
 import { notify } from "../../ui/Toast";
 import {
   ShiftConstraints,
@@ -41,10 +41,8 @@ type Station = {
   contactName?: string | null;
   contactPhone?: string | null;
   latenessToleranceMinutes?: number;
-  enforceMinRest?: boolean;
   minRestHours?: number;
   weeklyHoursLimit?: number;
-  blockPublishingWithVacancies?: boolean;
 };
 type PlanningSwapper = User & {
   isActive: boolean;
@@ -105,24 +103,40 @@ type Preview = {
 
 const day = (value: string) =>
   new Date(value).toLocaleDateString("fr-FR", { timeZone: "UTC" });
-const dayKeyOf = (iso: string, timezone: string) =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
+const normalizeTimezone = (timezone: string) => {
+  if (
+    timezone === "Douala" ||
+    timezone === "Yaounde" ||
+    timezone === "Yaoundé" ||
+    timezone === "Yaoundé"
+  ) {
+    return "Africa/Douala";
+  }
+
+  return timezone || "Africa/Douala";
+};
+
+const dayKeyOf = (iso: string, timezone: string) => {
+  const normalizedTimezone = normalizeTimezone(timezone);
+
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: normalizedTimezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(new Date(iso));
+};
 
 const time = (value: string, zone: string) =>
   new Date(value).toLocaleString("fr-FR", {
-    timeZone: zone,
+    timeZone: normalizeTimezone(zone),
     dateStyle: "short",
     timeStyle: "short",
   });
 
 const clock = (value: string, zone: string) =>
   new Date(value).toLocaleTimeString("fr-FR", {
-    timeZone: zone,
+    timeZone: normalizeTimezone(zone),
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -146,7 +160,10 @@ function periodShort(startIso: string, endIso: string) {
   return `Du ${two(sd)}/${two(sm)}/${sy} au ${two(ed)}/${two(em)}/${ey}`;
 }
 const period = (p: Planning) => periodShort(p.startDate, p.endDate);
+// Ordre d'affichage : lundi → dimanche. La valeur envoyée au serveur est le
+// numéro de jour JavaScript (0 = dimanche … 6 = samedi), comme `getUTCDay()`.
 const weekdays = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+const weekdayValues = [1, 2, 3, 4, 5, 6, 0];
 
 const groupKey = (o: Occurrence) =>
   `${o.station.id}|${o?.templateVersion?.label}|${o?.startTime}|${o?.endTime}`;
@@ -212,7 +229,7 @@ const dmy = (d: Date) =>
 const dm = (d: Date) => `${two(d.getUTCDate())}/${two(d.getUTCMonth() + 1)}`;
 function periodTitle(view: string, from: Date, to: Date) {
   if (view === "day") return dmy(from);
-  if (view === "week") return `${dm(from)} – ${dmy(to)}`;
+  if (view === "week") return `${dm(from)} “ ${dmy(to)}`;
   if (view === "month")
     return `${two(from.getUTCMonth() + 1)}/${from.getUTCFullYear()}`;
   return String(from.getUTCFullYear());
@@ -550,7 +567,6 @@ export function Planner({ user }: { user: User }) {
     setError("");
     try {
       const p = await api<Planning>("/plannings", {
-        ...(usingMock ? { name: planningName.trim() } : {}),
         startDate: start + "T00:00:00.000Z",
         endDate: end + "T23:59:59.999Z",
       });
@@ -742,9 +758,7 @@ export function Planner({ user }: { user: User }) {
                     actifs
                   </span>
                   <span>
-                    {station.enforceMinRest === false
-                      ? "Repos minimum désactivé"
-                      : `${station.minRestHours ?? 8} h de repos minimum`}
+                    `${station.minRestHours ?? 8} h de repos minimum`
                   </span>
                 </article>
               ))}
@@ -808,7 +822,7 @@ export function Planner({ user }: { user: User }) {
                           <span>
                             {template.label} (
                             <strong>
-                              {template.startTime}–{template.endTime}
+                              {template.startTime}“{template.endTime}
                             </strong>
                             )
                           </span>
@@ -827,12 +841,12 @@ export function Planner({ user }: { user: User }) {
                 <label key={label} className="checkbox-label">
                   <input
                     type="checkbox"
-                    checked={selectedDays.includes(i + 1)}
+                    checked={selectedDays.includes(weekdayValues[i])}
                     onChange={(e) => {
                       setSelectedDays(
                         e.target.checked
-                          ? [...selectedDays, i + 1]
-                          : selectedDays.filter((d) => d !== i + 1),
+                          ? [...selectedDays, weekdayValues[i]]
+                          : selectedDays.filter((d) => d !== weekdayValues[i]),
                       );
                     }}
                   />
@@ -858,7 +872,7 @@ export function Planner({ user }: { user: User }) {
             <div className="summary-row">
               <span>Période :</span>
               <strong>
-                {start ? day(start) : "—"} au {end ? day(end) : "—"}
+                {start ? day(start) : "”"} au {end ? day(end) : "”"}
               </strong>
             </div>
             <div className="summary-row">
@@ -875,9 +889,7 @@ export function Planner({ user }: { user: User }) {
             <div className="summary-row">
               <span>Effectif par créneau :</span>
               <strong>
-                {usingMock
-                  ? "1 poste minimum par créneau ; renforts selon l’effectif"
-                  : "Postes à pourvoir depuis le planning"}
+                "Postes à pourvoir depuis le planning"
               </strong>
             </div>
           </div>
@@ -1044,12 +1056,6 @@ function PlanningEditor({
 
   async function assignAutomatically() {
     if (!canEdit || p.status !== "DRAFT" || busy) return;
-    if (!usingMock) {
-      setError(
-        "L’API connectée ne garantit pas encore un shift stable ni l’équité des heures. Utilisez l’affectation manuelle jusqu’à l’alignement du service.",
-      );
-      return;
-    }
     setBusy(true);
     setError("");
     try {
@@ -1100,12 +1106,12 @@ function PlanningEditor({
         },
         {
           header: "Email Swappeur",
-          key: (o: Occurrence) => (o.swapper ? o?.swapper?.email : "—"),
+          key: (o: Occurrence) => (o.swapper ? o?.swapper?.email : "”"),
           width: 25,
         },
         {
           header: "Téléphone Swappeur",
-          key: (o: Occurrence) => o.swapper?.phoneNumber || "—",
+          key: (o: Occurrence) => o.swapper?.phoneNumber || "”",
           width: 18,
         },
         {
@@ -1317,7 +1323,7 @@ function PlanningEditor({
                     <span>
                       {t.label} (
                       <strong>
-                        {t?.startTime}–{t?.endTime}
+                        {t?.startTime}“{t?.endTime}
                       </strong>
                       )
                     </span>
@@ -1389,7 +1395,7 @@ function PlanningEditor({
                     <strong>{o.label}</strong>
                     <span>{o.stationName}</span>
                     <span>
-                      {time(o?.startTime, o.timezone)} –{" "}
+                      {time(o?.startTime, o.timezone)} “{" "}
                       {time(o?.endTime, o.timezone)}
                     </span>
                   </div>
@@ -1644,16 +1650,16 @@ function PlanningEditor({
                 {report?.totals?.vacant ?? vacantShifts} à pourvoir
               </span>
             </div>
-            {report?.valid && !!report.warnings.length && (
+            {report?.valid && !!report.warnings?.length && (
               <p className="planner-form-note">
                 Les avertissements attirent votre attention sur des points à
                 vérifier ; ils ne bloquent pas la publication.
               </p>
             )}
-            {!!report?.errors.length && (
+            {!!report?.errors?.length && (
               <section className="planner-validation-section is-error">
                 <h3>Erreurs bloquantes ({report.errors.length})</h3>
-                {report.errors.map((issue, index) => (
+                {(report.errors ?? []).map((issue, index) => (
                   <ValidationIssue
                     key={`error-${index}`}
                     issue={issue}
@@ -2230,12 +2236,12 @@ function DayDetail({
                         <div className="planner-day-detail__shift">
                           <strong>{g.label}</strong>
                           <span>
-                            {clock(g.start, g.station.timezone)} –{" "}
+                            {clock(g.start, g.station.timezone)} “{" "}
                             {clock(g.end, g.station.timezone)}
                           </span>
                           <small className="day-roster-pause">
                             {g.breakStart
-                              ? `Pause ${g.breakStart}–${g.breakEnd} · ${g.breakMinutes} min`
+                              ? `Pause ${g.breakStart}“${g.breakEnd} · ${g.breakMinutes} min`
                               : "Sans pause"}
                           </small>
                           <span
@@ -2560,12 +2566,12 @@ function Assignment({
       <div className="assignment-shift-summary">
         <strong>{o.templateVersion.label}</strong>
         <span>
-          {time(o.startTime, o.station.timezone)} –{" "}
+          {time(o.startTime, o.station.timezone)} “{" "}
           {time(o.endTime, o.station.timezone)}
         </span>
         {o.templateVersion.breakStart && (
           <small>
-            Pause {o.templateVersion.breakStart}–{o.templateVersion.breakEnd} ·{" "}
+            Pause {o.templateVersion.breakStart}“{o.templateVersion.breakEnd} ·{" "}
             {o.templateVersion.breakMinutes} min
           </small>
         )}
@@ -2748,3 +2754,6 @@ function Assignment({
     </form>
   );
 }
+
+
+

@@ -67,7 +67,7 @@ export class ReportsController {
   // ---------- Operational report dashboard ----------
 
   @Get('reports/dashboard')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @ApiOperation({
     summary: 'Tableau de bord operationnel (pointages, couverture)',
   })
@@ -105,7 +105,7 @@ export class ReportsController {
   }
 
   @Get('reports/export')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @ApiOperation({ summary: 'Exporter un rapport filtré en CSV ou Excel' })
   async export(
     @Req() req: AuthenticatedRequest,

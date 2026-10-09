@@ -1,8 +1,3 @@
-import { mockDownload, mockRequest } from "./mock";
-import { DEMO_PASSWORD, MOCK_LATENCY_MS, delay } from "./mock";
-import { FICTITIOUS_DOMAIN, MOCK_LOGIN_PROFILES } from "./mock/seed";
-import { MockHttpError, type MockCtx } from "./mock/types";
-
 export type Role = "ADMIN" | "SUPERVISOR" | "SWAPPER";
 
 export type UserIcon = {
@@ -38,18 +33,6 @@ export const rolePaths: Record<Role, string> = {
   SWAPPER: "/app/mon-espace",
 };
 
-export const mockPeople: User[] = MOCK_LOGIN_PROFILES;
-
-export { DEMO_PASSWORD, FICTITIOUS_DOMAIN, MOCK_LATENCY_MS };
-
-/** Profils proposés sur l'écran de connexion. En mode démo, la liste reste locale. */
-export async function fetchProfiles(): Promise<User[]> {
-  if (usingMock) return mockPeople;
-
-  // Le backend ne publie pas de répertoire de comptes avant authentification.
-  // Le champ e-mail reste saisissable librement sur l'écran de connexion.
-  return [];
-}
 
 const configured = (
   import.meta as unknown as {
@@ -57,9 +40,7 @@ const configured = (
   }
 ).env.VITE_API_URL;
 
-const base = (configured || "").replace(/\/$/, "");
-
-export const usingMock = !configured;
+const base = (configured || "/api").replace(/\/$/, "");
 
 export class ApiError extends Error {
   constructor(
@@ -95,32 +76,6 @@ let accessToken: string | null = null;
 let generation = 0;
 let inFlightRefresh: Promise<Session> | null = null;
 
-function serialize(body: unknown): {
-  plain: Record<string, unknown>;
-  file: File | null;
-} {
-  if (body instanceof FormData) {
-    const candidate = body.get("file");
-
-    return {
-      plain: {},
-      file: candidate instanceof File ? candidate : null,
-    };
-  }
-
-  if (body === undefined || body === null) {
-    return {
-      plain: {},
-      file: null,
-    };
-  }
-
-  return {
-    plain: JSON.parse(JSON.stringify(body)) as Record<string, unknown>,
-    file: null,
-  };
-}
-
 function triggerDownload(
   blob: Blob,
   filename: string,
@@ -143,40 +98,8 @@ export async function api<T>(
   method?: "POST" | "PUT" | "PATCH" | "DELETE",
   allowRefresh = true,
 ): Promise<T> {
-  const verb: MockCtx["method"] =
+  const verb: "POST" | "PUT" | "PATCH" | "DELETE" | "GET" =
     method ?? (body === undefined ? "GET" : "POST");
-
-  const { plain, file } = serialize(body);
-
-  if (usingMock) {
-    await delay(
-      MOCK_LATENCY_MS +
-        Math.round(Math.random() * 120),
-    );
-
-    try {
-      return await mockRequest<T>(
-        verb,
-        path,
-        plain,
-        file,
-      );
-    } catch (error) {
-      if (error instanceof MockHttpError) {
-        throw new ApiError(
-          error.status,
-          error.message ||
-            fallbackMessages[error.status] ||
-            unavailable,
-        );
-      }
-
-      throw new ApiError(
-        0,
-        unreachable,
-      );
-    }
-  }
 
   const requestBody: unknown = body;
 
@@ -259,7 +182,18 @@ export async function api<T>(
       );
     }
 
-    return (await response.json()) as T;
+    // NestJS can legitimately answer with 204 (for example after a logout,
+    // delete, or a successful command that has no response body). Never turn a
+    // valid empty response into a JSON parsing/network error.
+    if (response.status === 204) return undefined as T;
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().includes("application/json")) {
+      const text = await response.text();
+      return (text ? text : undefined) as T;
+    }
+
+    const raw = await response.text();
+    return (raw ? JSON.parse(raw) : undefined) as T;
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;
@@ -277,12 +211,6 @@ export async function api<T>(
 function remember(
   data: Session,
 ): Session {
-  if ((data.user?.role as string) === "STATION_CHIEF") {
-    data = {
-      ...data,
-      user: { ...data.user, role: "SUPERVISOR", stationId: null, stationName: null },
-    };
-  }
   if (
     !data.user ||
     !Object.prototype.hasOwnProperty.call(
@@ -316,28 +244,13 @@ function remember(
 }
 
 export function normalizeUserRole(user: UserIcon): UserIcon {
-  return (user.role as string) === "STATION_CHIEF"
-    ? { ...user, role: "SUPERVISOR", stationId: null, stationName: null }
-    : user;
+  return user;
 }
 
 export async function login(
   email: string,
   password: string,
 ): Promise<Session> {
-  if (usingMock) {
-    return remember(
-      await mockRequest<Session>(
-        "POST",
-        "/auth/login",
-        {
-          email,
-          password,
-        },
-      ),
-    );
-  }
-
   return remember(
     await api<Session>(
       "/auth/login",
@@ -350,13 +263,6 @@ export async function login(
 }
 
 export function refresh(): Promise<Session> {
-  if (usingMock) {
-    return mockRequest<Session>(
-      "POST",
-      "/auth/refresh",
-    );
-  }
-
   const savedUser =
     localStorage.getItem(USER_KEY);
 
@@ -443,17 +349,10 @@ export function forgetSession() {
 
 export async function logout(): Promise<void> {
   try {
-    if (usingMock) {
-      await mockRequest(
-        "POST",
-        "/auth/logout",
-      );
-    } else {
-      await api(
-        "/auth/logout",
-        {},
-      );
-    }
+    await api(
+      "/auth/logout",
+      {},
+    );
   } finally {
     forgetSession();
   }
@@ -463,26 +362,6 @@ export async function download(
   path: string,
   filename: string,
 ): Promise<void> {
-  if (usingMock) {
-    const result =
-      await mockDownload(path);
-
-    if (!result) {
-      throw new ApiError(
-        404,
-        "Ce téléchargement n'est pas disponible.",
-      );
-    }
-
-    triggerDownload(
-      result.blob,
-      result.filename ||
-        filename,
-    );
-
-    return;
-  }
-
   const controller =
     new AbortController();
 

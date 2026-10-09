@@ -5,7 +5,7 @@ import {
   shiftBreakError,
   shiftDuration,
 } from "./ShiftTemplates";
-import { api, usingMock } from "../../api/auth-api";
+import { api } from "../../api/auth-api";
 import { exportToExcel } from "../../utils/excelExport";
 import { StepperModal, type StepItem } from "../../ui/StepperModal";
 import { Modal } from "../../ui/Modal";
@@ -45,10 +45,8 @@ export type StationData = {
   isActive: boolean;
   latenessToleranceMinutes: number;
   geofenceRadiusMeters: number;
-  enforceMinRest: boolean;
   minRestHours: number;
   weeklyHoursLimit: number;
-  blockPublishingWithVacancies: boolean;
 };
 
 const emptyForm = {
@@ -63,10 +61,8 @@ const emptyForm = {
   contactPhone: "",
   latenessToleranceMinutes: 0,
   geofenceRadiusMeters: 150,
-  enforceMinRest: true,
   minRestHours: 8,
-  weeklyHoursLimit: 48,
-  blockPublishingWithVacancies: false,
+  weeklyHoursLimit: 72,
 };
 
 const blankStationForm: typeof emptyForm = {
@@ -81,10 +77,8 @@ const blankStationForm: typeof emptyForm = {
   contactPhone: "",
   latenessToleranceMinutes: "" as unknown as number,
   geofenceRadiusMeters: "" as unknown as number,
-  enforceMinRest: false,
   minRestHours: "" as unknown as number,
   weeklyHoursLimit: "" as unknown as number,
-  blockPublishingWithVacancies: false,
 };
 
 const blankSharedShift = {
@@ -559,9 +553,7 @@ function StationsMapView({
                 <span>Tolérance / Repos / Max :</span>
                 <strong>
                   {selectedStation?.latenessToleranceMinutes}m /{" "}
-                  {selectedStation?.enforceMinRest === false
-                    ? "repos libre"
-                    : `${selectedStation?.minRestHours}h`}{" "}
+                  `${selectedStation?.minRestHours ?? 8}h`{" "}
                   / {selectedStation?.weeklyHoursLimit}h
                 </strong>
               </div>
@@ -629,7 +621,6 @@ export function StationManager({
             contactName: station.contactName || "",
             contactPhone: station.contactPhone || "",
             geofenceRadiusMeters: station.geofenceRadiusMeters ?? 150,
-            enforceMinRest: station.enforceMinRest !== false,
           }
         : { ...blankStationForm },
     );
@@ -655,14 +646,6 @@ export function StationManager({
         geofenceRadiusMeters: Number(form.geofenceRadiusMeters),
         minRestHours: Number(form.minRestHours),
         weeklyHoursLimit: Number(form.weeklyHoursLimit),
-        ...(usingMock
-          ? {
-              enforceMinRest: Boolean(form.enforceMinRest),
-              blockPublishingWithVacancies: Boolean(
-                form.blockPublishingWithVacancies,
-              ),
-            }
-          : {}),
       };
 
       await api(
@@ -735,28 +718,21 @@ export function StationManager({
         breakStart: sharedShift.breakStart || null,
         breakEnd: sharedShift.breakEnd || null,
       };
-      if (usingMock) {
-        await api("/shift-templates/apply", {
-          stationIds: sharedShift.stationIds,
-          ...payload,
-        });
-      } else {
-        const remaining: string[] = [];
-        let applied = 0;
-        for (const stationId of sharedShift.stationIds) {
-          try {
-            await api(`/stations/${stationId}/shift-templates`, payload);
-            applied += 1;
-          } catch {
-            remaining.push(stationId);
-          }
+      const remaining: string[] = [];
+      let applied = 0;
+      for (const stationId of sharedShift.stationIds) {
+        try {
+          await api(`/stations/${stationId}/shift-templates`, payload);
+          applied += 1;
+        } catch {
+          remaining.push(stationId);
         }
-        if (remaining.length) {
-          setSharedShift({ ...sharedShift, stationIds: remaining });
-          throw new Error(
-            `Modèle appliqué à ${applied} station(s). Les autres n’ont pas pu être enregistrées ; réessayez pour celles-ci.`,
-          );
-        }
+      }
+      if (remaining.length) {
+        setSharedShift({ ...sharedShift, stationIds: remaining });
+        throw new Error(
+          `Modèle appliqué à ${applied} station(s). Les autres n’ont pas pu être enregistrées ; réessayez pour celles-ci.`,
+        );
       }
       notify(
         `Modèle appliqué à ${sharedShift.stationIds.length} station${sharedShift.stationIds.length > 1 ? "s" : ""}.`,
@@ -945,12 +921,10 @@ export function StationManager({
           isValid: () =>
             String(form.latenessToleranceMinutes).trim() !== "" &&
             Number(form.latenessToleranceMinutes) >= 0 &&
-            (!usingMock ||
-              (String(form.geofenceRadiusMeters).trim() !== "" &&
-                Number(form.geofenceRadiusMeters) >= 25)) &&
-            (!form.enforceMinRest ||
-              (String(form.minRestHours).trim() !== "" &&
-                Number(form.minRestHours) > 0)) &&
+            String(form.geofenceRadiusMeters).trim() !== "" &&
+            Number(form.geofenceRadiusMeters) >= 25 &&
+            String(form.minRestHours).trim() !== "" &&
+            Number(form.minRestHours) > 0 &&
             String(form.weeklyHoursLimit).trim() !== "" &&
             Number(form.weeklyHoursLimit) > 0,
           content: (
@@ -973,14 +947,11 @@ export function StationManager({
                   />
                 </div>
 
-                <div
-                  className={`stepper-field-group${form.enforceMinRest ? "" : " is-disabled"}`}
-                >
+                <div className="stepper-field-group">
                   <label>REPOS MINIMAL (HEURES)</label>
                   <input
                     type="number"
-                    required={form.enforceMinRest}
-                    disabled={!form.enforceMinRest}
+                    required
                     min={1}
                     step={1}
                     value={form?.minRestHours ?? 0}
@@ -1033,45 +1004,10 @@ export function StationManager({
                 </div>
               </div>
 
-              <label className="station-rule-toggle">
-                <input
-                  type="checkbox"
-                  checked={Boolean(form?.enforceMinRest)}
-                  onChange={(e) => set("enforceMinRest", e.target.checked)}
-                />
-                <span>
-                  <strong>Contrôler le repos entre deux shifts</strong>
-                  <small>
-                    Lorsqu’elle est active, cette règle bloque une affectation
-                    qui ne respecte pas le repos minimal indiqué.
-                  </small>
-                </span>
-              </label>
-
-              <label className="station-rule-toggle">
-                <input
-                  type="checkbox"
-                  checked={Boolean(form?.blockPublishingWithVacancies)}
-                  onChange={(e) =>
-                    set("blockPublishingWithVacancies", e.target.checked)
-                  }
-                />
-                <span>
-                  <strong>Exiger une couverture complète</strong>
-                  <small>
-                    La publication sera bloquée tant qu’un poste du planning
-                    reste sans swappeur.
-                  </small>
-                </span>
-              </label>
-              {usingMock && (
-                <p className="planner-form-note">
-                  Les règles et le périmètre de pointage mis à jour s’appliquent
-                  aussi aux shifts déjà créés. Les horaires et pauses déjà
-                  planifiés restent inchangés ; vérifiez les plannings publiés
-                  si vous durcissez une règle.
-                </p>
-              )}
+              <p className="planner-form-note">
+                Les règles enregistrées par cette station sont appliquées par le
+                moteur de planification et le contrôle de pointage.
+              </p>
             </div>
           ),
         },
@@ -1122,18 +1058,7 @@ export function StationManager({
                 <div className="summary-row">
                   <span>Repos min. / Limite hebdo :</span>
                   <strong>
-                    {form?.enforceMinRest
-                      ? `${form?.minRestHours ?? 0}h minimum`
-                      : "Contrôle désactivé"}{" "}
-                    · {form?.weeklyHoursLimit ?? 0}h max
-                  </strong>
-                </div>
-                <div className="summary-row">
-                  <span>Postes non couverts :</span>
-                  <strong>
-                    {form?.blockPublishingWithVacancies
-                      ? "Publication bloquée"
-                      : "Publication avec avertissement"}
+                    {form?.minRestHours ?? 0}h minimum · {form?.weeklyHoursLimit ?? 0}h max
                   </strong>
                 </div>
               </div>
@@ -1557,9 +1482,7 @@ export function StationManager({
                             </code>
                             <code>
                               Repos:{" "}
-                              {s?.enforceMinRest === false
-                                ? "libre"
-                                : `${s?.minRestHours ?? 0}h`}
+                              `${s?.minRestHours ?? 0}h`
                             </code>
                             <code>Max: {s?.weeklyHoursLimit ?? 0}h</code>
                           </div>
@@ -1677,9 +1600,7 @@ export function StationManager({
                       <div className="rule-chip">
                         <span className="rule-label">Repos min.</span>
                         <strong className="rule-value">
-                          {s?.enforceMinRest === false
-                            ? "Non contrôlé"
-                            : `${s?.minRestHours ?? 0} h`}
+                          `${s?.minRestHours ?? 0} h`
                         </strong>
                       </div>
                     </div>

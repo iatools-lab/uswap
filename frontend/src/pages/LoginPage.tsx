@@ -1,17 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye, EyeOff, LoaderCircle, Mail, X } from "../ui/icons";
 import { useSession } from "../app/session";
-import {
-  fetchProfiles,
-  mockPeople,
-  roles,
-  usingMock,
-  type User,
-} from "../api/auth-api";
 import { AuthLayout } from "./AuthLayout";
 import { RouteFallback } from "../app/RouteFallback";
-import { Select } from "../ui/Select";
 
 /** Format d'adresse e-mail attendu, partagé par la validation et les messages d'erreur. */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,24 +17,6 @@ export function LoginPage() {
   const [help, setHelp] = useState<"invite" | null>(null);
   const [capsLock, setCapsLock] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [profiles, setProfiles] = useState<User[]>(usingMock ? mockPeople : []);
-
-  useEffect(() => {
-    if (usingMock) return;
-    let active = true;
-    void fetchProfiles()
-      .then((items) => {
-        if (active) setProfiles(items);
-      })
-      .catch(() => {
-        // Le sélecteur est facultatif : l'e-mail peut toujours être saisi.
-        if (active) setProfiles([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitted(true);
@@ -85,26 +59,6 @@ export function LoginPage() {
         <>
           <h2 className="login-title">Connexion</h2>
           <form onSubmit={submit} noValidate>
-            {profiles.length > 0 && (
-              <div className="field">
-                <span className="field-label">Profil à ouvrir</span>
-                <Select
-                  size="lg"
-                  value={identifier}
-                  disabled={locked}
-                  ariaLabel="Choisir un profil"
-                  placeholder="Choisir un compte"
-                  onChange={(value) => {
-                    setIdentifier(String(value));
-                    setError("");
-                  }}
-                  options={profiles.map((person) => ({
-                    value: person.email,
-                    label: `${roles[person.role]} · ${person.fullName} — ${person.email}`,
-                  }))}
-                />
-              </div>
-            )}
             <div className="field">
               <label htmlFor="identifier">Adresse e-mail</label>
               <div

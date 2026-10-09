@@ -6,7 +6,7 @@ const { NestFactory } = require('@nestjs/core');
 const { AppModule } = require('../dist/app.module');
 const { SwaggerModule, DocumentBuilder } = require('@nestjs/swagger');
 
-// Contrat extrait de frontend/src/api/mock/handlers/*.ts + des appels api(...).
+// Contrat extrait des appels api(...) du frontend et des routes backend.
 const CALLS = [
   ['POST', '/auth/login'],
   ['POST', '/auth/refresh'],
