@@ -1,6 +1,6 @@
 /**
  * Inventaire de la base uSwap : plannings, shifts, modèles et pauses.
- * Usage : node scripts/_db-inventory.cjs
+ * Usage : node scripts/db-inventory.cjs
  */
 const { PrismaClient } = require('@prisma/client');
 require('dotenv/config');
