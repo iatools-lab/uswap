@@ -14,14 +14,13 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { QueryUsersDto } from './dto/query-users.dto';
 
 const TEMPLATE_HEADER = 'fullName,email,role,stationId,phoneNumber,address';
-const VALID_ROLES = ['SUPERVISOR', 'STATION_CHIEF', 'SWAPPER'];
+const VALID_ROLES = ['SUPERVISOR', 'SWAPPER'];
 const INVITATION_TOKEN_TTL_MS = 48 * 60 * 60 * 1000;
 
 /** Human labels used by the Excel export. */
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrateur',
   SUPERVISOR: 'Superviseur',
-  STATION_CHIEF: 'Chef de station',
   SWAPPER: 'Swappeur',
 };
 
@@ -219,7 +218,7 @@ export class UsersService {
 
   /**
    * Public directory used by the login screen's profile picker. Only active
-   * accounts are listed, and only fields a pre-auth visitor may see â€” no
+   * accounts are listed, and only fields a pre-auth visitor may see ” no
    * phone number, no address, no invitation state.
    */
   async findProfiles() {
@@ -324,7 +323,7 @@ export class UsersService {
       });
       if (duplicate && duplicate.id !== id) {
         throw new BadRequestException(
-          'Cet e-mail est dÃ©jÃ  utilisÃ© par un autre compte.',
+          'Cet e-mail est déjà utilisé par un autre compte.',
         );
       }
     }

@@ -141,7 +141,6 @@ export class ReportsService {
   async dashboard(actor: Actor, query: QueryReportDashboardDto) {
     if (
       actor.role !== Role.SUPERVISOR &&
-      actor.role !== Role.STATION_CHIEF &&
       actor.role !== Role.ADMIN
     ) {
       throw new ForbiddenException('Accès non autorisé aux rapports.');
@@ -158,8 +157,8 @@ export class ReportsService {
       select: { stationId: true },
     });
     const scopedStationId =
-      actor.role === Role.STATION_CHIEF
-        ? (me?.stationId ?? null)
+      actor.role === Role.SUPERVISOR && me?.stationId
+        ? me.stationId
         : query.stationId || null;
 
     const scopeStations = me?.stationId
@@ -533,7 +532,7 @@ export class ReportsService {
     query: QueryReportDashboardDto & { format?: string },
   ) {
     if (
-      !([Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF] as Role[]).includes(
+      !([Role.ADMIN, Role.SUPERVISOR] as Role[]).includes(
         actor.role,
       )
     ) {

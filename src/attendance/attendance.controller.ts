@@ -11,14 +11,16 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import { AttendanceQrType, AttendanceStatus, Role } from '@prisma/client';
+import {
+  AttendanceStatus,
+  Role,
+} from '@prisma/client';
 
 import { AttendanceService } from './attendance.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { OperationsService } from '../operations/operations.service';
-import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('attendance')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -26,60 +28,7 @@ export class AttendanceController {
   constructor(
     private readonly attendanceService: AttendanceService,
     private readonly operationsService: OperationsService,
-    private readonly prisma: PrismaService,
   ) {}
-
-  @Post('qr')
-  @Roles(Role.SUPERVISOR, Role.STATION_CHIEF)
-  async generateQr(
-    @Req()
-    req: {
-      user: {
-        id: string;
-      };
-    },
-    @Body()
-    body: {
-      shiftId: string;
-      stationId: string;
-      type?: AttendanceQrType;
-      kind?: 'CHECKIN' | 'CHECKOUT';
-    },
-  ) {
-    const type =
-      body.type ??
-      (body.kind === 'CHECKOUT'
-        ? AttendanceQrType.END
-        : AttendanceQrType.START);
-
-    const result = await this.attendanceService.generateQr(
-      body.shiftId,
-      body.stationId,
-      req.user.id,
-      type,
-    );
-
-    const station = await this.prisma.station.findUnique({
-      where: {
-        id: body.stationId,
-      },
-      select: {
-        name: true,
-        timezone: true,
-      },
-    });
-
-    if (!station) {
-      throw new ForbiddenException('Station introuvable.');
-    }
-
-    return {
-      ...result,
-      kind: type === AttendanceQrType.END ? 'CHECKOUT' : 'CHECKIN',
-      stationName: station.name,
-      timezone: station.timezone,
-    };
-  }
 
   /**
    * v5.3 : pointage GPS sans QR. Le swappeur envoie sa position pendant le
@@ -111,62 +60,6 @@ export class AttendanceController {
       body.latitude,
       body.longitude,
       body.accuracyMeters,
-    );
-  }
-
-  @Post('check-in')
-  @Roles(Role.SWAPPER)
-  async checkIn(
-    @Req()
-    req: {
-      user: {
-        id: string;
-      };
-    },
-    @Body()
-    body: {
-      token: string;
-      shiftId: string;
-      stationId: string;
-      latitude?: number;
-      longitude?: number;
-    },
-  ) {
-    return this.attendanceService.checkIn(
-      body.token,
-      req.user.id,
-      body.shiftId,
-      body.stationId,
-      body.latitude,
-      body.longitude,
-    );
-  }
-
-  @Post('check-out')
-  @Roles(Role.SWAPPER)
-  async checkOut(
-    @Req()
-    req: {
-      user: {
-        id: string;
-      };
-    },
-    @Body()
-    body: {
-      token: string;
-      shiftId: string;
-      stationId: string;
-      latitude?: number;
-      longitude?: number;
-    },
-  ) {
-    return this.attendanceService.checkOut(
-      body.token,
-      req.user.id,
-      body.shiftId,
-      body.stationId,
-      body.latitude,
-      body.longitude,
     );
   }
 
@@ -221,7 +114,7 @@ export class AttendanceController {
   }
 
   @Get('station/:stationId')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   async findByStation(
     @Req()
     req: {
@@ -290,11 +183,11 @@ export class AttendanceController {
   }
 
   /**
-   * Sprint 5: live attendance board for supervisors and station chiefs.
+   * Sprint 5: live attendance board for supervisors.
    * Declared before GET ':id' so 'monitor' is not read as an attendance id.
    */
   @Get('monitor')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   async monitor(@Req() req: { user: { id: string } }) {
     return this.attendanceService.monitor(req.user.id);
   }

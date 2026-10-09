@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { ShieldWarningIcon } from "@phosphor-icons/react";
-import { api, usingMock, type User } from "../../api/auth-api";
+import { api, type User } from "../../api/auth-api";
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
 import { notify } from "../../ui/Toast";
@@ -58,12 +58,6 @@ export function SwapperIncidentReport({
     }
     if (title.trim().length < 5 || description.trim().length < 12) {
       setError("Ajoutez un objet et une description suffisamment précise.");
-      return;
-    }
-    if (!usingMock) {
-      setError(
-        "L’API connectée ne propose pas encore de route de déclaration d’incident pour les swappeurs. Le signalement fonctionne en mode démo; l’API devra l’exposer pour l’activer ici.",
-      );
       return;
     }
     setBusy(true);
@@ -152,12 +146,7 @@ export function SwapperIncidentReport({
               {error}
             </p>
           )}
-          {!usingMock && (
-            <p className="swapper-incident-api-note">
-              Le signalement est prêt en mode démo. L’API connectée ne propose
-              pas encore cette action pour votre rôle.
-            </p>
-          )}
+
           {stations.length > 1 ? (
             <label>
               <span>Station concernée</span>

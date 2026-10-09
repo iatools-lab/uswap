@@ -19,7 +19,7 @@ export type OperationShift = {
   };
   swapper: { fullName: string };
   attendance: {
-    status: "PRESENT" | "LATE" | "CLOSED" | "JUSTIFIED" | "ABSENT";
+    status: "EXPECTED" | "PRESENT" | "LATE" | "CLOSED" | "JUSTIFIED" | "ABSENT";
     checkedInAt: string;
     checkedOutAt: string | null;
     isLate: boolean;

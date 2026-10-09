@@ -28,7 +28,7 @@ export class DashboardController {
    * rather than being split across role-specific routes.
    */
   @Get('stats')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF, Role.SWAPPER)
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.SWAPPER)
   getStats(@Req() req: AuthenticatedRequest) {
     return this.dashboardService.getStats(req.user.id);
   }

@@ -33,15 +33,15 @@ export class IncidentsController {
    * the query to the caller's station when the role requires it.
    */
   @Get()
-  @Roles(Role.SUPERVISOR, Role.STATION_CHIEF, Role.ADMIN)
+  @Roles(Role.SUPERVISOR, Role.ADMIN)
   @ApiOperation({ summary: 'Liste des incidents et indicateurs associes' })
   list(@Req() req: AuthenticatedRequest, @Query() query: QueryIncidentsDto) {
     return this.incidentsService.list(req.user, query);
   }
 
   @Post()
-  @Roles(Role.STATION_CHIEF)
-  @ApiOperation({ summary: 'Declarer un incident (chef de station)' })
+  @Roles(Role.SUPERVISOR, Role.SWAPPER)
+  @ApiOperation({ summary: 'Declarer un incident' })
   create(@Req() req: AuthenticatedRequest, @Body() dto: CreateIncidentDto) {
     return this.incidentsService.create(req.user, dto);
   }

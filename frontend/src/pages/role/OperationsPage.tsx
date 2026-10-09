@@ -46,7 +46,11 @@ function adaptWorkspace(payload: BackendWorkspace): OperationData {
             : "PRESENT"
           : shift.attendance?.isAbsent
             ? "ABSENT"
-            : "ABSENT";
+            : "EXPECTED";
+    // Un créneau dont la présence n'est pas encore renseignée est « en attente
+    // de pointage » (EXPECTED), pas « absent ». Le repli sur ABSENT faisait
+    // apparaître absents des services qui n'avaient pas encore commencé.
+    const hasAttendance = Boolean(checkInAt || checkOutAt || shift.attendance?.isAbsent);
     const timezone = shift.station.timezone || "Africa/Douala";
     const time = (value: string) =>
       new Intl.DateTimeFormat("fr-CM", {
@@ -73,7 +77,7 @@ function adaptWorkspace(payload: BackendWorkspace): OperationData {
         latenessToleranceMinutes: shift.station.latenessToleranceMinutes,
       },
       swapper: shift.swapper,
-      attendance: shift.attendance
+      attendance: hasAttendance
         ? {
             status,
             checkedInAt: checkInAt ?? "",
@@ -99,7 +103,7 @@ export function OperationsPage() {
     api<BackendWorkspace | OperationData>("/workspace")
       .then((value) => {
         if (!active) return;
-        // Les jeux mock sont déjà au format des composants V0. Le backend
+        // Les données API sont déjà au format attendu par les composants. Le backend
         // Danielle est converti une seule fois à cette frontière.
         setData(
           "shifts" in value && value.shifts.every((item) => "label" in item)

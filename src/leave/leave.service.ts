@@ -86,10 +86,10 @@ export class LeaveService {
   // ============================================================
 
   async create(userId: string, dto: CreateLeaveRequestDto) {
-    const key = dto.idempotencyKey?.trim();
-    if (!key) {
-      throw new BadRequestException('Référence de synchronisation manquante.');
-    }
+    // La clé d'idempotence rend la réconciliation hors connexion sûre, mais
+    // l'écran en ligne ne l'envoie pas : on en génère une plutôt que de
+    // rejeter la demande en 400 « Référence de synchronisation manquante ».
+    const key = dto.idempotencyKey?.trim() || `leave-${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
     // A replayed queue item returns the request it already created.
     const replay = await this.prisma.leaveRequest.findUnique({
@@ -133,6 +133,7 @@ export class LeaveService {
     });
 
     const days = this.daysBetween(values.startDate, values.endDate);
+    await this.ensureBalance(userId);
     await this.prisma.leaveBalance.update({
       where: { swapperId: userId },
       data: { pendingDays: { increment: days } },
@@ -489,12 +490,32 @@ export class LeaveService {
   }
 
   private async ensureBalance(userId: string) {
+    // L'année est calculée en UTC et alignée sur l'année en cours : un solde
+    // créé pour une autre année ne doit pas faire croire que le swappeur n'a
+    // aucun droit, ce qui désactivait le bouton « Envoyer la demande ».
+    const year = new Date().getUTCFullYear();
     const existing = await this.prisma.leaveBalance.findUnique({
       where: { swapperId: userId },
     });
-    if (existing) return existing;
+    if (existing) {
+      // Solde d'une année précédente : on le remet à niveau pour l'année en
+      // cours plutôt que de laisser remainingDays à zéro.
+      if (existing.year !== year) {
+        return this.prisma.leaveBalance.update({
+          where: { swapperId: userId },
+          data: {
+            year,
+            usedDays: 0,
+            pendingDays: 0,
+            entitledDays: existing.entitledDays > 0 ? existing.entitledDays : 30,
+            syncedAt: new Date(),
+          },
+        });
+      }
+      return existing;
+    }
     return this.prisma.leaveBalance.create({
-      data: { swapperId: userId, year: new Date().getFullYear() },
+      data: { swapperId: userId, year, entitledDays: 30 },
     });
   }
 
