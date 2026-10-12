@@ -26,3 +26,32 @@ Uswap-V6.1/
 # Archives de distribution
 *.zip
 
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+!.env.sample
+id_rsa
+id_rsa.*
+
+# Dependencies and generated files
+node_modules/
+dist/
+build/
+coverage/
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Local backups and archives
+backups/
+*.rar
+
+# Local personal images
+me--.jpeg
