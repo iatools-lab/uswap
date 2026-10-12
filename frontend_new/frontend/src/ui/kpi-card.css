@@ -1,0 +1,130 @@
+.tremor-kpi {
+  --kpi-accent: #143c8c;
+  --kpi-soft: #edf3ff;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 132px;
+  padding: 16px;
+  border: 1px solid #dfe6f0;
+  border-top: 3px solid var(--kpi-accent);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 36, 75, 0.045);
+  color: #17233d;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.tremor-kpi--blue {
+  --kpi-accent: #2d6cdf;
+  --kpi-soft: #edf4ff;
+}
+.tremor-kpi--green {
+  --kpi-accent: #168250;
+  --kpi-soft: #eaf8f1;
+}
+.tremor-kpi--amber {
+  --kpi-accent: #d48600;
+  --kpi-soft: #fff5df;
+}
+.tremor-kpi--red {
+  --kpi-accent: #d44238;
+  --kpi-soft: #fff0ee;
+}
+.tremor-kpi--neutral {
+  --kpi-accent: #7c899c;
+  --kpi-soft: #f1f4f8;
+}
+
+.tremor-kpi__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.tremor-kpi__label {
+  color: #6c7890;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+.tremor-kpi__icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--kpi-soft);
+  color: var(--kpi-accent);
+}
+.tremor-kpi__icon svg {
+  width: 17px;
+  height: 17px;
+}
+.tremor-kpi__value {
+  margin-top: 8px;
+  color: #102868;
+  font-size: clamp(22px, 2.2vw, 30px);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+.tremor-kpi__value small {
+  color: #7b879a;
+  font-size: 0.48em;
+  font-weight: 500;
+}
+.tremor-kpi__detail,
+.tremor-kpi__hint {
+  color: #69778e;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.tremor-kpi__detail {
+  margin-top: 5px;
+}
+.tremor-kpi__hint {
+  margin-top: 7px;
+}
+.tremor-kpi__progress {
+  height: 6px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e9eef6;
+}
+.tremor-kpi__progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--kpi-accent);
+  transition: width 220ms ease;
+}
+.tremor-kpi--compact {
+  min-height: 104px;
+  padding: 13px 14px;
+}
+.tremor-kpi--compact .tremor-kpi__value {
+  font-size: 23px;
+}
+
+button > .tremor-kpi,
+a > .tremor-kpi {
+  height: 100%;
+}
+
+@media (max-width: 640px) {
+  .tremor-kpi {
+    min-height: 108px;
+    padding: 13px;
+  }
+  .tremor-kpi__value {
+    font-size: 23px;
+  }
+}
