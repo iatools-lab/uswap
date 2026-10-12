@@ -1,0 +1,988 @@
+// Schema uSwap — derive du contrat consomme par frontend_new.
+//
+// Chaque modele correspond exactement a une collection de la maquette serveur
+// du frontend (`src/api/mock/types.ts`), afin que la reponse de l'API soit
+// interchangeable avec les donnees fictives, sans adaptation cote client.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  SUPERVISOR
+  SWAPPER
+}
+
+enum InvitationStatus {
+  NOT_SENT
+  SENT
+  EXPIRED
+  ACTIVATED
+  FAILED
+}
+
+enum AttendanceStatus {
+  EXPECTED
+  PRESENT
+  LATE
+  CLOSED
+  ABSENT
+  JUSTIFIED
+}
+
+enum PlanningStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum AbsenceOrigin {
+  DECLARATION
+  AUTOMATIC_ABSENCE
+  APPROVED_LEAVE
+}
+
+enum AbsenceStatus {
+  OPEN
+  COVERED
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  FAMILY
+  UNPAID
+  OTHER
+}
+
+enum LeaveRequestStatus {
+  DRAFT
+  QUEUED
+  SYNCING
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  SYNC_FAILED
+}
+
+enum SyncOperationStatus {
+  QUEUED
+  PROCESSING
+  SYNCED
+  FAILED
+  REVIEW_REQUIRED
+}
+
+enum SyncAction {
+  CREATE
+  UPDATE
+  CANCEL
+  REFRESH
+}
+
+enum IncidentStatus {
+  REPORTED
+  TO_REVIEW
+  ACKNOWLEDGED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentCategory {
+  ATTENDANCE
+  HEALTH
+  SAFETY
+  BEHAVIOR
+  SCHEDULING
+  OTHER
+}
+
+enum IncidentActionType {
+  CREATED
+  QUALIFIED
+  ASSIGNED
+  COMMENT
+  RESOLVED
+  CLOSED
+}
+
+enum ChangeType {
+  REPLACEMENT
+  PERMUTATION
+  REASSIGNMENT
+}
+
+enum ReportFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ReportFormat {
+  XLSX
+  CSV
+}
+
+enum ReportScope {
+  NETWORK
+  STATION
+}
+
+enum ImportRowStatus {
+  READY
+  IGNORED
+  REJECTED
+  CREATED
+}
+
+enum NotificationChannel {
+  INTERNAL
+  EMAIL
+  PUSH
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum TokenPurpose {
+  ACTIVATION
+  PASSWORD_RESET
+}
+
+// ---------------------------------------------------------------------------
+// Stations et comptes
+// ---------------------------------------------------------------------------
+
+model Station {
+  id           String  @id @default(uuid())
+  name         String  @unique
+  address      String?
+  city         String?
+  latitude     Float?
+  longitude    Float?
+  location     String?
+  timezone     String  @default("Africa/Douala")
+  contactName  String?
+  contactPhone String?
+  isActive     Boolean @default(true)
+
+  // Regles operationnelles de la station (US 2038, 2042).
+  latenessToleranceMinutes     Int     @default(5)
+  geofenceRadiusMeters         Int     @default(150)
+  enforceMinRest               Boolean @default(true)
+  minRestHours                 Float   @default(8)
+  weeklyHoursLimit             Float   @default(48)
+  blockPublishingWithVacancies Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users            User[]
+  templates        ShiftTemplate[]
+  occurrences      Occurrence[]
+  incidents        Incident[]
+  changes          ShiftChange[]
+  scheduledReports ScheduledReport[]
+
+  @@map("stations")
+}
+
+model User {
+  id                  String           @id @default(uuid())
+  fullName            String
+  email               String           @unique
+  passwordHash        String
+  role                Role
+  phoneNumber         String?
+  address             String?
+  stationId           String?
+  isActive            Boolean          @default(false)
+  disabledAt          DateTime?
+  invitationStatus    InvitationStatus @default(NOT_SENT)
+  invitationSentAt    DateTime?
+  invitationExpiresAt DateTime?
+  passwordChangedAt   DateTime?
+  lockedUntil         DateTime?
+  // Conserve le mot de passe choisi lors d'une creation directe activee.
+  acceptedTerms       Boolean          @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  station                Station?                @relation(fields: [stationId], references: [id], onDelete: SetNull)
+  auditEntries           AccountAudit[]
+  occurrences            Occurrence[]            @relation("OccurrenceSwapper")
+  attendance             Attendance[]
+  absences               Absence[]
+  leaves                 Leave[]
+  leaveBalance           LeaveBalance?
+  leaveSyncOperations    LeaveSyncOperation[]
+  incidentsReported      Incident[]              @relation("IncidentReporter")
+  incidentsAffected      Incident[]              @relation("IncidentAffected")
+  incidentsAssigned      Incident[]              @relation("IncidentAssignee")
+  incidentActions        IncidentAction[]
+  notifications          Notification[]
+  notificationDelivery   NotificationDelivery[]
+  notificationPreference NotificationPreference?
+  offlineOperations      OfflineOperation[]
+  pushSubscriptions      PushSubscription[]
+  scheduledReports       ScheduledReport[]
+  planningNotices        PlanningNotice[]
+  invitationTokens       InvitationToken[]
+  refreshTokens          RefreshToken[]
+  loginAttempts          LoginAttempt[]
+  initiatedChanges       ShiftChange[]
+  auditLogs              AuditLog[]
+  assignments            OccurrenceAssignment[]  @relation("AssignmentUser")
+  assignmentsAuthored    OccurrenceAssignment[]  @relation("AssignmentAuthor")
+  supervisedOccurrences  Occurrence[]            @relation("OccurrenceSupervisor")
+  planningRevisions      PlanningRevision[]
+
+  @@index([role])
+  @@index([stationId])
+  @@map("users")
+}
+
+/// Journal d'audit d'un compte (serialise dans `MockUser.audit`).
+model AccountAudit {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  actorId   String?
+  message   String?
+  before    String   @default("{}")
+  after     String   @default("{}")
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("account_audit")
+}
+
+/// Jeton d'activation / reinitialisation. Stocke le hachage, jamais le clair.
+model InvitationToken {
+  id        String       @id @default(uuid())
+  token     String       @unique
+  tokenHash String       @unique
+  userId    String
+  purpose   TokenPurpose @default(ACTIVATION)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("invitation_tokens")
+}
+
+/// Session serveur : le refresh token tourne a chaque renouvellement.
+model RefreshToken {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique
+  userId     String
+  userAgent  String?
+  ipAddress  String?
+  expiresAt  DateTime
+  lastUsedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+/// Tentatives de connexion : anti-brute-force persistant.
+model LoginAttempt {
+  id          String   @id @default(uuid())
+  userId      String
+  attemptedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, attemptedAt])
+  @@map("login_attempts")
+}
+
+// ---------------------------------------------------------------------------
+// Modeles de shift et plannings
+// ---------------------------------------------------------------------------
+
+model ShiftTemplate {
+  id              String   @id @default(uuid())
+  stationId       String
+  label           String
+  startTime       String // "HH:MM" local station
+  endTime         String // "HH:MM" local station, peut franchir minuit
+  breakStart      String?
+  breakEnd        String?
+  breakMinutes    Int      @default(0)
+  durationMinutes Int
+  isActive        Boolean  @default(true)
+  revision        Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  station     Station                @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  versions    ShiftTemplateVersion[]
+  occurrences Occurrence[]
+
+  @@unique([stationId, startTime, endTime])
+  @@index([stationId])
+  @@map("shift_templates")
+}
+
+/// Historique versionne d'un modele (`MockTemplate.versions`).
+model ShiftTemplateVersion {
+  id              String   @id @default(uuid())
+  templateId      String
+  revision        Int
+  label           String
+  startTime       String
+  endTime         String
+  breakStart      String?
+  breakEnd        String?
+  breakMinutes    Int
+  durationMinutes Int
+  isActive        Boolean
+  createdAt       DateTime @default(now())
+
+  template ShiftTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, revision])
+  @@map("shift_template_versions")
+}
+
+model Planning {
+  id             String         @id @default(uuid())
+  name           String
+  stationIds     String[]       @default([])
+  periodStart    DateTime
+  periodEnd      DateTime
+  status         PlanningStatus @default(DRAFT)
+  revision       Int            @default(1)
+  conflictPolicy String         @default("BLOCK")
+  publishedAt    DateTime?
+  publishedById  String?
+  createdById    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  occurrences Occurrence[]
+  notices     PlanningNotice[]
+  vacancies   PlanningVacancy[]
+  revisions   PlanningRevision[]
+
+  @@index([status, periodStart])
+  @@map("plannings")
+}
+
+/// Version successive d'un planning : permet de revenir sur un historique.
+model PlanningRevision {
+  id         String   @id @default(uuid())
+  planningId String
+  revision   Int
+  action     String
+  actorId    String?
+  snapshot   Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  planning Planning @relation(fields: [planningId], references: [id], onDelete: Cascade)
+  actor    User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([planningId, revision])
+  @@map("planning_revisions")
+}
+
+/// Poste non pourvu : suivi explicite pour la couverture et la publication.
+model PlanningVacancy {
+  id           String   @id @default(uuid())
+  planningId   String
+  occurrenceId String?
+  stationId    String
+  day          String
+  startTime    DateTime
+  endTime      DateTime
+  missing      Int      @default(1)
+  createdAt    DateTime @default(now())
+
+  planning Planning @relation(fields: [planningId], references: [id], onDelete: Cascade)
+
+  @@index([planningId])
+  @@map("planning_vacancies")
+}
+
+/// Poste genere : horaires et pause figes au moment de la generation (RM-13).
+model Occurrence {
+  id              String   @id @default(uuid())
+  planningId      String
+  stationId       String
+  templateId      String?
+  shiftTemplateId String?
+  label           String
+  shiftLabel      String?
+  day             String
+  breakStart      String?
+  breakEnd        String?
+  breakMinutes    Int      @default(0)
+  requiredStaff   Int      @default(1)
+  notes           String?
+  revision        Int      @default(1)
+  status          String   @default("PLANNED")
+  swapperId       String?
+  supervisorId    String?
+  startTime       DateTime
+  endTime         DateTime
+  createdAt       DateTime @default(now())
+
+  planning    Planning               @relation(fields: [planningId], references: [id], onDelete: Cascade)
+  station     Station                @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  template    ShiftTemplate?         @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  swapper     User?                  @relation("OccurrenceSwapper", fields: [swapperId], references: [id], onDelete: SetNull)
+  supervisor  User?                  @relation("OccurrenceSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+  assignments OccurrenceAssignment[]
+  attendance  Attendance?
+  absences    Absence[]
+  changes     ShiftChange[]
+
+  @@index([planningId])
+  @@index([stationId, startTime])
+  @@index([swapperId, startTime])
+  @@index([day])
+  @@map("occurrences")
+}
+
+/// Affectation nominative d'un agent a un poste (plusieurs par poste).
+model OccurrenceAssignment {
+  id           String    @id @default(uuid())
+  occurrenceId String
+  userId       String
+  assignedById String?
+  lockedAt     DateTime?
+  lockedById   String?
+  createdAt    DateTime  @default(now())
+
+  occurrence Occurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+  user       User       @relation("AssignmentUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy User?      @relation("AssignmentAuthor", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([occurrenceId, userId])
+  @@index([userId])
+  @@map("occurrence_assignments")
+}
+
+/// Avis de publication lu par un utilisateur (US planning).
+model PlanningNotice {
+  id         String    @id @default(uuid())
+  userId     String
+  planningId String
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planning Planning @relation(fields: [planningId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, planningId])
+  @@map("planning_notices")
+}
+
+// ---------------------------------------------------------------------------
+// Pointages et absences
+// ---------------------------------------------------------------------------
+
+model Attendance {
+  id           String           @id @default(uuid())
+  shiftId      String           @unique
+  swapperId    String
+  status       AttendanceStatus @default(EXPECTED)
+  checkedInAt  DateTime?
+  checkedOutAt DateTime?
+  isLate       Boolean          @default(false)
+  justified    Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  occurrence  Occurrence             @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  swapper     User                   @relation(fields: [swapperId], references: [id], onDelete: Cascade)
+  corrections AttendanceCorrection[]
+
+  @@index([swapperId])
+  @@map("attendance")
+}
+
+/// Trace de correction d'un pointage (US 2045).
+model AttendanceCorrection {
+  id           String   @id @default(uuid())
+  attendanceId String
+  reason       String
+  attachmentId String?
+  authorId     String
+  authorName   String
+  before       String   @default("{}")
+  after        String   @default("{}")
+  createdAt    DateTime @default(now())
+
+  attendance Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+
+  @@index([attendanceId, createdAt])
+  @@map("attendance_corrections")
+}
+
+model Absence {
+  id           String        @id @default(uuid())
+  shiftId      String
+  swapperId    String
+  reason       String
+  attachmentId String?
+  clientRef    String?       @unique
+  reportedAt   DateTime      @default(now())
+  origin       AbsenceOrigin
+  status       AbsenceStatus @default(OPEN)
+  coveredBy    String?
+  createdAt    DateTime      @default(now())
+
+  occurrence Occurrence @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  swapper    User       @relation(fields: [swapperId], references: [id], onDelete: Cascade)
+
+  @@index([swapperId])
+  @@index([status])
+  @@map("absences")
+}
+
+// ---------------------------------------------------------------------------
+// Conges
+// ---------------------------------------------------------------------------
+
+model Leave {
+  id             String             @id @default(uuid())
+  swapperId      String
+  startTime      DateTime
+  endTime        DateTime
+  type           LeaveType          @default(OTHER)
+  status         LeaveRequestStatus @default(PENDING)
+  reason         String
+  attachmentId   String?
+  externalId     String?
+  clientRef      String             @unique
+  submittedAt    DateTime?
+  decidedAt      DateTime?
+  decidedById    String?
+  decisionReason String?
+  cancellable    Boolean            @default(true)
+  editable       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  swapper    User                 @relation(fields: [swapperId], references: [id], onDelete: Cascade)
+  operations LeaveSyncOperation[]
+
+  @@index([swapperId, startTime])
+  @@index([status])
+  @@map("leaves")
+}
+
+model LeaveBalance {
+  id            String   @id @default(uuid())
+  swapperId     String   @unique
+  year          Int
+  entitledDays  Float    @default(24)
+  usedDays      Float    @default(0)
+  pendingDays   Float    @default(0)
+  remainingDays Float    @default(24)
+  syncedAt      DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  swapper User @relation(fields: [swapperId], references: [id], onDelete: Cascade)
+
+  @@map("leave_balances")
+}
+
+/// File d'integration RH externe (RM-15) : rejouable et idempotente.
+model LeaveSyncOperation {
+  id             String              @id @default(uuid())
+  leaveId        String
+  userId         String
+  action         SyncAction
+  status         SyncOperationStatus @default(QUEUED)
+  idempotencyKey String              @unique
+  attempts       Int                 @default(0)
+  queuedAt       DateTime            @default(now())
+  lastAttemptAt  DateTime?
+  nextAttemptAt  DateTime?
+  completedAt    DateTime?
+  lastError      String?
+  createdAt      DateTime            @default(now())
+
+  leave Leave @relation(fields: [leaveId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@map("leave_sync_operations")
+}
+
+// ---------------------------------------------------------------------------
+// Incidents
+// ---------------------------------------------------------------------------
+
+model Incident {
+  id                String           @id @default(uuid())
+  stationId         String
+  affectedSwapperId String
+  reporterId        String
+  assigneeId        String?
+  category          IncidentCategory @default(OTHER)
+  severity          IncidentSeverity @default(MEDIUM)
+  status            IncidentStatus   @default(REPORTED)
+  title             String
+  description       String
+  attachmentIds     String           @default("[]")
+  occurredAt        DateTime
+  resolvedAt        DateTime?
+  closedAt          DateTime?
+  resolution        String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  station         Station          @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  affectedSwapper User             @relation("IncidentAffected", fields: [affectedSwapperId], references: [id], onDelete: Cascade)
+  reporter        User             @relation("IncidentReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  assignee        User?            @relation("IncidentAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  actions         IncidentAction[]
+
+  @@index([stationId, status])
+  @@map("incidents")
+}
+
+model IncidentAction {
+  id         String             @id @default(uuid())
+  incidentId String
+  authorId   String
+  type       IncidentActionType
+  fromStatus IncidentStatus?
+  toStatus   IncidentStatus
+  comment    String
+  createdAt  DateTime           @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt])
+  @@map("incident_actions")
+}
+
+// ---------------------------------------------------------------------------
+// Changements d'affectation
+// ---------------------------------------------------------------------------
+
+model ShiftChange {
+  id           String     @id @default(uuid())
+  shiftId      String
+  type         ChangeType
+  initiatorId  String
+  initiator    String
+  stationId    String
+  station      String
+  outSwapper   String?
+  inSwapper    String?
+  outSwapperId String?
+  inSwapperId  String?
+  before       String     @default("{}")
+  after        String     @default("{}")
+  reason       String?
+  createdAt    DateTime   @default(now())
+
+  occurrence  Occurrence @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  initiatedBy User       @relation(fields: [initiatorId], references: [id], onDelete: Cascade)
+  stationRef  Station    @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([stationId])
+  @@map("shift_changes")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (in-app, e-mail, push)
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  kind      String
+  title     String
+  body      String
+  targetId  String?
+  targetUrl String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user     User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  delivery NotificationDelivery[]
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+/// Journal de livraison par canal : rend visible ce qui a ete envoye et quand.
+model NotificationDelivery {
+  id             String                     @id @default(uuid())
+  notificationId String
+  userId         String
+  channel        NotificationChannel
+  status         NotificationDeliveryStatus @default(PENDING)
+  recipient      String?
+  error          String?
+  attemptedAt    DateTime                   @default(now())
+  sentAt         DateTime?
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([notificationId, channel])
+  @@index([status])
+  @@map("notification_deliveries")
+}
+
+model NotificationPreference {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  internalEnabled   Boolean  @default(true)
+  emailEnabled      Boolean  @default(true)
+  pushEnabled       Boolean  @default(false)
+  digestEnabled     Boolean  @default(false)
+  quietHoursEnabled Boolean  @default(false)
+  quietHoursStart   String?
+  quietHoursEnd     String?
+  retentionDays     Int      @default(90)
+  categories        String   @default("{}")
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+// ---------------------------------------------------------------------------
+// Rapports programmes, imports, fichiers, reglages
+// ---------------------------------------------------------------------------
+
+model ScheduledReport {
+  id         String          @id @default(uuid())
+  ownerId    String
+  name       String
+  frequency  ReportFrequency
+  format     ReportFormat    @default(XLSX)
+  scope      ReportScope     @default(NETWORK)
+  stationId  String?
+  recipients String          @default("[]")
+  sections   String          @default("[]")
+  isActive   Boolean         @default(true)
+  nextRunAt  DateTime
+  lastRunAt  DateTime?
+  createdAt  DateTime        @default(now())
+
+  owner   User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  station Station?    @relation(fields: [stationId], references: [id], onDelete: SetNull)
+  runs    ReportRun[]
+
+  @@index([nextRunAt])
+  @@map("scheduled_reports")
+}
+
+model ReportRun {
+  id           String       @id @default(uuid())
+  reportId     String
+  status       String
+  format       ReportFormat
+  generatedAt  DateTime     @default(now())
+  sentAt       DateTime?
+  errorMessage String?
+
+  report ScheduledReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, generatedAt])
+  @@map("report_runs")
+}
+
+/// Lot d'import de comptes analyse puis confirme (US import).
+model ImportBatch {
+  id        String   @id @default(uuid())
+  actorId   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  rows ImportRow[]
+
+  @@index([expiresAt])
+  @@map("import_batches")
+}
+
+model ImportRow {
+  id          String          @id @default(uuid())
+  batchId     String
+  line        Int
+  fullName    String
+  email       String
+  role        String
+  stationId   String?
+  stationName String
+  status      ImportRowStatus
+  reason      String          @default("")
+
+  batch ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+  @@map("import_rows")
+}
+
+/// Piece jointe : le contenu accompagne la ligne pour rester simple a sauver.
+model Attachment {
+  id         String   @id @default(uuid())
+  name       String
+  size       Int
+  type       String
+  storageKey String
+  content    Bytes
+  ownerId    String?
+  createdAt  DateTime @default(now())
+
+  @@map("attachments")
+}
+
+model GlobalSettings {
+  id                        String   @id @default("global")
+  sessionMinutes            Int      @default(60)
+  invitationValidityHours   Int      @default(48)
+  maxAttachmentMb           Int      @default(5)
+  notificationRetentionDays Int      @default(90)
+  supportEmail              String
+  webhookSecretHash         String?
+  revision                  Int      @default(1)
+  updatedById               String?
+  updatedAt                 DateTime @updatedAt
+
+  @@map("global_settings")
+}
+
+model SettingsRevision {
+  id        String   @id @default(uuid())
+  revision  Int
+  actorId   String
+  before    String   @default("{}")
+  after     String   @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([revision])
+  @@map("settings_revisions")
+}
+
+/// Mutation hors connexion rejouee par le client (journal serveur idempotent).
+model OfflineOperation {
+  id             String              @id @default(uuid())
+  userId         String
+  kind           String
+  method         String
+  path           String
+  payload        String              @default("{}")
+  idempotencyKey String              @unique
+  status         SyncOperationStatus @default(QUEUED)
+  attempts       Int                 @default(0)
+  nextAttemptAt  DateTime?
+  lastError      String?
+  createdAt      DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("offline_operations")
+}
+
+/// Marqueur d'automatisation : une absence automatique n'est creee qu'une fois.
+model AutomatedAbsence {
+  shiftId    String   @id
+  detectedAt DateTime @default(now())
+  reason     String
+
+  @@map("automated_absences")
+}
+
+/// Journal des e-mails sortants : utile en recette et en production.
+model EmailLog {
+  id        String                     @id @default(uuid())
+  to        String
+  subject   String
+  template  String
+  status    NotificationDeliveryStatus @default(PENDING)
+  error     String?
+  createdAt DateTime                   @default(now())
+  sentAt    DateTime?
+
+  @@index([createdAt])
+  @@map("email_logs")
+}
+
+/// Journal d'audit transversal : qui a fait quoi, quand, sur quel objet.
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  action     String
+  targetType String
+  targetId   String
+  stationId  String?
+  metadata   Json     @default("{}")
+  message    String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
+
+/// Cles d'idempotence : une requete rejouee renvoie la meme reponse.
+model IdempotencyKey {
+  id        String    @id @default(uuid())
+  key       String    @unique
+  scope     String
+  response  Json      @default("{}")
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  @@index([scope])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
