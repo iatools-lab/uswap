@@ -1,7 +1,8 @@
+import { translate } from "../../app/i18n";
 import { useState, useMemo, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Building2, Search, X, MapPin } from "../../ui/icons";
-import { CaretDownIcon } from "@phosphor-icons/react";
+import { CaretDownIcon } from "../../ui/icons";
 import "./station-picker.css";
 
 interface Station {
@@ -36,9 +37,10 @@ export function StationPicker({
 
   const filteredStations = useMemo(() => {
     if (!query) return stations;
-    return stations.filter((s) =>
-      s.name.toLowerCase().includes(query.toLowerCase()) ||
-      (s.city && s.city.toLowerCase().includes(query.toLowerCase()))
+    return stations.filter(
+      (s) =>
+        s.name.toLowerCase().includes(query.toLowerCase()) ||
+        (s.city && s.city.toLowerCase().includes(query.toLowerCase())),
     );
   }, [stations, query]);
 
@@ -94,13 +96,24 @@ export function StationPicker({
       aria-modal="true"
       aria-labelledby={titleId}
     >
-      <div ref={panelRef} className="station-picker-panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={panelRef}
+        className="station-picker-panel"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <div>
-            <h2 id={titleId} className="station-picker-title">Choisir une station</h2>
-            <p className="modal-subtitle">Sélectionnez la station d'affectation</p>
+            <h2 id={titleId} className="station-picker-title">
+              {translate("Choisir une station")}</h2>
+            <p className="modal-subtitle">
+              {translate("Sélectionnez la station d'affectation")}</p>
           </div>
-          <button type="button" className="modal-close" onClick={() => setIsOpen(false)} aria-label="Fermer la liste des stations">
+          <button
+            type="button"
+            className="modal-close"
+            onClick={() => setIsOpen(false)}
+            aria-label={translate("Fermer la liste des stations")}
+          >
             <X size={18} />
           </button>
         </div>
@@ -110,7 +123,7 @@ export function StationPicker({
             <Search size={16} className="station-picker-search-icon" />
             <input
               autoFocus
-              placeholder="Rechercher par nom ou ville..."
+              placeholder={translate("Rechercher par nom ou ville...")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -124,9 +137,10 @@ export function StationPicker({
               className={`station-picker-option is-none${value === "" ? " is-selected" : ""}`}
               onClick={() => handleSelect("")}
             >
-              <span className={`station-picker-option-none-label${value === "" ? " is-selected" : ""}`}>
-                Aucune station (Optionnel)
-              </span>
+              <span
+                className={`station-picker-option-none-label${value === "" ? " is-selected" : ""}`}
+              >
+                {translate("Aucune station (Optionnel)")}</span>
             </button>
           )}
 
@@ -141,7 +155,8 @@ export function StationPicker({
               {(station.city || station.address) && (
                 <span className="station-picker-location">
                   <MapPin size={12} />
-                  {station.city ? `${station.city} ` : ""}{station.address ? `- ${station.address}` : ""}
+                  {station.city ? `${station.city} ` : ""}
+                  {station.address ? `- ${station.address}` : ""}
                 </span>
               )}
             </button>
@@ -149,8 +164,7 @@ export function StationPicker({
 
           {filteredStations.length === 0 && (
             <div className="station-picker-empty">
-              Aucune station ne correspond à "{query}"
-            </div>
+              {translate("Aucune station ne correspond à \"")}{query}{translate("\"")}</div>
           )}
         </div>
       </div>
@@ -167,7 +181,9 @@ export function StationPicker({
         aria-haspopup="dialog"
         aria-expanded={isOpen}
       >
-        <span className={`station-picker-trigger-label${selectedStation ? " has-value" : ""}`}>
+        <span
+          className={`station-picker-trigger-label${selectedStation ? " has-value" : ""}`}
+        >
           <Building2 size={16} />
           <span className="station-picker-trigger-name">
             {selectedStation ? selectedStation.name : placeholder}
@@ -176,7 +192,9 @@ export function StationPicker({
         <CaretDownIcon size={14} className="station-picker-caret" />
       </button>
 
-      {isOpen && typeof document !== "undefined" && createPortal(modalContent, document.body)}
+      {isOpen &&
+        typeof document !== "undefined" &&
+        createPortal(modalContent, document.body)}
     </>
   );
 }

@@ -1,3 +1,5 @@
+import { currentLocale } from "../../app/i18n";
+import { translate } from "../../app/i18n";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
   ClockIcon,
@@ -5,7 +7,7 @@ import {
   KeyIcon,
   PaperclipIcon,
   ShieldCheckIcon,
-} from "@phosphor-icons/react";
+} from "../../ui/icons";
 import { api } from "../../api/auth-api";
 import { notify } from "../../ui/Toast";
 import "../../styles/global-settings.css";
@@ -77,15 +79,13 @@ export function GlobalSettingsPage() {
     <form className="global-settings" onSubmit={save}>
       <section className="global-settings__intro">
         <div>
-          <span>Configuration de la plateforme</span>
-          <h2>Règles communes à tous les espaces</h2>
+          <span>{translate("Configuration de la plateforme")}</span>
+          <h2>{translate("Règles communes à tous les espaces")}</h2>
           <p>
-            Les règles propres aux stations restent configurées depuis la fiche
-            de chaque station.
-          </p>
+            {translate("Les règles propres aux stations restent configurées depuis la fiche de chaque station.")}</p>
         </div>
         <span className="global-settings__revision">
-          Révision {form.revision}
+          {translate("Révision")}{" "}{form.revision}
         </span>
       </section>
       {error && (
@@ -96,11 +96,11 @@ export function GlobalSettingsPage() {
       <div className="global-settings__grid">
         <SettingCard
           icon={<ClockIcon />}
-          title="Session et invitations"
-          description="Durées appliquées à l’authentification et aux liens d’activation."
+          title={translate("Session et invitations")}
+          description={translate("Durées appliquées à l’authentification et aux liens d’activation.")}
         >
           <NumberField
-            label="Durée d’une session"
+            label={translate("Durée d’une session")}
             suffix="minutes"
             min={15}
             max={720}
@@ -108,7 +108,7 @@ export function GlobalSettingsPage() {
             onChange={(value) => set("sessionMinutes", value)}
           />
           <NumberField
-            label="Validité d’une invitation"
+            label={translate("Validité d’une invitation")}
             suffix="heures"
             min={1}
             max={168}
@@ -118,11 +118,11 @@ export function GlobalSettingsPage() {
         </SettingCard>
         <SettingCard
           icon={<PaperclipIcon />}
-          title="Fichiers et conservation"
-          description="Limites communes pour les justificatifs et le centre de notifications."
+          title={translate("Fichiers et conservation")}
+          description={translate("Limites communes pour les justificatifs et le centre de notifications.")}
         >
           <NumberField
-            label="Taille maximale d’un fichier"
+            label={translate("Taille maximale d’un fichier")}
             suffix="Mo"
             min={1}
             max={25}
@@ -130,7 +130,7 @@ export function GlobalSettingsPage() {
             onChange={(value) => set("maxAttachmentMb", value)}
           />
           <NumberField
-            label="Conservation des notifications"
+            label={translate("Conservation des notifications")}
             suffix="jours"
             min={7}
             max={365}
@@ -140,12 +140,11 @@ export function GlobalSettingsPage() {
         </SettingCard>
         <SettingCard
           icon={<ShieldCheckIcon />}
-          title="Support et intégrations"
-          description="Coordonnées techniques utilisées par les messages de la plateforme."
+          title={translate("Support et intégrations")}
+          description={translate("Coordonnées techniques utilisées par les messages de la plateforme.")}
         >
           <label>
-            Adresse de support
-            <input
+            {translate("Adresse de support")}<input
               type="email"
               required
               value={form.supportEmail}
@@ -153,7 +152,7 @@ export function GlobalSettingsPage() {
             />
           </label>
           <label>
-            Secret webhook{" "}
+            {translate("Secret webhook")}{" "}
             <small>
               {form.webhookSecretConfigured
                 ? "Un secret est déjà enregistré. Laissez vide pour le conserver."
@@ -178,10 +177,10 @@ export function GlobalSettingsPage() {
       </div>
       <footer className="global-settings__footer">
         <div>
-          <strong>Historique des modifications</strong>
+          <strong>{translate("Historique des modifications")}</strong>
           <span>
             {history.length
-              ? `Dernière mise à jour le ${new Date(history[0].createdAt).toLocaleString("fr-FR")}`
+              ? `Dernière mise à jour le ${new Date(history[0].createdAt).toLocaleString(currentLocale())}`
               : "Aucune modification enregistrée"}
           </span>
         </div>
@@ -192,12 +191,12 @@ export function GlobalSettingsPage() {
       </footer>
       {history.length > 0 && (
         <section className="global-settings__history">
-          <h3>Versions récentes</h3>
+          <h3>{translate("Versions récentes")}</h3>
           {history.map((item) => (
             <div key={item.id}>
-              <span>Révision {item.revision}</span>
-              <time>{new Date(item.createdAt).toLocaleString("fr-FR")}</time>
-              <small>Administrateur</small>
+              <span>{translate("Révision")}{" "}{item.revision}</span>
+              <time>{new Date(item.createdAt).toLocaleString(currentLocale())}</time>
+              <small>{translate("Administrateur")}</small>
             </div>
           ))}
         </section>

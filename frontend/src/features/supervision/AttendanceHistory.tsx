@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/auth-api";
 import { LoaderCircle, Search } from "../../ui/icons";
@@ -172,24 +173,24 @@ export function AttendanceHistory({
   const columns: ResponsiveColumn<MonitorRow>[] = [
     {
       key: "swapper",
-      header: "Swappeur",
+      header: translate("Swappeur"),
       primary: true,
       render: (row) => (
         <span className="ops-person">
           <strong>{row.swapper.fullName}</strong>
-          {row.template && <small>{row.template}</small>}
+          {row.template && <small>{translate(row.template)}</small>}
         </span>
       ),
     },
-    { key: "station", header: "Station", render: (row) => row.station.name },
+    { key: "station", header: translate("Station"), render: (row) => row.station.name },
     {
       key: "planned",
-      header: "Shift prévu",
+      header: translate("Shift prévu"),
       render: (row) => formatDateTime(row.startTime, row.station.timezone),
     },
     {
       key: "checkin",
-      header: "Prise de service",
+      header: translate("Prise de service"),
       render: (row) =>
         row.checkedInAt
           ? formatDateTime(row.checkedInAt, row.station.timezone)
@@ -197,7 +198,7 @@ export function AttendanceHistory({
     },
     {
       key: "checkout",
-      header: "Fin de service",
+      header: translate("Fin de service"),
       render: (row) =>
         row.checkedOutAt
           ? formatDateTime(row.checkedOutAt, row.station.timezone)
@@ -205,12 +206,12 @@ export function AttendanceHistory({
     },
     {
       key: "status",
-      header: "Statut",
+      header: translate("Statut"),
       render: (row) => (
         <span
           className={`attendance-status attendance-status--${row.status.toLowerCase()}`}
         >
-          {STATUS_LABEL[row.status]}
+          {translate(STATUS_LABEL[row.status])}
         </span>
       ),
     },
@@ -218,7 +219,7 @@ export function AttendanceHistory({
       ? [
           {
             key: "action",
-            header: "Action",
+            header: translate("Action"),
             className: "responsive-data-card__action",
             render: (row: MonitorRow) => (
               <button
@@ -226,8 +227,7 @@ export function AttendanceHistory({
                 className="admin-button secondary small"
                 onClick={() => onCorrect(row)}
               >
-                Corriger
-              </button>
+                {translate("Corriger")}</button>
             ),
           },
         ]
@@ -238,14 +238,12 @@ export function AttendanceHistory({
     <section className="admin-card attendance-history">
       <div className="admin-card-heading">
         <div>
-          <h2>Historique complet des pointages</h2>
+          <h2>{translate("Historique complet des pointages")}</h2>
           <p className="operations-hint">
-            Tous les shifts commencés, avec les prises, fins de service et
-            statuts constatés.
-          </p>
+            {translate("Tous les shifts commencés, avec les prises, fins de service et statuts constatés.")}</p>
         </div>
         <span className="admin-badge">
-          {visibleRows.length} résultat{visibleRows.length === 1 ? "" : "s"}
+          {visibleRows.length} {" "}{translate("résultat")}{visibleRows.length === 1 ? "" : "s"}
         </span>
       </div>
 
@@ -255,40 +253,38 @@ export function AttendanceHistory({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Swappeur, station ou shift…"
-            aria-label="Rechercher dans l’historique"
+            placeholder={translate("Swappeur, station ou shift…")}
+            aria-label={translate("Rechercher dans l’historique")}
           />
         </label>
         <Select
           value={stationId}
           size="sm"
-          ariaLabel="Filtrer par station"
+          ariaLabel={translate("Filtrer par station")}
           onChange={(value) => setStationId(String(value))}
           options={[
-            { value: "ALL", label: "Toutes les stations" },
+            { value: "ALL", label: translate("Toutes les stations") },
             ...stations.map((item) => ({ value: item.id, label: item.name })),
           ]}
         />
         <Select
           value={status}
           size="sm"
-          ariaLabel="Filtrer par statut"
+          ariaLabel={translate("Filtrer par statut")}
           onChange={(value) =>
             setStatus(String(value) as MonitorRow["status"] | "ALL")
           }
-          options={STATUS_FILTERS}
+          options={STATUS_FILTERS.map((filter) => ({ ...filter, label: translate(filter.label) }))}
         />
         <label className="attendance-history-date">
-          Du
-          <input
+          {translate("Du")}<input
             type="date"
             value={from}
             onChange={(event) => setFrom(event.target.value)}
           />
         </label>
         <label className="attendance-history-date">
-          Au
-          <input
+          {translate("Au")}<input
             type="date"
             value={to}
             onChange={(event) => setTo(event.target.value)}
@@ -298,19 +294,18 @@ export function AttendanceHistory({
 
       {error ? (
         <div className="admin-empty" role="alert">
-          <h3>Historique indisponible</h3>
+          <h3>{translate("Historique indisponible")}</h3>
           <p>{error}</p>
         </div>
       ) : !records ? (
         <div className="admin-loading" role="status">
-          <LoaderCircle className="spin" /> Chargement de l’historique…
-        </div>
+          <LoaderCircle className="spin" /> {" "}{translate("Chargement de l’historique…")}</div>
       ) : visibleRows.length ? (
         <ResponsiveDataTable
           rows={visibleRows}
           columns={columns}
           rowKey={(row) => row.shiftId}
-          ariaLabel="Historique complet des pointages"
+          ariaLabel={translate("Historique complet des pointages")}
           className="ops-table"
         />
       ) : (
@@ -320,7 +315,7 @@ export function AttendanceHistory({
               ? "Aucun pointage ne correspond aux filtres"
               : "Aucun pointage enregistré"}
           </h3>
-          <p>Modifiez les filtres ou consultez les autres périodes.</p>
+          <p>{translate("Modifiez les filtres ou consultez les autres périodes.")}</p>
         </div>
       )}
     </section>

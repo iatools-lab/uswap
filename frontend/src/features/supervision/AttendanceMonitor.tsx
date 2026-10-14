@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/auth-api";
@@ -83,7 +84,10 @@ export function AttendanceMonitor({
     const now = Date.now();
     return data.rows.filter((row) => {
       // Le suivi direct reste centré sur les postes encore en cours ou à venir.
-      if (!row.swapper?.id || (!targetShiftId && Date.parse(row.endTime) <= now))
+      if (
+        !row.swapper?.id ||
+        (!targetShiftId && Date.parse(row.endTime) <= now)
+      )
         return false;
       if (targetShiftId && row.shiftId !== targetShiftId) return false;
       if (stationId !== "ALL" && row.station.id !== stationId) return false;
@@ -105,29 +109,29 @@ export function AttendanceMonitor({
   const columns: ResponsiveColumn<MonitorRow>[] = [
     {
       key: "swapper",
-      header: "Swappeur",
+      header: translate("Swappeur"),
       primary: true,
       render: (row: MonitorRow) => (
         <span className="ops-person">
           <strong>{row.swapper.fullName}</strong>
-          {row.template && <small>{row.template}</small>}
+          {row.template && <small>{translate(row.template)}</small>}
         </span>
       ),
     },
     {
       key: "station",
-      header: "Station",
+      header: translate("Station"),
       render: (row: MonitorRow) => row.station.name,
     },
     {
       key: "planned",
-      header: "Shift prévu",
+      header: translate("Shift prévu"),
       render: (row: MonitorRow) =>
         formatDateTime(row.startTime, row.station.timezone),
     },
     {
       key: "checkin",
-      header: "Début",
+      header: translate("Début"),
       render: (row: MonitorRow) =>
         row.checkedInAt
           ? formatDateTime(row.checkedInAt, row.station.timezone)
@@ -135,7 +139,7 @@ export function AttendanceMonitor({
     },
     {
       key: "checkout",
-      header: "Fin",
+      header: translate("Fin"),
       render: (row: MonitorRow) =>
         row.checkedOutAt
           ? formatDateTime(row.checkedOutAt, row.station.timezone)
@@ -143,10 +147,10 @@ export function AttendanceMonitor({
     },
     {
       key: "status",
-      header: "État",
+      header: translate("État"),
       render: (row: MonitorRow) => (
         <span className={`attendance-status ${STATUS_CLASS[row.status]}`}>
-          {STATUS_LABEL[row.status]}
+          {translate(STATUS_LABEL[row.status])}
         </span>
       ),
     },
@@ -154,7 +158,7 @@ export function AttendanceMonitor({
       ? [
           {
             key: "action",
-            header: "Action",
+            header: translate("Action"),
             className: "responsive-data-card__action",
             render: (row: MonitorRow) => (
               <button
@@ -162,8 +166,7 @@ export function AttendanceMonitor({
                 className="admin-button secondary small"
                 onClick={() => onCorrect(row)}
               >
-                Corriger
-              </button>
+                {translate("Corriger")}</button>
             ),
           },
         ]
@@ -173,11 +176,10 @@ export function AttendanceMonitor({
   if (error) {
     return (
       <section className="admin-card admin-empty" role="alert">
-        <h2>Suivi indisponible</h2>
+        <h2>{translate("Suivi indisponible")}</h2>
         <p>{error}</p>
         <button className="admin-button" onClick={() => void load()}>
-          Réessayer
-        </button>
+          {translate("Réessayer")}</button>
       </section>
     );
   }
@@ -185,8 +187,7 @@ export function AttendanceMonitor({
   if (!data) {
     return (
       <div className="admin-loading" role="status">
-        <LoaderCircle className="spin" /> Chargement du suivi…
-      </div>
+        <LoaderCircle className="spin" /> {" "}{translate("Chargement du suivi…")}</div>
     );
   }
 
@@ -199,10 +200,10 @@ export function AttendanceMonitor({
     <div className="operations-stack" style={{ paddingBottom: "24px" }}>
       <div className="premium-list-header">
         <div>
-          <span className="premium-eyebrow">POINTAGES DU JOUR</span>
-          <h2>Suivi des pointages</h2>
+          <span className="premium-eyebrow">{translate("POINTAGES DU JOUR")}</span>
+          <h2>{translate("Suivi des pointages")}</h2>
           <p>
-            Shifts en cours et à venir · Actualisé à{" "}
+            {translate("Shifts en cours et à venir · Actualisé à")}{" "}
             {formatDateTime(data.generatedAt)}
           </p>
         </div>
@@ -225,14 +226,13 @@ export function AttendanceMonitor({
 
       {targetShiftId && (
         <div className="attendance-target-notice" role="status">
-          <span>Pointage concerné par la notification</span>
+          <span>{translate("Pointage concerné par la notification")}</span>
           <button
             type="button"
             className="text-button"
             onClick={() => navigate(location.pathname, { replace: true })}
           >
-            Voir tout le suivi
-          </button>
+            {translate("Voir tout le suivi")}</button>
         </div>
       )}
 
@@ -242,17 +242,17 @@ export function AttendanceMonitor({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Rechercher un swappeur, un shift…"
+            placeholder={translate("Rechercher un swappeur, un shift…")}
           />
         </label>
         <Select
           size="sm"
           value={stationId}
-          ariaLabel="Filtrer les pointages par station"
+          ariaLabel={translate("Filtrer les pointages par station")}
           width="210px"
           onChange={(value) => setStationId(String(value))}
           options={[
-            { value: "ALL", label: "Toutes les stations" },
+            { value: "ALL", label: translate("Toutes les stations") },
             ...stations.map((station) => ({
               value: station.id,
               label: station.name,
@@ -261,7 +261,7 @@ export function AttendanceMonitor({
         />
       </div>
 
-      <div className="attendance-status-filters" aria-label="Filtrer par état">
+      <div className="attendance-status-filters" aria-label={translate("Filtrer par état")}>
         {FILTERS.map((f) => (
           <button
             key={f.key}
@@ -269,7 +269,7 @@ export function AttendanceMonitor({
             className={`admin-button secondary ${filter === f.key ? "active-filter" : ""}`}
             onClick={() => setFilter(f.key)}
           >
-            {f.label} <span>{getCount(f.key)}</span>
+            {translate(f.label)} <span>{getCount(f.key)}</span>
           </button>
         ))}
       </div>
@@ -303,7 +303,7 @@ export function AttendanceMonitor({
             rows={rows}
             columns={columns}
             rowKey={(row: MonitorRow) => row.shiftId}
-            ariaLabel="Suivi des présences"
+            ariaLabel={translate("Suivi des présences")}
             className="ops-table"
           />
         </div>

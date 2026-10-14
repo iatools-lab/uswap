@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../../api/auth-api";
 import { useSession } from "../../app/session";
+import {translate,  useI18n } from "../../app/i18n";
 import { notify } from "../../ui/Toast";
 import { LoaderCircle, RefreshCw } from "../../ui/icons";
+import { KpiCard } from "../../ui/KpiCard";
 import { formatDateTime } from "../../features/supervision/format";
 import "./dashboard.css";
 
@@ -69,6 +71,7 @@ const REFRESH_MS = 60_000;
 
 export function DashboardPage() {
   const { session, onAccessLost } = useSession();
+  const { t, locale } = useI18n();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<TimelineRow["status"] | "ALL">("ALL");
@@ -100,10 +103,10 @@ export function DashboardPage() {
   if (error)
     return (
       <section className="admin-card admin-empty" role="alert">
-        <h2>Tableau de bord indisponible</h2>
+        <h2>{t("Tableau de bord indisponible")}</h2>
         <p>{error}</p>
         <button className="admin-button" onClick={() => void load()}>
-          <RefreshCw size={16} /> Réessayer
+          <RefreshCw size={16} /> {t("Réessayer")}
         </button>
       </section>
     );
@@ -112,7 +115,7 @@ export function DashboardPage() {
     return (
       <div className="admin-loading" role="status">
         <LoaderCircle className="spin" />
-        Chargement du tableau de bord…
+        {t("Chargement du tableau de bord…")}
       </div>
     );
 
@@ -133,17 +136,16 @@ export function DashboardPage() {
 
   async function refreshNow() {
     await load();
-    notify("Tableau de bord actualisé.");
+    notify(t("Tableau de bord actualisé."));
   }
 
   return (
     <div className="dashboard">
       <div className="dashboard-head">
         <div>
-          <h1>Tableau de bord</h1>
+          <h1>{t("Tableau de bord")}</h1>
           <p className="operations-hint">
-            Journée opérationnelle du {stats.businessDate} (heure de Douala).
-          </p>
+            {t("Journée opérationnelle du")} {stats.businessDate} {" "}{translate("(")}{t("heure de Douala")}{translate(").")}</p>
         </div>
         <button
           type="button"
@@ -151,111 +153,111 @@ export function DashboardPage() {
           onClick={() => void refreshNow()}
         >
           <RefreshCw size={16} />
-          Actualiser
+          {t("Actualiser")}
         </button>
       </div>
 
-      <section className="dashboard-grid" aria-label="Indicateurs du jour">
-        <article className="dashboard-card">
-          <span className="dashboard-card__label">Shifts du jour</span>
-          <strong className="dashboard-card__value">{today.total}</strong>
-          <span className="dashboard-card__hint">
-            {coverage}% de couverture
-          </span>
-        </article>
-
-        <article className="dashboard-card dashboard-card--present">
-          <span className="dashboard-card__label">Présents</span>
-          <strong className="dashboard-card__value">{today.present}</strong>
-          <span className="dashboard-card__hint">À l’heure</span>
-        </article>
-
-        <article className="dashboard-card dashboard-card--late">
-          <span className="dashboard-card__label">En retard</span>
-          <strong className="dashboard-card__value">{today.late}</strong>
-          <span className="dashboard-card__hint">
-            Au-delà de la tolérance
-          </span>
-        </article>
-
-        <article className="dashboard-card dashboard-card--absent">
-          <span className="dashboard-card__label">Absents</span>
-          <strong className="dashboard-card__value">{today.absent}</strong>
-          <span className="dashboard-card__hint">Sans pointage valide</span>
-        </article>
-
-        <article className="dashboard-card dashboard-card--closed">
-          <span className="dashboard-card__label">Shifts terminés</span>
-          <strong className="dashboard-card__value">{today.completed}</strong>
-          <span className="dashboard-card__hint">Pointage clôturé</span>
-        </article>
-
-        <article
-          className={`dashboard-card ${
-            replacements.open > 0 ? "dashboard-card--alert" : ""
-          }`}
-        >
-          <span className="dashboard-card__label">
-            Demandes de remplacement
-          </span>
-          <strong className="dashboard-card__value">{replacements.open}</strong>
-          <span className="dashboard-card__hint">
-            {replacements.assignedToday} traitée(s) aujourd’hui
-          </span>
-        </article>
+      <section className="dashboard-grid" aria-label={t("Indicateurs du jour")}>
+        <KpiCard
+          compact
+          label={t("Shifts du jour")}
+          value={today.total}
+          detail={`${coverage}% ${t("de couverture")}`}
+          progress={coverage}
+          tone={coverage === 100 ? "green" : "amber"}
+        />
+        <KpiCard
+          compact
+          label={t("Présents")}
+          value={today.present}
+          detail={t("À l’heure")}
+          tone="green"
+        />
+        <KpiCard
+          compact
+          label={t("En retard")}
+          value={today.late}
+          detail={t("Au-delà de la tolérance")}
+          tone={today.late > 0 ? "amber" : "neutral"}
+        />
+        <KpiCard
+          compact
+          label={t("Absents")}
+          value={today.absent}
+          detail={t("Sans pointage valide")}
+          tone={today.absent > 0 ? "red" : "neutral"}
+        />
+        <KpiCard
+          compact
+          label={t("Shifts terminés")}
+          value={today.completed}
+          detail={t("Pointage clôturé")}
+          tone="blue"
+        />
+        <KpiCard
+          compact
+          label={t("Remplacements")}
+          value={replacements.open}
+          detail={`${replacements.assignedToday} ${replacements.assignedToday === 1 ? "traité aujourd’hui" : "traités aujourd’hui"}`}
+          tone={replacements.open > 0 ? "amber" : "neutral"}
+        />
       </section>
 
       <section className="dashboard-grid dashboard-grid--secondary">
-        <article className="dashboard-card">
-          <span className="dashboard-card__label">Attendus</span>
-          <strong className="dashboard-card__value">{today.expected}</strong>
-          <span className="dashboard-card__hint">
-            Shift en cours, pas encore pointé
-          </span>
-        </article>
-
-        <article
-          className={`dashboard-card ${
-            limitExceeded ? "dashboard-card--alert" : ""
-          }`}
-        >
-          <span className="dashboard-card__label">
-            Heures de la semaine
-          </span>
-          <strong className="dashboard-card__value">
-            {hours.weekly}h
-            <small> / {hours.weeklyLimit}h</small>
-          </strong>
-          <span className="dashboard-card__hint">
-            {limitExceeded
-              ? `Limite dépassée de ${(hours.weekly - hours.weeklyLimit).toFixed(1)}h`
-              : `${hours.remaining}h restantes`}
-          </span>
-        </article>
+        <KpiCard
+          compact
+          label={t("Attendus")}
+          value={today.expected}
+          detail={t("Shift en cours, sans pointage")}
+          tone={today.expected > 0 ? "amber" : "neutral"}
+        />
+        <KpiCard
+          compact
+          label={t("Heures de la semaine")}
+          value={
+            <>
+              {hours.weekly} {" "}{translate("h")}{" "}<small>{translate("/")}{" "}{hours.weeklyLimit} {" "}{translate("h")}</small>
+            </>
+          }
+          detail={
+            limitExceeded
+              ? `${t("Limite dépassée de")} ${(hours.weekly - hours.weeklyLimit).toFixed(1)} h`
+              : `${hours.remaining} ${t("h restantes")}`
+          }
+          progress={(hours.weekly / hours.weeklyLimit) * 100}
+          tone={limitExceeded ? "red" : "blue"}
+        />
 
         {workforce && (
-          <article className="dashboard-card">
-            <span className="dashboard-card__label">Swappeurs</span>
-            <strong className="dashboard-card__value">
-              {workforce.activeSwappers}
-              <small> / {workforce.totalSwappers}</small>
-            </strong>
-            <span className="dashboard-card__hint">
-              Comptes actifs sur le périmètre
-            </span>
-          </article>
+          <KpiCard
+            compact
+            label={t("Swappeurs")}
+            value={
+              <>
+                {workforce.activeSwappers}
+                <small> {" "}{translate("/")}{" "}{workforce.totalSwappers}</small>
+              </>
+            }
+            detail={t("Comptes actifs sur le périmètre")}
+            progress={
+              (workforce.activeSwappers /
+                Math.max(1, workforce.totalSwappers)) *
+              100
+            }
+            tone="navy"
+          />
         )}
       </section>
 
       <section className="admin-card">
         <div className="admin-card-heading">
           <div>
-            <h2>Shifts du jour</h2>
+            <h2>{t("Shifts du jour")}</h2>
             <p className="operations-hint">
-              Vue chronologique des affectations publiées.
+              {t("Vue chronologique des affectations publiées.")}
             </p>
           </div>
-          <div className="dashboard-filters" role="group" aria-label="Filtrer">
+          <div className="dashboard-filters" role="group" aria-label={t("Filtrer")}>
             {(
               [
                 "ALL",
@@ -274,7 +276,7 @@ export function DashboardPage() {
                 }`}
                 onClick={() => setFilter(value)}
               >
-                {value === "ALL" ? "Tous" : STATUS_LABEL[value]}
+                {value === "ALL" ? t("Tous") : t(STATUS_LABEL[value])}
               </button>
             ))}
           </div>
@@ -282,11 +284,11 @@ export function DashboardPage() {
 
         {!rows.length ? (
           <div className="admin-empty">
-            <h3>Aucun shift sur cette période</h3>
+            <h3>{t("Aucun shift sur cette période")}</h3>
             <p>
               {today.total === 0
-                ? "Aucune affectation publiée pour aujourd’hui."
-                : "Aucun shift ne correspond à ce filtre."}
+                ? t("Aucune affectation publiée pour aujourd’hui.")
+                : t("Aucun shift ne correspond à ce filtre.")}
             </p>
           </div>
         ) : (
@@ -294,33 +296,33 @@ export function DashboardPage() {
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>Horaire</th>
-                  <th>Swappeur</th>
-                  <th>Station</th>
-                  <th>Statut</th>
-                  <th>Pointage</th>
+                  <th>{t("Horaire")}</th>
+                  <th>{t("Swappeur")}</th>
+                  <th>{t("Station")}</th>
+                  <th>{t("Statut")}</th>
+                  <th>{t("Pointage")}</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.shiftId}>
                     <td>
-                      {formatDateTime(row.startTime, row.timezone)} →{" "}
-                      {formatDateTime(row.endTime, row.timezone)}
+                      {formatDateTime(row.startTime, row.timezone, locale)} {" "}{translate("→")}{" "}
+                      {formatDateTime(row.endTime, row.timezone, locale)}
                     </td>
                     <td>{row.swapper}</td>
                     <td>{row.station}</td>
                     <td>
                       <span className={STATUS_CLASS[row.status]}>
-                        {STATUS_LABEL[row.status]}
+                        {t(STATUS_LABEL[row.status])}
                       </span>
                     </td>
                     <td>
                       {row.checkedInAt
-                        ? `Entrée ${formatDateTime(row.checkedInAt, row.timezone)}`
+                        ? `${t("Entrée")} ${formatDateTime(row.checkedInAt, row.timezone, locale)}`
                         : "—"}
                       {row.checkedOutAt
-                        ? ` · Sortie ${formatDateTime(row.checkedOutAt, row.timezone)}`
+                        ? ` · ${t("Sortie")} ${formatDateTime(row.checkedOutAt, row.timezone, locale)}`
                         : ""}
                     </td>
                   </tr>
@@ -333,7 +335,7 @@ export function DashboardPage() {
 
       {session?.user.role === "SWAPPER" && (
         <p className="operations-hint">
-          Ces chiffres concernent vos propres shifts.
+          {t("Ces chiffres concernent vos propres shifts.")}
         </p>
       )}
     </div>

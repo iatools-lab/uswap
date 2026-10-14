@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { Clock3, LoaderCircle, LogOut } from "../../ui/icons";
 import { roles, type User } from "../../api/auth-api";
 import { timeGreeting } from "../../utils/greeting";
@@ -26,13 +27,11 @@ export function SessionHome({
     .toUpperCase();
   return (
     <div className="session-home">
-      <span className="section-eyebrow">MON ESPACE</span>
+      <span className="section-eyebrow">{translate("MON ESPACE")}</span>
       <h2>
-        {timeGreeting()}, {user.fullName.trim().split(/\s+/)[0]}.
-      </h2>
+        {timeGreeting()}{translate(",")}{" "}{user.fullName.trim().split(/\s+/)[0]}{translate(".")}</h2>
       <p className="form-description">
-        Retrouvez les informations de votre compte.
-      </p>
+        {translate("Retrouvez les informations de votre compte.")}</p>
       <div className="profile-card">
         <div className="profile-header">
           <span className="profile-avatar" aria-hidden="true">
@@ -42,18 +41,17 @@ export function SessionHome({
             <strong>{user.fullName}</strong>
             <span className="profile-status">
               <i />
-              Compte actif
-            </span>
+              {translate("Compte actif")}</span>
           </div>
         </div>
         <dl>
           <div>
-            <dt>Adresse e-mail</dt>
+            <dt>{translate("Adresse e-mail")}</dt>
             <dd>{user.email}</dd>
           </div>
           <div>
-            <dt>Rôle</dt>
-            <dd>{roles[user.role]}</dd>
+            <dt>{translate("Rôle")}</dt>
+            <dd>{translate(roles[user.role])}</dd>
           </div>
         </dl>
       </div>
@@ -61,10 +59,8 @@ export function SessionHome({
         <div className="session-warning" role="alert">
           <Clock3 size={18} />
           <div>
-            Votre session va expirer.
-            <button className="text-button" onClick={onExtend} disabled={busy}>
-              Prolonger ma session
-            </button>
+            {translate("Votre session va expirer.")}<button className="text-button" onClick={onExtend} disabled={busy}>
+              {translate("Prolonger ma session")}</button>
           </div>
         </div>
       )}
@@ -83,8 +79,7 @@ export function SessionHome({
         ) : (
           <LogOut size={18} />
         )}
-        Se déconnecter
-      </button>
+        {translate("Se déconnecter")}</button>
     </div>
   );
 }

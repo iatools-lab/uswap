@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { BellIcon } from '@phosphor-icons/react';
-import { api, rolePaths, type User } from '../../api/auth-api';
-import { interceptNav } from '../../app/spaNav';
+import { translate } from "../../app/i18n";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { BellIcon } from "../../ui/icons";
+import { api, rolePaths, type User } from "../../api/auth-api";
+import { interceptNav } from "../../app/spaNav";
 
 type Notice = {
   id: string;
@@ -18,8 +19,8 @@ export function PlanningInbox({ user }: { user: User }) {
     let active = true;
 
     const load = () => {
-      if (document.visibilityState === 'hidden') return;
-      api<Notice[]>('/plannings/notices')
+      if (document.visibilityState === "hidden") return;
+      api<Notice[]>("/plannings/notices")
         .then((rows) => {
           if (active) {
             setNotices(rows.filter((n) => !n.readAt));
@@ -31,18 +32,18 @@ export function PlanningInbox({ user }: { user: User }) {
     load();
 
     const timer = setInterval(load, 30000);
-    window.addEventListener('focus', load);
+    window.addEventListener("focus", load);
 
     return () => {
       active = false;
       clearInterval(timer);
-      window.removeEventListener('focus', load);
+      window.removeEventListener("focus", load);
     };
   }, [user.id, user.role]);
 
   if (!notices.length) return null;
 
-  const basePath = rolePaths[user.role] || '';
+  const basePath = rolePaths[user.role] || "";
   const targetUrl = `${basePath}/plannings?planning=${encodeURIComponent(notices[0].planningId)}`;
 
   return (
@@ -50,12 +51,11 @@ export function PlanningInbox({ user }: { user: User }) {
       className="planning-inbox"
       href={targetUrl}
       onClick={(event) => interceptNav(event, navigate, targetUrl)}
-      aria-label={`${notices.length} planning${notices.length > 1 ? 's' : ''} non lu${notices.length > 1 ? 's' : ''}`}
+      aria-label={`${notices.length} planning${notices.length === 1 ? "" : "s"} non lu${notices.length === 1 ? "" : "s"}`}
     >
       <BellIcon size={20} weight="regular" />
       <span>
-        {notices.length} planning{notices.length > 1 ? 's' : ''} à consulter
-      </span>
+        {notices.length} {" "}{translate("planning")}{notices.length === 1 ? "" : "s"} {" "}{translate("à consulter")}</span>
     </a>
   );
 }

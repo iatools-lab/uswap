@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { useState } from "react";
 import type { User } from "../../api/auth-api";
 import { AttendanceMonitor } from "./AttendanceMonitor";
@@ -17,31 +18,28 @@ export function SupervisionPanel({ user }: { user: User }) {
 
   return (
     <div className="supervision-stack">
-      <div className="supervision-tabs" role="tablist" aria-label="Pointages">
+      <div className="supervision-tabs" role="tablist" aria-label={translate("Pointages")}>
         <button
           type="button"
           role="tab"
           aria-selected={tab === "live"}
           onClick={() => setTab("live")}
         >
-          Suivi en direct
-        </button>
+          {translate("Suivi en direct")}</button>
         <button
           type="button"
           role="tab"
           aria-selected={tab === "history"}
           onClick={() => setTab("history")}
         >
-          Historique des pointages
-        </button>
+          {translate("Historique des pointages")}</button>
         <button
           type="button"
           role="tab"
           aria-selected={tab === "changes"}
           onClick={() => setTab("changes")}
         >
-          Changement d’affectation
-        </button>
+          {translate("Changement d’affectation")}</button>
       </div>
 
       {correctionRow && (

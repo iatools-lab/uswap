@@ -71,7 +71,11 @@ export async function mockRequest<T>(
     const pendingLeaveSyncAfter = db.leaveSyncOperations.filter((item) =>
       ["FAILED", "QUEUED"].includes(item.status),
     ).length;
-    if (method !== "GET" || db.automatedAbsences.length !== absencesBefore || pendingLeaveSyncAfter !== pendingLeaveSyncBefore)
+    if (
+      method !== "GET" ||
+      db.automatedAbsences.length !== absencesBefore ||
+      pendingLeaveSyncAfter !== pendingLeaveSyncBefore
+    )
       replaceDb(db);
     return result as T;
   }
@@ -95,8 +99,16 @@ export async function mockDownload(
     const sheet = XLSX.utils.aoa_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "Rapport");
-    const data = XLSX.write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
-    return { blob: new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), filename: "rapport-uswap.xlsx" };
+    const data = XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "array",
+    }) as ArrayBuffer;
+    return {
+      blob: new Blob([data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+      filename: "rapport-uswap.xlsx",
+    };
   }
   if (path === "/users/imports/template") {
     const sheet = XLSX.utils.json_to_sheet([

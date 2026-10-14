@@ -3,7 +3,13 @@ import { rolePaths, type Role } from "../api/auth-api";
 import { RouteFallback } from "./RouteFallback";
 import { useSession } from "./session";
 
-export function RequireAuth({ role, children }: { role: Role; children: React.ReactNode }) {
+export function RequireAuth({
+  role,
+  children,
+}: {
+  role: Role;
+  children: React.ReactNode;
+}) {
   const { session, checking } = useSession();
   if (checking) return <RouteFallback />;
   if (!session) return <Navigate to="/auth/login" replace />;

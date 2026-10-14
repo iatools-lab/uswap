@@ -1,5 +1,6 @@
+import { translate, useI18n } from "../app/i18n";
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircleIcon, InfoIcon, WarningCircleIcon, XIcon } from "@phosphor-icons/react";
+import { CheckCircleIcon, InfoIcon, WarningCircleIcon, XIcon } from "./icons";
 import "./ui.css";
 
 export type NotificationType = "success" | "error" | "info";
@@ -15,7 +16,9 @@ let nextToastId = 0;
 
 /** Émet une notification. API conservée à l'identique (événement global). */
 export function notify(message: string, type: NotificationType = "success") {
-  window.dispatchEvent(new CustomEvent("uswap-notification", { detail: { message, type } }));
+  window.dispatchEvent(
+    new CustomEvent("uswap-notification", { detail: { message, type } }),
+  );
 }
 
 /** Région de notifications unique de l'application (montée dans main.tsx). */
@@ -23,10 +26,13 @@ export function Notifications() {
   const [items, setItems] = useState<ToastItem[]>([]);
 
   const receive = useCallback((event: Event) => {
-    const detail = (event as CustomEvent<{ message: string; type: NotificationType }>).detail;
+    const detail = (
+      event as CustomEvent<{ message: string; type: NotificationType }>
+    ).detail;
     // Rétrocompatibilité si un simple string est passé
     const message = typeof detail === "string" ? detail : detail?.message;
-    const type = typeof detail === "string" ? "success" : detail?.type || "success";
+    const type =
+      typeof detail === "string" ? "success" : detail?.type || "success";
     if (!message) return;
 
     setItems((prev) => {
@@ -38,7 +44,11 @@ export function Notifications() {
 
   useEffect(() => {
     window.addEventListener("uswap-notification", receive as EventListener);
-    return () => window.removeEventListener("uswap-notification", receive as EventListener);
+    return () =>
+      window.removeEventListener(
+        "uswap-notification",
+        receive as EventListener,
+      );
   }, [receive]);
 
   const dismiss = useCallback((id: number) => {
@@ -56,7 +66,14 @@ export function Notifications() {
   );
 }
 
-function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: (id: number) => void }) {
+function Toast({
+  item,
+  onDismiss,
+}: {
+  item: ToastItem;
+  onDismiss: (id: number) => void;
+}) {
+  const { t } = useI18n();
   const [paused, setPaused] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const isError = item.type === "error";
@@ -92,13 +109,21 @@ function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: (id: number) =
           <CheckCircleIcon size={20} weight="fill" />
         )}
       </span>
-      <span className="ui-toast__message">{item.message}</span>
-      <button type="button" className="ui-toast__close" aria-label="Fermer la notification" onClick={close}>
+      <span className="ui-toast__message">{t(item.message)}</span>
+      <button
+        type="button"
+        className="ui-toast__close"
+        aria-label={translate("Fermer la notification")}
+        onClick={close}
+      >
         <XIcon size={16} />
       </button>
       <span
         className="ui-toast__progress"
-        style={{ animationDuration: `${TOAST_DURATION}ms`, animationPlayState: paused ? "paused" : "running" }}
+        style={{
+          animationDuration: `${TOAST_DURATION}ms`,
+          animationPlayState: paused ? "paused" : "running",
+        }}
         aria-hidden="true"
       />
     </div>

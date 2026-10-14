@@ -9,7 +9,8 @@ import {
 } from "../shared";
 import { MockHttpError, type MockRoute, type MockUser } from "../types";
 
-const asText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+const asText = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const ROLE_ALIASES: Record<string, MockUser["role"]> = {
@@ -33,7 +34,10 @@ function filteredMembers(db: MockUser[], query: URLSearchParams) {
   const status = asText(query.get("status")).toLowerCase();
   const stationId = asText(query.get("stationId"));
   return db.filter((user) => {
-    if (search && !`${user.fullName} ${user.email}`.toLowerCase().includes(search))
+    if (
+      search &&
+      !`${user.fullName} ${user.email}`.toLowerCase().includes(search)
+    )
       return false;
     if (role && user.role !== role) return false;
     if (status && memberStatusOf(user) !== status) return false;
@@ -62,7 +66,11 @@ export const userRoutes: MockRoute[] = [
       const role = asText(ctx.query.get("role")).toUpperCase();
       return ctx.db.users
         .filter((item) => (role ? item.role === role : true))
-        .map((item) => ({ ...serializeUser(ctx.db, item), isActive: item.isActive }));
+        .map((item) => ({
+          ...serializeUser(ctx.db, item),
+          isActive: item.isActive,
+          disabledAt: item.disabledAt,
+        }));
     },
   },
   {
@@ -71,16 +79,23 @@ export const userRoutes: MockRoute[] = [
     handler: (ctx) => {
       requireUser(ctx.db, ctx.user);
       const sort = asText(ctx.query.get("sort")) || "recent";
-      const sorted = [...filteredMembers(ctx.db.users, ctx.query)].sort((a, b) => {
-        if (sort === "name") return a.fullName.localeCompare(b.fullName, "fr");
-        if (sort === "role") return a.role.localeCompare(b.role);
-        if (sort === "oldest") return Date.parse(a.updatedAt) - Date.parse(b.updatedAt);
-        return Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
-      });
+      const sorted = [...filteredMembers(ctx.db.users, ctx.query)].sort(
+        (a, b) => {
+          if (sort === "name")
+            return a.fullName.localeCompare(b.fullName, "fr");
+          if (sort === "role") return a.role.localeCompare(b.role);
+          if (sort === "oldest")
+            return Date.parse(a.updatedAt) - Date.parse(b.updatedAt);
+          return Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
+        },
+      );
       const limit = Math.max(1, Number(ctx.query.get("limit")) || 8);
       const total = sorted.length;
       const totalPages = Math.max(1, Math.ceil(total / limit));
-      const page = Math.min(Math.max(1, Number(ctx.query.get("page")) || 1), totalPages);
+      const page = Math.min(
+        Math.max(1, Number(ctx.query.get("page")) || 1),
+        totalPages,
+      );
       const counts = {
         all: ctx.db.users.length,
         active: 0,
@@ -110,7 +125,9 @@ export const userRoutes: MockRoute[] = [
           fullName: user.fullName,
           email: user.email,
           role: user.role,
-          station: ctx.db.stations.find((item) => item.id === user.stationId)?.name ?? "—",
+          station:
+            ctx.db.stations.find((item) => item.id === user.stationId)?.name ??
+            "—",
           status: memberStatusOf(user),
           phoneNumber: user.phoneNumber ?? "—",
           address: user.address ?? "—",
@@ -124,14 +141,18 @@ export const userRoutes: MockRoute[] = [
     pattern: /^\/users\/imports\/preview$/,
     handler: async (ctx) => {
       requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
-      if (!ctx.file) throw new MockHttpError(400, "Choisissez un fichier CSV ou XLSX.");
+      if (!ctx.file)
+        throw new MockHttpError(400, "Choisissez un fichier CSV ou XLSX.");
       if (ctx.file.size > 2 * 1024 * 1024)
         throw new MockHttpError(413, "Le fichier dépasse la limite de 2 Mo.");
       const buffer = await ctx.file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      if (!sheet) throw new MockHttpError(400, "Le fichier ne contient aucune feuille.");
-      const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+      if (!sheet)
+        throw new MockHttpError(400, "Le fichier ne contient aucune feuille.");
+      const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+        defval: "",
+      });
       const seen = new Set<string>();
       const rows: ImportRow[] = raw.map((entry, index) => {
         const pick = (...keys: string[]) => {
@@ -144,10 +165,19 @@ export const userRoutes: MockRoute[] = [
           return "";
         };
         const fullName = pick("nom complet", "nom", "name", "fullname");
-        const email = pick("email", "e-mail", "adresse e-mail", "mail").toLowerCase();
+        const email = pick(
+          "email",
+          "e-mail",
+          "adresse e-mail",
+          "mail",
+        ).toLowerCase();
         const roleRaw = pick("rôle", "role");
         const role = ROLE_ALIASES[roleRaw.toLowerCase()] ?? "";
-        const stationRaw = pick("station", "station rattachée", "station rattachee");
+        const stationRaw = pick(
+          "station",
+          "station rattachée",
+          "station rattachee",
+        );
         const station = ctx.db.stations.find(
           (item) =>
             item.id.toLowerCase() === stationRaw.toLowerCase() ||
@@ -157,19 +187,85 @@ export const userRoutes: MockRoute[] = [
         const stationName = station?.name ?? stationRaw;
         const line = index + 2;
         if (!fullName || !email)
-          return { line, fullName, email, role: roleRaw, stationId, stationName, status: "REJECTED", reason: "Nom ou e-mail manquant." };
+          return {
+            line,
+            fullName,
+            email,
+            role: roleRaw,
+            stationId,
+            stationName,
+            status: "REJECTED",
+            reason: "Nom ou e-mail manquant.",
+          };
         if (!EMAIL_PATTERN.test(email))
-          return { line, fullName, email, role: roleRaw, stationId, stationName, status: "REJECTED", reason: "Adresse e-mail invalide." };
+          return {
+            line,
+            fullName,
+            email,
+            role: roleRaw,
+            stationId,
+            stationName,
+            status: "REJECTED",
+            reason: "Adresse e-mail invalide.",
+          };
         if (!role)
-          return { line, fullName, email, role: roleRaw, stationId, stationName, status: "REJECTED", reason: "Rôle non reconnu." };
+          return {
+            line,
+            fullName,
+            email,
+            role: roleRaw,
+            stationId,
+            stationName,
+            status: "REJECTED",
+            reason: "Rôle non reconnu.",
+          };
         if (role === "SWAPPER" && !stationRaw)
-          return { line, fullName, email, role, stationId: null, stationName: "", status: "REJECTED", reason: "Station obligatoire pour ce rôle." };
+          return {
+            line,
+            fullName,
+            email,
+            role,
+            stationId: null,
+            stationName: "",
+            status: "REJECTED",
+            reason: "Station obligatoire pour ce rôle.",
+          };
         if (role === "SWAPPER" && !station)
-          return { line, fullName, email, role, stationId: null, stationName, status: "REJECTED", reason: "Station inconnue." };
-        if (seen.has(email) || ctx.db.users.some((item) => item.email.toLowerCase() === email))
-          return { line, fullName, email, role, stationId, stationName, status: "IGNORED", reason: "Adresse déjà connue." };
+          return {
+            line,
+            fullName,
+            email,
+            role,
+            stationId: null,
+            stationName,
+            status: "REJECTED",
+            reason: "Station inconnue.",
+          };
+        if (
+          seen.has(email) ||
+          ctx.db.users.some((item) => item.email.toLowerCase() === email)
+        )
+          return {
+            line,
+            fullName,
+            email,
+            role,
+            stationId,
+            stationName,
+            status: "IGNORED",
+            reason: "Adresse déjà connue.",
+          };
         seen.add(email);
-        return { line, fullName, email, role, stationId, stationName, status: "READY", reason: "" };
+        return {
+          line,
+          fullName,
+          email,
+          role,
+          stationId,
+          stationName,
+          status: "READY",
+          reason: "",
+        };
       });
       const expiresAt = new Date(Date.now() + 30 * 60000).toISOString();
       const batchId = nextId("batch");
@@ -198,10 +294,16 @@ export const userRoutes: MockRoute[] = [
     pattern: /^\/users\/imports\/([^/]+)\/confirm$/,
     handler: (ctx) => {
       const admin = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
-      const batch = ctx.db.importBatches.find((item) => item.id === ctx.params[0]);
-      if (!batch) throw new MockHttpError(410, "Ce lot d'import est introuvable.");
+      const batch = ctx.db.importBatches.find(
+        (item) => item.id === ctx.params[0],
+      );
+      if (!batch)
+        throw new MockHttpError(410, "Ce lot d'import est introuvable.");
       if (Date.parse(batch.expiresAt) < Date.now())
-        throw new MockHttpError(410, "Ce lot d'import a expiré. Relancez l'analyse.");
+        throw new MockHttpError(
+          410,
+          "Ce lot d'import a expiré. Relancez l'analyse.",
+        );
       const now = new Date().toISOString();
       let created = 0;
       for (const row of batch.rows) {
@@ -220,7 +322,9 @@ export const userRoutes: MockRoute[] = [
           password: "uswap2026",
           invitationStatus: "SENT",
           invitationSentAt: now,
-          invitationExpiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+          invitationExpiresAt: new Date(
+            Date.now() + 7 * 86400000,
+          ).toISOString(),
           audit: [
             {
               id: nextId("aud"),
@@ -228,7 +332,12 @@ export const userRoutes: MockRoute[] = [
               actorId: admin.id,
               createdAt: now,
               before: {},
-              after: { fullName: row.fullName, email: row.email, role: row.role, stationId: row.stationId },
+              after: {
+                fullName: row.fullName,
+                email: row.email,
+                role: row.role,
+                stationId: row.stationId,
+              },
             },
           ],
         });
@@ -255,8 +364,13 @@ export const userRoutes: MockRoute[] = [
       const target = ctx.db.users.find((item) => item.id === ctx.params[0]);
       if (!target) throw new MockHttpError(404, "Compte introuvable.");
       const allowed =
-        ["ADMIN", "SUPERVISOR"].includes(viewer.role) || viewer.id === target.id;
-      if (!allowed) throw new MockHttpError(403, "Vous ne disposez pas des droits nécessaires.");
+        ["ADMIN", "SUPERVISOR"].includes(viewer.role) ||
+        viewer.id === target.id;
+      if (!allowed)
+        throw new MockHttpError(
+          403,
+          "Vous ne disposez pas des droits nécessaires.",
+        );
       return serializeDetail(ctx.db, target);
     },
   },
@@ -278,16 +392,29 @@ export const userRoutes: MockRoute[] = [
         if (!EMAIL_PATTERN.test(email))
           throw new MockHttpError(400, "Adresse e-mail invalide.");
         if (ctx.db.users.some((item) => item.email.toLowerCase() === email))
-          throw new MockHttpError(409, "Un autre compte utilise déjà cette adresse.");
+          throw new MockHttpError(
+            409,
+            "Un autre compte utilise déjà cette adresse.",
+          );
       }
-      const role = (asText(ctx.body.role).toUpperCase() || target.role) as MockUser["role"];
+      const role = (asText(ctx.body.role).toUpperCase() ||
+        target.role) as MockUser["role"];
       if (!["ADMIN", "SUPERVISOR", "SWAPPER"].includes(role))
         throw new MockHttpError(400, "Choisissez un rôle valide.");
       const stationId = asText(ctx.body.stationId) || null;
       if (role === "SWAPPER" && !stationId)
-        throw new MockHttpError(400, "Sélectionnez la station rattachée à ce collaborateur.");
-      if (stationId && !ctx.db.stations.some((station) => station.id === stationId))
-        throw new MockHttpError(400, "La station sélectionnée est introuvable.");
+        throw new MockHttpError(
+          400,
+          "Sélectionnez la station rattachée à ce collaborateur.",
+        );
+      if (
+        stationId &&
+        !ctx.db.stations.some((station) => station.id === stationId)
+      )
+        throw new MockHttpError(
+          400,
+          "La station sélectionnée est introuvable.",
+        );
       const before = {
         fullName: target.fullName,
         email: target.email,
@@ -301,8 +428,7 @@ export const userRoutes: MockRoute[] = [
       target.role = role;
       target.phoneNumber = asText(ctx.body.phoneNumber) || null;
       target.address = asText(ctx.body.address) || null;
-      target.stationId =
-        role === "SWAPPER" ? stationId : null;
+      target.stationId = role === "SWAPPER" ? stationId : null;
       target.updatedAt = new Date().toISOString();
       target.audit.unshift({
         id: nextId("aud"),
@@ -336,7 +462,10 @@ export const userRoutes: MockRoute[] = [
           "Le statut a changé entre-temps. Fermez ce menu puis rouvrez la liste.",
         );
       const enabled = ctx.body.enabled === true;
-      const before = { isActive: target.isActive, disabledAt: target.disabledAt };
+      const before = {
+        isActive: target.isActive,
+        disabledAt: target.disabledAt,
+      };
       target.isActive = enabled;
       target.disabledAt = enabled ? null : new Date().toISOString();
       if (enabled) target.invitationStatus = "ACTIVATED";
@@ -349,7 +478,8 @@ export const userRoutes: MockRoute[] = [
         before,
         after: { isActive: target.isActive, disabledAt: target.disabledAt },
       });
-      if (!enabled && ctx.db.sessionEmail === target.email) ctx.db.sessionEmail = null;
+      if (!enabled && ctx.db.sessionEmail === target.email)
+        ctx.db.sessionEmail = null;
       return { ok: true };
     },
   },
@@ -362,12 +492,17 @@ export const userRoutes: MockRoute[] = [
       if (!target) throw new MockHttpError(404, "Compte introuvable.");
       if (target.isActive)
         throw new MockHttpError(409, "Ce compte est déjà activé.");
-      const before = { isActive: target.isActive, invitationStatus: target.invitationStatus };
+      const before = {
+        isActive: target.isActive,
+        invitationStatus: target.invitationStatus,
+      };
       target.isActive = true;
       target.disabledAt = null;
       target.invitationStatus = "SENT";
       target.invitationSentAt = new Date().toISOString();
-      target.invitationExpiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
+      target.invitationExpiresAt = new Date(
+        Date.now() + 7 * 86400000,
+      ).toISOString();
       target.updatedAt = target.invitationSentAt;
       target.audit.unshift({
         id: nextId("aud"),

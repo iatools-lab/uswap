@@ -244,7 +244,7 @@ function decideLeave(
       decision === "APPROVED" ? "LEAVE_APPROVED" : "LEAVE_REJECTED",
       decision === "APPROVED" ? "Congé approuvé" : "Demande de congé refusée",
       decision === "APPROVED"
-        ? `Votre demande de ${dayTotal} jour${dayTotal > 1 ? "s" : ""} a été approuvée.`
+        ? `Votre demande de ${dayTotal} jour${dayTotal === 1 ? "" : "s"} a été approuvée.`
         : `Votre demande de congé a été refusée : ${reason}`,
       leave.id,
     );
@@ -316,7 +316,7 @@ export const leaveRoutes: MockRoute[] = [
           admin.id,
           "LEAVE_SUBMITTED",
           "Nouvelle demande de congé",
-          `${actor.fullName} · ${days} jour${days > 1 ? "s" : ""} demandé${days > 1 ? "s" : ""}.`,
+          `${actor.fullName} · ${days} jour${days === 1 ? "" : "s"} demandé${days === 1 ? "" : "s"}.`,
           created.id,
         );
       return view(db, created);
@@ -488,7 +488,7 @@ export const leaveRoutes: MockRoute[] = [
             ? "Congé approuvé"
             : "Demande de congé refusée",
           decision === "APPROVED"
-            ? `Votre demande de ${dayTotal} jour${dayTotal > 1 ? "s" : ""} a été approuvée.`
+            ? `Votre demande de ${dayTotal} jour${dayTotal === 1 ? "" : "s"} a été approuvée.`
             : `Votre demande de congé a été refusée : ${reason}`,
           leave.id,
         );

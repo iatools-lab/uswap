@@ -1,4 +1,5 @@
 import type { ReactNode, RefObject } from "react";
+import {translate,  LanguageSwitcher, useI18n } from "../app/i18n";
 
 type AppTopbarProps = {
   title: string;
@@ -13,20 +14,24 @@ export function AppTopbar({
   headingRef,
   actions,
 }: AppTopbarProps) {
+  const { t } = useI18n();
   return (
     <header className="admin-topbar">
       <div className="admin-heading-copy">
         <span className="admin-mobile-brand" aria-hidden="true">
-          uSwap<span>.</span>
+          {translate("uSwap")}<span>{translate(".")}</span>
         </span>
         <div className="admin-heading-text">
           <h1 ref={headingRef} tabIndex={-1} className="admin-breadcrumb">
-            {title}
+            {t(title)}
           </h1>
-          <p>{description}</p>
+          <p>{t(description)}</p>
         </div>
       </div>
-      <div className="admin-topbar__actions">{actions}</div>
+      <div className="admin-topbar__actions">
+        <LanguageSwitcher />
+        {actions}
+      </div>
     </header>
   );
 }

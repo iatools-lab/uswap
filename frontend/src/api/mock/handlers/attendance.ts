@@ -54,6 +54,8 @@ export const attendanceRoutes: MockRoute[] = [
               label: item.label,
               startTime: item.startTime,
               endTime: item.endTime,
+              breakStart: item.breakStart,
+              breakEnd: item.breakEnd,
               publishedAt:
                 ctx.db.plannings.find((pl) => pl.id === item.planningId)
                   ?.publishedAt ?? null,
@@ -64,7 +66,9 @@ export const attendanceRoutes: MockRoute[] = [
                 latitude: station.latitude,
                 longitude: station.longitude,
                 geofenceRadiusMeters: station.geofenceRadiusMeters,
-                latenessToleranceMinutes: station.latenessToleranceMinutes,
+                latenessToleranceMinutes:
+                  item.latenessToleranceOverrideMinutes ??
+                  station.latenessToleranceMinutes,
               },
               swapper: { fullName: user.fullName },
               attendance: record?.checkedInAt
@@ -104,6 +108,8 @@ export const attendanceRoutes: MockRoute[] = [
             label: item.label,
             startTime: item.startTime,
             endTime: item.endTime,
+            breakStart: item.breakStart,
+            breakEnd: item.breakEnd,
             publishedAt:
               ctx.db.plannings.find((pl) => pl.id === item.planningId)
                 ?.publishedAt ?? null,
@@ -114,7 +120,9 @@ export const attendanceRoutes: MockRoute[] = [
               latitude: target.latitude,
               longitude: target.longitude,
               geofenceRadiusMeters: target.geofenceRadiusMeters,
-              latenessToleranceMinutes: target.latenessToleranceMinutes,
+              latenessToleranceMinutes:
+                item.latenessToleranceOverrideMinutes ??
+                target.latenessToleranceMinutes,
             },
             swapper: { fullName: swapper?.fullName ?? "Poste vacant" },
             attendance: record?.checkedInAt
@@ -246,21 +254,22 @@ export const attendanceRoutes: MockRoute[] = [
           Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine)),
       );
       const radius = station.geofenceRadiusMeters;
-      if (!Number.isFinite(radius) || radius < 25)
+      if (!Number.isFinite(radius) || radius < 0)
         throw new MockHttpError(
           409,
           "Le périmètre de pointage de cette station est invalide. Contactez le superviseur.",
         );
       if (
-        !Number.isFinite(accuracyMeters) ||
-        accuracyMeters < 0 ||
-        accuracyMeters > radius
+        radius > 0 &&
+        (!Number.isFinite(accuracyMeters) ||
+          accuracyMeters < 0 ||
+          accuracyMeters > radius)
       )
         throw new MockHttpError(
           409,
           "Votre position manque de précision pour vérifier le périmètre. Réessayez avec le GPS activé.",
         );
-      if (distanceMeters + accuracyMeters > radius)
+      if (radius > 0 && distanceMeters + accuracyMeters > radius)
         throw new MockHttpError(
           403,
           `Pointage refusé : votre position est estimée à ${distanceMeters} m de ${station.name}; le périmètre autorisé est de ${radius} m et la précision GPS ne permet pas de confirmer que vous êtes dedans.`,
@@ -269,7 +278,9 @@ export const attendanceRoutes: MockRoute[] = [
       const start = Date.parse(occurrence.startTime);
       const end = Date.parse(occurrence.endTime);
       const record = recordOf(ctx, occurrence.id);
-      const tolerance = station.latenessToleranceMinutes;
+      const tolerance =
+        occurrence.latenessToleranceOverrideMinutes ??
+        station.latenessToleranceMinutes;
       if (kind === "CHECKIN") {
         if (ctx.now < start || ctx.now > end)
           throw new MockHttpError(
@@ -289,10 +300,12 @@ export const attendanceRoutes: MockRoute[] = [
           checkedInAt: isoFromMs(ctx.now),
           checkedOutAt: null,
           isLate: late,
+          toleranceMinutes: tolerance,
           justified: false,
           correction: null,
         };
-        ctx.db.attendance.push(created);
+        if (record) Object.assign(record, created);
+        else ctx.db.attendance.push(created);
         ctx.db.absences = ctx.db.absences.filter(
           (item) =>
             !(
@@ -387,7 +400,9 @@ export const attendanceRoutes: MockRoute[] = [
               id: station.id,
               name: station.name,
               timezone: station.timezone,
-              latenessToleranceMinutes: station.latenessToleranceMinutes,
+              latenessToleranceMinutes:
+                item.latenessToleranceOverrideMinutes ??
+                station.latenessToleranceMinutes,
             },
             swapper: swapper
               ? { id: swapper.id, fullName: swapper.fullName }
@@ -440,7 +455,9 @@ export const attendanceRoutes: MockRoute[] = [
               id: station.id,
               name: station.name,
               timezone: station.timezone,
-              latenessToleranceMinutes: station.latenessToleranceMinutes,
+              latenessToleranceMinutes:
+                item.latenessToleranceOverrideMinutes ??
+                station.latenessToleranceMinutes,
             },
             swapper: { id: swapper.id, fullName: swapper.fullName },
             shift: {
@@ -451,7 +468,9 @@ export const attendanceRoutes: MockRoute[] = [
                 id: station.id,
                 name: station.name,
                 timezone: station.timezone,
-                latenessToleranceMinutes: station.latenessToleranceMinutes,
+                latenessToleranceMinutes:
+                  item.latenessToleranceOverrideMinutes ??
+                  station.latenessToleranceMinutes,
               },
               swapper: { id: swapper.id, fullName: swapper.fullName },
             },
@@ -491,7 +510,10 @@ export const attendanceRoutes: MockRoute[] = [
             checkedOutAt: record?.checkedOutAt ?? null,
             isLate: record?.isLate ?? false,
             justified: status === "JUSTIFIED",
-            toleranceMinutes: station.latenessToleranceMinutes,
+            toleranceMinutes:
+              record?.toleranceMinutes ??
+              item.latenessToleranceOverrideMinutes ??
+              station.latenessToleranceMinutes,
           };
         });
       const summary = {

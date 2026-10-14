@@ -1,3 +1,4 @@
+import { translate } from "../app/i18n";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Check, X } from "./icons";
 import "./stepper.css";
@@ -77,7 +78,9 @@ export function StepperModal({
     document.addEventListener("keydown", onKeyDown);
     requestAnimationFrame(() => {
       modalRef.current
-        ?.querySelector<HTMLElement>("input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled)")
+        ?.querySelector<HTMLElement>(
+          "input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled)",
+        )
         ?.focus();
     });
 
@@ -129,18 +132,28 @@ export function StepperModal({
       aria-modal="true"
       aria-labelledby={titleId}
     >
-      <div ref={modalRef} className="stepper-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={modalRef}
+        className="stepper-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="stepper-header">
           <div className="stepper-header-title">
             {icon && <span className="stepper-header-icon">{icon}</span>}
             <h2 id={titleId}>{title}</h2>
           </div>
-          <button type="button" className="stepper-close-btn" onClick={requestClose} disabled={busy} aria-label="Fermer">
+          <button
+            type="button"
+            className="stepper-close-btn"
+            onClick={requestClose}
+            disabled={busy}
+            aria-label={translate("Fermer")}
+          >
             <X size={18} />
           </button>
         </div>
 
-        <div className="stepper-timeline" aria-label="Étapes de configuration">
+        <div className="stepper-timeline" aria-label={translate("Étapes de configuration")}>
           {steps.map((step, index) => {
             const isCompleted = index < currentStep;
             const isActive = index === currentStep;
@@ -158,7 +171,10 @@ export function StepperModal({
                   }
                 }}
                 onKeyDown={(event) => {
-                  if (isClickable && (event.key === "Enter" || event.key === " ")) {
+                  if (
+                    isClickable &&
+                    (event.key === "Enter" || event.key === " ")
+                  ) {
                     event.preventDefault();
                     setCurrentStep(index);
                   }
@@ -167,7 +183,7 @@ export function StepperModal({
                 <div className="stepper-pill-circle">
                   {isCompleted ? <Check size={13} /> : index + 1}
                 </div>
-                <span className="stepper-pill-label">{step.label}</span>
+                <span className="stepper-pill-label">{translate(step.label)}</span>
                 {index < steps.length - 1 && <span className="stepper-line" />}
               </div>
             );
@@ -178,9 +194,13 @@ export function StepperModal({
           <div className="stepper-step-content">{activeStep.content}</div>
 
           <div className="stepper-footer">
-            <button type="button" className="text-button cancel-btn" onClick={requestClose} disabled={busy}>
-              Annuler
-            </button>
+            <button
+              type="button"
+              className="text-button cancel-btn"
+              onClick={requestClose}
+              disabled={busy}
+            >
+              {translate("Annuler")}</button>
 
             <div className="stepper-footer-actions">
               {!isFirstStep && (
@@ -190,8 +210,7 @@ export function StepperModal({
                   onClick={handlePrev}
                   disabled={busy}
                 >
-                  Retour
-                </button>
+                  {translate("Retour")}</button>
               )}
 
               {!isLastStep ? (
@@ -202,8 +221,7 @@ export function StepperModal({
                   onClick={handleNext}
                   disabled={busy || !isCurrentStepValid}
                 >
-                  Suivant
-                </button>
+                  {translate("Suivant")}</button>
               ) : (
                 <button
                   key="submit-btn"

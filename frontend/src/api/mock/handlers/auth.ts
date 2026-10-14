@@ -12,7 +12,8 @@ import { MockHttpError, type MockRoute, type MockUser } from "../types";
 /** Jeton d'invitation attendu (64 caractères hexadécimaux, comme les vraies routes). */
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 
-const asText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+const asText = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
 
 export const authRoutes: MockRoute[] = [
   {
@@ -20,10 +21,16 @@ export const authRoutes: MockRoute[] = [
     pattern: /^\/auth\/login$/,
     handler: (ctx) => {
       const email = asText(ctx.body.email).toLowerCase();
-      const password = typeof ctx.body.password === "string" ? ctx.body.password : "";
-      const user = ctx.db.users.find((item) => item.email.toLowerCase() === email);
+      const password =
+        typeof ctx.body.password === "string" ? ctx.body.password : "";
+      const user = ctx.db.users.find(
+        (item) => item.email.toLowerCase() === email,
+      );
       if (!user || user.password !== password)
-        throw new MockHttpError(401, "Identifiants invalides ou session expirée.");
+        throw new MockHttpError(
+          401,
+          "Identifiants invalides ou session expirée.",
+        );
       if (user.disabledAt)
         throw new MockHttpError(
           403,
@@ -76,14 +83,18 @@ export const authRoutes: MockRoute[] = [
     pattern: /^\/auth\/(activate-account|reset-password)$/,
     handler: (ctx) => {
       const token = asText(ctx.body.token);
-      const password = typeof ctx.body.password === "string" ? ctx.body.password : "";
+      const password =
+        typeof ctx.body.password === "string" ? ctx.body.password : "";
       if (!TOKEN_PATTERN.test(token))
         throw new MockHttpError(
           400,
           "Ce lien est incomplet ou a expiré. Demandez-en un nouveau.",
         );
       if (password.length < 8)
-        throw new MockHttpError(400, "Le mot de passe doit contenir 8 caractères minimum.");
+        throw new MockHttpError(
+          400,
+          "Le mot de passe doit contenir 8 caractères minimum.",
+        );
       return { ok: true };
     },
   },
@@ -91,32 +102,51 @@ export const authRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/auth\/register$/,
     handler: (ctx) => {
-      const admin = requireRole(
-        requireUser(ctx.db, ctx.user),
-        ["ADMIN"],
-      );
+      const admin = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
       const fullName = asText(ctx.body.fullName);
       const email = asText(ctx.body.email).toLowerCase();
       const role = asText(ctx.body.role).toUpperCase() as MockUser["role"];
       const stationId = asText(ctx.body.stationId) || null;
       const phoneNumber = asText(ctx.body.phoneNumber) || null;
       const address = asText(ctx.body.address) || null;
-      const password = typeof ctx.body.password === "string" ? ctx.body.password : "";
+      const password =
+        typeof ctx.body.password === "string" ? ctx.body.password : "";
       const active = asText(ctx.body.accountStatus).toUpperCase() === "ACTIVE";
       if (!fullName || !email.includes("@"))
-        throw new MockHttpError(400, "Nom complet et adresse e-mail valides requis.");
+        throw new MockHttpError(
+          400,
+          "Nom complet et adresse e-mail valides requis.",
+        );
       if (!["ADMIN", "SUPERVISOR", "SWAPPER"].includes(role))
         throw new MockHttpError(400, "Choisissez un rôle valide.");
       if (role !== "SWAPPER" && stationId)
-        throw new MockHttpError(400, "Ce rôle ne se rattache pas à une station.");
+        throw new MockHttpError(
+          400,
+          "Ce rôle ne se rattache pas à une station.",
+        );
       if (role === "SWAPPER" && !stationId)
-        throw new MockHttpError(400, "Sélectionnez la station rattachée à ce collaborateur.");
-      if (stationId && !ctx.db.stations.some((station) => station.id === stationId))
-        throw new MockHttpError(400, "La station sélectionnée est introuvable.");
+        throw new MockHttpError(
+          400,
+          "Sélectionnez la station rattachée à ce collaborateur.",
+        );
+      if (
+        stationId &&
+        !ctx.db.stations.some((station) => station.id === stationId)
+      )
+        throw new MockHttpError(
+          400,
+          "La station sélectionnée est introuvable.",
+        );
       if (ctx.db.users.some((item) => item.email.toLowerCase() === email))
-        throw new MockHttpError(409, "Un compte utilise déjà cette adresse e-mail.");
+        throw new MockHttpError(
+          409,
+          "Un compte utilise déjà cette adresse e-mail.",
+        );
       if (active && password.length < 8)
-        throw new MockHttpError(400, "Le mot de passe doit contenir 8 caractères minimum.");
+        throw new MockHttpError(
+          400,
+          "Le mot de passe doit contenir 8 caractères minimum.",
+        );
       const now = new Date().toISOString();
       const created: MockUser = {
         id: nextId("us"),
@@ -132,7 +162,9 @@ export const authRoutes: MockRoute[] = [
         password: active ? password : DEMO_PASSWORD,
         invitationStatus: active ? "ACTIVATED" : "SENT",
         invitationSentAt: active ? null : now,
-        invitationExpiresAt: active ? null : new Date(Date.now() + 7 * 86400000).toISOString(),
+        invitationExpiresAt: active
+          ? null
+          : new Date(Date.now() + 7 * 86400000).toISOString(),
         audit: [
           {
             id: nextId("aud"),
@@ -164,7 +196,9 @@ export const authRoutes: MockRoute[] = [
         throw new MockHttpError(409, "Ce compte est déjà activé.");
       target.invitationStatus = "SENT";
       target.invitationSentAt = new Date().toISOString();
-      target.invitationExpiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
+      target.invitationExpiresAt = new Date(
+        Date.now() + 7 * 86400000,
+      ).toISOString();
       target.updatedAt = target.invitationSentAt;
       return { ok: true };
     },

@@ -121,10 +121,7 @@ function serialize(body: unknown): {
   };
 }
 
-function triggerDownload(
-  blob: Blob,
-  filename: string,
-) {
+function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
 
@@ -149,32 +146,19 @@ export async function api<T>(
   const { plain, file } = serialize(body);
 
   if (usingMock) {
-    await delay(
-      MOCK_LATENCY_MS +
-        Math.round(Math.random() * 120),
-    );
+    await delay(MOCK_LATENCY_MS + Math.round(Math.random() * 120));
 
     try {
-      return await mockRequest<T>(
-        verb,
-        path,
-        plain,
-        file,
-      );
+      return await mockRequest<T>(verb, path, plain, file);
     } catch (error) {
       if (error instanceof MockHttpError) {
         throw new ApiError(
           error.status,
-          error.message ||
-            fallbackMessages[error.status] ||
-            unavailable,
+          error.message || fallbackMessages[error.status] || unavailable,
         );
       }
 
-      throw new ApiError(
-        0,
-        unreachable,
-      );
+      throw new ApiError(0, unreachable);
     }
   }
 
@@ -187,37 +171,33 @@ export async function api<T>(
   }, 20_000);
 
   try {
-    const response = await fetch(
-      base + path,
-      {
-        method: verb,
-        credentials: "include",
-        cache: "no-store",
-        signal: controller.signal,
-        headers: {
-          ...(requestBody instanceof FormData
-            ? {}
-            : {
-                "Content-Type":
-                  "application/json",
-              }),
-          "X-USwap-Client": "web",
-          ...(accessToken
-            ? {
-                Authorization: `Bearer ${accessToken}`,
-              }
-            : {}),
-        },
-        ...(requestBody === undefined
+    const response = await fetch(base + path, {
+      method: verb,
+      credentials: "include",
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        ...(requestBody instanceof FormData
           ? {}
           : {
-              body:
-                requestBody instanceof FormData
-                  ? requestBody
-                  : JSON.stringify(requestBody),
+              "Content-Type": "application/json",
             }),
+        "X-USwap-Client": "web",
+        ...(accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : {}),
       },
-    );
+      ...(requestBody === undefined
+        ? {}
+        : {
+            body:
+              requestBody instanceof FormData
+                ? requestBody
+                : JSON.stringify(requestBody),
+          }),
+    });
 
     if (
       response.status === 401 &&
@@ -237,14 +217,8 @@ export async function api<T>(
     }
 
     if (!response.ok) {
-      const detail = [
-        400,
-        409,
-        410,
-      ].includes(response.status)
-        ? await response
-            .json()
-            .catch(() => null)
+      const detail = [400, 409, 410].includes(response.status)
+        ? await response.json().catch(() => null)
         : null;
 
       throw new ApiError(
@@ -253,9 +227,7 @@ export async function api<T>(
           ? detail.message
           : response.status === 413
             ? fallbackMessages[413]
-            : fallbackMessages[
-                response.status
-              ] || unavailable,
+            : fallbackMessages[response.status] || unavailable,
       );
     }
 
@@ -265,52 +237,40 @@ export async function api<T>(
       throw error;
     }
 
-    throw new ApiError(
-      0,
-      unreachable,
-    );
+    throw new ApiError(0, unreachable);
   } finally {
     clearTimeout(timer);
   }
 }
 
-function remember(
-  data: Session,
-): Session {
+function remember(data: Session): Session {
   if ((data.user?.role as string) === "STATION_CHIEF") {
     data = {
       ...data,
-      user: { ...data.user, role: "SUPERVISOR", stationId: null, stationName: null },
+      user: {
+        ...data.user,
+        role: "SUPERVISOR",
+        stationId: null,
+        stationName: null,
+      },
     };
   }
   if (
     !data.user ||
-    !Object.prototype.hasOwnProperty.call(
-      roles,
-      data.user.role,
-    ) ||
+    !Object.prototype.hasOwnProperty.call(roles, data.user.role) ||
     typeof data.accessToken !== "string" ||
     !Number.isFinite(data.expiresIn)
   ) {
-    throw new ApiError(
-      0,
-      "Réponse de connexion invalide.",
-    );
+    throw new ApiError(0, "Réponse de connexion invalide.");
   }
 
   accessToken = data.accessToken;
 
   if (data.refreshToken) {
-    localStorage.setItem(
-      REFRESH_TOKEN_KEY,
-      data.refreshToken,
-    );
+    localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
   }
 
-  localStorage.setItem(
-    USER_KEY,
-    JSON.stringify(data.user),
-  );
+  localStorage.setItem(USER_KEY, JSON.stringify(data.user));
 
   return data;
 }
@@ -321,52 +281,33 @@ export function normalizeUserRole(user: UserIcon): UserIcon {
     : user;
 }
 
-export async function login(
-  email: string,
-  password: string,
-): Promise<Session> {
+export async function login(email: string, password: string): Promise<Session> {
   if (usingMock) {
     return remember(
-      await mockRequest<Session>(
-        "POST",
-        "/auth/login",
-        {
-          email,
-          password,
-        },
-      ),
+      await mockRequest<Session>("POST", "/auth/login", {
+        email,
+        password,
+      }),
     );
   }
 
   return remember(
-    await api<Session>(
-      "/auth/login",
-      {
-        email,
-        password,
-      },
-    ),
+    await api<Session>("/auth/login", {
+      email,
+      password,
+    }),
   );
 }
 
 export function refresh(): Promise<Session> {
   if (usingMock) {
-    return mockRequest<Session>(
-      "POST",
-      "/auth/refresh",
-    );
+    return mockRequest<Session>("POST", "/auth/refresh");
   }
 
-  const savedUser =
-    localStorage.getItem(USER_KEY);
+  const savedUser = localStorage.getItem(USER_KEY);
 
   if (!savedUser) {
-    return Promise.reject(
-      new ApiError(
-        401,
-        "Session introuvable.",
-      ),
-    );
+    return Promise.reject(new ApiError(401, "Session introuvable."));
   }
 
   // Partage le refresh en cours : le backend renouvelle le token, donc deux
@@ -376,41 +317,24 @@ export function refresh(): Promise<Session> {
   let user: UserIcon;
 
   try {
-    user =
-      JSON.parse(
-        savedUser,
-      ) as UserIcon;
+    user = JSON.parse(savedUser) as UserIcon;
   } catch {
-    localStorage.removeItem(
-      USER_KEY,
-    );
+    localStorage.removeItem(USER_KEY);
 
-    localStorage.removeItem(
-      REFRESH_TOKEN_KEY,
-    );
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
 
-    return Promise.reject(
-      new ApiError(
-        401,
-        "Session introuvable.",
-      ),
-    );
+    return Promise.reject(new ApiError(401, "Session introuvable."));
   }
 
   // Le backend conserve le refresh token dans un cookie HttpOnly et le fait
   // tourner à chaque renouvellement. Il ne doit donc jamais être lu ni envoyé
   // dans le corps de la requête côté navigateur.
-  const request = api<Session>(
-    "/auth/refresh",
-    {},
-    "POST",
-  ).then((data) => {
+  const request = api<Session>("/auth/refresh", {}, "POST").then((data) => {
     const session = remember({
       ...data,
       user: data.user ?? user,
     });
-    if (!data.refreshToken)
-      localStorage.removeItem(REFRESH_TOKEN_KEY);
+    if (!data.refreshToken) localStorage.removeItem(REFRESH_TOKEN_KEY);
     return session;
   });
 
@@ -432,122 +356,79 @@ export function forgetSession() {
   }
   window.dispatchEvent(new Event("uswap:session-cleared"));
 
-  localStorage.removeItem(
-    REFRESH_TOKEN_KEY,
-  );
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
 
-  localStorage.removeItem(
-    USER_KEY,
-  );
+  localStorage.removeItem(USER_KEY);
 }
 
 export async function logout(): Promise<void> {
   try {
     if (usingMock) {
-      await mockRequest(
-        "POST",
-        "/auth/logout",
-      );
+      await mockRequest("POST", "/auth/logout");
     } else {
-      await api(
-        "/auth/logout",
-        {},
-      );
+      await api("/auth/logout", {});
     }
   } finally {
     forgetSession();
   }
 }
 
-export async function download(
-  path: string,
-  filename: string,
-): Promise<void> {
+export async function download(path: string, filename: string): Promise<void> {
   if (usingMock) {
-    const result =
-      await mockDownload(path);
+    const result = await mockDownload(path);
 
     if (!result) {
-      throw new ApiError(
-        404,
-        "Ce téléchargement n'est pas disponible.",
-      );
+      throw new ApiError(404, "Ce téléchargement n'est pas disponible.");
     }
 
-    triggerDownload(
-      result.blob,
-      result.filename ||
-        filename,
-    );
+    triggerDownload(result.blob, result.filename || filename);
 
     return;
   }
 
-  const controller =
-    new AbortController();
+  const controller = new AbortController();
 
-  const timer =
-    window.setTimeout(
-      () => {
-        controller.abort();
-      },
-      20_000,
-    );
+  const timer = window.setTimeout(() => {
+    controller.abort();
+  }, 20_000);
 
   try {
-    const response =
-      await fetch(
-        base + path,
-        {
-          method: "GET",
-          credentials: "include",
-          cache: "no-store",
-          signal:
-            controller.signal,
-          headers: {
-            "X-USwap-Client":
-              "web",
-            ...(accessToken
-              ? {
-                  Authorization: `Bearer ${accessToken}`,
-                }
-              : {}),
-          },
-        },
-      );
+    const response = await fetch(base + path, {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        "X-USwap-Client": "web",
+        ...(accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : {}),
+      },
+    });
 
     if (!response.ok) {
       throw new ApiError(
         response.status,
-        fallbackMessages[
-          response.status
-        ] || unavailable,
+        fallbackMessages[response.status] || unavailable,
       );
     }
 
-    const blob =
-      await response.blob();
+    const blob = await response.blob();
 
-    triggerDownload(
-      blob,
-      filename,
-    );
+    triggerDownload(blob, filename);
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;
     }
 
-    throw new ApiError(
-      0,
-      unreachable,
-    );
+    throw new ApiError(0, unreachable);
   } finally {
     clearTimeout(timer);
   }
 }
 
-export const currentAccessToken =
-  () => accessToken;
+export const currentAccessToken = () => accessToken;
 
-export const sessionGeneration =
-  () => generation;
+export const sessionGeneration = () => generation;

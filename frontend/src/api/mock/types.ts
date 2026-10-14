@@ -94,6 +94,7 @@ export type MockOccurrence = {
   breakEnd: string | null;
   breakMinutes: number;
   swapperId: string | null;
+  latenessToleranceOverrideMinutes?: number | null;
   startTime: string;
   endTime: string;
 };
@@ -105,6 +106,7 @@ export type MockAttendance = {
   checkedInAt: string | null;
   checkedOutAt: string | null;
   isLate: boolean;
+  toleranceMinutes?: number;
   justified: boolean;
   correction: {
     reason: string;

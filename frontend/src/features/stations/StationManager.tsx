@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { useState, useEffect, useRef } from "react";
 import { notify } from "../../ui/Toast";
 import {
@@ -28,7 +29,7 @@ import {
   ListIcon,
   SquaresFourIcon,
   CrosshairIcon,
-} from "@phosphor-icons/react";
+} from "../../ui/icons";
 import "./station-manager.css";
 
 export type StationData = {
@@ -318,12 +319,12 @@ function MapLocationPicker({
   return (
     <div className="map-picker-wrapper">
       <div className="stepper-field-group map-picker-field">
-        <label>NOM DE LA STATION / EMPLACEMENT OU ADRESSE *</label>
+        <label>{translate("NOM DE LA STATION / EMPLACEMENT OU ADRESSE *")}</label>
         <div className="map-picker-input-wrap">
           <input
             required
             maxLength={250}
-            placeholder="Tapez le nom d'une station (ex: Tradex, Total, Bonamoussadi)..."
+            placeholder={translate("Tapez le nom d'une station (ex: Tradex, Total, Bonamoussadi)...")}
             value={searchQuery}
             onChange={(e) => handleSearchInput(e.target.value)}
           />
@@ -355,10 +356,9 @@ function MapLocationPicker({
       </div>
 
       <div className="map-picker-caption">
-        <span>POSITIONNER OU DÉPLACER LE MARQUEUR *</span>
+        <span>{translate("POSITIONNER OU DÉPLACER LE MARQUEUR *")}</span>
         <span className="map-picker-hint">
-          <CrosshairIcon size={14} /> Glissez pour actualiser l'adresse
-        </span>
+          <CrosshairIcon size={14} /> {" "}{translate("Glissez pour actualiser l'adresse")}</span>
       </div>
 
       <div ref={mapContainerRef} className="map-picker-canvas" />
@@ -371,10 +371,10 @@ function MapLocationPicker({
       <div className="map-picker-coords">
         <div className="map-picker-coords-label">
           <MapPin size={16} />
-          <span>Coordonnées GPS capturées :</span>
+          <span>{translate("Coordonnées GPS capturées :")}</span>
         </div>
         <strong>
-          {latitude !== "" ? Number(latitude).toFixed(6) : "—"},{" "}
+          {latitude !== "" ? Number(latitude).toFixed(6) : "—"}{translate(",")}{" "}
           {longitude !== "" ? Number(longitude).toFixed(6) : "—"}
         </strong>
       </div>
@@ -481,10 +481,9 @@ function StationsMapView({
   return (
     <div className="admin-card stations-map-card">
       <div className="stations-map-head">
-        <h3>Cartographie des stations</h3>
+        <h3>{translate("Cartographie des stations")}</h3>
         <p>
-          Sélectionnez une station depuis son marqueur pour afficher sa fiche.
-        </p>
+          {translate("Sélectionnez une station depuis son marqueur pour afficher sa fiche.")}</p>
       </div>
       <div ref={mapRef} className="stations-map-canvas" />
       {mapError && (
@@ -506,8 +505,7 @@ function StationsMapView({
                 className="admin-button secondary"
                 onClick={() => setSelectedStation(null)}
               >
-                Fermer
-              </button>
+                {translate("Fermer")}</button>
               <button
                 type="button"
                 className="admin-button"
@@ -518,8 +516,7 @@ function StationsMapView({
                 }}
               >
                 <PencilSimpleIcon size={14} />
-                Modifier la station
-              </button>
+                {translate("Modifier la station")}</button>
             </>
           ) : undefined
         }
@@ -528,17 +525,15 @@ function StationsMapView({
           <div className="stations-map-panel-content">
             <div className="stepper-summary-card stations-map-summary">
               <div className="summary-row">
-                <span>Ville & Adresse :</span>
+                <span>{translate("Ville & Adresse :")}</span>
                 <strong>
-                  {selectedStation?.city || "—"} (
-                  {selectedStation?.address ||
+                  {selectedStation?.city || "—"} {" "}{translate("(")}{selectedStation?.address ||
                     selectedStation?.location ||
                     "Non précisée"}
-                  )
-                </strong>
+                  {translate(")")}</strong>
               </div>
               <div className="summary-row">
-                <span>Coordonnées GPS :</span>
+                <span>{translate("Coordonnées GPS :")}</span>
                 <strong>
                   {selectedStation?.latitude != null &&
                   selectedStation?.longitude != null
@@ -547,7 +542,7 @@ function StationsMapView({
                 </strong>
               </div>
               <div className="summary-row">
-                <span>Responsable :</span>
+                <span>{translate("Responsable :")}</span>
                 <strong>
                   {selectedStation?.contactName || "—"}{" "}
                   {selectedStation?.contactPhone
@@ -556,17 +551,16 @@ function StationsMapView({
                 </strong>
               </div>
               <div className="summary-row">
-                <span>Tolérance / Repos / Max :</span>
+                <span>{translate("Tolérance / Repos / Max :")}</span>
                 <strong>
-                  {selectedStation?.latenessToleranceMinutes}m /{" "}
+                  {selectedStation?.latenessToleranceMinutes}{translate("m /")}{" "}
                   {selectedStation?.enforceMinRest === false
                     ? "repos libre"
                     : `${selectedStation?.minRestHours}h`}{" "}
-                  / {selectedStation?.weeklyHoursLimit}h
-                </strong>
+                  {translate("/")}{" "}{selectedStation?.weeklyHoursLimit}{translate("h")}</strong>
               </div>
               <div className="summary-row">
-                <span>Statut :</span>
+                <span>{translate("Statut :")}</span>
                 <strong
                   className={
                     selectedStation?.isActive
@@ -754,12 +748,12 @@ export function StationManager({
         if (remaining.length) {
           setSharedShift({ ...sharedShift, stationIds: remaining });
           throw new Error(
-            `Modèle appliqué à ${applied} station(s). Les autres n’ont pas pu être enregistrées ; réessayez pour celles-ci.`,
+            `Modèle appliqué à ${applied} ${applied === 1 ? "station" : "stations"}. Les autres n’ont pas pu être enregistrées ; réessayez pour celles-ci.`,
           );
         }
       }
       notify(
-        `Modèle appliqué à ${sharedShift.stationIds.length} station${sharedShift.stationIds.length > 1 ? "s" : ""}.`,
+        `Modèle appliqué à ${sharedShift.stationIds.length} station${sharedShift.stationIds.length === 1 ? "" : "s"}.`,
         "success",
       );
       setSharedShift(null);
@@ -866,11 +860,11 @@ export function StationManager({
           content: (
             <div className="stepper-form-layout">
               <div className="stepper-field-group">
-                <label>NOM DE LA STATION *</label>
+                <label>{translate("NOM DE LA STATION *")}</label>
                 <input
                   required
                   maxLength={120}
-                  placeholder="ex: Station Bonamoussadi"
+                  placeholder={translate("ex: Station Bonamoussadi")}
                   value={String(form?.name || "")}
                   onChange={(e) => set("name", e.target.value)}
                 />
@@ -878,17 +872,17 @@ export function StationManager({
 
               <div className="user-form-grid-2">
                 <div className="stepper-field-group">
-                  <label>VILLE</label>
+                  <label>{translate("VILLE")}</label>
                   <input
                     maxLength={100}
-                    placeholder="ex: Douala"
+                    placeholder={translate("ex: Douala")}
                     value={String(form?.city || "")}
                     onChange={(e) => set("city", e.target.value)}
                   />
                 </div>
 
                 <div className="stepper-field-group">
-                  <label>FUSEAU HORAIRE *</label>
+                  <label>{translate("FUSEAU HORAIRE *")}</label>
                   <input
                     required
                     value={String(form?.timezone || "")}
@@ -920,18 +914,18 @@ export function StationManager({
           content: (
             <div className="stepper-form-layout">
               <div className="stepper-field-group">
-                <label>NOM DU RESPONSABLE DE STATION</label>
+                <label>{translate("NOM DU RESPONSABLE DE STATION")}</label>
                 <input
-                  placeholder="ex: Jalil KETOU"
+                  placeholder={translate("ex: Jalil KETOU")}
                   value={String(form?.contactName || "")}
                   onChange={(e) => set("contactName", e.target.value)}
                 />
               </div>
 
               <div className="stepper-field-group">
-                <label>NUMÉRO DE TÉLÉPHONE DU CONTACT</label>
+                <label>{translate("NUMÉRO DE TÉLÉPHONE DU CONTACT")}</label>
                 <input
-                  placeholder="ex: 693542271"
+                  placeholder={translate("ex: 693542271")}
                   value={String(form?.contactPhone || "")}
                   onChange={(e) => set("contactPhone", e.target.value)}
                 />
@@ -947,7 +941,7 @@ export function StationManager({
             Number(form.latenessToleranceMinutes) >= 0 &&
             (!usingMock ||
               (String(form.geofenceRadiusMeters).trim() !== "" &&
-                Number(form.geofenceRadiusMeters) >= 25)) &&
+                Number(form.geofenceRadiusMeters) >= 0)) &&
             (!form.enforceMinRest ||
               (String(form.minRestHours).trim() !== "" &&
                 Number(form.minRestHours) > 0)) &&
@@ -957,7 +951,7 @@ export function StationManager({
             <div className="stepper-form-layout">
               <div className="user-form-grid-2">
                 <div className="stepper-field-group">
-                  <label>TOLÉRANCE RETARD (MINUTES)</label>
+                  <label>{translate("TOLÉRANCE RETARD (MINUTES)")}</label>
                   <input
                     type="number"
                     required
@@ -976,7 +970,7 @@ export function StationManager({
                 <div
                   className={`stepper-field-group${form.enforceMinRest ? "" : " is-disabled"}`}
                 >
-                  <label>REPOS MINIMAL (HEURES)</label>
+                  <label>{translate("REPOS MINIMAL (HEURES)")}</label>
                   <input
                     type="number"
                     required={form.enforceMinRest}
@@ -996,7 +990,7 @@ export function StationManager({
 
               <div className="user-form-grid-2">
                 <div className="stepper-field-group">
-                  <label>LIMITE HEBDOMADAIRE (HEURES)</label>
+                  <label>{translate("LIMITE HEBDOMADAIRE (HEURES)")}</label>
                   <input
                     type="number"
                     required
@@ -1013,11 +1007,11 @@ export function StationManager({
                 </div>
 
                 <div className="stepper-field-group">
-                  <label>PÉRIMÈTRE DE POINTAGE (MÈTRES)</label>
+                  <label>{translate("PÉRIMÈTRE DE POINTAGE (MÈTRES)")}</label>
                   <input
                     type="number"
                     required
-                    min={25}
+                    min={0}
                     step={1}
                     value={form?.geofenceRadiusMeters ?? 150}
                     onChange={(e) =>
@@ -1028,8 +1022,7 @@ export function StationManager({
                     }
                   />
                   <small>
-                    {"Le swappeur doit se trouver dans ce rayon pour pointer. Au-delà, le pointage est refusé."}
-                  </small>
+                    {translate("0 désactive la limite de distance. Sinon, le swappeur doit se trouver dans le rayon indiqué pour pointer.")}</small>
                 </div>
               </div>
 
@@ -1040,11 +1033,9 @@ export function StationManager({
                   onChange={(e) => set("enforceMinRest", e.target.checked)}
                 />
                 <span>
-                  <strong>Contrôler le repos entre deux shifts</strong>
+                  <strong>{translate("Contrôler le repos entre deux shifts")}</strong>
                   <small>
-                    Lorsqu’elle est active, cette règle bloque une affectation
-                    qui ne respecte pas le repos minimal indiqué.
-                  </small>
+                    {translate("Lorsqu’elle est active, cette règle bloque une affectation qui ne respecte pas le repos minimal indiqué.")}</small>
                 </span>
               </label>
 
@@ -1057,20 +1048,14 @@ export function StationManager({
                   }
                 />
                 <span>
-                  <strong>Exiger une couverture complète</strong>
+                  <strong>{translate("Exiger une couverture complète")}</strong>
                   <small>
-                    La publication sera bloquée tant qu’un poste du planning
-                    reste sans swappeur.
-                  </small>
+                    {translate("La publication sera bloquée tant qu’un poste du planning reste sans swappeur.")}</small>
                 </span>
               </label>
               {usingMock && (
                 <p className="planner-form-note">
-                  Les règles et le périmètre de pointage mis à jour s’appliquent
-                  aussi aux shifts déjà créés. Les horaires et pauses déjà
-                  planifiés restent inchangés ; vérifiez les plannings publiés
-                  si vous durcissez une règle.
-                </p>
+                  {translate("Les règles et le périmètre de pointage mis à jour s’appliquent aussi aux shifts déjà créés. Les horaires et pauses déjà planifiés restent inchangés ; vérifiez les plannings publiés si vous durcissez une règle.")}</p>
               )}
             </div>
           ),
@@ -1087,21 +1072,20 @@ export function StationManager({
               )}
               <div className="stepper-summary-card">
                 <div className="summary-row">
-                  <span>Nom de la station :</span>
+                  <span>{translate("Nom de la station :")}</span>
                   <strong>{form?.name || "—"}</strong>
                 </div>
                 <div className="summary-row">
-                  <span>Ville & Fuseau :</span>
+                  <span>{translate("Ville & Fuseau :")}</span>
                   <strong>
-                    {form?.city || "—"} ({form?.timezone || "—"})
-                  </strong>
+                    {form?.city || "—"} {" "}{translate("(")}{form?.timezone || "—"}{translate(")")}</strong>
                 </div>
                 <div className="summary-row">
-                  <span>Adresse :</span>
+                  <span>{translate("Adresse :")}</span>
                   <strong>{form?.address || "Non renseignée"}</strong>
                 </div>
                 <div className="summary-row">
-                  <span>Coordonnées GPS :</span>
+                  <span>{translate("Coordonnées GPS :")}</span>
                   <strong>
                     {form?.latitude !== "" && form?.longitude !== ""
                       ? `${Number(form?.latitude || 0).toFixed(5)}, ${Number(form?.longitude || 0).toFixed(5)}`
@@ -1109,27 +1093,26 @@ export function StationManager({
                   </strong>
                 </div>
                 <div className="summary-row">
-                  <span>Responsable :</span>
+                  <span>{translate("Responsable :")}</span>
                   <strong>
                     {form?.contactName || "Aucun"}{" "}
                     {form?.contactPhone ? `(${form.contactPhone})` : ""}
                   </strong>
                 </div>
                 <div className="summary-row">
-                  <span>Tolérance retard :</span>
-                  <strong>{form?.latenessToleranceMinutes ?? 0} min</strong>
+                  <span>{translate("Tolérance retard :")}</span>
+                  <strong>{form?.latenessToleranceMinutes ?? 0} {" "}{translate("min")}</strong>
                 </div>
                 <div className="summary-row">
-                  <span>Repos min. / Limite hebdo :</span>
+                  <span>{translate("Repos min. / Limite hebdo :")}</span>
                   <strong>
                     {form?.enforceMinRest
                       ? `${form?.minRestHours ?? 0}h minimum`
                       : "Contrôle désactivé"}{" "}
-                    · {form?.weeklyHoursLimit ?? 0}h max
-                  </strong>
+                    {translate("·")}{" "}{form?.weeklyHoursLimit ?? 0}{translate("h max")}</strong>
                 </div>
                 <div className="summary-row">
-                  <span>Postes non couverts :</span>
+                  <span>{translate("Postes non couverts :")}</span>
                   <strong>
                     {form?.blockPublishingWithVacancies
                       ? "Publication bloquée"
@@ -1138,9 +1121,7 @@ export function StationManager({
                 </div>
               </div>
               <p className="station-summary-note">
-                Vérifiez les informations ci-dessus puis cliquez sur le bouton
-                de validation final pour créer ou mettre à jour la station.
-              </p>
+                {translate("Vérifiez les informations ci-dessus puis cliquez sur le bouton de validation final pour créer ou mettre à jour la station.")}</p>
             </div>
           ),
         },
@@ -1164,7 +1145,7 @@ export function StationManager({
         open={!!confirm}
         onClose={() => !busy && setConfirm(null)}
         title={
-          confirm?.isActive ? "Désactiver la station" : "Réactiver la station"
+          translate(confirm?.isActive ? "Désactiver la station" : "Réactiver la station")
         }
       >
         {confirm && (
@@ -1181,8 +1162,7 @@ export function StationManager({
                 disabled={busy}
                 onClick={() => setConfirm(null)}
               >
-                Annuler
-              </button>
+                {translate("Annuler")}</button>
               <button
                 type="button"
                 className={`admin-button ${confirm?.isActive ? "danger" : ""}`}
@@ -1190,8 +1170,7 @@ export function StationManager({
                 onClick={toggle}
               >
                 {busy && <LoaderCircle className="spin" size={16} />}
-                Confirmer
-              </button>
+                {translate("Confirmer")}</button>
             </div>
           </div>
         )}
@@ -1201,8 +1180,8 @@ export function StationManager({
         open={sharedShift !== null}
         size="lg"
         onClose={() => !busy && setSharedShift(null)}
-        title="Créer un modèle de shift"
-        subtitle="Définissez le créneau une seule fois, puis choisissez les stations qui pourront l’utiliser."
+        title={translate("Créer un modèle de shift")}
+        subtitle={translate("Définissez le créneau une seule fois, puis choisissez les stations qui pourront l’utiliser.")}
       >
         {sharedShift && (
           <form
@@ -1214,12 +1193,11 @@ export function StationManager({
           >
             <div className="user-form-grid shift-template-form-grid">
               <label className="wide">
-                Libellé
-                <input
+                {translate("Libellé")}<input
                   autoFocus
                   required
-                  placeholder="Ex. Équipe du matin"
-                  value={sharedShift.label}
+                  placeholder={translate("Ex. Équipe du matin")}
+                  value={translate(sharedShift.label)}
                   onChange={(event) =>
                     setSharedShift({
                       ...sharedShift,
@@ -1229,8 +1207,7 @@ export function StationManager({
                 />
               </label>
               <label>
-                Heure de début
-                <input
+                {translate("Heure de début")}<input
                   type="time"
                   required
                   value={sharedShift.startTime}
@@ -1243,8 +1220,7 @@ export function StationManager({
                 />
               </label>
               <label>
-                Heure de fin
-                <input
+                {translate("Heure de fin")}<input
                   type="time"
                   required
                   value={sharedShift.endTime}
@@ -1257,8 +1233,7 @@ export function StationManager({
                 />
               </label>
               <label>
-                Début de pause
-                <input
+                {translate("Début de pause")}<input
                   type="time"
                   value={sharedShift.breakStart}
                   onChange={(event) =>
@@ -1270,8 +1245,7 @@ export function StationManager({
                 />
               </label>
               <label>
-                Fin de pause
-                <input
+                {translate("Fin de pause")}<input
                   type="time"
                   value={sharedShift.breakEnd}
                   onChange={(event) =>
@@ -1287,10 +1261,9 @@ export function StationManager({
             <fieldset className="shared-shift-stations">
               <div className="shared-shift-stations-head">
                 <div>
-                  <legend>Stations concernées</legend>
+                  <legend>{translate("Stations concernées")}</legend>
                   <p>
-                    Le modèle restera modifiable séparément dans chaque station.
-                  </p>
+                    {translate("Le modèle restera modifiable séparément dans chaque station.")}</p>
                 </div>
                 <button
                   type="button"
@@ -1352,15 +1325,13 @@ export function StationManager({
                 disabled={busy}
                 onClick={() => setSharedShift(null)}
               >
-                Annuler
-              </button>
+                {translate("Annuler")}</button>
               <button
                 type="submit"
                 className="admin-button primary-cta"
                 disabled={busy}
               >
-                Appliquer aux stations
-              </button>
+                {translate("Appliquer aux stations")}</button>
             </div>
           </form>
         )}
@@ -1400,8 +1371,8 @@ export function StationManager({
             <div className="admin-search">
               <Search size={16} />
               <input
-                aria-label="Rechercher une station"
-                placeholder="Rechercher par nom, ville, adresse..."
+                aria-label={translate("Rechercher une station")}
+                placeholder={translate("Rechercher par nom, ville, adresse...")}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -1412,11 +1383,11 @@ export function StationManager({
                 <Select
                   size="sm"
                   value={cityFilter}
-                  ariaLabel="Filtrer les stations par ville"
+                  ariaLabel={translate("Filtrer les stations par ville")}
                   width="190px"
                   onChange={(value) => setCityFilter(String(value))}
                   options={[
-                    { value: "ALL", label: "Toutes les villes" },
+                    { value: "ALL", label: translate("Toutes les villes") },
                     ...cities.map((city) => ({
                       value: city || "",
                       label: city || "",
@@ -1435,7 +1406,7 @@ export function StationManager({
                   className={`stations-view-option${viewMode === "table" ? " is-selected" : ""}`}
                 >
                   <ListIcon size={14} />
-                  <span>Tableau</span>
+                  <span>{translate("Tableau")}</span>
                 </button>
                 <button
                   type="button"
@@ -1444,7 +1415,7 @@ export function StationManager({
                   className={`stations-view-option${viewMode === "grid" ? " is-selected" : ""}`}
                 >
                   <SquaresFourIcon size={14} />
-                  <span>Grille</span>
+                  <span>{translate("Grille")}</span>
                 </button>
               </div>
 
@@ -1457,7 +1428,7 @@ export function StationManager({
                 }}
               >
                 <Clock3 size={15} />
-                <span>Créer un modèle de shift</span>
+                <span>{translate("Créer un modèle de shift")}</span>
               </button>
 
               <button
@@ -1467,7 +1438,7 @@ export function StationManager({
                 disabled={!filteredStations?.length}
               >
                 <DownloadSimple size={15} />
-                <span>Excel</span>
+                <span>{translate("Excel")}</span>
               </button>
 
               <button
@@ -1476,7 +1447,7 @@ export function StationManager({
                 onClick={() => edit()}
               >
                 <PlusIcon size={15} weight="bold" />
-                <span>Créer une station</span>
+                <span>{translate("Créer une station")}</span>
               </button>
             </div>
           </div>
@@ -1487,19 +1458,19 @@ export function StationManager({
                 <table className="admin-table station-compact-table mobile-card-table">
                   <thead>
                     <tr>
-                      <th>Station</th>
-                      <th>Ville & Adresse</th>
-                      <th>GPS</th>
-                      <th>Responsable</th>
-                      <th>Contraintes</th>
-                      <th>Statut</th>
-                      <th className="station-cell-right">Actions</th>
+                      <th>{translate("Station")}</th>
+                      <th>{translate("Ville & Adresse")}</th>
+                      <th>{translate("GPS")}</th>
+                      <th>{translate("Responsable")}</th>
+                      <th>{translate("Contraintes")}</th>
+                      <th>{translate("Statut")}</th>
+                      <th className="station-cell-right">{translate("Actions")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredStations.map((s) => (
                       <tr key={s?.id}>
-                        <td data-label="Station">
+                        <td data-label={translate("Station")}>
                           <div className="admin-person">
                             <span className="admin-stat-icon orange station-person-icon">
                               <Building2 size={16} />
@@ -1511,7 +1482,7 @@ export function StationManager({
                           </div>
                         </td>
                         <td
-                          data-label="Ville & adresse"
+                          data-label={translate("Ville & adresse")}
                           title={[s?.city, s?.address || s?.location]
                             .filter(Boolean)
                             .join(" — ")}
@@ -1521,7 +1492,7 @@ export function StationManager({
                             <span>{s?.address || s?.location || "—"}</span>
                           </div>
                         </td>
-                        <td data-label="GPS">
+                        <td data-label={translate("GPS")}>
                           {s?.latitude != null && s?.longitude != null ? (
                             <a
                               href={`https://www.google.com/maps?q=${s.latitude},${s.longitude}`}
@@ -1531,15 +1502,15 @@ export function StationManager({
                             >
                               <MapPin size={13} />
                               <span>
-                                {Number(s.latitude).toFixed(2)},{" "}
+                                {Number(s.latitude).toFixed(2)}{translate(",")}{" "}
                                 {Number(s.longitude).toFixed(2)}
                               </span>
                             </a>
                           ) : (
-                            <span className="station-gps-empty">—</span>
+                            <span className="station-gps-empty">{translate("—")}</span>
                           )}
                         </td>
-                        <td data-label="Responsable">
+                        <td data-label={translate("Responsable")}>
                           <div
                             className="station-cell-contact"
                             title={[s?.contactName, s?.contactPhone]
@@ -1550,37 +1521,36 @@ export function StationManager({
                             {s?.contactPhone && <span>{s.contactPhone}</span>}
                           </div>
                         </td>
-                        <td data-label="Contraintes">
+                        <td data-label={translate("Contraintes")}>
                           <div className="code-chips station-code-chips">
                             <code>
-                              Tol: {s?.latenessToleranceMinutes ?? 0}m
-                            </code>
+                              {translate("Tol:")}{" "}{s?.latenessToleranceMinutes ?? 0}{translate("m")}</code>
                             <code>
-                              Repos:{" "}
+                              {translate("Repos:")}{" "}
                               {s?.enforceMinRest === false
                                 ? "libre"
                                 : `${s?.minRestHours ?? 0}h`}
                             </code>
-                            <code>Max: {s?.weeklyHoursLimit ?? 0}h</code>
+                            <code>{translate("Max:")}{" "}{s?.weeklyHoursLimit ?? 0}{translate("h")}</code>
                           </div>
                         </td>
-                        <td data-label="Statut">
+                        <td data-label={translate("Statut")}>
                           <span
                             className={`admin-badge ${s?.isActive ? "active" : "draft"}`}
                           >
-                            {s?.isActive ? "Active" : "Inactive"}
+                            {translate(s?.isActive ? "Actif" : "Inactif")}
                           </span>
                         </td>
-                        <td data-label="Actions" className="station-cell-right">
+                        <td data-label={translate("Actions")} className="station-cell-right">
                           <div className="station-row-actions">
                             <button
                               type="button"
                               className="admin-button secondary small"
-                              title="Gérer les modèles de shifts"
+                              title={translate("Gérer les modèles de shifts")}
                               onClick={() => setTemplateStation(s)}
                             >
                               <Clock3 size={13} />
-                              <span>Shifts</span>
+                              <span>{translate("Shifts")}</span>
                             </button>
                             <button
                               type="button"
@@ -1594,7 +1564,7 @@ export function StationManager({
                               className={`station-toggle-btn ${s?.isActive ? "danger" : "success"}`}
                               onClick={() => setConfirm(s)}
                             >
-                              {s?.isActive ? "Désactiver" : "Activer"}
+                              {translate(s?.isActive ? "Désactiver" : "Activer")}
                             </button>
                           </div>
                         </td>
@@ -1615,7 +1585,7 @@ export function StationManager({
                     <span
                       className={`admin-badge ${s?.isActive ? "active" : "draft"}`}
                     >
-                      {s?.isActive ? "Active" : "Inactive"}
+                      {translate(s?.isActive ? "Actif" : "Inactif")}
                     </span>
                   </div>
 
@@ -1645,13 +1615,13 @@ export function StationManager({
 
                   <details className="station-rules-details">
                     <summary className="station-rules-summary">
-                      <span>Règles & coordonnées GPS</span>
+                      <span>{translate("Règles & coordonnées GPS")}</span>
                       <CaretDownIcon size={16} className="caret-icon" />
                     </summary>
 
                     <div className="station-rules-grid">
                       <div className="rule-chip full-width">
-                        <span className="rule-label">Position GPS (Maps)</span>
+                        <span className="rule-label">{translate("Position GPS (Maps)")}</span>
                         <strong className="rule-value">
                           {s?.latitude != null && s?.longitude != null ? (
                             <a
@@ -1660,22 +1630,20 @@ export function StationManager({
                               rel="noreferrer"
                               className="station-rules-map-link"
                             >
-                              {Number(s.latitude).toFixed(4)},{" "}
-                              {Number(s.longitude).toFixed(4)} (Ouvrir Maps)
-                            </a>
+                              {Number(s.latitude).toFixed(4)}{translate(",")}{" "}
+                              {Number(s.longitude).toFixed(4)} {" "}{translate("(Ouvrir Maps)")}</a>
                           ) : (
                             "Non configuré"
                           )}
                         </strong>
                       </div>
                       <div className="rule-chip">
-                        <span className="rule-label">Tolérance retard</span>
+                        <span className="rule-label">{translate("Tolérance retard")}</span>
                         <strong className="rule-value">
-                          {s?.latenessToleranceMinutes ?? 0} min
-                        </strong>
+                          {s?.latenessToleranceMinutes ?? 0} {" "}{translate("min")}</strong>
                       </div>
                       <div className="rule-chip">
-                        <span className="rule-label">Repos min.</span>
+                        <span className="rule-label">{translate("Repos min.")}</span>
                         <strong className="rule-value">
                           {s?.enforceMinRest === false
                             ? "Non contrôlé"
@@ -1692,22 +1660,20 @@ export function StationManager({
                       onClick={() => setTemplateStation(s)}
                     >
                       <Clock3 size={15} />
-                      Modèles de shifts
-                    </button>
+                      {translate("Modèles de shifts")}</button>
                     <button
                       type="button"
                       className="admin-button secondary small"
                       onClick={() => edit(s)}
                     >
                       <PencilSimpleIcon size={15} />
-                      Modifier
-                    </button>
+                      {translate("Modifier")}</button>
                     <button
                       type="button"
                       className={`station-toggle-btn ${s?.isActive ? "danger" : "success"}`}
                       onClick={() => setConfirm(s)}
                     >
-                      {s?.isActive ? "Désactiver" : "Réactiver"}
+                      {translate(s?.isActive ? "Désactiver" : "Réactiver")}
                     </button>
                   </div>
                 </section>

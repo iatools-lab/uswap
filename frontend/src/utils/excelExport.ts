@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import * as XLSX from "xlsx";
 
 export interface ColumnConfig<T> {
   header: string;
@@ -16,14 +16,15 @@ export interface ExportToExcelOptions<T> {
 export function exportToExcel<T>({
   data,
   filename,
-  sheetName = 'Feuille1',
+  sheetName = "Feuille1",
   columns,
 }: ExportToExcelOptions<T>) {
   const formattedData = data.map((item) => {
     const row: Record<string, unknown> = {};
     columns.forEach((col) => {
-      const value = typeof col.key === 'function' ? col.key(item) : item[col.key];
-      row[col.header] = value ?? '—';
+      const value =
+        typeof col.key === "function" ? col.key(item) : item[col.key];
+      row[col.header] = value ?? "—";
     });
     return row;
   });
@@ -33,7 +34,7 @@ export function exportToExcel<T>({
   const colWidths = columns.map((col) => ({
     wch: col.width || 20,
   }));
-  worksheet['!cols'] = colWidths;
+  worksheet["!cols"] = colWidths;
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);

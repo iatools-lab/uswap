@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../../api/auth-api";
 import { notify } from "../../ui/Toast";
@@ -46,11 +47,10 @@ export function ReplacementQueue({
   if (error)
     return (
       <section className="admin-card admin-empty" role="alert">
-        <h2>File indisponible</h2>
+        <h2>{translate("File indisponible")}</h2>
         <p>{error}</p>
         <button className="admin-button" onClick={load}>
-          Réessayer
-        </button>
+          {translate("Réessayer")}</button>
       </section>
     );
 
@@ -58,54 +58,41 @@ export function ReplacementQueue({
     return (
       <div className="admin-loading" role="status">
         <LoaderCircle className="spin" />
-        Chargement de la file…
-      </div>
+        {translate("Chargement de la file…")}</div>
     );
 
   return (
     <section className="admin-card">
       <div className="admin-card-heading">
         <div>
-          <h2>Shifts à remplacer</h2>
+          <h2>{translate("Shifts à remplacer")}</h2>
           <p className="operations-hint">
-            Absences sans remplaçant, classées par heure de début. Un élément
-            disparaît dès que la couverture est rétablie.
-          </p>
+            {translate("Absences sans remplaçant, classées par heure de début. Un élément disparaît dès que la couverture est rétablie.")}</p>
         </div>
         {!!rows.length && (
-          <span className="admin-badge draft">{rows.length} à couvrir</span>
+          <span className="admin-badge draft">{rows.length} {" "}{translate("à couvrir")}</span>
         )}
       </div>
 
       <details className="coverage-process">
-        <summary>Comment cette file fonctionne-t-elle ?</summary>
+        <summary>{translate("Comment cette file fonctionne-t-elle ?")}</summary>
         <ol>
           <li>
-            Une absence est signalée, détectée après un pointage manquant ou
-            issue d’un congé approuvé.
-          </li>
+            {translate("Une absence est signalée, détectée après un pointage manquant ou issue d’un congé approuvé.")}</li>
           <li>
-            Le shift rejoint cette file tant qu’aucun remplaçant compatible
-            n’est confirmé.
-          </li>
+            {translate("Le shift rejoint cette file tant qu’aucun remplaçant compatible n’est confirmé.")}</li>
           <li>
-            « Affecter » propose les swappeurs actifs du réseau et vérifie leurs
-            contraintes, y compris pour un renfort entre stations.
-          </li>
+            {translate("« Affecter » propose les swappeurs actifs du réseau et vérifie leurs contraintes, y compris pour un renfort entre stations.")}</li>
           <li>
-            Après confirmation, les deux swappeurs sont notifiés et le shift
-            disparaît de la file.
-          </li>
+            {translate("Après confirmation, les deux swappeurs sont notifiés et le shift disparaît de la file.")}</li>
         </ol>
       </details>
 
       {!rows.length ? (
         <div className="admin-empty">
-          <h3>Aucun shift à couvrir</h3>
+          <h3>{translate("Aucun shift à couvrir")}</h3>
           <p>
-            Toutes les affectations publiées disposent d’un titulaire présent ou
-            remplacé.
-          </p>
+            {translate("Toutes les affectations publiées disposent d’un titulaire présent ou remplacé.")}</p>
         </div>
       ) : (
         <ul className="coverage-list">
@@ -139,8 +126,7 @@ export function ReplacementQueue({
                 className="admin-button"
                 onClick={() => onSelect(row.shiftId)}
               >
-                Affecter
-              </button>
+                {translate("Affecter")}</button>
             </li>
           ))}
         </ul>
@@ -198,8 +184,8 @@ export function ReplacementDialog({
       open
       size="lg"
       onClose={busy ? () => undefined : onClose}
-      title="Affecter un remplaçant"
-      subtitle="Les contraintes sont contrôlées avant confirmation. Le superviseur décide seul."
+      title={translate("Affecter un remplaçant")}
+      subtitle={translate("Les contraintes sont contrôlées avant confirmation. Le superviseur décide seul.")}
       footer={
         <>
           <button
@@ -208,8 +194,7 @@ export function ReplacementDialog({
             onClick={onClose}
             disabled={busy}
           >
-            Annuler
-          </button>
+            {translate("Annuler")}</button>
           <button
             type="button"
             className="admin-button primary-cta"
@@ -217,8 +202,7 @@ export function ReplacementDialog({
             disabled={busy || !selected}
           >
             {busy && <LoaderCircle className="spin" size={16} />}
-            Confirmer
-          </button>
+            {translate("Confirmer")}</button>
         </>
       }
     >
@@ -231,20 +215,19 @@ export function ReplacementDialog({
       {!candidates ? (
         <div className="admin-loading" role="status">
           <LoaderCircle className="spin" />
-          Évaluation des contraintes…
-        </div>
+          {translate("Évaluation des contraintes…")}</div>
       ) : !candidates.length ? (
         <div className="admin-empty">
-          <h3>Aucun swappeur actif disponible</h3>
+          <h3>{translate("Aucun swappeur actif disponible")}</h3>
         </div>
       ) : (
         <>
           <label className="coverage-search">
-            <span className="sr-only">Rechercher un swappeur</span>
+            <span className="sr-only">{translate("Rechercher un swappeur")}</span>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Rechercher par nom ou e-mail"
+              placeholder={translate("Rechercher par nom ou e-mail")}
             />
           </label>
           <div className="supervision-candidate-list" role="radiogroup">
@@ -280,7 +263,7 @@ export function ReplacementDialog({
                       <small>{candidate.email}</small>
                       {candidate.homeStationName && (
                         <small>
-                          Station de rattachement : {candidate.homeStationName}
+                          {translate("Station de rattachement :")}{" "}{candidate.homeStationName}
                         </small>
                       )}
                     </span>
@@ -297,7 +280,7 @@ export function ReplacementDialog({
                       {!!candidate.issues.length && (
                         <ul className="supervision-candidate__issues">
                           {candidate.issues.map((issue) => (
-                            <li key={issue.code}>{issue.message}</li>
+                            <li key={issue.code}>{translate(issue.message)}</li>
                           ))}
                         </ul>
                       )}
@@ -310,11 +293,10 @@ export function ReplacementDialog({
       )}
 
       <label className="ops-field">
-        Motif (optionnel)
-        <input
+        {translate("Motif (optionnel)")}<input
           value={reason}
           onChange={(event) => setReason(event.target.value)}
-          placeholder="Absence couverte, renfort ponctuel…"
+          placeholder={translate("Absence couverte, renfort ponctuel…")}
         />
       </label>
     </Modal>

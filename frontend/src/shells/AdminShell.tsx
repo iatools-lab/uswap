@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { CaretDownIcon } from "@phosphor-icons/react";
+import { CaretDownIcon } from "../ui/icons";
 import { AccountMenu } from "../features/account/AccountMenu";
 import { NotificationBell } from "../features/notifications/NotificationBell";
 import { interceptNav } from "../app/spaNav";
@@ -8,6 +8,8 @@ import { RouteFallback } from "../app/RouteFallback";
 import { useSession } from "../app/session";
 import { SidebarToggle } from "./SidebarToggle";
 import { AppTopbar } from "./AppTopbar";
+import { BrandSignature } from "../ui/BrandSignature";
+import {translate,  useI18n } from "../app/i18n";
 import {
   Building2,
   CalendarBlank,
@@ -17,7 +19,6 @@ import {
   History,
   UserRound,
   Users,
-  Zap,
 } from "../ui/icons";
 import "../styles/admin.css";
 import "../styles/shell.css";
@@ -50,6 +51,7 @@ const sectionDescriptions: Record<string, string> = {
 };
 
 export function AdminShell() {
+  const { t } = useI18n();
   const { session, busy, warning, error, disconnect, extend } = useSession();
   const location = useLocation();
   const navigate = useNavigate();
@@ -90,8 +92,8 @@ export function AdminShell() {
   }, [sidebarCollapsed]);
 
   useEffect(() => {
-    document.title = `${section.label} · Administration uSwap`;
-  }, [section.label]);
+    document.title = `${t(section.label)} · ${t("Administrateur")} uSwap`;
+  }, [section.label, t]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -120,27 +122,16 @@ export function AdminShell() {
       className={`admin-workspace${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
     >
       <a className="admin-skip" href="#admin-main">
-        Aller au contenu
+        {t("Aller au contenu")}
       </a>
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
           <a
             className="brand"
             {...link("/app/admin")}
-            aria-label="uSwap, accueil administrateur"
+            aria-label={translate("uSwap, accueil administrateur")}
           >
-            <span className="brand-symbol">
-              <Zap fill="currentColor" />
-            </span>
-            <span className="brand-lockup">
-              <span className="brand-name">
-                u<span className="brand-swap">Swap</span>
-                <span className="brand-dot">.</span>
-              </span>
-              <span className="brand-endorsement">
-                Powered by <strong>uPowa</strong>
-              </span>
-            </span>
+            <BrandSignature />
           </a>
           <SidebarToggle
             collapsed={sidebarCollapsed}
@@ -148,7 +139,7 @@ export function AdminShell() {
           />
         </div>
 
-        <nav aria-label="Navigation administrateur">
+        <nav aria-label={t("Navigation administrateur")}>
           {sections
             .filter((item) => !item.path.endsWith("compte"))
             .map(({ path: target, label, Icon }) => {
@@ -172,7 +163,7 @@ export function AdminShell() {
                         }}
                       >
                         <Icon size={19} />
-                        <span>{label}</span>
+                        <span>{t(label)}</span>
                         <CaretDownIcon
                           size={14}
                           className={`admin-nav-caret${stationsOpen ? " is-open" : ""}`}
@@ -188,7 +179,7 @@ export function AdminShell() {
                         aria-current={isCurrent ? "page" : undefined}
                       >
                         <Icon size={19} />
-                        <span>{label}</span>
+                        <span>{t(label)}</span>
                         {isCurrent && <i />}
                       </a>
                     )}
@@ -204,7 +195,7 @@ export function AdminShell() {
                             : undefined
                         }
                       >
-                        Mes stations
+                        {t("Mes stations")}
                       </a>
                       <a
                         {...link("/app/admin/stations?tab=map", "map")}
@@ -214,7 +205,7 @@ export function AdminShell() {
                             : undefined
                         }
                       >
-                        Carte des stations
+                        {t("Carte des stations")}
                       </a>
                     </div>
                   )}
@@ -226,7 +217,7 @@ export function AdminShell() {
 
       <div className="admin-body">
         <AppTopbar
-          title={section.label}
+          title={translate(section.label)}
           description={sectionDescriptions[section.path]}
           headingRef={title}
           actions={
@@ -247,13 +238,13 @@ export function AdminShell() {
             <div className="session-warning" role="alert">
               <Clock3 size={18} />
               <div>
-                Votre session va expirer.
+                {t("Votre session va expirer.")}
                 <button
                   className="text-button"
                   onClick={() => void extend()}
                   disabled={busy}
                 >
-                  Prolonger ma session
+                  {t("Prolonger ma session")}
                 </button>
               </div>
             </div>
@@ -263,7 +254,9 @@ export function AdminShell() {
               {error}
             </p>
           )}
-          <Suspense fallback={<RouteFallback label="Chargement de la page…" />}>
+          <Suspense
+            fallback={<RouteFallback label={t("Chargement de la page…")} />}
+          >
             <Outlet />
           </Suspense>
         </main>

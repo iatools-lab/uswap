@@ -37,7 +37,7 @@ function stationPayload(
       current?.latenessToleranceMinutes ?? 5,
     ),
     geofenceRadiusMeters: Math.max(
-      25,
+      0,
       asNumber(body.geofenceRadiusMeters, current?.geofenceRadiusMeters ?? 150),
     ),
     enforceMinRest:
@@ -80,11 +80,11 @@ function validateStationGeolocation(payload: Partial<MockStation>) {
     );
   if (
     !Number.isFinite(payload.geofenceRadiusMeters) ||
-    (payload.geofenceRadiusMeters ?? 0) < 25
+    (payload.geofenceRadiusMeters ?? 0) < 0
   )
     throw new MockHttpError(
       400,
-      "Le périmètre de pointage doit être d’au moins 25 mètres.",
+      "Le périmètre de pointage ne peut pas être négatif.",
     );
 }
 
@@ -260,7 +260,7 @@ export const stationRoutes: MockRoute[] = [
         if (pending.length)
           throw new MockHttpError(
             409,
-            `Impossible de désactiver : ${pending.length} affectation(s) à venir sur cette station.`,
+            `Impossible de désactiver : ${pending.length} ${pending.length === 1 ? "affectation à venir" : "affectations à venir"} sur cette station.`,
           );
       }
       station.isActive = active;

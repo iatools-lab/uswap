@@ -1,7 +1,7 @@
 .leave-page-stack,
 .leave-workspace {
   display: grid;
-  gap: 20px;
+  gap: 16px;
 }
 
 .leave-process-guide {
@@ -136,10 +136,16 @@
   border-radius: 50%;
   right: -80px;
   top: -130px;
+  pointer-events: none;
 }
 .leave-hero > div {
   position: relative;
   z-index: 1;
+}
+.leave-hero > .admin-button {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
 }
 .leave-eyebrow {
   display: block;
@@ -160,7 +166,7 @@
   margin: 9px 0 0;
   color: #dce6ff;
   font-size: 14px;
-  line-height: 1.65;
+  line-height: 1.45;
 }
 .leave-kpis {
   display: grid;
@@ -429,11 +435,11 @@
 }
 .leave-request-form {
   display: grid;
-  gap: 16px;
+  gap: 12px;
 }
 .leave-form-field {
   display: grid;
-  gap: 7px;
+  gap: 5px;
   min-width: 0;
 }
 .leave-form-field > label,
@@ -445,8 +451,8 @@
 .leave-form-field input,
 .leave-form-field textarea {
   width: 100%;
-  min-height: 46px;
-  padding: 10px 12px;
+  min-height: 42px;
+  padding: 9px 11px;
   border: 1px solid #cbd9df;
   border-radius: 8px;
   background: #fff;
@@ -454,7 +460,10 @@
   font: inherit;
 }
 .leave-form-field textarea {
-  min-height: 104px;
+  min-height: 76px;
+  max-height: 180px;
+  field-sizing: content;
+  line-height: 1.4;
   resize: vertical;
 }
 .leave-form-field input:focus,
@@ -598,7 +607,9 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 42px;
+  min-height: 38px;
+  height: auto;
+  padding: 7px 12px;
   border: 1px solid #dfe5ef;
   border-radius: 8px;
   background: #fff;
@@ -606,6 +617,7 @@
   font: inherit;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.2;
   cursor: pointer;
 }
 .leave-decision-options button[aria-pressed="true"]:first-child {
@@ -644,23 +656,31 @@
   .leave-hero {
     display: grid;
     align-items: start;
-    padding: 21px;
+    gap: 16px;
+    padding: 18px;
     border-radius: 15px;
   }
   .leave-hero h2 {
-    font-size: 24px;
+    font-size: 21px;
+    line-height: 1.25;
   }
   .leave-hero p {
+    margin-top: 6px;
     font-size: 13px;
+    line-height: 1.4;
   }
   .leave-hero > .admin-button {
     width: 100%;
-    min-height: 44px;
+    min-height: 40px;
+    padding-block: 8px;
     justify-content: center;
   }
   .leave-kpis {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 9px;
+  }
+  .leave-kpis > .tremor-kpi:first-child {
+    grid-column: 1 / -1;
   }
   .leave-balance-card {
     grid-column: auto;
@@ -674,7 +694,8 @@
     gap: 13px;
   }
   .leave-form-dates {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
   .leave-section-head {
     padding: 17px;

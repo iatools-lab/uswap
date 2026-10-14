@@ -1,3 +1,4 @@
+import { currentLocale } from "../../app/i18n";
 import type { OperationShift } from "./types";
 
 export const formatDate = (
@@ -5,7 +6,7 @@ export const formatDate = (
   zone = "Africa/Douala",
   seconds = false,
 ) =>
-  new Intl.DateTimeFormat("fr-CM", {
+  new Intl.DateTimeFormat(currentLocale(), {
     dateStyle: "medium",
     timeStyle: seconds ? "medium" : "short",
     timeZone: zone,
@@ -37,7 +38,8 @@ export function pickNextShift(shifts: OperationShift[]) {
   return (
     open
       .filter((shift) => Date.parse(shift.startTime) > now)
-      .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))[0] || null
+      .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))[0] ||
+    null
   );
 }
 

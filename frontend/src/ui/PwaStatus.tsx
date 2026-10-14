@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { CloudArrowUpIcon, WifiSlashIcon } from "@phosphor-icons/react";
+import { CloudArrowUpIcon, WifiSlashIcon } from "./icons";
 import { pending, subscribeOutbox } from "../features/offline/outbox";
+import { useI18n } from "../app/i18n";
 
 type InstallEvent = Event & {
   prompt: () => Promise<void>;
@@ -12,11 +13,14 @@ type InstallEvent = Event & {
  * l'installation de l'application. Enregistre le service worker en production.
  */
 export function PwaStatus() {
+  const { t } = useI18n();
   const [online, setOnline] = useState(navigator.onLine);
   const [install, setInstall] = useState<InstallEvent | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [queued, setQueued] = useState(0);
-  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
+  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(
+    null,
+  );
   const [updating, setUpdating] = useState(false);
   const updateRequested = useRef(false);
 
@@ -85,9 +89,23 @@ export function PwaStatus() {
 
   if (!online || queued > 0) {
     return (
-      <div className={`pwa-status pwa-status--sync ${online ? "is-syncing" : "is-offline"}`} role="status">
+      <div
+        className={`pwa-status pwa-status--sync ${online ? "is-syncing" : "is-offline"}`}
+        role="status"
+      >
         {online ? <CloudArrowUpIcon /> : <WifiSlashIcon />}
-        <span><strong>{online ? "Synchronisation en attente" : "Mode hors connexion"}</strong><small>{queued ? `${queued} opération(s) conservée(s) sur cet appareil` : "Votre dernier planning reste disponible"}</small></span>
+        <span>
+          <strong>
+            {online
+              ? t("Synchronisation en attente")
+              : t("Mode hors connexion")}
+          </strong>
+          <small>
+            {queued
+              ? `${queued} ${t(queued === 1 ? "opération conservée" : "opérations conservées")} ${t("sur cet appareil")}`
+              : t("Votre dernier planning reste disponible")}
+          </small>
+        </span>
       </div>
     );
   }
@@ -96,8 +114,10 @@ export function PwaStatus() {
     return (
       <div className="pwa-status pwa-status--update" role="status">
         <span>
-          <strong>Une nouvelle version de uSwap est prête.</strong>
-          <small>Actualisez pour utiliser les dernières améliorations.</small>
+          <strong>{t("Une nouvelle version de uSwap est prête.")}</strong>
+          <small>
+            {t("Actualisez pour utiliser les dernières améliorations.")}
+          </small>
         </span>
         <button
           type="button"
@@ -108,14 +128,14 @@ export function PwaStatus() {
             waitingWorker.postMessage({ type: "SKIP_WAITING" });
           }}
         >
-          {updating ? "Mise à jour…" : "Actualiser"}
+          {updating ? t("Mise à jour…") : t("Actualiser")}
         </button>
         <button
           type="button"
-          aria-label="Fermer la notification de mise à jour"
+          aria-label={t("Fermer la notification de mise à jour")}
           onClick={() => setDismissed(true)}
         >
-          Plus tard
+          {t("Plus tard")}
         </button>
       </div>
     );
@@ -132,16 +152,16 @@ export function PwaStatus() {
 
   return (
     <div className="pwa-status">
-      <span>uSwap sur votre écran d’accueil</span>
+      <span>{t("uSwap sur votre écran d’accueil")}</span>
       <button type="button" onClick={promptInstall}>
-        Installer
+        {t("Installer")}
       </button>
       <button
         type="button"
-        aria-label="Fermer la proposition d’installation"
+        aria-label={t("Fermer la proposition d’installation")}
         onClick={() => setDismissed(true)}
       >
-        Fermer
+        {t("Fermer")}
       </button>
     </div>
   );

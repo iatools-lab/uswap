@@ -1,3 +1,4 @@
+import { translate } from "../app/i18n";
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { rolePaths, type Role } from "../api/auth-api";
@@ -5,6 +6,7 @@ import { RequireAuth } from "./RequireAuth";
 import { RouteFallback } from "./RouteFallback";
 import { useSession } from "./session";
 import { LoginPage } from "../pages/LoginPage";
+import { useI18n } from "./i18n";
 
 const AdminShell = lazy(() =>
   import("../shells/AdminShell").then((m) => ({ default: m.AdminShell })),
@@ -94,7 +96,7 @@ const SupervisorLeaveManagementPage = lazy(() =>
 
 function page(node: ReactNode) {
   return (
-    <Suspense fallback={<RouteFallback label="Chargement de la page…" />}>
+    <Suspense fallback={<RouteFallback label={translate("Chargement de la page…")} />}>
       {node}
     </Suspense>
   );
@@ -104,7 +106,7 @@ const ROLE_SPACES: Role[] = ["SUPERVISOR", "SWAPPER"];
 
 function AccountRoute({ mode }: { mode: "forgot" | "activate" | "reset" }) {
   return (
-    <Suspense fallback={<RouteFallback label="Chargement…" />}>
+    <Suspense fallback={<RouteFallback label={translate("Chargement…")} />}>
       <AccountAccessPage mode={mode} />
     </Suspense>
   );
@@ -122,6 +124,8 @@ function RoleCatchAll({ role }: { role: Role }) {
 }
 
 export function AppRoutes() {
+  const { language } = useI18n();
+  void language;
   return (
     <Routes>
       <Route path="/auth/login" element={<LoginPage />} />

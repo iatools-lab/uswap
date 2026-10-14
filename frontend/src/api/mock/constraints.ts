@@ -102,7 +102,9 @@ export function runAutomation(db: MockDb, now: number): void {
     if (!station) continue;
     const start = Date.parse(occurrence.startTime);
     const end = Date.parse(occurrence.endTime);
-    const tolerance = station.latenessToleranceMinutes * 60000;
+    const tolerance =
+      (occurrence.latenessToleranceOverrideMinutes ??
+        station.latenessToleranceMinutes) * 60000;
     if (now < start + tolerance) continue;
     const record = attendanceRecord(db, occurrence.id);
     const missedCheckin = !record;
@@ -190,6 +192,15 @@ export function constraintReport(
       code: "SWAPPER_INACTIVE",
       message: "Ce swappeur est désactivé.",
     });
+  if (swapper && swapper.stationId !== station.id) {
+    const homeStation = db.stations.find(
+      (item) => item.id === swapper.stationId,
+    );
+    warnings.push({
+      code: "CROSS_STATION",
+      message: `Ce swappeur n’est pas rattaché à ${station.name}${homeStation ? ` ; sa station principale est ${homeStation.name}` : ""}. Il peut être affecté ici comme renfort ponctuel.`,
+    });
+  }
   if (!station.isActive)
     errors.push({
       code: "STATION_CLOSED",

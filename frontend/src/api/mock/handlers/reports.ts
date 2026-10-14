@@ -43,7 +43,9 @@ export const reportRoutes: MockRoute[] = [
         after: Record<string, unknown>,
       ) =>
         [...new Set([...Object.keys(before), ...Object.keys(after)])]
-          .filter((key) => key !== "webhookSecret" && before[key] !== after[key])
+          .filter(
+            (key) => key !== "webhookSecret" && before[key] !== after[key],
+          )
           .map((key) => fieldNames[key] ?? key)
           .filter((value, index, values) => values.indexOf(value) === index);
       const actorOf = (id: string | null | undefined) =>
@@ -103,7 +105,7 @@ export const reportRoutes: MockRoute[] = [
             description: [
               action.fromStatus
                 ? `${statusNames[action.fromStatus] ?? action.fromStatus} → ${statusNames[action.toStatus] ?? action.toStatus}`
-                : statusNames[action.toStatus] ?? action.toStatus,
+                : (statusNames[action.toStatus] ?? action.toStatus),
               action.comment,
             ]
               .filter(Boolean)
@@ -228,25 +230,19 @@ export const reportRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/reports\/dashboard$/,
     handler: ({ db, user, query, now }) => {
-      const actor = requireRole(requireUser(db, user), [
-        "ADMIN",
-        "SUPERVISOR",
-      ]);
+      const actor = requireRole(requireUser(db, user), ["ADMIN", "SUPERVISOR"]);
       const fromValue = text(query.get("from"));
       const toValue = text(query.get("to"));
       const from = Date.parse(
         fromValue ? `${fromValue}T00:00:00` : isoFromMs(now - 30 * 86400000),
       );
       const to = Date.parse(
-        toValue
-          ? `${toValue}T23:59:59.999`
-          : isoFromMs(now + 86400000),
+        toValue ? `${toValue}T23:59:59.999` : isoFromMs(now + 86400000),
       );
       const planningId = text(query.get("planningId"));
       const requestedStation = text(query.get("stationId"));
       const requestedSwapper = text(query.get("swapperId"));
-      const stationId =
-        actor.stationId || requestedStation || null;
+      const stationId = actor.stationId || requestedStation || null;
       const scopeStations = actor.stationId
         ? [actor.stationId]
         : db.stations.map((item) => item.id);
@@ -265,10 +261,9 @@ export const reportRoutes: MockRoute[] = [
             Date.parse(item.startTime) <= to,
         )
         .filter((item) => (stationId ? item.stationId === stationId : true));
-      const occurrences = scheduleOccurrences
-        .filter((item) =>
-          requestedSwapper ? item.swapperId === requestedSwapper : true,
-        );
+      const occurrences = scheduleOccurrences.filter((item) =>
+        requestedSwapper ? item.swapperId === requestedSwapper : true,
+      );
       const attendanceRows = occurrences.map((occurrence) => ({
         occurrence,
         record: db.attendance.find((row) => row.shiftId === occurrence.id),
@@ -301,7 +296,9 @@ export const reportRoutes: MockRoute[] = [
           label: occurrence.label,
         };
       });
-      const assigned = scheduleOccurrences.filter((item) => item.swapperId).length;
+      const assigned = scheduleOccurrences.filter(
+        (item) => item.swapperId,
+      ).length;
       const completedAssigned = occurrences.filter(
         (item) => item.swapperId && Date.parse(item.endTime) <= now,
       ).length;
@@ -363,7 +360,9 @@ export const reportRoutes: MockRoute[] = [
         )
         .filter((item) => {
           if (!stationId) return true;
-          const swapper = db.users.find((candidate) => candidate.id === item.swapperId);
+          const swapper = db.users.find(
+            (candidate) => candidate.id === item.swapperId,
+          );
           return (
             swapper?.stationId === stationId ||
             scheduleOccurrences.some(
@@ -411,7 +410,9 @@ export const reportRoutes: MockRoute[] = [
           };
         });
       const scheduledSwapperIds = new Set(
-        occurrences.map((item) => item.swapperId).filter((id): id is string => Boolean(id)),
+        occurrences
+          .map((item) => item.swapperId)
+          .filter((id): id is string => Boolean(id)),
       );
       const swappers = db.users
         .filter(
@@ -466,7 +467,18 @@ export const reportRoutes: MockRoute[] = [
         hours: Array.from(hoursBySwapper.values())
           .sort((a, b) => b.hours - a.hours)
           .slice(0, 8),
-        hoursByStation: Array.from(new Map(occurrences.filter((row) => row.swapperId).map((row) => [row.stationId, row])).entries()).map(([stationId]) => ({ station: stationNameOf(db, stationId) ?? "—", hours: occurrences.filter((row) => row.stationId === stationId && row.swapperId).reduce((sum, row) => sum + durationHours(db, row), 0) })),
+        hoursByStation: Array.from(
+          new Map(
+            occurrences
+              .filter((row) => row.swapperId)
+              .map((row) => [row.stationId, row]),
+          ).entries(),
+        ).map(([stationId]) => ({
+          station: stationNameOf(db, stationId) ?? "—",
+          hours: occurrences
+            .filter((row) => row.stationId === stationId && row.swapperId)
+            .reduce((sum, row) => sum + durationHours(db, row), 0),
+        })),
         hoursByWeek: Array.from(
           occurrences.reduce((totals, item) => {
             if (!item.swapperId) return totals;
@@ -476,22 +488,33 @@ export const reportRoutes: MockRoute[] = [
           }, new Map<string, number>()),
         )
           .sort(([a], [b]) => a.localeCompare(b))
-          .map(([week, hours]) => ({ week, hours: Math.round(hours * 10) / 10 })),
+          .map(([week, hours]) => ({
+            week,
+            hours: Math.round(hours * 10) / 10,
+          })),
         hoursByMonth: Array.from(
           occurrences.reduce((totals, item) => {
             if (!item.swapperId) return totals;
-            const station = db.stations.find((row) => row.id === item.stationId);
+            const station = db.stations.find(
+              (row) => row.id === item.stationId,
+            );
             const month = new Intl.DateTimeFormat("en-CA", {
               year: "numeric",
               month: "2-digit",
               timeZone: station?.timezone || "Africa/Douala",
             }).format(new Date(item.startTime));
-            totals.set(month, (totals.get(month) ?? 0) + durationHours(db, item));
+            totals.set(
+              month,
+              (totals.get(month) ?? 0) + durationHours(db, item),
+            );
             return totals;
           }, new Map<string, number>()),
         )
           .sort(([a], [b]) => a.localeCompare(b))
-          .map(([month, hours]) => ({ month, hours: Math.round(hours * 10) / 10 })),
+          .map(([month, hours]) => ({
+            month,
+            hours: Math.round(hours * 10) / 10,
+          })),
         changes: changes.map((item) => ({
           date: item.createdAt,
           station: item.station,
@@ -509,7 +532,15 @@ export const reportRoutes: MockRoute[] = [
       requireRole(requireUser(db, user), ["ADMIN"]);
       const stationId = text(body.stationId) || undefined;
       const dashboard = await reportRoutes[2].handler({
-        method: "GET", path: "/reports/dashboard", params: [], query: new URLSearchParams({ ...(stationId ? { stationId } : {}) }), body: {}, file: null, db, user, now: Date.now(),
+        method: "GET",
+        path: "/reports/dashboard",
+        params: [],
+        query: new URLSearchParams({ ...(stationId ? { stationId } : {}) }),
+        body: {},
+        file: null,
+        db,
+        user,
+        now: Date.now(),
       } as never);
       return dashboard;
     },
@@ -525,7 +556,8 @@ export const reportRoutes: MockRoute[] = [
   {
     method: "GET",
     pattern: /^\/reports\/export$/,
-    handler: ({ user, db }) => requireRole(requireUser(db, user), ["ADMIN", "SUPERVISOR"]),
+    handler: ({ user, db }) =>
+      requireRole(requireUser(db, user), ["ADMIN", "SUPERVISOR"]),
   },
   {
     method: "GET",

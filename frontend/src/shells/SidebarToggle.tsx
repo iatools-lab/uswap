@@ -1,4 +1,4 @@
-import { SidebarSimpleIcon } from "@phosphor-icons/react";
+import { SidebarSimpleIcon } from "../ui/icons";
 
 export function SidebarToggle({
   collapsed,

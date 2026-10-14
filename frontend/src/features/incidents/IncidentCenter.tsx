@@ -1,3 +1,5 @@
+import { currentLocale } from "../../app/i18n";
+import { translate } from "../../app/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -9,12 +11,13 @@ import {
   ShieldWarningIcon,
   SpinnerGapIcon,
   WarningDiamondIcon,
-} from "@phosphor-icons/react";
+} from "../../ui/icons";
 import { api } from "../../api/auth-api";
 import type { IncidentSeverity, IncidentStatus } from "../../api/mock/types";
 import type { IncidentView } from "../../domain/sprint4";
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
+import { KpiCard } from "../../ui/KpiCard";
 import "./incidents.css";
 
 type Incident = IncidentView & {
@@ -71,7 +74,7 @@ const nextStatuses: Record<IncidentStatus, IncidentStatus[]> = {
   CLOSED: ["CLOSED"],
 };
 const date = (value: string) =>
-  new Intl.DateTimeFormat("fr-FR", {
+  new Intl.DateTimeFormat(currentLocale(), {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
@@ -147,15 +150,14 @@ export function IncidentCenter({
   if (!data)
     return (
       <div className="incident-loading">
-        <SpinnerGapIcon className="spin" /> Chargement des incidents…
-      </div>
+        <SpinnerGapIcon className="spin" /> {" "}{translate("Chargement des incidents…")}</div>
     );
   return (
     <section className="incident-center">
       <div className="incident-heading">
         <div>
-          <span className="incident-eyebrow">Pilotage opérationnel</span>
-          <h2>Incidents concernant les swappeurs</h2>
+          <span className="incident-eyebrow">{translate("Pilotage opérationnel")}</span>
+          <h2>{translate("Incidents concernant les swappeurs")}</h2>
           <p>
             {canReport
               ? "Choisissez la station et le swappeur concernés, puis suivez la prise en charge."
@@ -168,53 +170,55 @@ export function IncidentCenter({
             onClick={() => setCreateOpen(true)}
           >
             <PlusIcon />
-            Déclarer un incident
-          </button>
+            {translate("Déclarer un incident")}</button>
         )}
       </div>
       <div className="incident-kpis">
-        <article>
-          <ActivityIcon />
-          <span>
-            <strong>{data.metrics.open}</strong>
-            <small>incidents ouverts</small>
-          </span>
-          <i style={{ width: `${Math.min(100, data.metrics.open * 16)}%` }} />
-        </article>
-        <article className="danger">
-          <WarningDiamondIcon />
-          <span>
-            <strong>{data.metrics.critical}</strong>
-            <small>priorités critiques</small>
-          </span>
-        </article>
-        <article>
-          <ClockCountdownIcon />
-          <span>
-            <strong>
-              {data.metrics.meanResolutionHours || "—"}
-              {data.metrics.meanResolutionHours ? " h" : ""}
-            </strong>
-            <small>délai moyen de résolution</small>
-          </span>
-        </article>
-        <article>
-          <ChartLineUpIcon />
-          <span>
-            <strong>{data.metrics.total}</strong>
-            <small>événements historisés</small>
-          </span>
-        </article>
+        <KpiCard
+          compact
+          label={translate("Incidents ouverts")}
+          value={data.metrics.open}
+          icon={<ActivityIcon />}
+          tone={data.metrics.open > 0 ? "amber" : "green"}
+          progress={Math.min(100, data.metrics.open * 16)}
+        />
+        <KpiCard
+          compact
+          label={translate("Priorités critiques")}
+          value={data.metrics.critical}
+          icon={<WarningDiamondIcon />}
+          tone={data.metrics.critical > 0 ? "red" : "neutral"}
+        />
+        <KpiCard
+          compact
+          label={translate("Délai moyen")}
+          value={
+            data.metrics.meanResolutionHours
+              ? `${data.metrics.meanResolutionHours} h`
+              : "—"
+          }
+          detail="Temps de résolution"
+          icon={<ClockCountdownIcon />}
+          tone="blue"
+        />
+        <KpiCard
+          compact
+          label={translate("Historique")}
+          value={data.metrics.total}
+          detail="Événements enregistrés"
+          icon={<ChartLineUpIcon />}
+          tone="navy"
+        />
       </div>
       <div className="incident-toolbar">
         <div
           className="incident-filter-controls"
-          aria-label="Filtres des incidents"
+          aria-label={translate("Filtres des incidents")}
         >
           {!stationId && data.stations.length > 0 && (
             <Select
               value={stationFilter}
-              ariaLabel="Filtrer par station"
+              ariaLabel={translate("Filtrer par station")}
               onChange={(value) => setStationFilter(String(value))}
               options={[
                 { value: "", label: "Toutes les stations" },
@@ -230,7 +234,7 @@ export function IncidentCenter({
           )}
           <Select
             value={statusFilter}
-            ariaLabel="Filtrer par statut"
+            ariaLabel={translate("Filtrer par statut")}
             onChange={(value) => setStatusFilter(String(value))}
             options={[
               { value: "OPEN", label: "Incidents ouverts" },
@@ -246,7 +250,7 @@ export function IncidentCenter({
           />
           <Select
             value={severityFilter}
-            ariaLabel="Filtrer par priorité"
+            ariaLabel={translate("Filtrer par priorité")}
             onChange={(value) => setSeverityFilter(String(value))}
             options={[
               { value: "ALL", label: "Toutes les priorités" },
@@ -261,7 +265,7 @@ export function IncidentCenter({
           />
           <Select
             value={periodFilter}
-            ariaLabel="Filtrer par période"
+            ariaLabel={translate("Filtrer par période")}
             onChange={(value) => setPeriodFilter(String(value))}
             options={[
               { value: "7", label: "7 derniers jours" },
@@ -275,7 +279,7 @@ export function IncidentCenter({
           />
         </div>
         <span aria-live="polite">
-          {rows.length} résultat{rows.length > 1 ? "s" : ""}
+          {rows.length} {" "}{translate("résultat")}{rows.length === 1 ? "" : "s"}
         </span>
       </div>
       <div className="incident-grid">
@@ -292,21 +296,21 @@ export function IncidentCenter({
                 {severityLabels[item.severity]}
               </span>
               <div className="incident-card-title">
-                <strong>{item.title}</strong>
+                <strong>{translate(item.title)}</strong>
                 <ArrowRightIcon />
               </div>
-              <p>{item.description}</p>
+              <p>{translate(item.description)}</p>
               <dl>
                 <div>
-                  <dt>Swappeur</dt>
+                  <dt>{translate("Swappeur")}</dt>
                   <dd>{item.affectedSwapperName}</dd>
                 </div>
                 <div>
-                  <dt>Station</dt>
+                  <dt>{translate("Station")}</dt>
                   <dd>{item.stationName}</dd>
                 </div>
                 <div>
-                  <dt>Catégorie</dt>
+                  <dt>{translate("Catégorie")}</dt>
                   <dd>
                     {categories[item.category as keyof typeof categories] ??
                       item.category}
@@ -326,8 +330,8 @@ export function IncidentCenter({
         ) : (
           <div className="incident-empty">
             <ShieldWarningIcon />
-            <h3>Aucun incident pour ces filtres</h3>
-            <p>Modifiez les filtres ou affichez tous les statuts.</p>
+            <h3>{translate("Aucun incident pour ces filtres")}</h3>
+            <p>{translate("Modifiez les filtres ou affichez tous les statuts.")}</p>
             <button
               type="button"
               className="admin-button secondary small"
@@ -338,8 +342,7 @@ export function IncidentCenter({
                 setPeriodFilter("ALL");
               }}
             >
-              Effacer les filtres
-            </button>
+              {translate("Effacer les filtres")}</button>
           </div>
         )}
       </div>
@@ -418,13 +421,12 @@ function IncidentCreate({
       open={open}
       onClose={onClose}
       size="lg"
-      title="Déclarer un incident"
-      subtitle="Choisissez le swappeur concerné, puis décrivez les faits et leur impact."
+      title={translate("Déclarer un incident")}
+      subtitle={translate("Choisissez le swappeur concerné, puis décrivez les faits et leur impact.")}
       footer={
         <>
           <button className="admin-button secondary" onClick={onClose}>
-            Annuler
-          </button>
+            {translate("Annuler")}</button>
           <button
             className="admin-button primary-cta"
             disabled={
@@ -437,7 +439,7 @@ function IncidentCreate({
             onClick={() => void save()}
           >
             {busy && <SpinnerGapIcon className="spin" />}
-            <span>Transmettre l’incident</span>
+            <span>{translate("Transmettre l’incident")}</span>
           </button>
         </>
       }
@@ -446,11 +448,11 @@ function IncidentCreate({
         {error && <p className="error-message">{error}</p>}
         {!fixedStationId && (
           <label>
-            <span>Station concernée</span>
+            <span>{translate("Station concernée")}</span>
             <Select
               value={station}
-              placeholder="Sélectionner la station"
-              ariaLabel="Station concernée"
+              placeholder={translate("Sélectionner la station")}
+              ariaLabel={translate("Station concernée")}
               onChange={(value) => {
                 setStation(String(value));
                 setAffectedSwapper("");
@@ -463,7 +465,7 @@ function IncidentCreate({
           </label>
         )}
         <label>
-          <span>Swappeur concerné</span>
+          <span>{translate("Swappeur concerné")}</span>
           <Select
             value={affectedSwapper}
             placeholder={
@@ -471,21 +473,21 @@ function IncidentCreate({
                 ? "Sélectionner le swappeur"
                 : "Choisir d’abord la station"
             }
-            ariaLabel="Swappeur concerné"
+            ariaLabel={translate("Swappeur concerné")}
             disabled={!station}
             onChange={(value) => setAffectedSwapper(String(value))}
             options={swappers
               .filter((item) => item.stationId === station)
               .map((item) => ({ value: item.id, label: item.fullName }))}
           />
-          <small>Seuls les swappeurs actifs de la station sont proposés.</small>
+          <small>{translate("Seuls les swappeurs actifs de la station sont proposés.")}</small>
         </label>
         <div className="incident-form-row">
           <label>
-            <span>Catégorie</span>
+            <span>{translate("Catégorie")}</span>
             <Select
               value={category}
-              ariaLabel="Catégorie de l’incident"
+              ariaLabel={translate("Catégorie de l’incident")}
               onChange={(value) => setCategory(String(value))}
               options={Object.entries(categories).map(([value, label]) => ({
                 value,
@@ -494,10 +496,10 @@ function IncidentCreate({
             />
           </label>
           <label>
-            <span>Niveau d’impact</span>
+            <span>{translate("Niveau d’impact")}</span>
             <Select
               value={severity}
-              ariaLabel="Niveau d’impact"
+              ariaLabel={translate("Niveau d’impact")}
               onChange={(value) => setSeverity(value as IncidentSeverity)}
               options={Object.entries(severityLabels).map(([value, label]) => ({
                 value,
@@ -507,20 +509,20 @@ function IncidentCreate({
           </label>
         </div>
         <label>
-          <span>Titre court</span>
+          <span>{translate("Titre court")}</span>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ex. Malaise pendant le service"
+            placeholder={translate("Ex. Malaise pendant le service")}
           />
         </label>
         <label>
-          <span>Description et impact opérationnel</span>
+          <span>{translate("Description et impact opérationnel")}</span>
           <textarea
             rows={5}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Précisez ce que le swappeur a rencontré, les conséquences sur son service et les premières mesures prises…"
+            placeholder={translate("Précisez ce que le swappeur a rencontré, les conséquences sur son service et les premières mesures prises…")}
           />
         </label>
       </div>
@@ -580,8 +582,7 @@ function IncidentDetail({
         canManage ? (
           <>
             <button className="admin-button secondary" onClick={onClose}>
-              Fermer
-            </button>
+              {translate("Fermer")}</button>
             <button
               className="admin-button primary-cta"
               disabled={
@@ -591,13 +592,11 @@ function IncidentDetail({
               }
               onClick={() => void save()}
             >
-              Enregistrer le suivi
-            </button>
+              {translate("Enregistrer le suivi")}</button>
           </>
         ) : (
           <button className="admin-button secondary" onClick={onClose}>
-            Fermer
-          </button>
+            {translate("Fermer")}</button>
         )
       }
     >
@@ -615,18 +614,18 @@ function IncidentDetail({
             >
               {statusLabels[incident.status]}
             </span>
-            <p>{incident.description}</p>
+            <p>{translate(incident.description)}</p>
             <strong>{incident.affectedSwapperName}</strong>
-            <small>Déclaré par {incident.reporterName}</small>
+            <small>{translate("Déclaré par")}{" "}{incident.reporterName}</small>
           </div>
           {canManage && (
             <div className="incident-review">
               <div className="incident-form-row">
                 <label>
-                  <span>Prochaine étape</span>
+                  <span>{translate("Prochaine étape")}</span>
                   <Select
                     value={status}
-                    ariaLabel="Prochaine étape"
+                    ariaLabel={translate("Prochaine étape")}
                     onChange={(value) => setStatus(value as IncidentStatus)}
                     options={nextStatuses[incident.status].map((value) => ({
                       value,
@@ -635,10 +634,10 @@ function IncidentDetail({
                   />
                 </label>
                 <label>
-                  <span>Priorité</span>
+                  <span>{translate("Priorité")}</span>
                   <Select
                     value={severity}
-                    ariaLabel="Priorité de l’incident"
+                    ariaLabel={translate("Priorité de l’incident")}
                     onChange={(value) => setSeverity(value as IncidentSeverity)}
                     options={Object.entries(severityLabels).map(
                       ([value, label]) => ({
@@ -650,18 +649,18 @@ function IncidentDetail({
                 </label>
               </div>
               <label>
-                <span>Compte rendu</span>
+                <span>{translate("Compte rendu")}</span>
                 <textarea
                   rows={3}
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  placeholder="Ajoutez l’analyse, l’action menée ou la résolution…"
+                  placeholder={translate("Ajoutez l’analyse, l’action menée ou la résolution…")}
                 />
               </label>
             </div>
           )}
           <div className="incident-timeline">
-            <h3>Journal de suivi</h3>
+            <h3>{translate("Journal de suivi")}</h3>
             {incident.actions.map((action) => (
               <div key={action.id}>
                 <i />

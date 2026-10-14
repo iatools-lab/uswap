@@ -12,11 +12,13 @@ import {
 import { AuthLayout } from "./AuthLayout";
 import { RouteFallback } from "../app/RouteFallback";
 import { Select } from "../ui/Select";
+import {translate,  useI18n } from "../app/i18n";
 
 /** Format d'adresse e-mail attendu, partagé par la validation et les messages d'erreur. */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function LoginPage() {
+  const { t } = useI18n();
   const { session, checking, busy, error, setError, signIn } = useSession();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -61,7 +63,7 @@ export function LoginPage() {
       return;
     }
     if (new TextEncoder().encode(password).length > 72) {
-      setError("Ce mot de passe est trop long.");
+      setError(t("Ce mot de passe est trop long."));
       return;
     }
     setSubmitting(true);
@@ -69,7 +71,7 @@ export function LoginPage() {
       await signIn(identifier.trim(), password);
       setPassword("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Connexion impossible.");
+      setError(err instanceof Error ? err.message : t("Connexion impossible."));
     } finally {
       setSubmitting(false);
     }
@@ -80,33 +82,33 @@ export function LoginPage() {
   return (
     <AuthLayout>
       {checking || session ? (
-        <RouteFallback label="Vérification de votre session…" />
+        <RouteFallback label={t("Vérification de votre session…")} />
       ) : (
         <>
-          <h2 className="login-title">Connexion</h2>
+          <h2 className="login-title">{t("Connexion")}</h2>
           <form onSubmit={submit} noValidate>
             {profiles.length > 0 && (
               <div className="field">
-                <span className="field-label">Profil à ouvrir</span>
+                <span className="field-label">{t("Profil à ouvrir")}</span>
                 <Select
                   size="lg"
                   value={identifier}
                   disabled={locked}
-                  ariaLabel="Choisir un profil"
-                  placeholder="Choisir un compte"
+                  ariaLabel={t("Choisir un profil")}
+                  placeholder={t("Choisir un compte")}
                   onChange={(value) => {
                     setIdentifier(String(value));
                     setError("");
                   }}
                   options={profiles.map((person) => ({
                     value: person.email,
-                    label: `${roles[person.role]} · ${person.fullName} — ${person.email}`,
+                    label: `${t(roles[person.role])} · ${person.fullName} — ${person.email}`,
                   }))}
                 />
               </div>
             )}
             <div className="field">
-              <label htmlFor="identifier">Adresse e-mail</label>
+              <label htmlFor="identifier">{t("Adresse e-mail")}</label>
               <div
                 className={`input-wrap ${submitted && !EMAIL_PATTERN.test(identifier.trim()) ? "invalid" : ""}`}
               >
@@ -120,7 +122,7 @@ export function LoginPage() {
                   inputMode="email"
                   required
                   maxLength={254}
-                  placeholder="Votre adresse e-mail"
+                  placeholder={t("Votre adresse e-mail")}
                   value={identifier}
                   onChange={(e) => {
                     setIdentifier(e.target.value);
@@ -139,15 +141,15 @@ export function LoginPage() {
               </div>
               {submitted && !EMAIL_PATTERN.test(identifier.trim()) && (
                 <span id="identifier-error" className="field-error">
-                  Saisissez une adresse e-mail valide.
+                  {t("Saisissez une adresse e-mail valide.")}
                 </span>
               )}
             </div>
             <div className="field">
               <div className="label-row">
-                <label htmlFor="password">Mot de passe</label>
+                <label htmlFor="password">{t("Mot de passe")}</label>
                 <Link className="text-button" to="/auth/forgot-password">
-                  Mot de passe oublié ?
+                  {t("Mot de passe oublié ?")}
                 </Link>
               </div>
               <div
@@ -158,7 +160,7 @@ export function LoginPage() {
                   name="password"
                   type={visible ? "text" : "password"}
                   autoComplete="current-password"
-                  placeholder="Votre mot de passe"
+                  placeholder={t("Votre mot de passe")}
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
@@ -178,8 +180,8 @@ export function LoginPage() {
                   onClick={() => setVisible(!visible)}
                   aria-label={
                     visible
-                      ? "Masquer le mot de passe"
-                      : "Afficher le mot de passe"
+                      ? t("Masquer le mot de passe")
+                      : t("Afficher le mot de passe")
                   }
                   aria-pressed={visible}
                 >
@@ -188,12 +190,12 @@ export function LoginPage() {
               </div>
               {submitted && !password && (
                 <span id="password-error" className="field-error">
-                  Saisissez votre mot de passe.
+                  {t("Saisissez votre mot de passe.")}
                 </span>
               )}
               {capsLock && (
                 <span className="field-hint" role="status">
-                  La touche Verr. Maj est activée.
+                  {t("La touche Verr. Maj est activée.")}
                 </span>
               )}
             </div>
@@ -206,17 +208,17 @@ export function LoginPage() {
               {submitting ? (
                 <>
                   <LoaderCircle className="spin" size={19} />
-                  Connexion en cours…
+                  {t("Connexion en cours…")}
                 </>
               ) : (
-                <>Se connecter</>
+                <>{t("Se connecter")}</>
               )}
             </button>
           </form>
           <div className="invite-note">
-            Première connexion ?{" "}
+            {t("Première connexion ?")}{" "}
             <button className="text-button" onClick={() => setHelp("invite")}>
-              Activer mon accès
+              {t("Activer mon accès")}
             </button>
           </div>
         </>
@@ -241,7 +243,7 @@ export function LoginPage() {
             <button
               className="dialog-close"
               autoFocus
-              aria-label="Fermer"
+              aria-label={translate("Fermer")}
               onClick={() => setHelp(null)}
             >
               <X />
@@ -249,12 +251,9 @@ export function LoginPage() {
             <div className="form-icon">
               <Mail />
             </div>
-            <h2 id="help-title">Activez votre accès</h2>
+            <h2 id="help-title">{translate("Activez votre accès")}</h2>
             <p>
-              Ouvrez le lien d’activation reçu par e-mail pour définir votre mot
-              de passe. Si vous n’avez pas reçu d’invitation, contactez votre
-              administrateur.
-            </p>
+              {translate("Ouvrez le lien d’activation reçu par e-mail pour définir votre mot de passe. Si vous n’avez pas reçu d’invitation, contactez votre administrateur.")}</p>
           </dialog>
         </div>
       )}

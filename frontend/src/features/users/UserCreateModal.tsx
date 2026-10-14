@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { useEffect, useState } from "react";
 import { StepperModal, type StepItem } from "../../ui/StepperModal";
 import { UserRound, Eye, EyeOff, CheckCheck } from "../../ui/icons";
@@ -11,7 +12,12 @@ interface UserCreateModalProps {
   onCreated: () => void;
 }
 
-export function UserCreateModal({ open, stations, onClose, onCreated }: UserCreateModalProps) {
+export function UserCreateModal({
+  open,
+  stations,
+  onClose,
+  onCreated,
+}: UserCreateModalProps) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -20,7 +26,9 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
   const [stationId, setStationId] = useState("");
 
   // Nouveau state pour choisir la méthode d'activation
-  const [activationMethod, setActivationMethod] = useState<"link" | "password">("link");
+  const [activationMethod, setActivationMethod] = useState<"link" | "password">(
+    "link",
+  );
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
@@ -53,7 +61,7 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
   const handleSubmit = async () => {
     setError("");
     setBusy(true);
-    
+
     const isPasswordMode = activationMethod === "password";
 
     try {
@@ -72,7 +80,10 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
       onCreated();
       onClose();
     } catch (err) {
-      setError((err as Error).message || "Une erreur est survenue lors de la création.");
+      setError(
+        (err as Error).message ||
+          "Une erreur est survenue lors de la création.",
+      );
     } finally {
       setBusy(false);
     }
@@ -86,12 +97,12 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
       content: (
         <div className="stepper-form-layout">
           <div className="stepper-field-group">
-            <label htmlFor="fullName">NOM COMPLET *</label>
+            <label htmlFor="fullName">{translate("NOM COMPLET *")}</label>
             <input
               id="fullName"
               type="text"
               required
-              placeholder="ex: Jean Dupont"
+              placeholder={translate("ex: Jean Dupont")}
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
             />
@@ -99,23 +110,23 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
 
           <div className="user-form-grid-2">
             <div className="stepper-field-group">
-              <label htmlFor="phoneNumber">NUMÉRO DE TÉLÉPHONE</label>
+              <label htmlFor="phoneNumber">{translate("NUMÉRO DE TÉLÉPHONE")}</label>
               <input
                 id="phoneNumber"
                 type="tel"
                 autoComplete="tel"
-                placeholder="Ex. +237 6 99 00 00 00"
+                placeholder={translate("Ex. +237 6 99 00 00 00")}
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
               />
             </div>
             <div className="stepper-field-group">
-              <label htmlFor="address">ADRESSE</label>
+              <label htmlFor="address">{translate("ADRESSE")}</label>
               <input
                 id="address"
                 type="text"
                 autoComplete="street-address"
-                placeholder="Quartier, ville"
+                placeholder={translate("Quartier, ville")}
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
               />
@@ -123,12 +134,12 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
           </div>
 
           <div className="stepper-field-group">
-            <label htmlFor="email">ADRESSE E-MAIL *</label>
+            <label htmlFor="email">{translate("ADRESSE E-MAIL *")}</label>
             <input
               id="email"
               type="email"
               required
-              placeholder="prenom.nom@example.com"
+              placeholder={translate("prenom.nom@example.com")}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -146,7 +157,7 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
       content: (
         <div className="stepper-form-layout">
           <div className="stepper-field-group">
-            <label>RÔLE DANS L'ÉCOSYSTÈME *</label>
+            <label>{translate("RÔLE DANS L'ÉCOSYSTÈME *")}</label>
             <Select
               value={role}
               onChange={(value) => {
@@ -156,7 +167,7 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
                   setStationId("");
                 }
               }}
-              placeholder="Sélectionner un rôle"
+              placeholder={translate("Sélectionner un rôle")}
               options={Object.entries(roles).map(([val, label]) => ({
                 label,
                 value: val,
@@ -166,17 +177,16 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
 
           {requiresStation && (
             <div className="stepper-field-group">
-              <label>STATION RATTACHÉE *</label>
+              <label>{translate("STATION RATTACHÉE *")}</label>
               <StationPicker
                 value={stationId}
                 onChange={setStationId}
                 stations={stations}
-                placeholder="Sélectionner une station"
+                placeholder={translate("Sélectionner une station")}
                 allowEmpty={false}
               />
               <span className="field-hint">
-                Ce collaborateur ne verra et ne recevra que les données de cette station.
-              </span>
+                {translate("Ce collaborateur ne verra et ne recevra que les données de cette station.")}</span>
             </div>
           )}
         </div>
@@ -186,52 +196,73 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
       id: "summary",
       label: "Récapitulatif",
       // On bloque l'étape finale si le mode mot de passe est actif mais qu'il fait moins de 8 caractères
-      isValid: () => activationMethod === "link" || (activationMethod === "password" && password.length >= 8),
+      isValid: () =>
+        activationMethod === "link" ||
+        (activationMethod === "password" && password.length >= 8),
       content: (
         <div className="stepper-form-layout">
           {error && <p className="error-message">{error}</p>}
 
           <div className="stepper-summary-card">
             <div className="summary-row">
-              <span>Collaborateur :</span>
+              <span>{translate("Collaborateur :")}</span>
               <strong>{fullName || "—"}</strong>
             </div>
             <div className="summary-row">
-              <span>E-mail :</span>
+              <span>{translate("E-mail :")}</span>
               <strong>{email || "—"}</strong>
             </div>
             <div className="summary-row">
-              <span>Rôle attribué :</span>
+              <span>{translate("Rôle attribué :")}</span>
               <strong>{role ? roles[role as keyof typeof roles] : "—"}</strong>
             </div>
             <div className="summary-row">
-              <span>Téléphone :</span>
+              <span>{translate("Téléphone :")}</span>
               <strong>{phoneNumber || "Non renseigné"}</strong>
             </div>
             <div className="summary-row">
-              <span>Adresse :</span>
+              <span>{translate("Adresse :")}</span>
               <strong>{address || "Non renseignée"}</strong>
             </div>
             {requiresStation && (
               <div className="summary-row">
-                <span>Station :</span>
-                <strong>{stations.find((s) => s.id === stationId)?.name || "Non sélectionnée"}</strong>
+                <span>{translate("Station :")}</span>
+                <strong>
+                  {stations.find((s) => s.id === stationId)?.name ||
+                    "Non sélectionnée"}
+                </strong>
               </div>
             )}
           </div>
 
           <div className="activation-field">
-            <label>MÉTHODE D'ACTIVATION DU COMPTE *</label>
+            <label>{translate("MÉTHODE D'ACTIVATION DU COMPTE *")}</label>
 
             <div className="activation-switch">
-              <label className={`activation-option${activationMethod === "link" ? " is-selected" : ""}`}>
-                <input type="radio" name="activation" value="link" checked={activationMethod === "link"} onChange={() => setActivationMethod("link")} />
-                <span>Envoyer un lien</span>
+              <label
+                className={`activation-option${activationMethod === "link" ? " is-selected" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="activation"
+                  value="link"
+                  checked={activationMethod === "link"}
+                  onChange={() => setActivationMethod("link")}
+                />
+                <span>{translate("Envoyer un lien")}</span>
               </label>
 
-              <label className={`activation-option${activationMethod === "password" ? " is-selected" : ""}`}>
-                <input type="radio" name="activation" value="password" checked={activationMethod === "password"} onChange={() => setActivationMethod("password")} />
-                <span>Définir un mot de passe</span>
+              <label
+                className={`activation-option${activationMethod === "password" ? " is-selected" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="activation"
+                  value="password"
+                  checked={activationMethod === "password"}
+                  onChange={() => setActivationMethod("password")}
+                />
+                <span>{translate("Définir un mot de passe")}</span>
               </label>
             </div>
           </div>
@@ -240,20 +271,25 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
             <div className="activation-notice">
               <CheckCheck size={18} />
               <p>
-                Un e-mail d'invitation sera envoyé à <strong>{email || "l'utilisateur"}</strong> contenant un lien sécurisé pour qu'il définisse lui-même son propre mot de passe.
-              </p>
+                {translate("Un e-mail d'invitation sera envoyé à")}{" "}
+                <strong>{email || "l'utilisateur"}</strong> {" "}{translate("contenant un lien sécurisé pour qu'il définisse lui-même son propre mot de passe.")}</p>
             </div>
           ) : (
             <div className="stepper-field-group is-tight">
-              <label htmlFor="password">MOT DE PASSE PROVISOIRE (Min. 8 caractères) *</label>
+              <label htmlFor="password">
+                {translate("MOT DE PASSE PROVISOIRE (Min. 8 caractères) *")}</label>
               <div className="input-wrap">
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Saisissez un mot de passe sécurisé..."
+                  placeholder={translate("Saisissez un mot de passe sécurisé...")}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={password.length > 0 && password.length < 8 ? "field-invalid" : undefined}
+                  className={
+                    password.length > 0 && password.length < 8
+                      ? "field-invalid"
+                      : undefined
+                  }
                 />
                 <button
                   type="button"
@@ -264,7 +300,8 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
                 </button>
               </div>
               {password.length > 0 && password.length < 8 && (
-                <span className="field-error-inline">Le mot de passe doit contenir au moins 8 caractères.</span>
+                <span className="field-error-inline">
+                  {translate("Le mot de passe doit contenir au moins 8 caractères.")}</span>
               )}
             </div>
           )}
@@ -276,7 +313,7 @@ export function UserCreateModal({ open, stations, onClose, onCreated }: UserCrea
   return (
     <StepperModal
       open={open}
-      title="Nouveau collaborateur"
+      title={translate("Nouveau collaborateur")}
       icon={<UserRound size={20} />}
       steps={steps}
       submitLabel="Créer l'utilisateur"

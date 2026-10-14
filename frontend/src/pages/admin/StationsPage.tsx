@@ -1,14 +1,19 @@
+import { translate } from "../../app/i18n";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { api, ApiError } from "../../api/auth-api";
 import { useSession } from "../../app/session";
-import { StationManager, type StationData } from "../../features/stations/StationManager";
+import {
+  StationManager,
+  type StationData,
+} from "../../features/stations/StationManager";
 import { LoaderCircle, RefreshCw } from "../../ui/icons";
 
 export function StationsPage() {
   const { onAccessLost } = useSession();
   const location = useLocation();
-  const activeTab = new URLSearchParams(location.search).get("tab") === "map" ? "map" : "list";
+  const activeTab =
+    new URLSearchParams(location.search).get("tab") === "map" ? "map" : "list";
   const [stations, setStations] = useState<StationData[] | null>(null);
   const [loadError, setLoadError] = useState("");
   const [revision, setRevision] = useState(0);
@@ -22,7 +27,11 @@ export function StationsPage() {
       })
       .catch((errorData) => {
         if (!active) return;
-        if (errorData instanceof ApiError && [401, 403].includes(errorData.status)) onAccessLost();
+        if (
+          errorData instanceof ApiError &&
+          [401, 403].includes(errorData.status)
+        )
+          onAccessLost();
         else setLoadError("Les données n’ont pas pu être chargées. Réessayez.");
       });
     return () => {
@@ -34,11 +43,13 @@ export function StationsPage() {
     return (
       <div className="admin-card admin-empty" role="alert">
         <RefreshCw size={25} />
-        <h2>Chargement indisponible</h2>
+        <h2>{translate("Chargement indisponible")}</h2>
         <p>{loadError}</p>
-        <button className="admin-button" onClick={() => setRevision((value) => value + 1)}>
-          Réessayer
-        </button>
+        <button
+          className="admin-button"
+          onClick={() => setRevision((value) => value + 1)}
+        >
+          {translate("Réessayer")}</button>
       </div>
     );
 
@@ -46,8 +57,7 @@ export function StationsPage() {
     return (
       <div className="admin-loading" role="status">
         <LoaderCircle className="spin" size={24} />
-        Chargement des stations…
-      </div>
+        {translate("Chargement des stations…")}</div>
     );
 
   return (

@@ -94,7 +94,8 @@ function assignPlanningByShift(ctx: MockCtx, planning: MockPlanning) {
   const planningHours = (swapperId: string) =>
     ctx.db.occurrences
       .filter(
-        (item) => item.planningId === planning.id && item.swapperId === swapperId,
+        (item) =>
+          item.planningId === planning.id && item.swapperId === swapperId,
       )
       .reduce((total, item) => total + durationHours(ctx.db, item), 0);
   const totalHours = (swapperId: string) =>
@@ -129,7 +130,9 @@ function assignPlanningByShift(ctx: MockCtx, planning: MockPlanning) {
     orderedDays.forEach(([, rows]) =>
       rows.sort((a, b) => (dbOrder.get(a.id) ?? 0) - (dbOrder.get(b.id) ?? 0)),
     );
-    const roster = activeSwappers.filter((user) => user.stationId === station.id);
+    const roster = activeSwappers.filter(
+      (user) => user.stationId === station.id,
+    );
     const stationHours = ctx.db.occurrences
       .filter(
         (item) =>
@@ -266,16 +269,15 @@ function assignPlanningByShift(ctx: MockCtx, planning: MockPlanning) {
           planningHours(item.id) +
           (item.id === user.id ? durationHours(ctx.db, preview) : 0),
       );
-      const mean = projected.reduce((sum, value) => sum + value, 0) /
+      const mean =
+        projected.reduce((sum, value) => sum + value, 0) /
         Math.max(projected.length, 1);
       options.push({
         source,
-        score: projected.reduce(
-          (sum, value) => sum + (value - mean) ** 2,
-          0,
-        ),
+        score: projected.reduce((sum, value) => sum + (value - mean) ** 2, 0),
         preferred:
-          preferredTemplates.size === 0 || preferredTemplates.has(source.templateId),
+          preferredTemplates.size === 0 ||
+          preferredTemplates.has(source.templateId),
       });
     }
     options.sort(
@@ -471,8 +473,8 @@ function planningValidation(db: MockDb, planning: MockPlanning) {
     const issue = {
       code: "VACANT",
       message: blockingStations.length
-        ? `${vacant.length} poste(s) restent vacants. La publication est bloquée pour ${blockingStations.join(", ")}.`
-        : `${vacant.length} poste(s) sans swappeur seront publiés comme vacants.`,
+        ? `${vacant.length} ${vacant.length === 1 ? "poste reste vacant" : "postes restent vacants"}. La publication est bloquée pour ${blockingStations.join(", ")}.`
+        : `${vacant.length} ${vacant.length === 1 ? "poste sans swappeur sera publié comme vacant" : "postes sans swappeur seront publiés comme vacants"}.`,
     };
     if (blockingStations.length) errors.push(issue);
     else warnings.push(issue);
@@ -818,6 +820,22 @@ export const planningRoutes: MockRoute[] = [
           409,
           "Ce poste porte déjà un pointage : il ne peut plus être retiré.",
         );
+      const sameShift = ctx.db.occurrences.filter(
+        (item) =>
+          item.planningId === target.planningId &&
+          item.stationId === target.stationId &&
+          item.templateId === target.templateId &&
+          item.startTime === target.startTime &&
+          item.endTime === target.endTime,
+      );
+      if (sameShift.length === 1) {
+        // Le dernier poste matérialise le shift dans le calendrier. Le retirer
+        // ferait disparaître le créneau au lieu de le laisser « Non affecté ».
+        const changed = target.swapperId !== null;
+        target.swapperId = null;
+        if (changed) planning.revision += 1;
+        return { ok: true, preserved: true, revision: planning.revision };
+      }
       ctx.db.occurrences = ctx.db.occurrences.filter(
         (item) => item.id !== target.id,
       );
@@ -885,6 +903,23 @@ export const planningRoutes: MockRoute[] = [
           "Ce planning a été modifié entre-temps. Rechargez-le avant d'affecter.",
         );
       const swapperId = ctx.body.swapperId ? String(ctx.body.swapperId) : null;
+      const hasToleranceOverride = Object.hasOwn(
+        ctx.body,
+        "latenessToleranceOverrideMinutes",
+      );
+      const toleranceOverride = ctx.body.latenessToleranceOverrideMinutes;
+      if (
+        hasToleranceOverride &&
+        toleranceOverride !== null &&
+        (typeof toleranceOverride !== "number" ||
+          !Number.isInteger(toleranceOverride) ||
+          toleranceOverride < 0 ||
+          toleranceOverride > 240)
+      )
+        throw new MockHttpError(
+          400,
+          "La tolérance ponctuelle doit être un nombre entier entre 0 et 240 minutes.",
+        );
       const swapWithId = ctx.body.swapWith ? String(ctx.body.swapWith) : null;
       const counterpart = swapWithId
         ? (ctx.db.occurrences.find(
@@ -932,6 +967,10 @@ export const planningRoutes: MockRoute[] = [
       if (afterUser && !afterUser.isActive)
         throw new MockHttpError(409, "Sélectionnez un swappeur actif.");
       occurrence.swapperId = swapperId;
+      if (hasToleranceOverride)
+        occurrence.latenessToleranceOverrideMinutes = swapperId
+          ? (toleranceOverride as number | null)
+          : null;
       if (counterpart) counterpart.swapperId = beforeUser?.id ?? null;
       planning.revision += 1;
       if (beforeUser?.id !== afterUser?.id || counterpart) {

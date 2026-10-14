@@ -1,3 +1,5 @@
+import { currentLocale } from "../../app/i18n";
+import { translate } from "../../app/i18n";
 import { useMemo, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -6,7 +8,7 @@ import {
   PlusIcon,
   PencilSimpleIcon,
   XCircleIcon,
-} from "@phosphor-icons/react";
+} from "../../ui/icons";
 import { mockLeaveGateway } from "../../api/gateways/mock-leave-gateway";
 import type {
   LeaveRequestInput,
@@ -16,6 +18,8 @@ import type {
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
 import { notify } from "../../ui/Toast";
+import { KpiCard } from "../../ui/KpiCard";
+import { formatDateRange } from "../../utils/french";
 import "./leaves.css";
 
 const TYPES: Record<LeaveRequestView["type"], string> = {
@@ -41,7 +45,7 @@ const STATUS: Record<
 };
 
 const displayDate = (iso: string) =>
-  new Intl.DateTimeFormat("fr-FR", {
+  new Intl.DateTimeFormat(currentLocale(), {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -133,7 +137,7 @@ export function LeaveWorkspace({
     }
     if (requestedDays > availableForRequest) {
       setFormError(
-        `Votre solde disponible ne couvre pas cette demande (${availableForRequest} jour${availableForRequest > 1 ? "s" : ""} disponible${availableForRequest > 1 ? "s" : ""}).`,
+        `Votre solde disponible ne couvre pas cette demande (${availableForRequest} jour${availableForRequest === 1 ? "" : "s"} disponible${availableForRequest === 1 ? "" : "s"}).`,
       );
       return;
     }
@@ -179,80 +183,63 @@ export function LeaveWorkspace({
     <div className="leave-workspace">
       <header className="leave-hero">
         <div>
-          <span className="leave-eyebrow">Espace congés</span>
-          <h2>Solde et suivi de vos congés</h2>
+          <span className="leave-eyebrow">{translate("Espace congés")}</span>
+          <h2>{translate("Solde et suivi de vos congés")}</h2>
           <p>
-            Consultez votre solde, envoyez une demande et suivez sa décision.
-          </p>
+            {translate("Consultez votre solde, envoyez une demande et suivez sa décision.")}</p>
         </div>
         <button
           type="button"
           className="admin-button primary-cta"
           onClick={() => openForm()}
         >
-          <PlusIcon size={17} weight="bold" /> Demander un congé
-        </button>
+          <PlusIcon size={17} weight="bold" /> {" "}{translate("Demander un congé")}</button>
       </header>
 
       {targetLeaveId && (
         <div className="attendance-target-notice" role="status">
-          <span>Demande de congé concernée par la notification</span>
+          <span>{translate("Demande de congé concernée par la notification")}</span>
           <button
             type="button"
             className="text-button"
             onClick={() => navigate(location.pathname, { replace: true })}
           >
-            Voir toutes les demandes
-          </button>
+            {translate("Voir toutes les demandes")}</button>
         </div>
       )}
 
-      <section className="leave-kpis" aria-label="Synthèse de vos congés">
-        <article className="leave-balance-card">
-          <div
-            className="leave-donut"
-            style={
-              { "--progress": `${usedPercent * 3.6}deg` } as React.CSSProperties
-            }
-          >
-            <div>
-              <strong>{balance.remainingDays}</strong>
-              <span>jours</span>
-            </div>
-          </div>
-          <div>
-            <span className="leave-kpi-label">Solde disponible</span>
-            <h3>
-              {balance.remainingDays} jours sur {balance.entitledDays}
-            </h3>
-            <p>{balance.usedDays} jours consommés cette année</p>
-          </div>
-        </article>
-        <article className="leave-kpi-card amber">
-          <ClockIcon />
-          <div>
-            <strong>{balance.pendingDays}</strong>
-            <span>jours en attente de décision</span>
-          </div>
-        </article>
-        <article className="leave-kpi-card blue">
-          <CalendarBlankIcon />
-          <div>
-            <strong>{pendingRequests.length}</strong>
-            <span>
-              demande{pendingRequests.length === 1 ? "" : "s"} à traiter
-            </span>
-          </div>
-        </article>
+      <section className="leave-kpis" aria-label={translate("Synthèse de vos congés")}>
+        <KpiCard
+          label={translate("Solde disponible")}
+          value={`${balance.remainingDays} ${translate(balance.remainingDays === 1 ? "jour" : "jours")}`}
+          detail={`${balance.entitledDays} ${translate("jours attribués")}`}
+          hint={`${balance.usedDays} ${translate("jours consommés cette année")}`}
+          icon={<CalendarBlankIcon />}
+          tone="navy"
+          progress={100 - usedPercent}
+        />
+        <KpiCard
+          label={translate("En attente")}
+          value={`${balance.pendingDays} ${translate(balance.pendingDays === 1 ? "jour" : "jours")}`}
+          detail={translate("En attente de décision")}
+          icon={<ClockIcon />}
+          tone={balance.pendingDays > 0 ? "amber" : "neutral"}
+        />
+        <KpiCard
+          label={translate("Demandes en cours")}
+          value={pendingRequests.length}
+          detail={translate(pendingRequests.length === 1 ? "Demande à suivre" : "Demandes à suivre")}
+          icon={<CalendarBlankIcon />}
+          tone="blue"
+        />
       </section>
 
       <section className="leave-list-card">
         <div className="leave-section-head">
           <div>
-            <h3>Suivi des demandes</h3>
+            <h3>{translate("Suivi des demandes")}</h3>
             <p>
-              Vos demandes, leurs périodes et chaque décision au même endroit.
-            </p>
+              {translate("Vos demandes, leurs périodes et chaque décision au même endroit.")}</p>
           </div>
           <span className="leave-count">{data.requests.length}</span>
         </div>
@@ -261,11 +248,11 @@ export function LeaveWorkspace({
             <CalendarBlankIcon />
             <h4>
               {targetLeaveId
-                ? "Cette demande n’est plus disponible"
+                ? translate("Cette demande n’est plus disponible")
                 : "Aucun congé enregistré"}
             </h4>
             {!targetLeaveId && (
-              <p>Vos demandes envoyées apparaîtront ici avec leur statut.</p>
+              <p>{translate("Vos demandes envoyées apparaîtront ici avec leur statut.")}</p>
             )}
           </div>
         ) : (
@@ -277,25 +264,25 @@ export function LeaveWorkspace({
                   <div className={`leave-status-rail ${status.tone}`} />
                   <div className="leave-request-main">
                     <div className="leave-request-title">
-                      <strong>{TYPES[request.type]}</strong>
+                      <strong>{translate(TYPES[request.type])}</strong>
                       <span className={`leave-status ${status.tone}`}>
-                        {status.label}
+                        {translate(status.label)}
                       </span>
                     </div>
-                    <p>{request.reason}</p>
+                    <p>{translate(request.reason)}</p>
                     <div className="leave-period">
-                      <CalendarBlankIcon /> Du {displayDate(request.startTime)}{" "}
-                      au {displayDate(request.endTime)}
+                      <CalendarBlankIcon />{" "}
+                      {formatDateRange(request.startTime, request.endTime)}
                     </div>
                     {request.decisionReason &&
                       request.status === "REJECTED" && (
                         <p className="leave-decision-note">
-                          Motif du refus : {request.decisionReason}
+                          {translate("Motif du refus :")}{" "}{translate(request.decisionReason)}
                         </p>
                       )}
                   </div>
                   <div className="leave-request-meta">
-                    <small>Mis à jour</small>
+                    <small>{translate("Mis à jour")}</small>
                     <span>{displayDate(request.updatedAt)}</span>
                     {request.editable && (
                       <button
@@ -303,8 +290,7 @@ export function LeaveWorkspace({
                         className="leave-inline-action"
                         onClick={() => openForm(request)}
                       >
-                        <PencilSimpleIcon size={15} /> Modifier
-                      </button>
+                        <PencilSimpleIcon size={15} /> {" "}{translate("Modifier")}</button>
                     )}
                     {request.cancellable && (
                       <button
@@ -315,8 +301,7 @@ export function LeaveWorkspace({
                           setCancelTarget(request);
                         }}
                       >
-                        <XCircleIcon size={15} /> Annuler
-                      </button>
+                        <XCircleIcon size={15} /> {" "}{translate("Annuler")}</button>
                     )}
                   </div>
                 </article>
@@ -330,7 +315,7 @@ export function LeaveWorkspace({
         open={formOpen}
         size="md"
         title={editing ? "Modifier la demande" : "Demander un congé"}
-        subtitle="Votre demande sera transmise à l’administration pour décision."
+        subtitle={translate("Validation par l’administration.")}
         onClose={() => !busy && setFormOpen(false)}
         footer={
           <>
@@ -340,8 +325,7 @@ export function LeaveWorkspace({
               disabled={busy}
               onClick={() => setFormOpen(false)}
             >
-              Annuler
-            </button>
+              {translate("Annuler")}</button>
             <button
               type="submit"
               form="leave-request-form"
@@ -365,10 +349,10 @@ export function LeaveWorkspace({
           onSubmit={(event) => void submitRequest(event)}
         >
           <div className="leave-form-field">
-            <span>Type de congé</span>
+            <span>{translate("Type de congé")}</span>
             <Select
               value={form.type}
-              ariaLabel="Type de congé"
+              ariaLabel={translate("Type de congé")}
               onChange={(value) =>
                 setForm((current) => ({
                   ...current,
@@ -383,7 +367,7 @@ export function LeaveWorkspace({
           </div>
           <div className="leave-form-dates">
             <div className="leave-form-field">
-              <label htmlFor="leave-start">Du</label>
+              <label htmlFor="leave-start">{translate("Du")}</label>
               <input
                 id="leave-start"
                 type="date"
@@ -399,7 +383,7 @@ export function LeaveWorkspace({
               />
             </div>
             <div className="leave-form-field">
-              <label htmlFor="leave-end">Au</label>
+              <label htmlFor="leave-end">{translate("Au")}</label>
               <input
                 id="leave-end"
                 type="date"
@@ -417,27 +401,26 @@ export function LeaveWorkspace({
           </div>
           {requestedDays > 0 && (
             <p className="leave-days-hint">
-              {requestedDays} jour{requestedDays > 1 ? "s" : ""} demandé
-              {requestedDays > 1 ? "s" : ""} · {availableForRequest} disponible
-              {availableForRequest > 1 ? "s" : ""}
+              {requestedDays} {" "}{translate("jour")}{requestedDays === 1 ? "" : "s"} {" "}{translate("demandé")}{requestedDays === 1 ? "" : "s"} {" "}{translate("·")}{" "}{availableForRequest}{" "}
+              {translate("disponible")}{availableForRequest === 1 ? "" : "s"}
             </p>
           )}
           <div className="leave-form-field">
-            <label htmlFor="leave-reason">Motif</label>
+            <label htmlFor="leave-reason">{translate("Motif")}</label>
             <textarea
               id="leave-reason"
-              rows={4}
+              rows={3}
               minLength={8}
               maxLength={500}
               required
-              value={form.reason}
+              value={translate(form.reason)}
               onChange={(event) =>
                 setForm((current) => ({
                   ...current,
                   reason: event.target.value,
                 }))
               }
-              placeholder="Précisez brièvement le motif de votre demande"
+              placeholder={translate("Précisez brièvement le motif de votre demande")}
             />
           </div>
           {formError && (
@@ -451,8 +434,8 @@ export function LeaveWorkspace({
       <Modal
         open={!!cancelTarget}
         size="md"
-        title="Annuler cette demande ?"
-        subtitle="Elle restera visible dans votre historique avec le statut Annulé."
+        title={translate("Annuler cette demande ?")}
+        subtitle={translate("Elle restera visible dans votre historique avec le statut Annulé.")}
         onClose={() => !busy && setCancelTarget(null)}
         footer={
           <>
@@ -462,8 +445,7 @@ export function LeaveWorkspace({
               disabled={busy}
               onClick={() => setCancelTarget(null)}
             >
-              Garder la demande
-            </button>
+              {translate("Garder la demande")}</button>
             <button
               type="button"
               className="admin-button danger"
@@ -482,9 +464,8 @@ export function LeaveWorkspace({
         )}
         {cancelTarget && (
           <p>
-            {TYPES[cancelTarget.type]} · du{" "}
-            {displayDate(cancelTarget.startTime)} au{" "}
-            {displayDate(cancelTarget.endTime)}
+            {TYPES[cancelTarget.type]} {" "}{translate("· du")}{" "}
+            {formatDateRange(cancelTarget.startTime, cancelTarget.endTime)}
           </p>
         )}
       </Modal>

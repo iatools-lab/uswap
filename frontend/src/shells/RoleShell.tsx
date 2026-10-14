@@ -12,14 +12,16 @@ import {
   LayoutDashboard,
   MapPin,
   UserRound,
-  Zap,
 } from "../ui/icons";
 import { SidebarToggle } from "./SidebarToggle";
 import { AppTopbar } from "./AppTopbar";
+import { BrandSignature } from "../ui/BrandSignature";
+import { useI18n } from "../app/i18n";
 import "../styles/admin.css";
 import "../styles/shell.css";
 
 export function RoleShell() {
+  const { t } = useI18n();
   const { session, busy, warning, error, disconnect, extend } = useSession();
   const location = useLocation();
   const navigate = useNavigate();
@@ -38,8 +40,21 @@ export function RoleShell() {
   const homePath = session ? rolePaths[session.user.role] : "/auth/login";
 
   useEffect(() => {
-    document.title = `${account ? (session?.user.role === "SUPERVISOR" ? "Mon compte" : "Compte") : leave ? "Congés" : planning ? "Planning" : attendance ? "Pointages" : session?.user.role === "SWAPPER" ? "Pointage" : title} · uSwap`;
-  }, [account, attendance, leave, planning, session?.user.role, title]);
+    const pageTitle = account
+      ? session?.user.role === "SUPERVISOR"
+        ? "Mon compte"
+        : "Compte"
+      : leave
+        ? "Congés"
+        : planning
+          ? "Planning"
+          : attendance
+            ? "Pointages"
+            : session?.user.role === "SWAPPER"
+              ? "Pointage"
+              : title;
+    document.title = `${t(pageTitle)} · uSwap`;
+  }, [account, attendance, leave, planning, session?.user.role, title, t]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -78,7 +93,7 @@ export function RoleShell() {
       className={`admin-workspace role-workspace${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
     >
       <a className="admin-skip" href="#role-main">
-        Aller au contenu
+        {t("Aller au contenu")}
       </a>
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
@@ -86,26 +101,20 @@ export function RoleShell() {
             className="brand"
             href={homePath}
             onClick={goHome}
-            aria-label={`uSwap, accueil ${roles[session.user.role].toLowerCase()}`}
+            aria-label={t(
+              `uSwap, accueil ${roles[session.user.role].toLowerCase()}`,
+            )}
           >
-            <span className="brand-symbol">
-              <Zap weight="fill" />
-            </span>
-            <span className="brand-lockup">
-              <span className="brand-name">
-                uSwap<span className="brand-dot">.</span>
-              </span>
-              <span className="brand-endorsement">
-                Powered by <strong>uPowa</strong>
-              </span>
-            </span>
+            <BrandSignature />
           </a>
           <SidebarToggle
             collapsed={sidebarCollapsed}
             onToggle={() => setSidebarCollapsed((value) => !value)}
           />
         </div>
-        <nav aria-label={`Navigation ${roles[session.user.role]}`}>
+        <nav
+          aria-label={t(`Navigation ${roles[session.user.role].toUpperCase()}`)}
+        >
           <a
             href={homePath}
             onClick={goHome}
@@ -116,7 +125,9 @@ export function RoleShell() {
             }
           >
             {session.user.role === "SWAPPER" ? <MapPin /> : <LayoutDashboard />}
-            <span>{session.user.role === "SWAPPER" ? "Pointage" : title}</span>
+            <span>
+              {t(session.user.role === "SWAPPER" ? "Pointage" : title)}
+            </span>
           </a>
           {session.user.role === "SUPERVISOR" && (
             <a
@@ -125,7 +136,7 @@ export function RoleShell() {
               aria-current={attendance ? "page" : undefined}
             >
               <Clock3 />
-              <span>Pointages</span>
+              <span>{t("Pointages")}</span>
             </a>
           )}
           <a
@@ -134,7 +145,7 @@ export function RoleShell() {
             aria-current={planning ? "page" : undefined}
           >
             <Clock3 />
-            <span>Planning</span>
+            <span>{t("Planning")}</span>
           </a>
           {(session.user.role === "SWAPPER" ||
             session.user.role === "SUPERVISOR") && (
@@ -144,7 +155,7 @@ export function RoleShell() {
               aria-current={leave ? "page" : undefined}
             >
               <CalendarBlank />
-              <span>Congés</span>
+              <span>{t("Congés")}</span>
             </a>
           )}
           <a
@@ -154,7 +165,7 @@ export function RoleShell() {
           >
             <UserRound />
             <span>
-              {session.user.role === "SUPERVISOR" ? "Mon compte" : "Compte"}
+              {t(session.user.role === "SUPERVISOR" ? "Mon compte" : "Compte")}
             </span>
           </a>
         </nav>
@@ -209,13 +220,13 @@ export function RoleShell() {
             <div className="session-warning" role="alert">
               <Clock3 />
               <div>
-                Votre session va expirer.
+                {t("Votre session va expirer.")}
                 <button
                   className="text-button"
                   onClick={() => void extend()}
                   disabled={busy}
                 >
-                  Prolonger ma session
+                  {t("Prolonger ma session")}
                 </button>
               </div>
             </div>
@@ -225,7 +236,9 @@ export function RoleShell() {
               {error}
             </p>
           )}
-          <Suspense fallback={<RouteFallback label="Chargement de la page…" />}>
+          <Suspense
+            fallback={<RouteFallback label={t("Chargement de la page…")} />}
+          >
             <Outlet context={{ planningResetKey }} />
           </Suspense>
         </main>

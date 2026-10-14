@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { notify } from "../../ui/Toast";
 import { useRef, useState, type DragEvent } from "react";
 import { api, download } from "../../api/auth-api";
@@ -154,7 +155,7 @@ export function UserImport({
           onClick={onBack}
         >
           <ArrowLeft size={16} />
-          <span>Utilisateurs</span>
+          <span>{translate("Utilisateurs")}</span>
         </button>
         <h2>{done ? "Bilan de l’importation" : "Importer des utilisateurs"}</h2>
       </div>
@@ -189,8 +190,8 @@ export function UserImport({
                 <CloudUpload size={36} />
               </div>
               <div className="dropzone-text">
-                <strong>Glissez-déposez votre fichier ici</strong>
-                <span>CSV (UTF-8) ou Excel (.xlsx) • 2 Mo maximum</span>
+                <strong>{translate("Glissez-déposez votre fichier ici")}</strong>
+                <span>{translate("CSV (UTF-8) ou Excel (.xlsx) • 2 Mo maximum")}</span>
               </div>
               <button
                 type="button"
@@ -201,14 +202,13 @@ export function UserImport({
                   fileInput.current?.click();
                 }}
               >
-                Choisir un fichier
-              </button>
+                {translate("Choisir un fichier")}</button>
             </div>
 
             {busy && (
               <div className="import-loading-state">
                 <LoaderCircle className="spin" size={20} />
-                <span>Analyse et vérification du fichier en cours…</span>
+                <span>{translate("Analyse et vérification du fichier en cours…")}</span>
               </div>
             )}
           </section>
@@ -217,11 +217,9 @@ export function UserImport({
           <aside className="admin-card user-import-sidebar">
             <div className="template-download-box">
               <div className="template-box-content">
-                <strong>Modèle de fichier</strong>
+                <strong>{translate("Modèle de fichier")}</strong>
                 <p>
-                  Téléchargez le modèle Excel préformaté pour garantir la
-                  conformité des colonnes.
-                </p>
+                  {translate("Téléchargez le modèle Excel préformaté pour garantir la conformité des colonnes.")}</p>
               </div>
               <button
                 type="button"
@@ -239,29 +237,27 @@ export function UserImport({
             <div className="instructions-box">
               <h3>
                 <Info size={16} />
-                Exigences de structure
-              </h3>
+                {translate("Exigences de structure")}</h3>
               <ul className="instructions-list">
                 <li>
-                  <strong>Colonnes obligatoires :</strong>
+                  <strong>{translate("Colonnes obligatoires :")}</strong>
                   <div className="code-chips">
-                    <code>fullName</code>
-                    <code>email</code>
-                    <code>role</code>
-                    <code>station</code>
+                    <code>{translate("fullName")}</code>
+                    <code>{translate("email")}</code>
+                    <code>{translate("role")}</code>
+                    <code>{translate("station")}</code>
                   </div>
                 </li>
                 <li>
-                  <strong>Rôles autorisés :</strong>
+                  <strong>{translate("Rôles autorisés :")}</strong>
                   <div className="code-chips">
-                    <code>ADMIN</code>
-                    <code>SUPERVISOR</code>
-                    <code>SWAPPER</code>
+                    <code>{translate("ADMIN")}</code>
+                    <code>{translate("SUPERVISOR")}</code>
+                    <code>{translate("SWAPPER")}</code>
                   </div>
                 </li>
                 <li className="note-item">
-                  La station est obligatoire pour les swappeurs. Les comptes seront créés en attente d'activation.
-                </li>
+                  {translate("La station est obligatoire pour les swappeurs. Les comptes seront créés en attente d'activation.")}</li>
               </ul>
             </div>
           </aside>
@@ -275,7 +271,12 @@ export function UserImport({
               <FileSpreadsheet size={24} className="file-icon" />
               <div>
                 <strong>{filename}</strong>
-                <span>{preview.rows.length} ligne(s) analysée(s)</span>
+                <span>
+                  {preview.rows.length}{" "}
+                  {preview.rows.length === 1
+                    ? "ligne analysée"
+                    : "lignes analysées"}
+                </span>
               </div>
             </div>
             {!done && !busy && (
@@ -283,7 +284,7 @@ export function UserImport({
                 type="button"
                 className="toast-close"
                 onClick={clearSelection}
-                aria-label="Changer de fichier"
+                aria-label={translate("Changer de fichier")}
               >
                 <X size={18} />
               </button>
@@ -301,11 +302,11 @@ export function UserImport({
             </div>
             <div className="summary-card warning">
               <span className="summary-val">{preview.ignored}</span>
-              <span className="summary-label">Lignes ignorées</span>
+              <span className="summary-label">{translate("Lignes ignorées")}</span>
             </div>
             <div className="summary-card danger">
               <span className="summary-val">{preview.rejected}</span>
-              <span className="summary-label">Lignes rejetées</span>
+              <span className="summary-label">{translate("Lignes rejetées")}</span>
             </div>
           </div>
 
@@ -314,28 +315,28 @@ export function UserImport({
               <table className="admin-table mobile-card-table">
                 <thead>
                   <tr>
-                    <th>Ligne</th>
-                    <th>Collaborateur</th>
-                    <th>E-mail</th>
-                    <th>Rôle</th>
-                    <th>Station</th>
-                    <th>Résultat</th>
-                    <th>Motif</th>
+                    <th>{translate("Ligne")}</th>
+                    <th>{translate("Collaborateur")}</th>
+                    <th>{translate("E-mail")}</th>
+                    <th>{translate("Rôle")}</th>
+                    <th>{translate("Station")}</th>
+                    <th>{translate("Résultat")}</th>
+                    <th>{translate("Motif")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {preview.rows.map((row) => (
                     <tr key={row.line}>
-                      <td data-label="Ligne">
-                        <strong>#{row.line}</strong>
+                      <td data-label={translate("Ligne")}>
+                        <strong>{translate("#")}{row.line}</strong>
                       </td>
-                      <td data-label="Collaborateur">{row.fullName || "—"}</td>
-                      <td data-label="E-mail">{row.email || "—"}</td>
-                      <td data-label="Rôle">
+                      <td data-label={translate("Collaborateur")}>{row.fullName || "—"}</td>
+                      <td data-label={translate("E-mail")}>{row.email || "—"}</td>
+                      <td data-label={translate("Rôle")}>
                         {row.role ? <code>{row.role}</code> : "—"}
                       </td>
-                      <td data-label="Station">{row.stationName || "—"}</td>
-                      <td data-label="Résultat">
+                      <td data-label={translate("Station")}>{row.stationName || "—"}</td>
+                      <td data-label={translate("Résultat")}>
                         <span
                           className={`admin-badge ${
                             ["READY", "CREATED"].includes(row.status)
@@ -348,7 +349,7 @@ export function UserImport({
                           {labels[row.status] || row.status}
                         </span>
                       </td>
-                      <td data-label="Motif" className="import-reason">
+                      <td data-label={translate("Motif")} className="import-reason">
                         {row.reason || "—"}
                       </td>
                     </tr>
@@ -361,8 +362,7 @@ export function UserImport({
               {done ? (
                 <button type="button" className="admin-button" onClick={onBack}>
                   <CheckCheck size={18} />
-                  Voir les utilisateurs
-                </button>
+                  {translate("Voir les utilisateurs")}</button>
               ) : (
                 <>
                   <button
@@ -371,8 +371,7 @@ export function UserImport({
                     disabled={busy}
                     onClick={clearSelection}
                   >
-                    Changer de fichier
-                  </button>
+                    {translate("Changer de fichier")}</button>
                   <button
                     type="button"
                     className="admin-button"
@@ -380,8 +379,7 @@ export function UserImport({
                     onClick={confirm}
                   >
                     {busy && <LoaderCircle className="spin" size={16} />}
-                    Importer {preview.ready} utilisateur
-                    {preview.ready > 1 ? "s" : ""}
+                    {translate("Importer")}{" "}{preview.ready} {" "}{translate("utilisateur")}{preview.ready === 1 ? "" : "s"}
                   </button>
                 </>
               )}

@@ -1,3 +1,4 @@
+import { currentLocale } from "../../app/i18n";
 /**
  * Formatage lisible d'une période de planification.
  *
@@ -17,11 +18,12 @@ export type PeriodDuration = {
   detail: string;
 };
 
-const plural = (value: number, singular: string) =>
-  `${value} ${singular}${value > 1 ? "s" : ""}`;
+const english = () => currentLocale() === "en-GB";
+const plural = (value: number, singular: string, englishUnit = singular) =>
+  `${value} ${english() ? `${englishUnit}${value === 1 ? "" : "s"}` : `${singular}${value === 1 ? "" : "s"}`}`;
 
-/** « mois » est invariable : on l'affiche sans « s » au pluriel. */
-const monthLabel = (value: number) => `${value} mois`;
+const monthLabel = (value: number) =>
+  `${value} ${english() ? `month${value === 1 ? "" : "s"}` : "mois"}`;
 
 /** Nombre de jours entre deux dates ISO, bornes incluses (au moins 1). */
 export function inclusiveDayCount(startIso: string, endIso: string): number {
@@ -65,20 +67,20 @@ export function periodDuration(
 
   const parts: string[] = [];
   if (months) parts.push(monthLabel(months));
-  if (weeks) parts.push(plural(weeks, "semaine"));
-  if (rest) parts.push(plural(rest, "jour"));
+  if (weeks) parts.push(plural(weeks, "semaine", "week"));
+  if (rest) parts.push(plural(rest, "jour", "day"));
 
   // Un intervalle de plusieurs mois n'a pas besoin du détail en jours.
   const label =
     parts.length === 0
-      ? plural(days, "jour")
+      ? plural(days, "jour", "day")
       : parts.length === 1
         ? parts[0]
-        : `${parts.slice(0, -1).join(" et ")} et ${parts[parts.length - 1]}`;
+        : `${parts.slice(0, -1).join(english() ? " and " : " et ")}${english() ? " and " : " et "}${parts[parts.length - 1]}`;
 
   return {
     days,
     label,
-    detail: plural(days, "jour"),
+    detail: plural(days, "jour", "day"),
   };
 }

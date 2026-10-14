@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../../api/auth-api";
@@ -26,8 +27,13 @@ export function UserDetailPage() {
       })
       .catch((errorData) => {
         if (!active) return;
-        if (errorData instanceof ApiError && [401, 403].includes(errorData.status)) onAccessLost();
-        else setLoadError("Les stations n’ont pas pu être chargées. Réessayez.");
+        if (
+          errorData instanceof ApiError &&
+          [401, 403].includes(errorData.status)
+        )
+          onAccessLost();
+        else
+          setLoadError("Les stations n’ont pas pu être chargées. Réessayez.");
       });
     return () => {
       active = false;
@@ -39,11 +45,13 @@ export function UserDetailPage() {
     return (
       <div className="admin-card admin-empty" role="alert">
         <RefreshCw size={25} />
-        <h2>Chargement indisponible</h2>
+        <h2>{translate("Chargement indisponible")}</h2>
         <p>{loadError}</p>
-        <button className="admin-button" onClick={() => setRevision((value) => value + 1)}>
-          Réessayer
-        </button>
+        <button
+          className="admin-button"
+          onClick={() => setRevision((value) => value + 1)}
+        >
+          {translate("Réessayer")}</button>
       </div>
     );
 
@@ -51,8 +59,7 @@ export function UserDetailPage() {
     return (
       <div className="admin-loading" role="status">
         <LoaderCircle className="spin" size={24} />
-        Chargement de la fiche…
-      </div>
+        {translate("Chargement de la fiche…")}</div>
     );
 
   return (

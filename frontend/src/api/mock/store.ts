@@ -145,18 +145,21 @@ function incidentFitsCurrentScope(
   );
 }
 
-/** Conserve le planning de test et l'historique publié nécessaire à la démo. */
+/** Conserve le planning courant, l'historique et le brouillon de démo. */
 function retainTestPlanning(current: MockDb): MockDb {
   const source =
+    current.plannings.find((item) => item.id === "pl-courant") ??
     current.plannings.find(
       (item) => item.name?.trim().toLocaleLowerCase("fr") === "test",
     ) ??
-    current.plannings.find((item) => item.id === "pl-courant") ??
     current.plannings.find((item) => item.status === "PUBLISHED") ??
     current.plannings[0];
 
   const history = current.plannings.find(
     (item) => item.id === "pl-historique" && item.status === "PUBLISHED",
+  );
+  const demoDraft = current.plannings.find(
+    (item) => item.id === "pl-suivant" && item.status === "DRAFT",
   );
 
   if (!source) {
@@ -174,7 +177,11 @@ function retainTestPlanning(current: MockDb): MockDb {
       createdAt: now.toISOString(),
       publishedAt: null,
     };
-    const retainedPlans = [retained, ...(history ? [history] : [])];
+    const retainedPlans = [
+      retained,
+      ...(history ? [history] : []),
+      ...(demoDraft && demoDraft.id !== retained.id ? [demoDraft] : []),
+    ];
     const planningIds = new Set(retainedPlans.map((item) => item.id));
     const retainedOccurrences = current.occurrences.filter((item) =>
       planningIds.has(item.planningId),
@@ -211,6 +218,7 @@ function retainTestPlanning(current: MockDb): MockDb {
   const retainedPlans = [
     retained,
     ...(history && history.id !== retained.id ? [history] : []),
+    ...(demoDraft && demoDraft.id !== retained.id ? [demoDraft] : []),
   ];
   const planningIds = new Set(retainedPlans.map((item) => item.id));
   const retainedOccurrences = current.occurrences.filter((item) =>
@@ -268,8 +276,14 @@ function migrateDb(candidate: unknown): MockDb | null {
   );
   const currentStations = previous.stations.map((item) => ({
     ...item,
-    geofenceRadiusMeters:
-      Number((item as MockDb["stations"][number]).geofenceRadiusMeters) || 150,
+    geofenceRadiusMeters: Number.isFinite(
+      Number((item as MockDb["stations"][number]).geofenceRadiusMeters),
+    )
+      ? Math.max(
+          0,
+          Number((item as MockDb["stations"][number]).geofenceRadiusMeters),
+        )
+      : 150,
   }));
   const activeStationIds = new Set(
     currentStations
@@ -311,28 +325,83 @@ function migrateDb(candidate: unknown): MockDb | null {
   const compatibleSeedIncidents = seed.incidents.filter((incident) =>
     incidentFitsCurrentScope(incident, currentUsers, currentStationIds),
   );
-  const { qrTokens: _obsoleteQrTokens, ...previousWithoutQr } =
-    previous as Partial<MockDb> & { qrTokens?: unknown };
+  const demoPlanningIds = new Set(["pl-courant", "pl-historique"]);
+  const previousOccurrences = previous.occurrences ?? [];
+  const previousDemoShiftIds = new Set(
+    previousOccurrences
+      .filter((item) => demoPlanningIds.has(item.planningId))
+      .map((item) => item.id),
+  );
+  const freshDemoOccurrences = seed.occurrences.filter((item) =>
+    demoPlanningIds.has(item.planningId),
+  );
+  const freshDemoShiftIds = new Set(
+    freshDemoOccurrences.map((item) => item.id),
+  );
+  const demoTargetIds = new Set([
+    ...demoPlanningIds,
+    ...previousDemoShiftIds,
+    ...freshDemoShiftIds,
+  ]);
+  // Ignore fields from older mock schemas that are no longer part of the app.
+  const previousKnownFields = Object.fromEntries(
+    Object.entries(previous).filter(([key]) => key in seed),
+  ) as Partial<MockDb>;
   const migrated = {
     ...seed,
-    ...previousWithoutQr,
+    ...previousKnownFields,
     version: DB_VERSION,
-    // Garde le planning Test local tout en ajoutant une vraie période publiée
-    // terminée pour que l'archive swappeur soit testable après migration.
+    // Les deux plannings de démonstration sont relatifs à la date courante.
+    // Les rafraîchir ensemble évite qu'un ancien « Test » se retrouve sur la
+    // même période que l'historique et vide le suivi en direct.
     plannings: [
-      ...(previous.plannings ?? []),
-      ...seed.plannings.filter(
-        (item) =>
-          item.id === "pl-historique" &&
-          !(previous.plannings ?? []).some((saved) => saved.id === item.id),
+      ...(previous.plannings ?? []).filter(
+        (item) => !demoPlanningIds.has(item.id),
       ),
+      ...seed.plannings.filter((item) => demoPlanningIds.has(item.id)),
     ],
     occurrences: [
-      ...(previous.occurrences ?? []),
-      ...seed.occurrences.filter(
-        (item) =>
-          item.planningId === "pl-historique" &&
-          !(previous.occurrences ?? []).some((saved) => saved.id === item.id),
+      ...previousOccurrences.filter(
+        (item) => !demoPlanningIds.has(item.planningId),
+      ),
+      ...freshDemoOccurrences,
+    ],
+    attendance: [
+      ...(previous.attendance ?? []).filter(
+        (item) => !previousDemoShiftIds.has(item.shiftId),
+      ),
+      ...seed.attendance.filter((item) => freshDemoShiftIds.has(item.shiftId)),
+    ],
+    absences: [
+      ...(previous.absences ?? []).filter(
+        (item) => !previousDemoShiftIds.has(item.shiftId),
+      ),
+      ...seed.absences.filter((item) => freshDemoShiftIds.has(item.shiftId)),
+    ],
+    changes: [
+      ...(previous.changes ?? []).filter(
+        (item) => !previousDemoShiftIds.has(item.shiftId),
+      ),
+      ...seed.changes.filter((item) => freshDemoShiftIds.has(item.shiftId)),
+    ],
+    automatedAbsences: [
+      ...(previous.automatedAbsences ?? []).filter(
+        (id) => !previousDemoShiftIds.has(id),
+      ),
+      ...seed.automatedAbsences.filter((id) => freshDemoShiftIds.has(id)),
+    ],
+    notices: [
+      ...(previous.notices ?? []).filter(
+        (item) => !demoPlanningIds.has(item.planningId),
+      ),
+      ...seed.notices.filter((item) => demoPlanningIds.has(item.planningId)),
+    ],
+    notifications: [
+      ...(previous.notifications ?? []).filter(
+        (item) => !item.targetId || !demoTargetIds.has(item.targetId),
+      ),
+      ...seed.notifications.filter(
+        (item) => item.targetId && demoTargetIds.has(item.targetId),
       ),
     ],
     // Ajoute les nouveaux profils fictifs sans écraser les comptes locaux :

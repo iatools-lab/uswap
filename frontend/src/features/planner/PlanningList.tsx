@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import {translate,  useI18n } from "../../app/i18n";
 import {
   CalendarBlankIcon,
   CalendarDotsIcon,
@@ -8,8 +9,9 @@ import {
   MapPinIcon,
   PlusIcon,
   LightningIcon,
-} from "@phosphor-icons/react";
+} from "../../ui/icons";
 import { periodDuration } from "./duration";
+import { formatDateRange } from "../../utils/french";
 import "./planning-list.css";
 
 export type PlanningListItem = {
@@ -38,32 +40,8 @@ function planningHasEnded(endDate: string, now = Date.now()) {
   return Date.parse(value) < now;
 }
 
-const dayShort = (value: string) =>
-  new Date(value).toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-
-/** Libellé de période compact : « Du 15 au 21/09/2025 ». */
 function periodLabel(startIso: string, endIso: string) {
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  const sd = start.getUTCDate();
-  const sm = start.getUTCMonth() + 1;
-  const sy = start.getUTCFullYear();
-  const ed = end.getUTCDate();
-  const em = end.getUTCMonth() + 1;
-  const ey = end.getUTCFullYear();
-  const two = (n: number) => String(n).padStart(2, "0");
-  if (sy === ey && sm === em && sd === ed)
-    return `Le ${two(sd)}/${two(sm)}/${sy}`;
-  if (sy === ey && sm === em)
-    return `Du ${two(sd)} au ${two(ed)}/${two(sm)}/${sy}`;
-  if (sy === ey)
-    return `Du ${two(sd)}/${two(sm)} au ${two(ed)}/${two(em)}/${sy}`;
-  return `Du ${two(sd)}/${two(sm)}/${sy} au ${two(ed)}/${two(em)}/${ey}`;
+  return formatDateRange(startIso, endIso);
 }
 
 /**
@@ -94,6 +72,7 @@ export function PlanningList({
   error?: string;
   onRetry?: () => void;
 }) {
+  const { t, locale } = useI18n();
   const [status, setStatus] = useState<StatusFilter>("ALL");
   const [swapperPeriod, setSwapperPeriod] =
     useState<SwapperPeriodFilter>("ALL");
@@ -139,18 +118,18 @@ export function PlanningList({
     return (
       <section className="admin-card admin-empty" role="status">
         <CalendarDotsIcon size={30} weight="regular" />
-        <h3>Chargement des plannings…</h3>
+        <h3>{t("Chargement des plannings…")}</h3>
       </section>
     );
 
   if (error)
     return (
       <section className="admin-card admin-empty" role="alert">
-        <h2>Chargement indisponible</h2>
+        <h2>{t("Chargement indisponible")}</h2>
         <p>{error}</p>
         {onRetry && (
           <button className="admin-button" onClick={onRetry}>
-            Réessayer
+            {t("Réessayer")}
           </button>
         )}
       </section>
@@ -180,13 +159,13 @@ export function PlanningList({
     return (
       <section
         className="swapper-planning-directory"
-        aria-label="Mes plannings publiés"
+        aria-label={t("Mes plannings publiés")}
       >
         <header className="swapper-planning-directory__intro">
           <div>
-            <span className="admin-eyebrow">Mes affectations</span>
-            <h2>Mes plannings</h2>
-            <p>Consultez vos services à venir et vos périodes terminées.</p>
+            <span className="admin-eyebrow">{t("Mes affectations")}</span>
+            <h2>{t("Mes plannings")}</h2>
+            <p>{t("Consultez vos services à venir et vos périodes terminées.")}</p>
           </div>
         </header>
 
@@ -194,13 +173,13 @@ export function PlanningList({
           <div
             className="swapper-planning-period-filters"
             role="group"
-            aria-label="Filtrer mes plannings par période"
+            aria-label={t("Filtrer mes plannings par période")}
           >
             {(
               [
-                ["ALL", "Tous"],
-                ["ACTIVE", "En cours"],
-                ["COMPLETED", "Terminés"],
+                ["ALL", t("Tous")],
+                ["ACTIVE", t("En cours")],
+                ["COMPLETED", t("Terminés")],
               ] as [SwapperPeriodFilter, string][]
             ).map(([value, label]) => (
               <button
@@ -221,14 +200,14 @@ export function PlanningList({
             <h3>
               {publishedPlans.length > 0
                 ? swapperPeriod === "COMPLETED"
-                  ? "Aucun planning terminé"
-                  : "Aucun planning à venir"
-                : "Aucun planning publié"}
+                  ? t("Aucun planning terminé")
+                  : t("Aucun planning à venir")
+                : t("Aucun planning publié")}
             </h3>
             <p>
               {publishedPlans.length > 0
-                ? "Changez de période pour consulter vos autres plannings."
-                : "Vos plannings apparaîtront ici dès qu’une affectation vous sera publiée."}
+                ? t("Changez de période pour consulter vos autres plannings.")
+                : t("Vos plannings apparaîtront ici dès qu’une affectation vous sera publiée.")}
             </p>
           </section>
         ) : (
@@ -256,7 +235,7 @@ export function PlanningList({
                   className="swapper-planning-entry"
                   disabled={busy || Boolean(openingId)}
                   aria-busy={opening}
-                  aria-label={`Ouvrir le planning ${plan.name || periodLabel(plan.startDate, plan.endDate)}`}
+                  aria-label={`Ouvrir le planning ${translate(plan.name || periodLabel(plan.startDate, plan.endDate))}`}
                   onClick={async () => {
                     setOpeningId(plan.id);
                     try {
@@ -275,7 +254,7 @@ export function PlanningList({
                     </span>
                     <span className="swapper-planning-entry__title">
                       <strong>
-                        {plan.name || periodLabel(plan.startDate, plan.endDate)}
+                        {translate(plan.name || periodLabel(plan.startDate, plan.endDate))}
                       </strong>
                       <small>{periodLabel(plan.startDate, plan.endDate)}</small>
                     </span>
@@ -300,12 +279,11 @@ export function PlanningList({
                     </span>
                     <span>
                       <CalendarBlankIcon size={14} /> {plan.occurrences.length}{" "}
-                      shift{plan.occurrences.length > 1 ? "s" : ""}
+                      {translate("shift")}{plan.occurrences.length === 1 ? "" : "s"}
                     </span>
                     {completed && (
                       <span className="swapper-planning-entry__complete">
-                        Terminé
-                      </span>
+                        {translate("Terminé")}</span>
                     )}
                   </span>
 
@@ -313,10 +291,10 @@ export function PlanningList({
                     <span className="swapper-planning-entry__next">
                       <ClockIcon size={15} />
                       <span>
-                        <small>Prochain service</small>
+                        <small>{translate("Prochain service")}</small>
                         <strong>
                           {new Date(nextShift.startTime || "").toLocaleString(
-                            "fr-FR",
+                            locale,
                             {
                               day: "2-digit",
                               month: "short",
@@ -348,8 +326,8 @@ export function PlanningList({
             <div className="admin-search planner-listing__search">
               <MagnifyingGlassIcon size={18} aria-hidden="true" />
               <input
-                aria-label="Rechercher un planning"
-                placeholder="Nom, station ou période…"
+                aria-label={translate("Rechercher un planning")}
+                placeholder={translate("Nom, station ou période…")}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -360,34 +338,32 @@ export function PlanningList({
               className="admin-button secondary planner-generate-btn"
               onClick={onGenerate}
               disabled={busy}
-              title="Crée les shifts des stations choisies puis répartit les swappeurs de chacune"
+              title={translate("Crée les shifts des stations choisies puis répartit les swappeurs de chacune")}
             >
               <LightningIcon size={18} aria-hidden="true" />
-              Générer automatiquement
-            </button>
+              {translate("Générer automatiquement")}</button>
           )}
           {canCreate && onCreate && (
             <button
               className="admin-button primary-cta"
               onClick={onCreate}
               disabled={busy}
-              title="Crée un brouillon avec des postes à affecter depuis le calendrier"
+              title={translate("Crée un brouillon avec des postes à affecter depuis le calendrier")}
             >
               <PlusIcon size={18} aria-hidden="true" />
-              Créer un brouillon
-            </button>
+              {translate("Créer un brouillon")}</button>
           )}
         </div>
         {plans.length > 0 && (
           <div
             className="planner-listing__filters"
             role="group"
-            aria-label="Statut des plannings"
+            aria-label={translate("Statut des plannings")}
           >
             {(
               [
-                ["ALL", "Tous", counts.all],
-                ["PUBLISHED", "Publiés", counts.published],
+                ["ALL", t("Tous"), counts.all],
+                ["PUBLISHED", t("Publiés"), counts.published],
                 ["DRAFT", "Brouillons", counts.draft],
               ] as [StatusFilter, string, number][]
             ).map(([value, label, count]) => (
@@ -409,22 +385,22 @@ export function PlanningList({
       {!plans.length ? (
         <section className="admin-card admin-empty">
           <CalendarBlankIcon size={30} weight="regular" />
-          <h3>Aucun planning pour le moment</h3>
+          <h3>{t("Aucun planning pour le moment")}</h3>
           <p>
             {canCreate
-              ? "Créez votre premier planning pour commencer à affecter des swappeurs."
-              : "Vos horaires apparaîtront ici dès leur publication."}
+              ? t("Créez votre premier planning pour commencer à affecter des swappeurs.")
+              : t("Vos horaires apparaîtront ici dès leur publication.")}
           </p>
           {canCreate && onCreate && (
             <button className="admin-button" onClick={onCreate}>
-              Créer un brouillon
+              {t("Créer un brouillon")}
             </button>
           )}
         </section>
       ) : !rows.length ? (
         <section className="admin-card admin-empty">
-          <h3>Aucun planning ne correspond</h3>
-          <p>Essayez un autre statut ou un autre terme de recherche.</p>
+          <h3>{t("Aucun planning ne correspond")}</h3>
+          <p>{t("Essayez un autre statut ou un autre terme de recherche.")}</p>
         </section>
       ) : (
         <div className="admin-card planner-listing__table-card">
@@ -432,13 +408,13 @@ export function PlanningList({
             <table className="admin-table planner-table">
               <thead>
                 <tr>
-                  <th>Planning</th>
-                  <th>Période</th>
-                  <th>Durée</th>
-                  <th>Station</th>
-                  <th>Shifts inclus</th>
-                  <th>Statut</th>
-                  <th aria-label="Action" />
+                  <th>{t("Planning")}</th>
+                  <th>{t("Période")}</th>
+                  <th>{t("Durée")}</th>
+                  <th>{t("Station")}</th>
+                  <th>{t("Shifts inclus")}</th>
+                  <th>{t("Statut")}</th>
+                  <th aria-label={translate("Action")} />
                 </tr>
               </thead>
               <tbody>
@@ -458,7 +434,7 @@ export function PlanningList({
                       tabIndex={0}
                       role="link"
                       aria-busy={openingId === plan.id}
-                      aria-label={`Ouvrir le planning ${plan.name || periodLabel(plan.startDate, plan.endDate)}`}
+                      aria-label={`Ouvrir le planning ${translate(plan.name || periodLabel(plan.startDate, plan.endDate))}`}
                       onClick={async () => {
                         if (busy || openingId) return;
                         setOpeningId(plan.id);
@@ -482,51 +458,48 @@ export function PlanningList({
                       <td>
                         <span className="planner-table__title">
                           <strong>
-                            {plan.name ||
-                              periodLabel(plan.startDate, plan.endDate)}
+                            {translate(plan.name ||
+                              periodLabel(plan.startDate, plan.endDate))}
                           </strong>
-                          <small>Révision {plan.revision}</small>
+                          <small>{t("Révision")} {plan.revision}</small>
                         </span>
                       </td>
-                      <td className="planner-table__dates" data-label="Période">
-                        <span>{dayShort(plan.startDate)}</span>
-                        <span className="planner-table__arrow">→</span>
-                        <span>{dayShort(plan.endDate)}</span>
+                      <td className="planner-table__dates" data-label={translate("Période")}>
+                        <span>{periodLabel(plan.startDate, plan.endDate)}</span>
                       </td>
-                      <td data-label="Durée">
+                      <td data-label={translate("Durée")}>
                         <span className="planner-table__duration">
-                          <strong>{duration.label}</strong>
+                          <strong>{translate(duration.label)}</strong>
                           <small>{duration.detail}</small>
                         </span>
                       </td>
-                      <td data-label="Station">
+                      <td data-label={translate("Station")}>
                         <span className="planner-table__stations">
                           {stations.length === 0 ? (
-                            <em className="planner-muted">—</em>
+                            <em className="planner-muted">{translate("—")}</em>
                           ) : (
                             <>
                               <strong>{stations[0]}</strong>
                               {stations.length > 1 && (
                                 <small>
-                                  +{stations.length - 1} autre
-                                  {stations.length > 2 ? "s" : ""}
+                                  {translate("+")}{stations.length - 1} {" "}{translate("autre")}{stations.length > 2 ? "s" : ""}
                                 </small>
                               )}
                             </>
                           )}
                         </span>
                       </td>
-                      <td data-label="Shifts inclus">
+                      <td data-label={translate("Shifts inclus")}>
                         <span className="planner-table__shifts">
                           <strong>{shiftCount}</strong>
-                          <small>shift{shiftCount > 1 ? "s" : ""}</small>
+                          <small>{t(shiftCount === 1 ? "shift" : "shifts")}</small>
                         </span>
                       </td>
-                      <td data-label="Statut">
+                      <td data-label={translate("Statut")}>
                         <span
                           className={`admin-badge ${draft ? "draft" : "active"}`}
                         >
-                          {draft ? "Brouillon" : "Publié"}
+                          {t(draft ? "Brouillon" : "Publié")}
                         </span>
                       </td>
                       <td className="planner-table__go">
@@ -548,8 +521,7 @@ export function PlanningList({
 
           {!canCreate && (
             <p className="planner-listing__note">
-              Consultation seule : vous voyez les plannings publiés de votre
-              station et vos propres shifts.
+              {t("Consultation seule : vous voyez les plannings publiés de votre station et vos propres shifts.")}
             </p>
           )}
         </div>

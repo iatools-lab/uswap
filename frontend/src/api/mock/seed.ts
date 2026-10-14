@@ -170,7 +170,7 @@ export const FICTITIOUS_DOMAIN = "uswap.example.com";
  * referme aussi les sessions en cours (comportement attendu lors d'un
  * changement de schéma, jamais lors d'un simple rechargement).
  */
-export const DB_VERSION = 15;
+export const DB_VERSION = 16;
 
 /** Mot de passe commun aux comptes de démonstration (fictifs). */
 export const DEMO_PASSWORD = "uswap2026";
