@@ -140,19 +140,6 @@ export class OperationsService {
       return { unrestricted: true, stationIds: [] };
     }
 
-    if (user.role === Role.STATION_CHIEF) {
-      if (!user.stationId) {
-        throw new ForbiddenException(
-          'This station chief is not assigned to a station.',
-        );
-      }
-
-      return {
-        unrestricted: false,
-        stationIds: [user.stationId],
-      };
-    }
-
     if (user.role === Role.SUPERVISOR) {
       const stationIds = new Set<string>();
 
@@ -223,7 +210,7 @@ export class OperationsService {
   }
 
   // ============================================================
-  // BLOC A â€” OPEN A REPLACEMENT REQUEST
+  // BLOC A ” OPEN A REPLACEMENT REQUEST
   // ============================================================
 
   /**
@@ -343,15 +330,15 @@ export class OperationsService {
     const when = shift.startTime.toISOString().slice(0, 16).replace('T', ' ');
 
     await this.notifications.notifyRoles({
-      roles: [Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF],
+      roles: [Role.ADMIN, Role.SUPERVISOR],
       stationIds: [shift.stationId],
       kind: NotificationKind.REPLACEMENT_REQUESTED,
       title: isAutomatic
-        ? `Absence constatÃ©e â€” ${shift.station.name}`
-        : `EmpÃªchement dÃ©clarÃ© â€” ${shift.station.name}`,
+        ? `Absence constatée ” ${shift.station.name}`
+        : `Empêchement déclaré ” ${shift.station.name}`,
       body: isAutomatic
-        ? `Aucun pointage enregistrÃ© pour ${shift.swapper.fullName} (${when}). Un remplaÃ§ant est nÃ©cessaire.`
-        : `${shift.swapper.fullName} ne peut plus assurer le shift du ${when}. Motif : ${params.reason ?? 'non prÃ©cisÃ©'}.`,
+        ? `Aucun pointage enregistré pour ${shift.swapper.fullName} (${when}). Un remplaçant est nécessaire.`
+        : `${shift.swapper.fullName} ne peut plus assurer le shift du ${when}. Motif : ${params.reason ?? 'non précisé'}.`,
       link: '/app/supervision/operations',
       entityId: params.requestId,
     });
@@ -457,7 +444,7 @@ export class OperationsService {
   }
 
   // ============================================================
-  // BLOC B â€” PENDING REPLACEMENTS (COVERAGE QUEUE)
+  // BLOC B ” PENDING REPLACEMENTS (COVERAGE QUEUE)
   // ============================================================
 
   async findPendingReplacements(userId: string) {
@@ -562,7 +549,7 @@ export class OperationsService {
   }
 
   // ============================================================
-  // BLOC B â€” SHIFT CHANGE HISTORY
+  // BLOC B ” SHIFT CHANGE HISTORY
   // ============================================================
 
   async findShiftChanges(
@@ -685,7 +672,7 @@ export class OperationsService {
   }
 
   // ============================================================
-  // BLOC C â€” REPLACEMENT CANDIDATES
+  // BLOC C ” REPLACEMENT CANDIDATES
   // ============================================================
 
   /**
@@ -717,7 +704,7 @@ export class OperationsService {
 
     if (!shift.swapperId) {
       throw new BadRequestException(
-        'Ce poste est vacant et ne nÃ©cessite pas de remplacement.',
+        'Ce poste est vacant et ne nécessite pas de remplacement.',
       );
     }
 
@@ -772,7 +759,7 @@ export class OperationsService {
   }
 
   // ============================================================
-  // BLOC C â€” ASSIGN A REPLACEMENT
+  // BLOC C ” ASSIGN A REPLACEMENT
   // ============================================================
 
   /**
@@ -1028,11 +1015,11 @@ export class OperationsService {
 
     const when = params.startTime.toISOString().slice(0, 16).replace('T', ' ');
 
-    // The incoming swapper â€” the most important message of the three.
+    // The incoming swapper ” the most important message of the three.
     await this.notifications.notify({
       userId: params.newSwapperId,
       kind: NotificationKind.REPLACEMENT_ASSIGNED,
-      title: 'Nouveau shift qui vous est affectÃ©',
+      title: 'Nouveau shift qui vous est affecté',
       body: `Vous remplacez sur ${station?.name ?? 'la station'} le ${when}. Motif : ${params.reason}.`,
       link: '/app/supervision/operations',
       entityId: params.shiftId,
@@ -1042,19 +1029,19 @@ export class OperationsService {
     await this.notifications.notify({
       userId: params.previousSwapperId,
       kind: NotificationKind.SHIFT_CHANGED,
-      title: 'Vous Ãªtes dÃ©chargÃ© de ce shift',
-      body: `${params.newSwapperName} assure dÃ©sormais le shift du ${when} Ã  ${station?.name ?? 'la station'}.`,
+      title: 'Vous êtes déchargé de ce shift',
+      body: `${params.newSwapperName} assure désormais le shift du ${when} à ${station?.name ?? 'la station'}.`,
       link: '/app/supervision/operations',
       entityId: params.shiftId,
     });
 
     // Supervision gets the confirmation.
     await this.notifications.notifyRoles({
-      roles: [Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF],
+      roles: [Role.ADMIN, Role.SUPERVISOR],
       stationIds: [params.stationId],
       kind: NotificationKind.SHIFT_CHANGED,
-      title: 'Remplacement effectuÃ©',
-      body: `${params.newSwapperName} couvre le shift du ${when} Ã  ${station?.name ?? 'la station'}.`,
+      title: 'Remplacement effectué',
+      body: `${params.newSwapperName} couvre le shift du ${when} à ${station?.name ?? 'la station'}.`,
       link: '/app/supervision/operations',
       entityId: params.shiftId,
     });

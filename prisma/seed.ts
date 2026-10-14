@@ -69,8 +69,8 @@ const USERS: DemoUser[] = [
   },
   {
     email: 'chef@upowa.org',
-    fullName: 'Chef de station Bonabéri',
-    role: Role.STATION_CHIEF,
+    fullName: 'Superviseur Bonabéri',
+    role: Role.SUPERVISOR,
     stationKey: 'douala',
   },
   {
@@ -418,7 +418,7 @@ async function main() {
   console.log('========================================');
   console.log('  ADMIN          admin@upowa.org');
   console.log('  SUPERVISOR     superviseur@upowa.org');
-  console.log('  STATION_CHIEF  chef@upowa.org');
+  console.log('  SUPERVISOR     chef@upowa.org');
   console.log('  SWAPPER        awa.nkolo@upowa.org');
   console.log('  SWAPPER        jean.dupont@upowa.org');
   console.log('  SWAPPER        paul.mbarga@upowa.org');

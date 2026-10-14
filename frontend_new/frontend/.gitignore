@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.tsbuildinfo
+docs/
+fe-build.txt
+fe-check.txt

@@ -27,7 +27,6 @@ model User {
   tokenVersion               Int                     @default(0)
   attendances                Attendance[]
   attendanceCorrections      AttendanceCorrection[]  @relation("AttendanceCorrectionBy")
-  attendanceQrsCreated       AttendanceQr[]          @relation("AttendanceQrCreatedBy")
   incidentsAffected          Incident[]              @relation("IncidentAffectedSwapper")
   incidentsAssigned          Incident[]              @relation("IncidentAssignee")
   incidentsReported          Incident[]              @relation("IncidentReporter")
@@ -75,11 +74,9 @@ model Station {
   location                 String?
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
-  checkinQrTtl             Int                @default(300)
-  checkoutQrTtl            Int                @default(300)
   contactName              String?
   contactPhone             String?
-  latenessToleranceMinutes Int                @default(0)
+  latenessToleranceMinutes Int      @default(5)
   minRestHours             Int                @default(8)
   timezone                 String             @default("Africa/Douala")
   weeklyHoursLimit         Int                @default(72)
@@ -93,7 +90,6 @@ model Station {
   address                  String?
   city                     String?
   attendances              Attendance[]
-  attendanceQrs            AttendanceQr[]
   incidents                Incident[]
   planningStations         PlanningStation[]
   shifts                   Shift[]
@@ -181,17 +177,22 @@ model Shift {
   endTime             DateTime
   createdAt           DateTime             @default(now())
   planningId          String?
+  /// Modèle de shift dont ce créneau est issu. Conserver le lien permet au
+  /// planning d'afficher la pause du modèle ; sans lui, les shifts générés
+  /// apparaissaient « sans pause » alors que la station en avait bien une.
+  templateId          String?
   attendances         Attendance[]
-  attendanceQrs       AttendanceQr[]
   replacementRequests ReplacementRequest[]
   planning            Planning?            @relation(fields: [planningId], references: [id])
   station             Station              @relation(fields: [stationId], references: [id])
   swapper             User?                @relation(fields: [swapperId], references: [id])
+  template            ShiftTemplate?       @relation(fields: [templateId], references: [id])
   shiftChanges        ShiftChange[]
 
   @@index([stationId, startTime])
   @@index([swapperId, startTime])
   @@index([planningId])
+  @@index([templateId])
   @@index([startTime, endTime])
 }
 
@@ -222,25 +223,6 @@ model Attendance {
   @@index([swapperId, status])
   @@index([stationId, status])
   @@index([shiftId])
-}
-
-model AttendanceQr {
-  id          String           @id @default(uuid())
-  stationId   String
-  shiftId     String
-  type        AttendanceQrType
-  tokenHash   String           @unique
-  expiresAt   DateTime
-  usedAt      DateTime?
-  createdById String
-  createdAt   DateTime         @default(now())
-  createdBy   User             @relation("AttendanceQrCreatedBy", fields: [createdById], references: [id])
-  shift       Shift            @relation(fields: [shiftId], references: [id], onDelete: Cascade)
-  station     Station          @relation(fields: [stationId], references: [id], onDelete: Cascade)
-
-  @@index([shiftId, type])
-  @@index([stationId, expiresAt])
-  @@index([expiresAt])
 }
 
 model AttendanceCorrection {
@@ -367,6 +349,7 @@ model ShiftTemplate {
   updatedAt       DateTime               @updatedAt
   station         Station                @relation(fields: [stationId], references: [id], onDelete: Cascade)
   versions        ShiftTemplateVersion[]
+  shifts          Shift[]
 
   @@unique([stationId, startTime, endTime])
   @@index([stationId])
@@ -614,7 +597,6 @@ model LeaveSyncOperation {
 enum Role {
   ADMIN
   SUPERVISOR
-  STATION_CHIEF
   SWAPPER
 }
 
@@ -644,11 +626,6 @@ enum AttendanceStatus {
   CHECKED_OUT
   ABSENT
   JUSTIFIED
-}
-
-enum AttendanceQrType {
-  START
-  END
 }
 
 enum ReplacementStatus {

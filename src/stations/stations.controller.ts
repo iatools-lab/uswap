@@ -30,7 +30,7 @@ export class StationsController {
     return this.stationsService.create(dto);
   }
 
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Get()
   findAll() {
     return this.stationsService.findAll();
@@ -40,7 +40,7 @@ export class StationsController {
   // SHIFT TEMPLATES (nested under a station, as the screen calls them)
   // ============================================================
 
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Get(':id/shift-templates')
   findTemplates(@Param('id') id: string) {
     return this.stationsService.findTemplates(id);
@@ -62,7 +62,7 @@ export class StationsController {
     return this.stationsService.createTemplate(id, body);
   }
 
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Get(':id/shift-templates/:templateId/history')
   findTemplateHistory(
     @Param('id') id: string,
@@ -89,7 +89,7 @@ export class StationsController {
     return this.stationsService.updateTemplate(id, templateId, body);
   }
 
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.stationsService.findOne(id);

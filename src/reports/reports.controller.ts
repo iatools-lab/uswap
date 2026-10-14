@@ -36,6 +36,17 @@ export class ReportsController {
 
   // ---------- Global settings (admin) ----------
 
+  /**
+   * Sprint 6 : journal d'audit consolide (comptes, incidents, affectations,
+   * reglages). Alimente `/admin/audit` cote frontend.
+   */
+  @Get('admin/audit')
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @ApiOperation({ summary: "Journal d'audit consolide" })
+  audit() {
+    return this.reportsService.auditLog();
+  }
+
   @Get('admin/settings')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Reglages globaux du reseau et historique' })
@@ -56,7 +67,7 @@ export class ReportsController {
   // ---------- Operational report dashboard ----------
 
   @Get('reports/dashboard')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @ApiOperation({
     summary: 'Tableau de bord operationnel (pointages, couverture)',
   })
@@ -94,7 +105,7 @@ export class ReportsController {
   }
 
   @Get('reports/export')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @ApiOperation({ summary: 'Exporter un rapport filtré en CSV ou Excel' })
   async export(
     @Req() req: AuthenticatedRequest,

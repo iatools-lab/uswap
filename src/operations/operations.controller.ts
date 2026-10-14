@@ -77,7 +77,7 @@ export class OperationsController {
   // ============================================================
 
   @Get('replacements/pending')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   findPendingReplacements(@Req() req: AuthenticatedRequest) {
     return this.operationsService.findPendingReplacements(req.user.id);
   }
@@ -87,7 +87,7 @@ export class OperationsController {
   // ============================================================
 
   @Get('changes')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   findShiftChanges(
     @Req() req: AuthenticatedRequest,
     @Query('from') from?: string,
@@ -108,7 +108,7 @@ export class OperationsController {
   // ============================================================
 
   @Get('shifts/:shiftId/candidates')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   findReplacementCandidates(
     @Req() req: AuthenticatedRequest,
     @Param('shiftId') shiftId: string,
@@ -124,7 +124,7 @@ export class OperationsController {
   // ============================================================
 
   @Post('shifts/:shiftId/replacement')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   assignReplacement(
     @Req() req: AuthenticatedRequest,
     @Param('shiftId') shiftId: string,

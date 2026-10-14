@@ -89,7 +89,7 @@ export class IncidentsService {
         : [];
 
     const scopeStationId =
-      actor.role === Role.STATION_CHIEF
+      actor.role === Role.SUPERVISOR && !stationId
         ? ((await this.primaryStationOf(actor.id)) ?? undefined)
         : stationId;
 
@@ -120,22 +120,38 @@ export class IncidentsService {
     };
   }
 
-  /** Declares an incident. Only a station chief raises one, for its own staff. */
+  /** Declares an incident. Supervisors can report for a station's swapper;
+   * swappers can report incidents concerning themselves. */
   async create(actor: Actor, dto: CreateIncidentDto) {
-    if (actor.role !== Role.STATION_CHIEF) {
-      throw new ForbiddenException(
-        'Seul un chef de station peut déclarer un incident.',
-      );
+    let stationId: string | null = null;
+    let affectedSwapperId = dto.affectedSwapperId;
+
+    if (actor.role === Role.SWAPPER) {
+      const self = await this.prisma.user.findUnique({
+        where: { id: actor.id },
+        select: { id: true, fullName: true, stationId: true, role: true, isActive: true },
+      });
+      if (!self?.isActive || self.role !== Role.SWAPPER || !self.stationId) {
+        throw new BadRequestException('Votre compte n’est pas rattaché à une station active.');
+      }
+      stationId = self.stationId;
+      affectedSwapperId = actor.id;
+    } else if (actor.role === Role.SUPERVISOR) {
+      stationId = await this.primaryStationOf(actor.id);
+      if (!stationId) {
+        throw new BadRequestException('Sélectionnez une station valide.');
+      }
+    } else {
+      throw new ForbiddenException('Vous ne pouvez pas déclarer un incident.');
     }
 
-    const stationId = await this.primaryStationOf(actor.id);
     if (!stationId) {
       throw new BadRequestException('Sélectionnez une station valide.');
     }
 
     const affected = await this.prisma.user.findFirst({
       where: {
-        id: dto.affectedSwapperId,
+        id: affectedSwapperId,
         role: Role.SWAPPER,
         isActive: true,
         stationId,
@@ -276,7 +292,7 @@ export class IncidentsService {
     });
 
     await this.notifications.notifyRoles({
-      roles: [Role.STATION_CHIEF, Role.SUPERVISOR, Role.ADMIN],
+      roles: [Role.SUPERVISOR, Role.ADMIN],
       stationIds: [incident.stationId],
       kind: NotificationKind.INCIDENT,
       title: `Incident ${nextStatus.toLowerCase()}`,
@@ -289,18 +305,12 @@ export class IncidentsService {
     return this.serialize(updated);
   }
 
-  /** Supervisors and admins read the whole network; a chief only its station. */
+  /** Supervisors and admins read the whole network; a supervisor may be
+   * scoped to their own station. */
   private async resolveStationFilter(
     actor: Actor,
     requested?: string,
   ): Promise<string | undefined> {
-    if (actor.role === Role.STATION_CHIEF) {
-      const stationId = await this.primaryStationOf(actor.id);
-      if (!stationId) {
-        throw new BadRequestException('Aucune station associée à ce compte.');
-      }
-      return stationId;
-    }
     if (actor.role === Role.SUPERVISOR || actor.role === Role.ADMIN) {
       return requested || undefined;
     }

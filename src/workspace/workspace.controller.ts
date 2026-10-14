@@ -29,7 +29,7 @@ export class WorkspaceController {
    * payload adapts to the caller instead of being role-split across routes.
    */
   @Get()
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF, Role.SWAPPER)
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.SWAPPER)
   getWorkspace(@Req() req: AuthenticatedRequest) {
     return this.workspaceService.getWorkspace(req.user.id);
   }

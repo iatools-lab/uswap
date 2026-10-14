@@ -71,11 +71,14 @@ export type AttendanceHistoryRow = {
   plannedStart: string;
   plannedEnd: string;
   plannedHours: number;
+  /** Statut renvoyé par le serveur : EXPECTED, PRESENT, LATE, ABSENT, JUSTIFIED, CLOSED. */
+  status?: string | null;
   checkedInAt: string | null;
   checkedOutAt: string | null;
   isLate: boolean;
   isAbsent: boolean;
   isJustified: boolean;
+  isExpected?: boolean;
   corrected: boolean;
   correctedAt: string | null;
   correctionReason: string | null;

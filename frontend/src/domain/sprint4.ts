@@ -1,9 +1,30 @@
-import type {
-  IncidentSeverity,
-  IncidentStatus,
-  LeaveRequestStatus,
-  SyncOperationStatus,
-} from "../api/mock/types";
+export type LeaveRequestStatus =
+  | "DRAFT"
+  | "QUEUED"
+  | "SYNCING"
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "SYNC_FAILED";
+
+export type SyncOperationStatus =
+  | "QUEUED"
+  | "PROCESSING"
+  | "SYNCED"
+  | "FAILED"
+  | "REVIEW_REQUIRED";
+
+export type IncidentStatus =
+  | "REPORTED"
+  | "TO_REVIEW"
+  | "ACKNOWLEDGED"
+  | "IN_PROGRESS"
+  | "RESOLVED"
+  | "CLOSED";
+
+export type IncidentSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
 import type { Role } from "../api/auth-api";
 
 export type LeaveType = "ANNUAL" | "SICK" | "FAMILY" | "UNPAID" | "OTHER";

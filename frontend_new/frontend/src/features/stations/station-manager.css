@@ -1,0 +1,602 @@
+/* ============================================================
+   Gestion des stations — carte, formulaires et listes
+   (remplace les styles inline de StationManager.tsx)
+   ============================================================ */
+
+/* Sélecteur de localisation (carte + suggestions) */
+.map-picker-wrapper {
+  display: grid;
+  gap: 8px;
+  position: relative;
+}
+
+.map-picker-field {
+  margin: 0;
+  position: relative;
+}
+
+.map-picker-input-wrap {
+  position: relative;
+}
+
+.map-picker-spinner {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  display: flex;
+}
+
+.map-picker-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 100%;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12);
+  z-index: 1000;
+  max-height: 240px;
+  overflow-y: auto;
+  display: grid;
+  padding: 4px;
+}
+
+.map-picker-suggestion {
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  color: #0f172a;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-picker-suggestion:hover {
+  background: #f1f5f9;
+}
+
+.map-picker-suggestion svg {
+  color: #ff5500;
+  flex-shrink: 0;
+}
+
+.map-picker-suggestion span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-picker-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  gap: 8px;
+}
+
+.map-picker-caption > span:first-child {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.map-picker-hint {
+  font-size: 11.5px;
+  color: #00a896;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.map-picker-canvas {
+  height: 240px;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.uswap-map-marker {
+  border: 0;
+  background: transparent;
+}
+
+.uswap-map-marker span {
+  position: relative;
+  display: block;
+  width: 24px;
+  height: 24px;
+  border: 3px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  background: #ff5500;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.28);
+  transform: rotate(-45deg);
+}
+
+.uswap-map-marker span::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.map-picker-coords {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+}
+
+.map-picker-coords-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #334155;
+}
+
+.map-picker-coords-label svg {
+  color: #ff5500;
+}
+
+.map-picker-coords strong {
+  font-family: monospace;
+  color: #0f172a;
+}
+
+/* Vue carte globale des stations */
+.stations-map-card {
+  padding: 16px;
+  height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.stations-map-head {
+  margin-bottom: 12px;
+}
+
+.stations-map-head h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.stations-map-head p {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.stations-map-canvas {
+  flex: 1;
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  z-index: 1;
+}
+
+.stations-map-summary {
+  margin-bottom: 16px;
+}
+
+.stations-map-status-active {
+  color: #16a34a;
+}
+
+.stations-map-status-inactive {
+  color: #d97706;
+}
+
+/* Confirmation et modales */
+.station-confirm {
+  display: grid;
+  gap: 16px;
+}
+
+.station-confirm p {
+  margin: 0;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.station-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.station-templates-modal-body {
+  padding: 4px;
+}
+
+.shared-shift-form {
+  display: grid;
+  gap: 22px;
+}
+
+.shared-shift-stations {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.shared-shift-stations legend {
+  color: #18243e;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.shared-shift-stations-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.shared-shift-stations-head p {
+  color: #738097;
+  font-size: 12.5px;
+  margin: 3px 0 0;
+}
+
+.shared-shift-stations-head .text-button {
+  flex: 0 0 auto;
+}
+
+.shared-shift-stations > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.shared-shift-stations label {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid #e1e7f0;
+  border-radius: 9px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.shared-shift-stations label:has(input:checked) {
+  border-color: #8da5d5;
+  background: #f3f6fc;
+}
+
+.shared-shift-stations label > span {
+  display: grid;
+  gap: 2px;
+}
+
+.shared-shift-stations small {
+  color: #738097;
+}
+
+@media (max-width: 700px) {
+  .shared-shift-stations > div {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Barre d'outils de la liste */
+.stations-toolbar {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stations-toolbar .admin-search {
+  flex: 1;
+  max-width: 340px;
+  height: 36px;
+}
+
+.stations-city-filter {
+  position: relative;
+}
+
+.stations-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Contrôle segmenté Tableau / Grille */
+.stations-view-toggle {
+  display: flex;
+  background: #edf2f7;
+  padding: 3px;
+  border-radius: 8px;
+  height: 36px;
+  box-sizing: border-box;
+}
+
+.stations-view-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  height: 100%;
+}
+
+.stations-view-option.is-selected {
+  background: #fff;
+  color: #0f172a;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.stations-toolbar .admin-button {
+  height: 36px;
+  min-height: 36px;
+  border-radius: 8px;
+}
+
+.stations-toolbar .admin-button.secondary {
+  padding: 0 12px;
+}
+
+.stations-toolbar .admin-button.primary-cta {
+  padding: 0 14px;
+}
+
+/* Tableau des stations */
+.station-compact-table {
+  table-layout: fixed;
+  white-space: nowrap;
+}
+
+.station-compact-table th,
+.station-compact-table td {
+  padding-inline: 9px !important;
+  height: 62px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.station-compact-table th:nth-child(1) {
+  width: 14%;
+}
+.station-compact-table th:nth-child(2) {
+  width: 15%;
+}
+.station-compact-table th:nth-child(3) {
+  width: 10%;
+}
+.station-compact-table th:nth-child(4) {
+  width: 14%;
+}
+.station-compact-table th:nth-child(5) {
+  width: 10%;
+}
+.station-compact-table th:nth-child(6) {
+  width: 9%;
+}
+.station-compact-table th:nth-child(7) {
+  width: 28%;
+}
+
+.station-compact-table .admin-person,
+.station-compact-table .station-cell-city,
+.station-compact-table .station-cell-contact {
+  min-width: 0;
+}
+
+.station-compact-table .admin-person > div,
+.station-compact-table .station-cell-city span,
+.station-compact-table .station-cell-contact span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.station-cell-city {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.station-cell-city strong {
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.station-cell-city span {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.station-cell-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.station-cell-contact span:first-child {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.station-cell-contact span:last-child {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.station-map-link {
+  font-size: 12px;
+}
+
+.station-gps-empty {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.station-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.station-row-actions .admin-button.secondary {
+  min-height: 28px;
+  padding: 2px 8px;
+  font-size: 11.5px;
+}
+
+.station-row-actions .admin-button.icon-only {
+  padding: 2px 6px;
+}
+
+.station-row-actions .station-toggle-btn {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+th.station-cell-right {
+  text-align: right;
+}
+
+.station-person-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+}
+
+.station-code-chips {
+  margin-top: 0;
+  gap: 3px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.station-code-chips code {
+  white-space: nowrap;
+  padding-inline: 5px;
+  font-size: 10.5px;
+}
+
+.stepper-field-group.is-disabled {
+  opacity: 0.55;
+}
+
+td.station-cell-right {
+  text-align: right;
+}
+
+@media (max-width: 1100px) and (min-width: 768px) {
+  .station-compact-table th:nth-child(3),
+  .station-compact-table td:nth-child(3),
+  .station-compact-table th:nth-child(5),
+  .station-compact-table td:nth-child(5) {
+    display: none;
+  }
+
+  .station-compact-table th:nth-child(1) {
+    width: 20%;
+  }
+
+  .station-compact-table th:nth-child(2) {
+    width: 22%;
+  }
+
+  .station-compact-table th:nth-child(4) {
+    width: 20%;
+  }
+
+  .station-compact-table th:nth-child(6) {
+    width: 12%;
+  }
+
+  .station-compact-table th:nth-child(7) {
+    width: 26%;
+  }
+}
+
+/* Grille de cartes */
+.station-rules-map-link {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+/* Récapitulatif du stepper */
+.station-summary-note {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.station-rule-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #dbe3f0;
+  border-radius: 10px;
+  background: #f8faff;
+  cursor: pointer;
+}
+
+.station-rule-toggle input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: #092784;
+}
+
+.station-rule-toggle span {
+  display: grid;
+  gap: 4px;
+}
+
+.station-rule-toggle strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.station-rule-toggle small {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.station-phone-icon {
+  color: #16a34a;
+}

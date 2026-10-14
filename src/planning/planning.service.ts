@@ -48,6 +48,10 @@ export class PlanningService {
   ) {}
 
   async create(dto: CreatePlanningDto, createdBy: string) {
+    // The DTO carries plain calendar dates ("YYYY-MM-DD"). `new Date(...)`
+    // parses those as UTC midnight, so the bounds must also be set in UTC:
+    // using the local setHours() shifted the window by the server's UTC offset
+    // (a request for 08-15 was stored as 07-16).
     const startDate = new Date(dto.startDate);
     const endDate = new Date(dto.endDate);
 
@@ -55,8 +59,8 @@ export class PlanningService {
       throw new BadRequestException('Les dates du planning sont invalides.');
     }
 
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
+    startDate.setUTCHours(0, 0, 0, 0);
+    endDate.setUTCHours(23, 59, 59, 999);
 
     if (endDate <= startDate) {
       throw new BadRequestException(
@@ -74,6 +78,7 @@ export class PlanningService {
         shifts: {
           include: {
             station: true,
+            template: true,
             swapper: {
               select: {
                 id: true,
@@ -108,7 +113,7 @@ export class PlanningService {
     const shiftWhere =
       actor?.role === Role.SWAPPER
         ? { swapperId: userId }
-        : actor?.role === Role.STATION_CHIEF && actor.stationId
+        : actor?.role === Role.SUPERVISOR && actor.stationId
           ? { stationId: actor.stationId }
           : {};
 
@@ -117,33 +122,34 @@ export class PlanningService {
         where:
           actor?.role === Role.SWAPPER
             ? { status: 'PUBLISHED', shifts: { some: shiftWhere } }
-            : actor?.role === Role.STATION_CHIEF && actor.stationId
+            : actor?.role === Role.SUPERVISOR && actor.stationId
               ? { shifts: { some: shiftWhere } }
               : undefined,
-        include: {
-          shifts: {
-            where: shiftWhere,
-            include: {
-              station: true,
-              swapper: {
-                select: {
-                  id: true,
-                  fullName: true,
-                  email: true,
-                  phoneNumber: true,
+          include: {
+            shifts: {
+              where: shiftWhere,
+              include: {
+                station: true,
+                template: true,
+                swapper: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                    email: true,
+                    phoneNumber: true,
+                  },
                 },
+                attendances: true,
               },
-              attendances: true,
-            },
-            orderBy: {
-              startTime: 'asc',
+              orderBy: {
+                startTime: 'asc',
+              },
             },
           },
-        },
-        orderBy: {
-          startDate: 'desc',
-        },
-      })
+          orderBy: {
+            startDate: 'desc',
+          },
+        })
       .then((rows) => rows.map((row) => this.withOccurrences(row)));
   }
 
@@ -163,6 +169,7 @@ export class PlanningService {
         shifts: {
           include: {
             station: true,
+            template: true,
             swapper: {
               select: {
                 id: true,
@@ -196,7 +203,7 @@ export class PlanningService {
     }
 
     if (
-      actor?.role === Role.STATION_CHIEF &&
+      actor?.role === Role.SUPERVISOR &&
       actor.stationId &&
       planning.shifts.length === 0
     ) {
@@ -222,30 +229,44 @@ export class PlanningService {
         endTime: Date;
         station?: unknown;
         swapper?: unknown;
+        template?: {
+          id: string;
+          label: string;
+          breakStart: string | null;
+          breakEnd: string | null;
+          breakMinutes: number;
+        } | null;
       }[];
       createdAt?: Date;
       updatedAt?: Date;
     },
   >(planning: T) {
-    const occurrences = planning.shifts.map((shift) => ({
-      id: shift.id,
-      planningId: (planning as unknown as { id: string }).id,
-      stationId: shift.stationId,
-      station: shift.station ?? null,
-      swapperId: shift.swapperId,
-      swapper: shift.swapper ?? null,
-      templateId: null,
-      templateVersion: {
-        label: `${shift.startTime
-          .toISOString()
-          .slice(11, 16)} â€“ ${shift.endTime.toISOString().slice(11, 16)}`,
-        breakStart: null,
-        breakEnd: null,
-        breakMinutes: 0,
-      },
-      startTime: shift.startTime.toISOString(),
-      endTime: shift.endTime.toISOString(),
-    }));
+    const occurrences = planning.shifts.map((shift) => {
+      const template = shift.template ?? null;
+      return {
+        id: shift.id,
+        planningId: (planning as unknown as { id: string }).id,
+        stationId: shift.stationId,
+        station: shift.station ?? null,
+        swapperId: shift.swapperId,
+        swapper: shift.swapper ?? null,
+        templateId: template?.id ?? null,
+        // Le créneau reprs le modèle qui l'a produit : c'est là que vivent
+        // les pauses. Sans ce lien, le planning affichait « sans pause ».
+        templateVersion: {
+          label:
+            template?.label ??
+            `${shift.startTime.toISOString().slice(11, 16)} – ${shift.endTime
+              .toISOString()
+              .slice(11, 16)}`,
+          breakStart: template?.breakStart ?? null,
+          breakEnd: template?.breakEnd ?? null,
+          breakMinutes: template?.breakMinutes ?? 0,
+        },
+        startTime: shift.startTime.toISOString(),
+        endTime: shift.endTime.toISOString(),
+      };
+    });
 
     return {
       ...planning,
@@ -516,6 +537,9 @@ export class PlanningService {
             label: true,
             startTime: true,
             endTime: true,
+            breakStart: true,
+            breakEnd: true,
+            breakMinutes: true,
           },
         })
       : [];
@@ -524,7 +548,7 @@ export class PlanningService {
     );
     if (templateIds.length && templates.length !== templateIds.length) {
       throw new BadRequestException(
-        'Un ou plusieurs modÃ¨les de shift sont introuvables, inactifs ou ne correspondent plus au planning.',
+        'Un ou plusieurs modèles de shift sont introuvables, inactifs ou ne correspondent plus au planning.',
       );
     }
 
@@ -561,10 +585,7 @@ export class PlanningService {
         }
 
         const selectedWeekdays = stationSelection.weekdays;
-        if (
-          selectedWeekdays?.length &&
-          !selectedWeekdays.includes(day.getUTCDay())
-        ) {
+        if (selectedWeekdays?.length && !this.matchesWeekday(day, selectedWeekdays)) {
           continue;
         }
 
@@ -613,11 +634,19 @@ export class PlanningService {
 
           let endTime = this.buildSlotEnd(day, slot.endHour);
 
-          if (slot.name === 'NIGHT') {
-            endTime = this.buildSlotEnd(this.addDays(day, 1), 6);
+          // Un créneau dont la fin est antérieure ou égale au début franchit
+          // minuit (ex. 22:00 → 06:00) : il se termine le lendemain. On se fie
+          // au modèle plutôt qu'au seul libellé « NIGHT », sinon un modèle
+          // nommé autrement restait faux.
+          if (endTime <= startTime) {
+            endTime = this.buildSlotEnd(this.addDays(day, 1), slot.endHour);
           }
 
-          if (startTime < planning.startDate || endTime > planning.endDate) {
+          // Un créneau qui démarre après la fin du planning est hors période.
+          // La borne haute n'est volontairement PAS testée sur `endTime` : un
+          // shift de nuit commencé le dernier jour se termine le lendemain et
+          // était sinon rejeté, ce qui laissait les derniers jours incomplets.
+          if (startTime > planning.endDate) {
             continue;
           }
 
@@ -650,11 +679,13 @@ export class PlanningService {
                     planningId,
                     stationId: station.id,
                     swapperId,
+                    templateId: slot.templateId,
                     startTime,
                     endTime,
                   },
                   include: {
                     station: true,
+                    template: true,
                     swapper: {
                       select: {
                         id: true,
@@ -700,11 +731,13 @@ export class PlanningService {
                 planningId,
                 stationId: station.id,
                 swapperId: null,
+                templateId: slot.templateId,
                 startTime,
                 endTime,
               },
               include: {
                 station: true,
+                template: true,
               },
             });
 
@@ -734,6 +767,20 @@ export class PlanningService {
     // and `revision` undefined on the client, so the freshly generated planning
     // appeared empty and could not be published.
     return this.findOne(planningId);
+  }
+
+  /**
+   * Vrai si `day` fait partie des jours sélectionnés.
+   *
+   * L'écran de planification envoie 1 = lundi … 7 = dimanche, alors que
+   * `Date.getUTCDay()` renvoie 0 = dimanche … 6 = samedi. Les deux conventions
+   * sont acceptées : un 7 est ramené à 0, et 0 est toujours dimanche.
+   */
+  private matchesWeekday(day: Date, weekdays: number[]): boolean {
+    const jsDay = day.getUTCDay();
+    return weekdays.some((value) =>
+      value === 7 ? jsDay === 0 : value === jsDay,
+    );
   }
 
   private resolveSwapperIds(
@@ -781,6 +828,7 @@ export class PlanningService {
     name: string;
     startHour: number | string;
     endHour: number | string;
+    templateId: string | null;
   }> {
     if (stationSelection.templateIds?.length) {
       const slots = stationSelection.templateIds
@@ -803,6 +851,7 @@ export class PlanningService {
           name: template.label,
           startHour: template.startTime,
           endHour: template.endTime,
+          templateId: template.id,
         }));
       if (slots.length) return slots;
     }
@@ -811,7 +860,7 @@ export class PlanningService {
       !stationSelection.shiftNames ||
       stationSelection.shiftNames.length === 0
     ) {
-      return SHIFT_SLOTS;
+      return SHIFT_SLOTS.map((slot) => ({ ...slot, templateId: null }));
     }
 
     return stationSelection.shiftNames
@@ -821,7 +870,8 @@ export class PlanningService {
           Boolean(slot) &&
           array.findIndex((candidate) => candidate?.name === slot?.name) ===
             index,
-      );
+      )
+      .map((slot) => ({ ...slot, templateId: null }));
   }
 
   private async orderSwappersByAvailability(
@@ -857,9 +907,9 @@ export class PlanningService {
     const result = new Date(day);
     if (typeof value === 'string') {
       const [hours, minutes] = value.split(':').map(Number);
-      result.setHours(hours || 0, minutes || 0, 0, 0);
+      result.setUTCHours(hours || 0, minutes || 0, 0, 0);
     } else {
-      result.setHours(value, 0, 0, 0);
+      result.setUTCHours(value, 0, 0, 0);
     }
     return result;
   }
@@ -871,7 +921,7 @@ export class PlanningService {
   private addDays(date: Date, days: number): Date {
     const result = new Date(date);
 
-    result.setDate(result.getDate() + days);
+    result.setUTCDate(result.getUTCDate() + days);
 
     return result;
   }
@@ -879,16 +929,16 @@ export class PlanningService {
   private *eachDay(startDate: Date, endDate: Date): Generator<Date> {
     const current = new Date(startDate);
 
-    current.setHours(0, 0, 0, 0);
+    current.setUTCHours(0, 0, 0, 0);
 
     const last = new Date(endDate);
 
-    last.setHours(0, 0, 0, 0);
+    last.setUTCHours(0, 0, 0, 0);
 
     while (current <= last) {
       yield new Date(current);
 
-      current.setDate(current.getDate() + 1);
+      current.setUTCDate(current.getUTCDate() + 1);
     }
   }
 
@@ -933,7 +983,7 @@ export class PlanningService {
   }
 
   // ============================================================
-  // SPRINT 5 â€” PREVIEW, AUTO-ASSIGN, VALIDATION, OCCURRENCES
+  // SPRINT 5 ” PREVIEW, AUTO-ASSIGN, VALIDATION, OCCURRENCES
   // ============================================================
 
   /**
@@ -975,7 +1025,9 @@ export class PlanningService {
     });
 
     const weekdays =
-      dto.weekdays && dto.weekdays.length ? new Set(dto.weekdays) : null;
+      dto.weekdays && dto.weekdays.length
+        ? new Set(dto.weekdays.map((value) => (value === 7 ? 0 : value)))
+        : null;
 
     const occurrences: {
       label: string;
@@ -995,13 +1047,13 @@ export class PlanningService {
         const start = this.slotFromTime(day, template.startTime);
         const end = this.slotFromTime(day, template.endTime);
         if (end <= start) {
-          end.setDate(end.getDate() + 1);
+          end.setUTCDate(end.getUTCDate() + 1);
         }
 
         const key = `${template.stationId}|${start.toISOString()}`;
         const entry = {
           label: template.label,
-          stationName: template.station?.name ?? 'â€”',
+          stationName: template.station?.name ?? '—',
           timezone: template.station?.timezone ?? 'Africa/Douala',
           startTime: start.toISOString(),
           endTime: end.toISOString(),
@@ -1011,7 +1063,9 @@ export class PlanningService {
         };
 
         // A slot for a station that already has a shift at that instant is a
-        // duplicate; one outside the planning window is reported separately.
+        // duplicate; one that starts after the window is reported separately.
+        // La borne de fin n'est pas testée : un shift de nuit démarré le
+        // dernier jour se termine le lendemain (voir generateShifts).
         if (existingKeys.has(key)) {
           duplicates.push({
             startTime: start.toISOString(),
@@ -1019,11 +1073,11 @@ export class PlanningService {
           });
           continue;
         }
-        if (start < planning.startDate || end > planning.endDate) {
+        if (start > planning.endDate) {
           outside.push({
             startTime: start.toISOString(),
             label: template.label,
-            reason: 'Hors de la pÃ©riode du planning.',
+            reason: 'Hors de la période du planning.',
           });
           continue;
         }
@@ -1045,7 +1099,7 @@ export class PlanningService {
   private slotFromTime(day: Date, time: string): Date {
     const [hours, minutes] = time.split(':').map((value) => Number(value));
     const result = new Date(day);
-    result.setHours(hours || 0, minutes || 0, 0, 0);
+    result.setUTCHours(hours || 0, minutes || 0, 0, 0);
     return result;
   }
 
@@ -1132,7 +1186,7 @@ export class PlanningService {
         total: 0,
         assigned: 0,
         vacant: 0,
-        stationName: shift.station?.name ?? 'â€”',
+        stationName: shift.station?.name ?? '—',
       };
       entry.total += 1;
       if (shift.swapperId) entry.assigned += 1;
@@ -1169,7 +1223,7 @@ export class PlanningService {
       if (config && swapperTotal > config.limit) {
         warnings.push({
           code: 'WEEKLY_LIMIT',
-          message: `Un swappeur dÃ©passe la limite hebdomadaire de ${config.limit} h Ã  ${config.name}.`,
+          message: `Un swappeur dépasse la limite hebdomadaire de ${config.limit} h à ${config.name}.`,
           occurrenceId: shift.id,
         });
         break;
@@ -1178,6 +1232,11 @@ export class PlanningService {
     }
 
     return {
+      // `valid` doit être renvoyé explicitement : l'écran de planning lit
+      // `report.valid` pour activer le bouton « Confirmer la publication ».
+      // Sans ce champ, la valeur était `undefined`, donc toujours fausse, et
+      // le bouton restait désactivé : impossible de publier.
+      valid: errors.length === 0,
       errors,
       warnings,
       totals: {
@@ -1258,6 +1317,7 @@ export class PlanningService {
             minRestHours: true,
             id: true,
             name: true,
+            timezone: true,
           },
         },
       },
@@ -1266,18 +1326,33 @@ export class PlanningService {
       throw new NotFoundException('Shift introuvable dans ce planning.');
     }
 
+    // L'écran de contrôle affiche le nom de la station, son fuseau, la durée
+    // du créneau et la répartition hebdomadaire (`weeks`). Sans ces champs, le
+    // composant ShiftConstraints lisait `report.weeks.map` sur `undefined` et
+    // l'affectation échouait.
+    const durationHours =
+      (shift.endTime.getTime() - shift.startTime.getTime()) / 3_600_000;
+
     const candidateId = body.swapperId ?? shift.swapperId;
+    // `errors` bloque une affectation impossible ; `warnings` signale une règle
+    // à surveiller sans empêcher le superviseur de travailler.
+    const errors: { code: string; message: string }[] = [];
     const warnings: { code: string; message: string }[] = [];
 
     if (!candidateId) {
       return {
         valid: false,
-        warnings: [
+        stationName: shift.station.name,
+        timezone: shift.station.timezone,
+        durationHours,
+        weeks: [],
+        errors: [
           {
             code: 'VACANCY',
-            message: 'Ce poste est vacant : sÃ©lectionnez un swappeur.',
+            message: 'Ce poste est vacant : sélectionnez un swappeur.',
           },
         ],
+        warnings: [],
         hours: 0,
       };
     }
@@ -1290,19 +1365,24 @@ export class PlanningService {
     if (!candidate || !candidate.isActive) {
       return {
         valid: false,
-        warnings: [
+        stationName: shift.station.name,
+        timezone: shift.station.timezone,
+        durationHours,
+        weeks: [],
+        errors: [
           {
             code: 'INACTIVE',
             message: 'Ce swappeur est inactif ou introuvable.',
           },
         ],
+        warnings: [],
         hours: 0,
       };
     }
     if (candidate.stationId !== shift.stationId) {
-      warnings.push({
+      errors.push({
         code: 'WRONG_STATION',
-        message: `Ce swappeur n'est pas rattachÃ© Ã  ${shift.station.name}.`,
+        message: `Ce swappeur n'est pas rattaché à ${shift.station.name}.`,
       });
     }
 
@@ -1311,22 +1391,22 @@ export class PlanningService {
       where: {
         id: { not: shift.id },
         swapperId: candidateId,
-        stationId: shift.stationId,
         startTime: { lt: shift.endTime },
         endTime: { gt: shift.startTime },
       },
     });
     if (overlap) {
-      warnings.push({
+      errors.push({
         code: 'OVERLAP',
-        message: 'Ce swappeur a dÃ©jÃ  un shift sur ce crÃ©neau.',
+        message: 'Ce swappeur a déjà un shift sur ce créneau.',
       });
     }
 
-    // 3. Weekly hours limit.
+    // 3. Weekly hours limit (avertissement, pas un blocage).
     const weekStart = new Date(shift.startTime);
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    weekStart.setHours(0, 0, 0, 0);
+    const dayOfWeek = weekStart.getUTCDay();
+    weekStart.setUTCDate(weekStart.getUTCDate() - dayOfWeek);
+    weekStart.setUTCHours(0, 0, 0, 0);
     const weekEnd = new Date(weekStart.getTime() + 7 * 86_400_000);
 
     const weekShifts = await this.prisma.shift.findMany({
@@ -1348,12 +1428,25 @@ export class PlanningService {
     if (weekHours > shift.station.weeklyHoursLimit) {
       warnings.push({
         code: 'WEEKLY_LIMIT',
-        message: `DÃ©passe la limite de ${shift.station.weeklyHoursLimit} h par semaine.`,
+        message: `Dépasse la limite de ${shift.station.weeklyHoursLimit} h par semaine.`,
       });
     }
 
     return {
-      valid: warnings.length === 0,
+      valid: errors.length === 0,
+      stationName: shift.station.name,
+      timezone: shift.station.timezone,
+      durationHours,
+      weeks: [
+        {
+          startDate: weekStart.toISOString().slice(0, 10),
+          existingHours: Math.round((weekHours - durationHours) * 10) / 10,
+          addedHours: Math.round(durationHours * 10) / 10,
+          projectedHours: Math.round(weekHours * 10) / 10,
+          limitHours: shift.station.weeklyHoursLimit,
+        },
+      ],
+      errors,
       warnings,
       hours: Math.round(weekHours * 10) / 10,
     };
@@ -1381,7 +1474,7 @@ export class PlanningService {
       const current = await this.findOne(planningId);
       if (current.revision !== body.revision) {
         throw new BadRequestException(
-          'Le planning a changÃ©. Rechargez-le avant de modifier cette affectation.',
+          'Le planning a changé. Rechargez-le avant de modifier cette affectation.',
         );
       }
     }
@@ -1399,7 +1492,7 @@ export class PlanningService {
       );
       if (!validation.valid) {
         throw new BadRequestException(
-          validation.warnings.map((item) => item.message).join(' '),
+          validation.errors.map((item) => item.message).join(' '),
         );
       }
     }
@@ -1489,10 +1582,10 @@ export class PlanningService {
     await this.notifications.notify({
       userId: targetSwapperId ?? previousSwapperId ?? changedById,
       kind: 'SHIFT_CHANGED',
-      title: 'Planning mis Ã  jour',
+      title: 'Planning mis à jour',
       body: targetSwapperId
-        ? 'Une affectation de votre planning a Ã©tÃ© mise Ã  jour.'
-        : 'Une affectation a Ã©tÃ© retirÃ©e de votre planning.',
+        ? 'Une affectation de votre planning a été mise à jour.'
+        : 'Une affectation a été retirée de votre planning.',
       entityId: updated.id,
       link: '/app/mon-espace/plannings',
     });

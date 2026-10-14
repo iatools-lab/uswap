@@ -78,12 +78,13 @@ export class UpdateStationDto {
 
   @ApiProperty({
     required: false,
-    example: 0,
-    description: 'Tolerance de retard en minutes',
+    example: 5,
+    description:
+      'Tolerance de retard en minutes (doit etre superieure ou egale a 1)',
   })
   @IsOptional()
   @IsInt()
-  @Min(0)
+  @Min(1)
   latenessToleranceMinutes?: number;
 
   @ApiProperty({
@@ -106,26 +107,6 @@ export class UpdateStationDto {
   @IsInt()
   @Min(1)
   weeklyHoursLimit?: number;
-
-  @ApiProperty({
-    required: false,
-    example: 300,
-    description: 'Validité du QR de début en secondes',
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(30)
-  checkinQrTtl?: number;
-
-  @ApiProperty({
-    required: false,
-    example: 300,
-    description: 'Validité du QR de fin en secondes',
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(30)
-  checkoutQrTtl?: number;
 
   @ApiProperty({
     required: false,

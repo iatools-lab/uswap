@@ -54,7 +54,7 @@ export class CorrectionsController {
   // ============================================================
 
   @Post('attachments')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
   uploadAttachment(@UploadedFile() file?: UploadedAttachment) {
@@ -66,7 +66,7 @@ export class CorrectionsController {
   // ============================================================
 
   @Patch('shifts/:shiftId')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   correctShift(
     @Req() req: AuthenticatedRequest,
     @Param('shiftId') shiftId: string,
@@ -89,7 +89,7 @@ export class CorrectionsController {
   // ============================================================
 
   @Get('shifts/:shiftId')
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.STATION_CHIEF)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   findShiftCorrections(
     @Req() req: AuthenticatedRequest,
     @Param('shiftId') shiftId: string,
