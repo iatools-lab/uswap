@@ -127,7 +127,7 @@ export const reportRoutes: MockRoute[] = [
             change.type === "REPLACEMENT"
               ? "Remplacement de swappeur"
               : change.type === "PERMUTATION"
-                ? "Permutation de service"
+                ? "Permutation de shift"
                 : "Changement d’affectation",
           objectName: change.inSwapper ?? change.outSwapper ?? "Affectation",
           actorId: change.initiatorId,

@@ -2,7 +2,6 @@ import { currentLocale } from "../../app/i18n";
 import { translate } from "../../app/i18n";
 import { useEffect, useState } from "react";
 import {
-  ArrowsClockwiseIcon,
   CheckCircleIcon,
   CloudCheckIcon,
   WarningCircleIcon,
@@ -30,16 +29,15 @@ type Health = {
 export function LeaveIntegrationHealth() {
   const [health, setHealth] = useState<Health | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [revision, setRevision] = useState(0);
   useEffect(() => {
     let active = true;
-    api<Health>("/admin/integrations/leaves").then(
+    const load = () => api<Health>("/admin/integrations/leaves").then(
       (value) => active && setHealth(value),
-    );
-    return () => {
-      active = false;
-    };
-  }, [revision]);
+    ).catch(() => {});
+    void load();
+    const timer = window.setInterval(() => void load(), 60_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
   if (!health) return null;
   const ok = health.status === "OPERATIONAL";
   return (
@@ -92,12 +90,6 @@ export function LeaveIntegrationHealth() {
         />
       </div>
       <div className="leave-integration-actions">
-        <button
-          className="admin-button secondary small"
-          onClick={() => setRevision((value) => value + 1)}
-        >
-          <ArrowsClockwiseIcon />
-          {translate("Actualiser")}</button>
         <button
           className="admin-button secondary small"
           onClick={() => setExpanded((value) => !value)}

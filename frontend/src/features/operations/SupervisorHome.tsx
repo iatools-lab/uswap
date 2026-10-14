@@ -210,7 +210,7 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
             {t("Votre périmètre, en un coup d’œil")}
           </h2>
           <p>
-            {t("Repérez les shifts à couvrir, puis suivez les présences, incidents et services à venir par station.")}
+            {t("Repérez les shifts à couvrir, puis suivez les présences, incidents et shifts à venir par station.")}
           </p>
         </div>
         <div className="supervisor-overview__actions">
@@ -243,14 +243,14 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
             <div>
               <h2>{t("Prochains shifts")}</h2>
               <p className="operations-hint">
-                {t("Les services publiés, regroupés par station.")}
+                {t("Les shifts publiés, regroupés par station.")}
               </p>
             </div>
           </div>
           {!published.length ? (
             <div className="admin-empty">
               <h3>{t("Aucun shift publié")}</h3>
-              <p>{t("Les prochains services apparaîtront ici après publication.")}</p>
+              <p>{t("Les prochains shifts apparaîtront ici après publication.")}</p>
             </div>
           ) : (
             <ul
@@ -282,7 +282,7 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
                         </span>
                         <span>
                           <UsersThreeIcon size={15} aria-hidden="true" />
-                          {group.shifts.length} {" "}{translate("service")}{group.shifts.length === 1 ? "" : "s"} {" "}{translate("programmé")}{group.shifts.length === 1 ? "" : "s"}
+                          {group.shifts.length} {translate("shift")}{group.shifts.length === 1 ? "" : "s"} {translate("programmé")}{group.shifts.length === 1 ? "" : "s"}
                         </span>
                       </div>
                       <CaretRight size={18} weight="bold" aria-hidden="true" />

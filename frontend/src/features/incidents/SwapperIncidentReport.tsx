@@ -107,7 +107,7 @@ export function SwapperIncidentReport({
         </span>
         <span className="swapper-incident-entry__copy">
           <strong>{translate("Signaler un incident")}</strong>
-          <small>{translate("Un problème lié à votre service ou à votre sécurité ?")}</small>
+          <small>{translate("Un problème lié à votre shift ou à votre sécurité ?")}</small>
         </span>
         <span className="swapper-incident-entry__action">{translate("Déclarer")}</span>
       </button>
@@ -205,7 +205,7 @@ export function SwapperIncidentReport({
               value={title}
               maxLength={100}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder={translate("Ex. Malaise pendant le service")}
+              placeholder={translate("Ex. Malaise pendant un shift")}
             />
           </label>
           <label>

@@ -189,7 +189,7 @@ function issueText(issue: { code: string; message: string }, report: Report) {
     const minimum = values?.[2]?.replace(".", ",") ?? "le minimum requis";
     return {
       title: "Le repos minimal défini pour la station n’est pas respecté.",
-      detail: `Ce shift ne laisserait que ${actual} h de repos avant ou après un autre service. La règle de repos de cette station fixe un minimum de ${minimum} h. Elle peut être désactivée dans ses paramètres.`,
+      detail: `Ce shift ne laisserait que ${actual} h de repos avant ou après un autre shift. La règle de repos de cette station fixe un minimum de ${minimum} h. Elle peut être désactivée dans ses paramètres.`,
     };
   }
   if (issue.code === "OVERLAP") {
@@ -208,7 +208,7 @@ function issueText(issue: { code: string; message: string }, report: Report) {
     return {
       title: "Ce shift se termine le lendemain.",
       detail:
-        "Le prochain service doit laisser assez de repos après la fin de ce shift de nuit.",
+        "Le prochain shift doit laisser assez de repos après la fin de ce shift de nuit.",
     };
   }
   if (issue.code === "NO_BREAK") {

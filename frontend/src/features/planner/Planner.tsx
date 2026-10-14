@@ -1060,7 +1060,7 @@ function PlanningEditor({
     if (!canEdit || p.status !== "DRAFT" || busy) return;
     if (!usingMock) {
       setError(
-        "L’API connectée ne garantit pas encore un shift stable ni l’équité des heures. Utilisez l’affectation manuelle jusqu’à l’alignement du service.",
+        "L’API connectée ne garantit pas encore un shift stable ni l’équité des heures. Utilisez l’affectation manuelle jusqu’à l’alignement de l’API.",
       );
       return;
     }

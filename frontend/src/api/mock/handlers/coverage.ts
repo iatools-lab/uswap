@@ -187,7 +187,7 @@ export const coverageRoutes: MockRoute[] = [
       if (occurrence.swapperId !== user.id)
         throw new MockHttpError(403, "Ce shift ne vous est pas affecté.");
       if (Date.parse(occurrence.endTime) < ctx.now)
-        throw new MockHttpError(409, "Ce service est déjà terminé.");
+        throw new MockHttpError(409, "Ce shift est déjà terminé.");
       if (clientRef) {
         const replayed = ctx.db.absences.find(
           (item) => item.clientRef === clientRef,

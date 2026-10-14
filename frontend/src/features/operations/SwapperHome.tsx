@@ -632,7 +632,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
           {t(greeting)}
           {firstName ? `, ${firstName}` : ""}
         </h2>
-        <p>{t("Retrouvez ici votre présence et vos prochains services.")}</p>
+        <p>{t("Retrouvez ici votre présence et vos prochains shifts.")}</p>
       </section>
 
       <section aria-label={t("Votre présence")}>
@@ -802,7 +802,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
                 className="admin-button primary-cta"
                 onClick={() => handleDirectAction("CHECKIN")}
               >
-                <LogIn size={18} /> {t("Prendre mon service")}
+                <LogIn size={18} /> {t("Pointer mon shift")}
               </button>
             )}
             {canCheckOut && (
@@ -811,7 +811,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
                 className="admin-button secondary"
                 onClick={() => handleDirectAction("CHECKOUT")}
               >
-                <LogOut size={18} /> {t("Terminer mon service")}
+                <LogOut size={18} /> {t("Terminer mon shift")}
               </button>
             )}
             {!canCheckIn && !canCheckOut && (
@@ -841,7 +841,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
             <span className="admin-eyebrow">{t("Pointage")}</span>
             <h2>{t("Aucun shift à venir")}</h2>
             <p>
-              {t("Les prochains shifts publiés et affectés à votre compte apparaîtront ici. Vos anciens services restent consultables dans l’historique.")}
+              {t("Les prochains shifts publiés et affectés à votre compte apparaîtront ici. Vos anciens shifts restent consultables dans l’historique.")}
             </p>
           </div>
         </section>
@@ -961,8 +961,8 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
         size="md"
         title={
           punchKind === "CHECKOUT"
-            ? "Terminer le service"
-            : "Prendre le service"
+            ? "Terminer le shift"
+            : "Pointer le shift"
         }
         onClose={() => !busy && setPunchKind(null)}
         footer={

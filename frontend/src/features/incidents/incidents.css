@@ -15,6 +15,15 @@
   background: linear-gradient(120deg, #fff, #f5f8ff);
   box-shadow: 0 8px 26px rgba(14, 37, 79, 0.045);
 }
+
+.incident-heading__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 0 0 auto;
+}
 .incident-eyebrow {
   font-size: 10px;
   font-weight: 750;

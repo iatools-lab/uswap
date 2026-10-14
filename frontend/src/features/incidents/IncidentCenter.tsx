@@ -18,6 +18,8 @@ import type { IncidentView } from "../../domain/sprint4";
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
 import { KpiCard } from "../../ui/KpiCard";
+import { ExportExcelButton } from "../../ui/ExportExcelButton";
+import { exportToExcel } from "../../utils/excelExport";
 import "./incidents.css";
 
 type Incident = IncidentView & {
@@ -147,6 +149,27 @@ export function IncidentCenter({
       }) ?? []
     );
   }, [data, periodFilter, severityFilter, stationFilter, statusFilter]);
+  function exportIncidents() {
+    if (!rows.length) return;
+    exportToExcel({
+      data: rows,
+      filename: `uswap-incidents-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Incidents",
+      columns: [
+        { header: translate("Date du fait"), key: (item) => date(item.occurredAt), width: 22 },
+        { header: translate("Station"), key: "stationName", width: 24 },
+        { header: translate("Swappeur concerné"), key: "affectedSwapperName", width: 24 },
+        { header: translate("Catégorie"), key: (item) => translate(categories[item.category as keyof typeof categories] ?? item.category), width: 30 },
+        { header: translate("Titre"), key: (item) => translate(item.title), width: 32 },
+        { header: translate("Détail"), key: (item) => translate(item.description), width: 48 },
+        { header: translate("Niveau d’impact"), key: (item) => translate(severityLabels[item.severity]), width: 18 },
+        { header: translate("Statut"), key: (item) => translate(statusLabels[item.status]), width: 20 },
+        { header: translate("Déclaré par"), key: "reporterName", width: 24 },
+        { header: translate("Responsable"), key: (item) => item.assigneeName ?? "—", width: 24 },
+        { header: translate("Résolution"), key: (item) => item.resolution ?? "—", width: 42 },
+      ],
+    });
+  }
   if (!data)
     return (
       <div className="incident-loading">
@@ -164,13 +187,18 @@ export function IncidentCenter({
               : "Analysez les signalements des stations, documentez les actions menées et clôturez leur traitement."}
           </p>
         </div>
-        {canReport && (
-          <button
-            className="admin-button primary-cta"
-            onClick={() => setCreateOpen(true)}
-          >
-            <PlusIcon />
-            {translate("Déclarer un incident")}</button>
+        {(canManage || canReport) && (
+          <div className="incident-heading__actions">
+            {canManage && <ExportExcelButton onClick={exportIncidents} disabled={!rows.length} />}
+            {canReport && (
+              <button
+                className="admin-button primary-cta"
+                onClick={() => setCreateOpen(true)}
+              >
+                <PlusIcon />
+                {translate("Déclarer un incident")}</button>
+            )}
+          </div>
         )}
       </div>
       <div className="incident-kpis">
@@ -513,7 +541,7 @@ function IncidentCreate({
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder={translate("Ex. Malaise pendant le service")}
+            placeholder={translate("Ex. Malaise pendant un shift")}
           />
         </label>
         <label>
@@ -522,7 +550,7 @@ function IncidentCreate({
             rows={5}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder={translate("Précisez ce que le swappeur a rencontré, les conséquences sur son service et les premières mesures prises…")}
+            placeholder={translate("Précisez ce que le swappeur a rencontré, les conséquences sur son shift et les premières mesures prises…")}
           />
         </label>
       </div>

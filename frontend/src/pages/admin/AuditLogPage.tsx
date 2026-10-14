@@ -3,6 +3,8 @@ import { translate } from "../../app/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { api, usingMock } from "../../api/auth-api";
 import { Select } from "../../ui/Select";
+import { ExportExcelButton } from "../../ui/ExportExcelButton";
+import { exportToExcel } from "../../utils/excelExport";
 import { ClockCounterClockwise, MagnifyingGlass } from "../../ui/icons";
 import "./audit-log.css";
 
@@ -100,6 +102,25 @@ export function AuditLogPage() {
     });
   }, [actionFilter, data, periodFilter, query, userFilter]);
 
+  function exportAuditLog() {
+    if (!filtered.length) return;
+    exportToExcel({
+      data: filtered,
+      filename: `uswap-journal-audit-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Journal d’audit",
+      columns: [
+        { header: translate("Date"), key: (event) => formatDateTime(event.createdAt), width: 22 },
+        { header: translate("Catégorie"), key: (event) => translate(categoryNames[event.category]), width: 20 },
+        { header: translate("Action"), key: (event) => translate(event.action), width: 24 },
+        { header: translate("Acteur"), key: (event) => event.actorName ?? "—", width: 24 },
+        { header: translate("Objet"), key: (event) => `${event.title} · ${event.objectName}`, width: 36 },
+        { header: translate("Station"), key: (event) => event.stationName ?? "—", width: 24 },
+        { header: translate("Détail"), key: "description", width: 44 },
+        { header: translate("Résultat"), key: (event) => translate(event.result), width: 20 },
+      ],
+    });
+  }
+
   if (!usingMock) {
     return (
       <section className="audit-log-page">
@@ -133,9 +154,12 @@ export function AuditLogPage() {
           <p>
             {translate("Événements enregistrés sur les comptes, les incidents, les affectations et les réglages.")}</p>
         </div>
-        <span className="audit-log-total">
-          {`${filtered.length} action${filtered.length === 1 ? "" : "s"}`}
-        </span>
+        <div className="audit-log-tools">
+          <span className="audit-log-total">
+            {`${filtered.length} ${translate(filtered.length === 1 ? "action" : "actions")}`}
+          </span>
+          <ExportExcelButton onClick={exportAuditLog} disabled={!filtered.length} />
+        </div>
       </header>
 
       <div

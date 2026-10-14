@@ -1433,26 +1433,98 @@ textarea:focus-visible {
   min-height: 44px;
   cursor: pointer;
 }
-.pwa-status--update {
-  background: #08277d;
-  gap: 10px;
+.pwa-status--install {
+  top: auto;
+  right: 20px;
+  bottom: 20px;
+  left: auto;
+  transform: none;
+  z-index: 90;
+  width: max-content;
+  max-width: min(390px, calc(100vw - 32px));
+  padding: 8px 9px 8px 11px;
+  gap: 8px;
+  border: 1px solid #dce4f1;
+  border-radius: 14px;
+  background: #fff;
+  color: #172b55;
+  box-shadow: 0 8px 26px #172b551c, 0 2px 6px #172b550d;
+  font-size: 12px;
 }
-.pwa-status--update > span {
+.pwa-status--install .pwa-status-install-copy {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.35;
+  font-weight: 600;
+}
+.pwa-status--install .pwa-status-install-icon {
   display: grid;
-  gap: 3px;
-  min-width: 220px;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 10px;
+  background: #eef3ff;
+  color: #0a2b84;
 }
-.pwa-status--update strong {
-  font-size: 13px;
-}
-.pwa-status--update small {
-  color: #d9e4ff;
-  font-size: 11px;
-}
-.pwa-status--update button:last-child {
-  background: transparent;
+.pwa-status--install button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #0a2b84;
   color: #fff;
-  border: 1px solid #ffffff55;
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.pwa-status--install .pwa-status-dismiss {
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: #f3f5f9;
+  color: #62718b;
+}
+@media (max-width: 600px) {
+  .pwa-status.pwa-status--install {
+    top: auto;
+    right: 12px;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    left: auto;
+    transform: none;
+    width: min(366px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    flex-wrap: nowrap;
+    padding: 7px;
+    gap: 6px;
+  }
+  .pwa-status.pwa-status--install .pwa-status-install-copy {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 11px;
+  }
+  .pwa-status.pwa-status--install button {
+    min-height: 36px;
+    padding: 6px 9px;
+    font-size: 11px;
+  }
+  .pwa-status.pwa-status--install .pwa-status-dismiss {
+    width: 30px;
+    min-width: 30px;
+    min-height: 30px;
+    padding: 0;
+  }
 }
 
 /* --- Responsive adjustments (mobile-first: narrowest constraint first) --- */

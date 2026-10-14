@@ -83,13 +83,14 @@
 }
 .leave-management-panel-head {
   display: grid;
-  grid-template-columns: minmax(170px, auto) minmax(0, 1fr);
+  grid-template-columns: minmax(230px, 270px) minmax(0, 1fr);
   align-items: center;
-  gap: 24px;
-  padding: 14px 18px;
+  gap: 20px;
+  padding: 14px 20px;
   border-bottom: 1px solid #edf0f5;
 }
 .leave-management-panel-heading {
+  align-self: start;
   min-width: 0;
 }
 .leave-management-panel-head h3 {
@@ -103,15 +104,50 @@
 }
 .leave-management-filters {
   display: grid;
-  grid-template-columns: minmax(180px, 320px) 165px 180px;
-  justify-content: end;
+  grid-template-columns:
+    minmax(180px, 1.4fr)
+    minmax(140px, 0.9fr)
+    minmax(180px, 1.05fr)
+    repeat(2, minmax(135px, 0.85fr));
+  align-items: end;
+  min-width: 0;
   gap: 8px;
+}
+.leave-management-filters > .ui-select {
+  min-width: 0;
+}
+.leave-management-filters .ui-select__trigger {
+  height: 40px;
+}
+.leave-management-date-filter {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: #69768a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.leave-management-date-filter input {
+  width: 100%;
+  height: 40px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid #dbe4f0;
+  border-radius: 9px;
+  background: #fff;
+  color: #243a5c;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 .leave-management-search {
   display: flex;
   align-items: center;
   width: 100%;
-  height: 36px;
+  height: 40px;
   border: 1px solid #dbe4f0;
   border-radius: 9px;
   background: #fff;
@@ -287,14 +323,35 @@
     gap: 10px;
   }
   .leave-management-filters {
-    grid-template-columns: minmax(180px, 1fr) 165px 180px;
+    grid-template-columns: minmax(180px, 1.2fr) minmax(145px, 0.9fr) minmax(180px, 1fr);
     justify-content: stretch;
+  }
+  .leave-management-filters > :nth-child(4) {
+    grid-column: 2;
+  }
+  .leave-management-filters > :nth-child(5) {
+    grid-column: 3;
   }
   .leave-management-item {
     grid-template-columns: minmax(0, 1fr) auto;
   }
   .leave-management-item-reason {
     grid-column: 1 / -1;
+  }
+}
+@media (min-width: 901px) and (max-width: 1200px) {
+  .leave-management-panel-head {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .leave-management-filters {
+    grid-template-columns: minmax(220px, 1.2fr) minmax(145px, 0.9fr) minmax(180px, 1fr);
+  }
+  .leave-management-filters > :nth-child(4) {
+    grid-column: 2;
+  }
+  .leave-management-filters > :nth-child(5) {
+    grid-column: 3;
   }
 }
 @media (max-width: 640px) {
@@ -315,6 +372,10 @@
   }
   .leave-management-filters {
     grid-template-columns: 1fr;
+  }
+  .leave-management-filters > :nth-child(4),
+  .leave-management-filters > :nth-child(5) {
+    grid-column: auto;
   }
   .leave-management-panel-head {
     padding: 14px 15px;

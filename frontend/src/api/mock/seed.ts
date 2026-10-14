@@ -439,7 +439,7 @@ export function createSeed(nowMs: number): MockDb {
   const plannings = [
     {
       id: "pl-historique",
-      name: "Historique des services",
+      name: "Historique des shifts",
       startDate: `${historyWeekStart}T00:00:00.000Z`,
       endDate: `${addDaysKey(historyWeekStart, 6)}T23:59:59.999Z`,
       status: "PUBLISHED" as const,
@@ -823,7 +823,7 @@ export function createSeed(nowMs: number): MockDb {
       category: "HEALTH",
       severity: "HIGH",
       status: "IN_PROGRESS",
-      title: "Malaise pendant le service",
+      title: "Malaise pendant un shift",
       description:
         "Léa a signalé un malaise pendant son shift. Elle a été mise au repos et doit confirmer son aptitude avant sa prochaine affectation.",
       attachmentIds: [],
@@ -842,7 +842,7 @@ export function createSeed(nowMs: number): MockDb {
           fromStatus: "ACKNOWLEDGED",
           toStatus: "IN_PROGRESS",
           comment:
-            "Le swappeur a été contacté et son prochain service est en cours de réévaluation.",
+            "Le swappeur a été contacté et son prochain shift est en cours de réévaluation.",
           createdAt: isoFromMs(nowMs - 2 * 3600000),
         },
         {
@@ -885,7 +885,7 @@ export function createSeed(nowMs: number): MockDb {
           fromStatus: "REPORTED",
           toStatus: "ACKNOWLEDGED",
           comment:
-            "Le swappeur a confirmé pouvoir poursuivre son service sous surveillance.",
+            "Le swappeur a confirmé pouvoir poursuivre son shift sous surveillance.",
           createdAt: isoFromMs(nowMs - 75 * 60000),
         },
         {
@@ -911,7 +911,7 @@ export function createSeed(nowMs: number): MockDb {
       status: "CLOSED",
       title: "Retards répétés sur les shifts du matin",
       description:
-        "Jean est arrivé en retard sur plusieurs services consécutifs. Un échange a permis de convenir d’un suivi temporaire.",
+        "Jean est arrivé en retard sur plusieurs shifts consécutifs. Un échange a permis de convenir d’un suivi temporaire.",
       attachmentIds: [],
       occurredAt: isoFromMs(nowMs - 9 * 86400000),
       createdAt: isoFromMs(nowMs - 9 * 86400000),

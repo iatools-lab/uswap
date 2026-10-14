@@ -146,7 +146,7 @@ export function SwapperMobileCalendar({
           <ArrowLeftIcon size={17} /> {" "}{translate("Mes plannings")}</button>
         <span className="admin-badge active">{translate("Publié")}</span>
         <h2>{planning.name || "Mon planning"}</h2>
-        <p>{translate("Consultez vos services et ouvrez une date pour agir rapidement.")}</p>
+        <p>{translate("Consultez vos shifts et ouvrez une date pour agir rapidement.")}</p>
       </header>
 
       <div className="swapper-calendar__surface">
@@ -221,7 +221,7 @@ export function SwapperMobileCalendar({
         open={Boolean(selectedDay)}
         size="md"
         title={selectedDay ? longDate(selectedDay) : "Détail des shifts"}
-        subtitle={`${selected.length} service${selected.length === 1 ? "" : "s"} prévu${selected.length === 1 ? "" : "s"}`}
+        subtitle={`${selected.length} shift${selected.length === 1 ? "" : "s"} prévu${selected.length === 1 ? "" : "s"}`}
         onClose={() => setSelectedDay(null)}
       >
         <div className="swapper-shift-detail-list">

@@ -178,7 +178,7 @@ export function constraintReport(
   if (!(end > start))
     errors.push({
       code: "INVALID_WINDOW",
-      message: "La fin du service doit être postérieure à son début.",
+      message: "La fin du shift doit être postérieure à son début.",
     });
   if (!swapper)
     errors.push({ code: "SWAPPER_INVALID", message: "Swappeur inconnu." });
@@ -232,7 +232,7 @@ export function constraintReport(
     if (otherStart < end && start < otherEnd)
       errors.push({
         code: "OVERLAP",
-        message: `Chevauchement avec le service du ${hour(otherStart)} (${other.label}).`,
+        message: `Chevauchement avec le shift du ${hour(otherStart)} (${other.label}).`,
       });
   }
 
@@ -250,7 +250,7 @@ export function constraintReport(
       if (gap >= 0 && gap < minRest)
         errors.push({
           code: "REST",
-          message: `Repos insuffisant : ${Math.round((gap / 3600000) * 10) / 10} h entre deux services (minimum ${station.minRestHours} h).`,
+          message: `Repos insuffisant : ${Math.round((gap / 3600000) * 10) / 10} h entre deux shifts (minimum ${station.minRestHours} h).`,
         });
     }
   }
@@ -279,7 +279,7 @@ export function constraintReport(
   if (crossesMidnight)
     warnings.push({
       code: "NIGHT",
-      message: "Le service franchit minuit : vérifiez le repos qui suit.",
+      message: "Le shift franchit minuit : vérifiez le repos qui suit.",
     });
 
   const target = options.ignoreOccurrenceId

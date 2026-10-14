@@ -57,7 +57,7 @@ const STATUS_FILTERS: Array<{
   { value: "LATE", label: "En retard" },
   { value: "ABSENT", label: "Absent" },
   { value: "JUSTIFIED", label: "Absence justifiée" },
-  { value: "CLOSED", label: "Service terminé" },
+  { value: "CLOSED", label: "Shift terminé" },
   { value: "EXPECTED", label: "Non pointé" },
 ];
 

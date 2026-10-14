@@ -213,7 +213,7 @@ export function AbsenceDeclaration({
         open={open}
         onClose={close}
         title={translate("Signaler une absence")}
-        subtitle={translate("Indiquez le service concerné, le motif et joignez un justificatif.")}
+        subtitle={translate("Indiquez le shift concerné, le motif et joignez un justificatif.")}
         footer={
           <>
             <button

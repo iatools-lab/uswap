@@ -6,7 +6,6 @@ import {
   CheckCircleIcon,
   ClockIcon,
   MagnifyingGlassIcon,
-  RefreshCw,
   XCircleIcon,
 } from "../../ui/icons";
 import { api, ApiError, type Role } from "../../api/auth-api";
@@ -17,8 +16,10 @@ import type {
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
 import { LoaderCircle } from "../../ui/icons";
+import { ExportExcelButton } from "../../ui/ExportExcelButton";
 import { notify } from "../../ui/Toast";
 import { formatDateRange } from "../../utils/french";
+import { exportToExcel } from "../../utils/excelExport";
 import { KpiCard } from "../../ui/KpiCard";
 import "../../features/leaves/leaves.css";
 import "./leave-management.css";
@@ -64,13 +65,16 @@ type Decision = "APPROVED" | "REJECTED";
 export function LeaveManagementPage({ role }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
-  const targetId = new URLSearchParams(location.search).get("leave");
+  const searchParams = new URLSearchParams(location.search);
+  const targetId = searchParams.get("leave");
   const [items, setItems] = useState<LeaveManagementItem[] | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"ALL" | LeaveRequestView["status"]>(
     "ALL",
   );
-  const [station, setStation] = useState("ALL");
+  const [station, setStation] = useState(searchParams.get("stationId") ?? "ALL");
+  const [fromDate, setFromDate] = useState(searchParams.get("from") ?? "");
+  const [toDate, setToDate] = useState(searchParams.get("to") ?? "");
   const [selected, setSelected] = useState<LeaveManagementItem | null>(null);
   const [decision, setDecision] = useState<Decision>("APPROVED");
   const [reason, setReason] = useState("");
@@ -100,16 +104,18 @@ export function LeaveManagementPage({ role }: Props) {
 
   const stations = useMemo(
     () =>
-      Array.from(new Set((items ?? []).map((item) => item.stationName))).sort(
-        (a, b) => a.localeCompare(b, "fr"),
-      ),
+      Array.from(
+        new Map((items ?? []).map((item) => [item.stationId ?? "", item.stationName])).entries(),
+      ).sort((a, b) => a[1].localeCompare(b[1], "fr")),
     [items],
   );
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("fr");
     return (items ?? []).filter((item) => {
       if (status !== "ALL" && item.status !== status) return false;
-      if (station !== "ALL" && item.stationName !== station) return false;
+      if (station !== "ALL" && item.stationId !== station) return false;
+      if (fromDate && item.endTime.slice(0, 10) < fromDate) return false;
+      if (toDate && item.startTime.slice(0, 10) > toDate) return false;
       if (!normalized) return true;
       return [
         item.swapperName,
@@ -121,7 +127,27 @@ export function LeaveManagementPage({ role }: Props) {
         .toLocaleLowerCase("fr")
         .includes(normalized);
     });
-  }, [items, query, station, status]);
+  }, [fromDate, items, query, station, status, toDate]);
+
+  function exportLeaves() {
+    if (!filtered.length) return;
+    exportToExcel({
+      data: filtered,
+      filename: `uswap-conges-${fromDate || "debut"}-${toDate || "fin"}`,
+      sheetName: "Congés",
+      columns: [
+        { header: translate("Swappeur"), key: "swapperName", width: 24 },
+        { header: translate("Type de congé"), key: (item) => translate(TYPE_LABELS[item.type]), width: 22 },
+        { header: translate("Station"), key: "stationName", width: 24 },
+        { header: translate("Début"), key: (item) => formatDateRange(item.startTime, item.startTime), width: 18 },
+        { header: translate("Fin"), key: (item) => formatDateRange(item.endTime, item.endTime), width: 18 },
+        { header: translate("Durée"), key: (item) => `${dayCount(item.startTime, item.endTime)} ${translate("jours")}`, width: 12 },
+        { header: translate("Statut"), key: (item) => translate(STATUS_LABELS[item.status]), width: 20 },
+        { header: translate("Motif"), key: "reason", width: 40 },
+      ],
+    });
+    notify("Exportation Excel terminée.", "success");
+  }
   const counts = useMemo(
     () => ({
       pending: (items ?? []).filter((item) => item.status === "PENDING").length,
@@ -192,13 +218,7 @@ export function LeaveManagementPage({ role }: Props) {
               : translate("Examinez les demandes de votre équipe et anticipez les remplacements à organiser.")}
           </p>
         </div>
-        <button
-          type="button"
-          className="admin-button secondary small"
-          onClick={() => setRevision((value) => value + 1)}
-          disabled={items === null}
-        >
-          <RefreshCw size={16} /> {" "}{translate("Actualiser")}</button>
+        <ExportExcelButton onClick={exportLeaves} disabled={!filtered.length} />
       </section>
       {loadingError ? (
         <section className="admin-card leave-management-empty" role="alert">
@@ -288,9 +308,17 @@ export function LeaveManagementPage({ role }: Props) {
                   onChange={(value) => setStation(String(value))}
                   options={[
                     { value: "ALL", label: translate("Toutes les stations") },
-                    ...stations.map((item) => ({ value: item, label: item })),
+                    ...stations.map(([id, name]) => ({ value: id, label: name })),
                   ]}
                 />
+                <label className="leave-management-date-filter">
+                  <span>{translate("Du")}</span>
+                  <input type="date" aria-label={translate("Date de début")} value={fromDate} max={toDate || undefined} onChange={(event) => setFromDate(event.target.value)} />
+                </label>
+                <label className="leave-management-date-filter">
+                  <span>{translate("Au")}</span>
+                  <input type="date" aria-label={translate("Date de fin")} value={toDate} min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} />
+                </label>
               </div>
             </div>
             {items === null ? (

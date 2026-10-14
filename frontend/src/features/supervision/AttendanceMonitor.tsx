@@ -2,7 +2,9 @@ import { translate } from "../../app/i18n";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/auth-api";
-import { LoaderCircle, RefreshCw, Search } from "../../ui/icons";
+import { LoaderCircle, Search } from "../../ui/icons";
+import { ExportExcelButton } from "../../ui/ExportExcelButton";
+import { exportToExcel } from "../../utils/excelExport";
 import { Select } from "../../ui/Select";
 import {
   ResponsiveDataTable,
@@ -47,20 +49,16 @@ export function AttendanceMonitor({
   const targetShiftId = new URLSearchParams(location.search).get("shift");
   const [data, setData] = useState<MonitorData | null>(null);
   const [error, setError] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<MonitorRow["status"] | "ALL">("ALL");
   const [query, setQuery] = useState("");
   const [stationId, setStationId] = useState("ALL");
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setError("");
-    setRefreshing(true);
     try {
       setData(await api<MonitorData>("/attendance/monitor"));
     } catch (err) {
       if (!silent) setError((err as Error).message);
-    } finally {
-      setRefreshing(false);
     }
   }, []);
 
@@ -196,6 +194,27 @@ export function AttendanceMonitor({
     return scopedRows.filter((row) => row.status === key).length;
   };
 
+  function exportAttendance() {
+    if (!rows.length) return;
+    exportToExcel({
+      data: rows,
+      filename: `uswap-pointages-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Pointages",
+      columns: [
+        { header: translate("Swappeur"), key: (row) => row.swapper.fullName, width: 24 },
+        { header: translate("Station"), key: (row) => row.station.name, width: 24 },
+        { header: translate("Shift"), key: (row) => translate(row.template ?? "—"), width: 18 },
+        { header: translate("Début prévu"), key: (row) => formatDateTime(row.startTime, row.station.timezone), width: 22 },
+        { header: translate("Fin prévue"), key: (row) => formatDateTime(row.endTime, row.station.timezone), width: 22 },
+        { header: translate("Début du pointage"), key: (row) => row.checkedInAt ? formatDateTime(row.checkedInAt, row.station.timezone) : "—", width: 22 },
+        { header: translate("Fin du pointage"), key: (row) => row.checkedOutAt ? formatDateTime(row.checkedOutAt, row.station.timezone) : "—", width: 22 },
+        { header: translate("Retard"), key: (row) => row.isLate ? translate("Oui") : translate("Non"), width: 12 },
+        { header: translate("Tolérance (min)"), key: (row) => row.toleranceMinutes ?? "—", width: 16 },
+        { header: translate("État"), key: (row) => translate(STATUS_LABEL[row.status]), width: 18 },
+      ],
+    });
+  }
+
   return (
     <div className="operations-stack" style={{ paddingBottom: "24px" }}>
       <div className="premium-list-header">
@@ -207,21 +226,7 @@ export function AttendanceMonitor({
             {formatDateTime(data.generatedAt)}
           </p>
         </div>
-        <button
-          type="button"
-          className="admin-button secondary small"
-          style={{
-            width: "34px",
-            height: "34px",
-            padding: 0,
-            borderRadius: "10px",
-            flexShrink: 0,
-          }}
-          disabled={refreshing}
-          onClick={() => void load()}
-        >
-          <RefreshCw size={16} className={refreshing ? "spin" : undefined} />
-        </button>
+        <ExportExcelButton onClick={exportAttendance} disabled={!rows.length} />
       </div>
 
       {targetShiftId && (

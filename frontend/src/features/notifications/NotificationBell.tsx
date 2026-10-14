@@ -464,7 +464,7 @@ export function NotificationBell() {
                                 : item.kind.includes("INCIDENT")
                                   ? t("Voir l’incident")
                                   : item.kind === "CHECKIN_REMINDER"
-                                    ? t("Pointer mon service")
+                                    ? t("Pointer mon shift")
                                     : categoryFor(item.kind) === "ATTENDANCE"
                                       ? t("Voir le pointage")
                                       : item.kind === "REPLACEMENT_NEEDED"

@@ -12,6 +12,8 @@ import {
 } from "../../ui/icons";
 import { periodDuration } from "./duration";
 import { formatDateRange } from "../../utils/french";
+import { ExportExcelButton } from "../../ui/ExportExcelButton";
+import { exportToExcel } from "../../utils/excelExport";
 import "./planning-list.css";
 
 export type PlanningListItem = {
@@ -113,6 +115,23 @@ export function PlanningList({
       });
   }, [plans, status, query]);
 
+  function exportPlannings() {
+    if (!rows.length) return;
+    exportToExcel({
+      data: rows,
+      filename: `uswap-plannings-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Plannings",
+      columns: [
+        { header: t("Planning"), key: (plan) => translate(plan.name || periodLabel(plan.startDate, plan.endDate)), width: 32 },
+        { header: t("Période"), key: (plan) => periodLabel(plan.startDate, plan.endDate), width: 32 },
+        { header: t("Station"), key: (plan) => stationNamesOf(plan).join(", ") || "—", width: 36 },
+        { header: t("Shifts inclus"), key: (plan) => plan._count?.occurrences ?? plan.occurrences.length, width: 16 },
+        { header: t("Statut"), key: (plan) => t(plan.status === "PUBLISHED" ? "Publié" : "Brouillon"), width: 18 },
+        { header: t("Révision"), key: (plan) => plan.revision, width: 12 },
+      ],
+    });
+  }
+
   // Premier chargement : aucun planning n'est encore connu.
   if (loading && !plans.length)
     return (
@@ -165,7 +184,7 @@ export function PlanningList({
           <div>
             <span className="admin-eyebrow">{t("Mes affectations")}</span>
             <h2>{t("Mes plannings")}</h2>
-            <p>{t("Consultez vos services à venir et vos périodes terminées.")}</p>
+            <p>{t("Consultez vos shifts à venir et vos shifts terminés.")}</p>
           </div>
         </header>
 
@@ -291,7 +310,7 @@ export function PlanningList({
                     <span className="swapper-planning-entry__next">
                       <ClockIcon size={15} />
                       <span>
-                        <small>{translate("Prochain service")}</small>
+                        <small>{translate("Prochain shift")}</small>
                         <strong>
                           {new Date(nextShift.startTime || "").toLocaleString(
                             locale,
@@ -352,6 +371,9 @@ export function PlanningList({
             >
               <PlusIcon size={18} aria-hidden="true" />
               {translate("Créer un brouillon")}</button>
+          )}
+          {canCreate && plans.length > 0 && (
+            <ExportExcelButton onClick={exportPlannings} disabled={!rows.length} />
           )}
         </div>
         {plans.length > 0 && (

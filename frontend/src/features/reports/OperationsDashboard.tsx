@@ -489,7 +489,7 @@ export function OperationsDashboard({
               <header>
                 <div>
                   <h3>{translate("Répartition des présences")}</h3>
-                  <p>{translate("État des services sur la période")}</p>
+                  <p>{translate("État des shifts sur la période")}</p>
                 </div>
                 <ChartBarIcon />
               </header>

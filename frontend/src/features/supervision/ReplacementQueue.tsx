@@ -5,6 +5,8 @@ import { notify } from "../../ui/Toast";
 import { Modal } from "../../ui/Modal";
 import { LoaderCircle, Warning } from "../../ui/icons";
 import { formatDateTime } from "./format";
+import { ExportExcelButton } from "../../ui/ExportExcelButton";
+import { exportToExcel } from "../../utils/excelExport";
 import {
   URGENCY_LABEL,
   type Candidate,
@@ -61,6 +63,27 @@ export function ReplacementQueue({
         {translate("Chargement de la file…")}</div>
     );
 
+  const queueRows = rows;
+  function exportQueue() {
+    if (!queueRows.length) return;
+    exportToExcel({
+      data: queueRows,
+      filename: `uswap-shifts-a-couvrir-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "À couvrir",
+      columns: [
+        { header: translate("Swappeur remplacé"), key: (row) => row.swapper.fullName, width: 24 },
+        { header: translate("Station"), key: (row) => row.station.name, width: 24 },
+        { header: translate("Shift"), key: (row) => translate(row.template ?? "—"), width: 18 },
+        { header: translate("Début"), key: (row) => formatDateTime(row.startTime, row.station.timezone), width: 22 },
+        { header: translate("Fin"), key: (row) => formatDateTime(row.endTime, row.station.timezone), width: 22 },
+        { header: translate("Urgence"), key: (row) => translate(URGENCY_LABEL[row.urgency]), width: 18 },
+        { header: translate("Origine"), key: (row) => translate(ORIGIN_LABEL[row.origin]), width: 30 },
+        { header: translate("Motif"), key: (row) => cleanReason(row), width: 40 },
+        { header: translate("Signalé le"), key: (row) => row.reportedAt ? formatDateTime(row.reportedAt, row.station.timezone) : "—", width: 22 },
+      ],
+    });
+  }
+
   return (
     <section className="admin-card">
       <div className="admin-card-heading">
@@ -70,7 +93,10 @@ export function ReplacementQueue({
             {translate("Absences sans remplaçant, classées par heure de début. Un élément disparaît dès que la couverture est rétablie.")}</p>
         </div>
         {!!rows.length && (
-          <span className="admin-badge draft">{rows.length} {" "}{translate("à couvrir")}</span>
+          <div className="replacement-queue__actions">
+            <span className="admin-badge draft">{rows.length} {" "}{translate("à couvrir")}</span>
+            <ExportExcelButton onClick={exportQueue} />
+          </div>
         )}
       </div>
 

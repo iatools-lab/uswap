@@ -43,6 +43,14 @@
   white-space: nowrap;
 }
 
+.audit-log-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+}
+
 .audit-log-filters {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(190px, 220px) minmax(190px, 220px) minmax(165px, 185px);
@@ -275,8 +283,13 @@
   }
 
   .audit-log-total {
+    white-space: nowrap;
+  }
+
+  .audit-log-tools {
     grid-column: 2;
-    justify-self: start;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .audit-log-filters > * {

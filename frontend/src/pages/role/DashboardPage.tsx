@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../../api/auth-api";
 import { useSession } from "../../app/session";
 import {translate,  useI18n } from "../../app/i18n";
-import { notify } from "../../ui/Toast";
 import { LoaderCircle, RefreshCw } from "../../ui/icons";
 import { KpiCard } from "../../ui/KpiCard";
 import { formatDateTime } from "../../features/supervision/format";
@@ -134,11 +133,6 @@ export function DashboardPage() {
 
   const limitExceeded = hours.weekly > hours.weeklyLimit;
 
-  async function refreshNow() {
-    await load();
-    notify(t("Tableau de bord actualisé."));
-  }
-
   return (
     <div className="dashboard">
       <div className="dashboard-head">
@@ -147,14 +141,6 @@ export function DashboardPage() {
           <p className="operations-hint">
             {t("Journée opérationnelle du")} {stats.businessDate} {" "}{translate("(")}{t("heure de Douala")}{translate(").")}</p>
         </div>
-        <button
-          type="button"
-          className="admin-button secondary small"
-          onClick={() => void refreshNow()}
-        >
-          <RefreshCw size={16} />
-          {t("Actualiser")}
-        </button>
       </div>
 
       <section className="dashboard-grid" aria-label={t("Indicateurs du jour")}>

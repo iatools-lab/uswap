@@ -6,8 +6,9 @@ import { firstNameOf, timeGreeting } from "../../utils/greeting";
 import { interceptNav } from "../../app/spaNav";
 import { useSession } from "../../app/session";
 import {translate,  useI18n } from "../../app/i18n";
-import { api, ApiError } from "../../api/auth-api";
+import { api, ApiError, download } from "../../api/auth-api";
 import { KpiCard } from "../../ui/KpiCard";
+import { ExportExcelButton } from "../../ui/ExportExcelButton";
 import { Select } from "../../ui/Select";
 import {
   ActivityIcon,
@@ -77,6 +78,7 @@ type LeaveRow = {
   swapperId: string;
   startTime: string;
   endTime: string;
+  stationId?: string | null;
 };
 type MemberSummary = {
   id: string;
@@ -217,7 +219,7 @@ function ActivityTrend({
   if (!data.length) {
     return (
       <div className="activity-trend activity-trend--empty" role="status">
-        <strong>{t("Aucun service publié")}</strong>
+        <strong>{t("Aucun shift publié")}</strong>
         <span>
           {translate("Il n’y a pas d’activité publiée sur cette période et cette station.")}</span>
       </div>
@@ -323,7 +325,7 @@ function ActivityTrend({
 
 const ATTENDANCE_META: Record<string, { label: string; color: string }> = {
   present: { label: "Présents", color: "#168250" },
-  closed: { label: "Services terminés", color: "#2d6cdf" },
+  closed: { label: "Shifts terminés", color: "#2d6cdf" },
   late: { label: "Retards", color: "#e99a16" },
   absent: { label: "Absences", color: "#dc4a43" },
   justified: { label: "Absences justifiées", color: "#7756b5" },
@@ -564,19 +566,6 @@ export function AdminHomePage() {
     (item) => item.status === "PUBLISHED",
   ).length;
   const draftTotal = plannings.filter((item) => item.status === "DRAFT").length;
-  const todayKey = localDateKey(new Date());
-  const approvedLeaves = leaveRequests.filter(
-    (leave) => leave.status === "APPROVED",
-  );
-  const swappersOnLeave = new Set(
-    approvedLeaves
-      .filter(
-        (leave) =>
-          datePart(leave.startTime) <= todayKey &&
-          datePart(leave.endTime) >= todayKey,
-      )
-      .map((leave) => leave.swapperId),
-  ).size;
   const planning =
     plannings.find((item) => {
       const today = localDateKey(new Date());
@@ -595,6 +584,35 @@ export function AdminHomePage() {
     selectedPlanningId,
     plannings,
   );
+  async function exportDashboard() {
+    const query = new URLSearchParams({
+      from: filteredFrom,
+      to: filteredTo,
+      format: "XLSX",
+    });
+    const selectedPlanning = plannings.find((item) => item.id === selectedPlanningId);
+    if (filterMode === "PLANNING" && selectedPlanning)
+      query.set("planningId", selectedPlanning.id);
+    if (stationFilter !== "ALL") query.set("stationId", stationFilter);
+    try {
+      await download(
+        `/reports/export?${query.toString()}`,
+        `uswap-activite-${filteredFrom}-${filteredTo}.xlsx`,
+      );
+    } catch {
+      setLoadError(translate("L’export Excel n’a pas pu être téléchargé."));
+    }
+  }
+  const approvedLeaves = leaveRequests.filter(
+    (leave) =>
+      leave.status === "APPROVED" &&
+      datePart(leave.startTime) <= filteredTo &&
+      datePart(leave.endTime) >= filteredFrom &&
+      (stationFilter === "ALL" || leave.stationId === stationFilter),
+  );
+  const swappersOnLeave = new Set(
+    approvedLeaves.map((leave) => leave.swapperId),
+  ).size;
   const attentionCount =
     counts.pending + pendingLeaves + (dashboard?.kpis.futureVacant ?? 0);
   const stationRows = useMemo(
@@ -687,11 +705,6 @@ export function AdminHomePage() {
           <h2 id="home-welcome-title" className="home-welcome">
             {t(timeGreeting())}, {firstNameOf(session.user.fullName)}
           </h2>
-          <p className="home-subtitle">
-            {planning
-              ? `${planning.name} · ${compactPeriod(planning.startDate, planning.endDate)}`
-              : t("Activité consolidée des six dernières semaines")}
-          </p>
         </div>
         <div className="home-actions">
           <a
@@ -712,14 +725,18 @@ export function AdminHomePage() {
       <section className="admin-overview" aria-labelledby="admin-overview-title">
         <header className="admin-overview__header">
           <div>
-            <span className="insight-kicker">{t("Vue d’ensemble")}</span>
-            <h3 id="admin-overview-title">{t("Repères essentiels")}</h3>
+            <h3 id="admin-overview-title">{t("Vue d’ensemble")}</h3>
           </div>
-          <span className="admin-overview__scope">{t("Ensemble de l’organisation")}</span>
+          <div className="admin-overview__tools">
+            <ExportExcelButton
+              onClick={() => void exportDashboard()}
+              disabled={dashboardLoading || !dashboard}
+            />
+          </div>
         </header>
 
         <section
-          className="home-filters"
+          className={`home-filters${filterMode === "PERIOD" && periodScale === "custom" ? " home-filters--custom" : ""}`}
         aria-label={translate("Filtres du tableau de bord")}
         aria-busy={dashboardLoading}
       >
@@ -897,6 +914,7 @@ export function AdminHomePage() {
       </section>
 
       <section className="admin-overview-kpis" aria-label={t("Indicateurs clés")}>
+        <a className="admin-overview-kpi-link" {...link("/app/admin/utilisateurs")}>
         <KpiCard
           compact
           className="admin-overview-kpi"
@@ -917,6 +935,8 @@ export function AdminHomePage() {
             </div>
           }
         />
+        </a>
+        <a className="admin-overview-kpi-link" {...link("/app/admin/stations?tab=list")}>
         <KpiCard
           compact
           className="admin-overview-kpi"
@@ -930,6 +950,8 @@ export function AdminHomePage() {
             </div>
           }
         />
+        </a>
+        <a className="admin-overview-kpi-link" {...link("/app/admin/plannings")}>
         <KpiCard
           compact
           className="admin-overview-kpi"
@@ -944,6 +966,11 @@ export function AdminHomePage() {
             </div>
           }
         />
+        </a>
+        <a
+          className="admin-overview-kpi-link"
+          {...link(`/app/admin/conges?${new URLSearchParams({ from: filteredFrom, to: filteredTo, ...(stationFilter !== "ALL" ? { stationId: stationFilter } : {}) }).toString()}`)}
+        >
         <KpiCard
           compact
           className="admin-overview-kpi"
@@ -953,11 +980,12 @@ export function AdminHomePage() {
           tone={swappersOnLeave ? "amber" : "neutral"}
           detail={
             <div className="admin-overview-kpi__breakdown">
-              <span>{t("swappeurs en congé aujourd’hui")}</span>
+              <span>{t("swappeurs en congé sur la période sélectionnée")}</span>
               <span>{countLabel(approvedLeaves.length, "congé approuvé", "congés approuvés", t)}</span>
             </div>
           }
         />
+        </a>
       </section>
 
       <section className="home-insights" aria-label={translate("Analyse de l’activité")}>
@@ -995,7 +1023,7 @@ export function AdminHomePage() {
               </span>
               <span>
                 <strong>
-                  {countLabel(dashboard?.kpis.futureVacant ?? 0, "service", "services", t)}
+                  {countLabel(dashboard?.kpis.futureVacant ?? 0, "shift", "shifts", t)}
                 </strong>
                 <small>{t("à affecter au planning")}</small>
               </span>
@@ -1043,7 +1071,7 @@ export function AdminHomePage() {
           <header className="insight-card__head">
             <div>
               <span className="insight-kicker">{t("Réseau")}</span>
-              <h3>{t("Services attribués par station")}</h3>
+              <h3>{t("Shifts attribués par station")}</h3>
             </div>
             <a {...link("/app/admin/stations?tab=list")}>{t("Gérer les stations")}</a>
           </header>
