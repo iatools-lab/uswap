@@ -1,3 +1,5 @@
+import { currentLocale } from "../../app/i18n";
+import { translate } from "../../app/i18n";
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "../../api/auth-api";
 import { notify } from "../../ui/Toast";
@@ -161,10 +163,12 @@ export function AbsenceDeclaration({
         <section className="admin-card" aria-live="polite">
           <div className="ops-quick-action">
             <div>
-              <h2>Déclarations en attente</h2>
+              <h2>{translate("Déclarations en attente")}</h2>
               <p>
-                {queued.length} déclaration(s) hors connexion attend(ent) la
-                synchronisation.
+                {queued.length}{" "}
+                {queued.length === 1
+                  ? "déclaration hors connexion attend la synchronisation."
+                  : "déclarations hors connexion attendent la synchronisation."}
               </p>
             </div>
             <div>
@@ -175,8 +179,8 @@ export function AbsenceDeclaration({
                   className="admin-button secondary small"
                   onClick={() => void discard(item.id)}
                 >
-                  Annuler ·{" "}
-                  {new Date(item.queuedAt).toLocaleTimeString("fr-FR", {
+                  {translate("Annuler ·")}{" "}
+                  {new Date(item.queuedAt).toLocaleTimeString(currentLocale(), {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
@@ -189,11 +193,9 @@ export function AbsenceDeclaration({
       <section className="admin-card">
         <div className="ops-quick-action">
           <div>
-            <h2>Absence imprévue</h2>
+            <h2>{translate("Absence imprévue")}</h2>
             <p>
-              Prévenez l’exploitation tout de suite. Cela n’ouvre pas une
-              demande de congé.
-            </p>
+              {translate("Prévenez votre hiérarchie si jamais vous ne pouvez pas venir au travail.")}</p>
           </div>
           <button
             type="button"
@@ -203,16 +205,15 @@ export function AbsenceDeclaration({
               setOpen(true);
             }}
           >
-            Signaler
-          </button>
+            {translate("Signaler")}</button>
         </div>
       </section>
 
       <Modal
         open={open}
         onClose={close}
-        title="Signaler une absence"
-        subtitle="Indiquez le service concerné, le motif et joignez un justificatif."
+        title={translate("Signaler une absence")}
+        subtitle={translate("Indiquez le shift concerné, le motif et joignez un justificatif.")}
         footer={
           <>
             <button
@@ -221,8 +222,7 @@ export function AbsenceDeclaration({
               onClick={close}
               disabled={busy}
             >
-              Annuler
-            </button>
+              {translate("Annuler")}</button>
             {eligible.length > 0 && (
               <button
                 type="submit"
@@ -231,8 +231,7 @@ export function AbsenceDeclaration({
                 disabled={busy || !shiftId || !file}
               >
                 {busy && <LoaderCircle className="spin" size={16} />}
-                Envoyer
-              </button>
+                {translate("Envoyer")}</button>
             )}
           </>
         }
@@ -241,8 +240,7 @@ export function AbsenceDeclaration({
           {!online && (
             <p className="operations-offline" role="status">
               <Warning size={16} />
-              Hors connexion : la déclaration partira dès le retour du réseau.
-            </p>
+              {translate("Hors connexion : la déclaration partira dès le retour du réseau.")}</p>
           )}
           {error && (
             <p className="error-message" role="alert">
@@ -251,20 +249,17 @@ export function AbsenceDeclaration({
           )}
           {!eligible.length ? (
             <div className="absence-no-eligible" role="status">
-              <strong>Aucun shift à signaler pour le moment</strong>
+              <strong>{translate("Aucun shift à signaler pour le moment")}</strong>
               <p>
-                Cette déclaration est disponible pour un shift publié qui n’a
-                pas encore commencé ou qui est en cours.
-              </p>
+                {translate("Cette déclaration est disponible pour un shift publié qui n’a pas encore commencé ou qui est en cours.")}</p>
             </div>
           ) : (
             <fieldset disabled={busy} className="ops-form">
               <label>
-                Shift concerné
-                <Select
-                  ariaLabel="Shift concerné"
+                {translate("Shift concerné")}<Select
+                  ariaLabel={translate("Shift concerné")}
                   value={shiftId}
-                  placeholder="Sélectionner"
+                  placeholder={translate("Sélectionner")}
                   onChange={(value) => setShiftId(String(value))}
                   options={eligible.map((shift) => ({
                     value: shift.id,
@@ -273,13 +268,12 @@ export function AbsenceDeclaration({
                 />
               </label>
               <label className="ops-field">
-                Motif
-                <input
+                {translate("Motif")}<input
                   required
                   minLength={3}
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
-                  placeholder="Maladie, imprévu personnel…"
+                  placeholder={translate("Maladie, imprévu personnel…")}
                 />
               </label>
               <div className="ops-file-row">
@@ -296,15 +290,15 @@ export function AbsenceDeclaration({
                     <strong>
                       {file ? file.name : "Joindre un justificatif"}
                     </strong>
-                    <small>PDF ou image · 5 Mo max · obligatoire</small>
+                    <small>{translate("PDF ou image · 5 Mo max · obligatoire")}</small>
                   </span>
                 </label>
                 {file && (
                   <button
                     type="button"
                     className="ops-file-remove"
-                    aria-label="Retirer le justificatif"
-                    title="Retirer le justificatif"
+                    aria-label={translate("Retirer le justificatif")}
+                    title={translate("Retirer le justificatif")}
                     onClick={() => setFile(null)}
                   >
                     <X size={18} />

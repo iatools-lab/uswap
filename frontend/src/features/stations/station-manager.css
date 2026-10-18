@@ -393,22 +393,22 @@
   width: 14%;
 }
 .station-compact-table th:nth-child(2) {
-  width: 15%;
-}
-.station-compact-table th:nth-child(3) {
-  width: 10%;
-}
-.station-compact-table th:nth-child(4) {
   width: 14%;
 }
-.station-compact-table th:nth-child(5) {
-  width: 10%;
-}
-.station-compact-table th:nth-child(6) {
+.station-compact-table th:nth-child(3) {
   width: 9%;
 }
+.station-compact-table th:nth-child(4) {
+  width: 15%;
+}
+.station-compact-table th:nth-child(5) {
+  width: 21%;
+}
+.station-compact-table th:nth-child(6) {
+  width: 6%;
+}
 .station-compact-table th:nth-child(7) {
-  width: 28%;
+  width: 21%;
 }
 
 .station-compact-table .admin-person,
@@ -502,13 +502,18 @@ th.station-cell-right {
 
 .station-code-chips {
   margin-top: 0;
-  gap: 3px;
-  flex-wrap: nowrap;
+  gap: 3px !important;
+  flex-wrap: nowrap !important;
   overflow: hidden;
 }
 
 .station-code-chips code {
+  flex: 0 0 auto;
   white-space: nowrap;
+  padding-inline: 5px;
+  font-size: 10.5px;
+}
+.station-compact-table td:nth-child(6) .admin-badge {
   padding-inline: 5px;
   font-size: 10.5px;
 }

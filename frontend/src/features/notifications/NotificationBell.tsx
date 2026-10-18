@@ -11,10 +11,11 @@ import {
   BellIcon,
   CaretRightIcon,
   SlidersHorizontalIcon,
-} from "@phosphor-icons/react";
-import { api } from "../../api/auth-api";
+} from "../../ui/icons";
+import { api, usingMock } from "../../api/auth-api";
 import { useSession } from "../../app/session";
 import { formatDateTime } from "../supervision/format";
+import { useI18n } from "../../app/i18n";
 
 /** En dessous de cette largeur, le panneau devient une feuille ancrée en bas. */
 const SHEET_MAX_WIDTH = 620;
@@ -119,6 +120,7 @@ const categoryLabels: Record<NotificationCategory, string> = {
 };
 
 export function NotificationBell() {
+  const { language, locale, t } = useI18n();
   const { session } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
@@ -255,11 +257,28 @@ export function NotificationBell() {
   const visibleItems = items.filter(
     (item) => category === "ALL" || categoryFor(item.kind) === category,
   );
+  const categoryLabel = (value: NotificationCategory) =>
+    t(categoryLabels[value]);
 
   async function markAllRead() {
     const pending = unread;
-    await api("/notifications/read-all", {}, "PATCH");
-    const readIds = new Set(pending.map((item) => item.id));
+    if (usingMock) {
+      await api("/notifications/read-all", {}, "PATCH").catch(() => {});
+      const readAt = new Date().toISOString();
+      setItems((rows) =>
+        rows.map((row) => ({ ...row, readAt: row.readAt ?? readAt })),
+      );
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      pending.map((item) => api(`/notifications/${item.id}/read`, {}, "PATCH")),
+    );
+    const readIds = new Set(
+      results.flatMap((result, index) =>
+        result.status === "fulfilled" ? [pending[index].id] : [],
+      ),
+    );
     const readAt = new Date().toISOString();
     setItems((rows) =>
       rows.map((row) =>
@@ -332,8 +351,10 @@ export function NotificationBell() {
         className="notification-bell__trigger"
         aria-label={
           unread.length
-            ? `${unread.length} notification${unread.length > 1 ? "s" : ""} non lue${unread.length > 1 ? "s" : ""}`
-            : "Notifications"
+            ? language === "en"
+              ? `${unread.length} unread notification${unread.length === 1 ? "" : "s"}`
+              : `${unread.length} notification${unread.length === 1 ? "" : "s"} non lue${unread.length === 1 ? "" : "s"}`
+            : t("Notifications")
         }
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
@@ -352,7 +373,7 @@ export function NotificationBell() {
               "notification-bell__menu" + (sheet.current ? " is-sheet" : "")
             }
             role="dialog"
-            aria-label="Notifications"
+            aria-label={t("Notifications")}
             style={{
               top: placement.top,
               left: placement.left,
@@ -361,28 +382,28 @@ export function NotificationBell() {
             }}
           >
             <div className="notification-bell__head">
-              <strong>Notifications</strong>
+              <strong>{t("Notifications")}</strong>
               {!!unread.length && (
                 <button
                   type="button"
                   className="text-button"
                   onClick={() => void markAllRead()}
                 >
-                  Tout marquer lu
+                  {t("Tout marquer lu")}
                 </button>
               )}
             </div>
             <div
               className="notification-bell__categories"
               role="group"
-              aria-label="Filtrer par catégorie"
+              aria-label={t("Filtrer par catégorie")}
             >
               <button
                 type="button"
                 aria-pressed={category === "ALL"}
                 onClick={() => setCategory("ALL")}
               >
-                Toutes <span>{items.length}</span>
+                {t("Toutes")} <span>{items.length}</span>
               </button>
               {availableCategories.map((key) => (
                 <button
@@ -391,15 +412,15 @@ export function NotificationBell() {
                   aria-pressed={category === key}
                   onClick={() => setCategory(key)}
                 >
-                  {categoryLabels[key]} <span>{categoryCounts[key]}</span>
+                  {categoryLabel(key)} <span>{categoryCounts[key]}</span>
                 </button>
               ))}
             </div>
             {!visibleItems.length ? (
               <p className="notification-bell__empty">
                 {category === "ALL"
-                  ? "Aucune notification pour le moment."
-                  : `Aucune notification dans ${categoryLabels[category]}.`}
+                  ? t("Aucune notification pour le moment.")
+                  : `${t("Aucune notification dans")} ${categoryLabel(category)}.`}
               </p>
             ) : (
               <ul className="notification-bell__list">
@@ -412,41 +433,43 @@ export function NotificationBell() {
                           ? "notification-bell__item"
                           : "notification-bell__item unread"
                       }
-                      aria-label={`Ouvrir ${item.title}`}
+                      aria-label={`${t("Ouvrir le suivi")} ${t(item.title)}`}
                       onClick={() => void openNotification(item)}
                     >
                       <span className="notification-bell__content">
                         <span className="notification-bell__title-row">
-                          <strong>{item.title}</strong>
+                          <strong>{t(item.title)}</strong>
                         </span>
                         <span className="notification-bell__body">
-                          {notificationBodyFor(
+                          {t(notificationBodyFor(
                             item,
                             session?.user.fullName ?? "",
                             session?.user.role ?? "",
-                          )}
+                          ))}
                         </span>
                         <span className="notification-bell__meta">
-                          <time>{formatDateTime(item.createdAt)}</time>
-                          <span>{categoryLabels[categoryFor(item.kind)]}</span>
+                          <time>
+                            {formatDateTime(item.createdAt, undefined, locale)}
+                          </time>
+                          <span>{categoryLabel(categoryFor(item.kind))}</span>
                         </span>
                         <span className="notification-bell__action">
                           {item.kind === "ACCESS_PENDING"
-                            ? "Examiner les accès"
+                            ? t("Examiner les accès")
                             : item.kind.startsWith("PLANNING_") ||
                                 item.kind === "ASSIGNMENT"
-                              ? "Voir le planning"
+                              ? t("Voir le planning")
                               : item.kind.includes("LEAVE")
-                                ? "Voir la demande de congé"
+                                ? t("Voir la demande de congé")
                                 : item.kind.includes("INCIDENT")
-                                  ? "Voir l’incident"
+                                  ? t("Voir l’incident")
                                   : item.kind === "CHECKIN_REMINDER"
-                                    ? "Pointer mon service"
+                                    ? t("Pointer mon shift")
                                     : categoryFor(item.kind) === "ATTENDANCE"
-                                      ? "Voir le pointage"
+                                      ? t("Voir le pointage")
                                       : item.kind === "REPLACEMENT_NEEDED"
-                                        ? "Voir le remplacement"
-                                        : "Ouvrir le suivi"}
+                                        ? t("Voir le remplacement")
+                                        : t("Ouvrir le suivi")}
                         </span>
                       </span>
                     </button>
@@ -467,8 +490,9 @@ export function NotificationBell() {
                 navigate(`${base}/compte?section=notifications`);
               }}
             >
-              <SlidersHorizontalIcon size={15} weight="duotone" /> Gérer mes
-              préférences <CaretRightIcon size={15} weight="bold" />
+              <SlidersHorizontalIcon size={15} weight="duotone" />{" "}
+              {t("Gérer mes préférences")}{" "}
+              <CaretRightIcon size={15} weight="bold" />
             </button>
           </div>,
           document.body,

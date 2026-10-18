@@ -110,7 +110,6 @@ export async function discard(id: string): Promise<void> {
   await remove(id);
 }
 
-
 export async function clearAll(): Promise<void> {
   const db = await open();
   if (!db) return;
@@ -168,7 +167,10 @@ export async function flush(): Promise<{ sent: number; remaining: number }> {
         );
         localStorage.setItem(
           "uswap:last-sync",
-          JSON.stringify({ queuedAt: mutation.queuedAt, syncedAt: synced?.syncedAt ?? new Date().toISOString() }),
+          JSON.stringify({
+            queuedAt: mutation.queuedAt,
+            syncedAt: synced?.syncedAt ?? new Date().toISOString(),
+          }),
         );
         await remove(mutation.id);
         sent += 1;

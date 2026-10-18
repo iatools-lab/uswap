@@ -1,6 +1,7 @@
+import { translate } from "../app/i18n";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CaretDownIcon } from "@phosphor-icons/react";
+import { CaretDownIcon } from "./icons";
 import "./ui.css";
 
 export type SelectValue = string | number;
@@ -236,7 +237,7 @@ export function Select({
                   }
                 }}
               >
-                {option.label}
+                {translate(option.label)}
               </button>
             ))}
           </div>,

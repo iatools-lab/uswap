@@ -1,10 +1,11 @@
+import { translate } from "../../app/i18n";
 import {
   CaretDownIcon,
   ListIcon,
   PlusIcon,
   SortAscendingIcon,
   SquaresFourIcon,
-} from "@phosphor-icons/react";
+} from "../../ui/icons";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Modal } from "../../ui/Modal";
@@ -157,11 +158,16 @@ export function UsersPage() {
           setLoadError("");
         } else {
           const errorData = membersResult.reason;
-          if (errorData instanceof ApiError && [401, 403].includes(errorData.status)) {
+          if (
+            errorData instanceof ApiError &&
+            [401, 403].includes(errorData.status)
+          ) {
             onAccessLost();
             return;
           }
-          setLoadError("Les utilisateurs n’ont pas pu être chargés. Réessayez.");
+          setLoadError(
+            "Les utilisateurs n’ont pas pu être chargés. Réessayez.",
+          );
         }
 
         if (stationsResult.status === "fulfilled") {
@@ -271,14 +277,13 @@ export function UsersPage() {
     return (
       <div className="admin-card admin-empty" role="alert">
         <RefreshCw size={25} />
-        <h2>Chargement indisponible</h2>
+        <h2>{translate("Chargement indisponible")}</h2>
         <p>{loadError}</p>
         <button
           className="admin-button"
           onClick={() => setRevision((value) => value + 1)}
         >
-          Réessayer
-        </button>
+          {translate("Réessayer")}</button>
       </div>
     );
 
@@ -286,8 +291,7 @@ export function UsersPage() {
     return (
       <div className="admin-loading" role="status">
         <LoaderCircle className="spin" size={24} />
-        Chargement de votre espace…
-      </div>
+        {translate("Chargement de votre espace…")}</div>
     );
 
   return (
@@ -315,8 +319,7 @@ export function UsersPage() {
                 disabled={actionBusy}
                 onClick={() => setConfirmingMember(null)}
               >
-                Annuler
-              </button>
+                {translate("Annuler")}</button>
               <button
                 type="button"
                 className="admin-button"
@@ -324,8 +327,7 @@ export function UsersPage() {
                 onClick={handleToggleStatus}
               >
                 {actionBusy && <LoaderCircle className="spin" size={16} />}
-                Confirmer
-              </button>
+                {translate("Confirmer")}</button>
             </div>
           </div>
         )}
@@ -344,8 +346,8 @@ export function UsersPage() {
         <div className="admin-search">
           <Search size={18} />
           <input
-            aria-label="Rechercher un utilisateur"
-            placeholder="Rechercher un nom ou un e-mail"
+            aria-label={translate("Rechercher un utilisateur")}
+            placeholder={translate("Rechercher un nom ou un e-mail")}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
@@ -359,15 +361,15 @@ export function UsersPage() {
             <Select
               size="sm"
               value={sort}
-              ariaLabel="Trier les utilisateurs"
+              ariaLabel={translate("Trier les utilisateurs")}
               onChange={(value) => {
                 setSort(String(value));
                 setCurrentPage(1);
               }}
               options={[
-                { label: "Plus récents", value: "recent" },
-                { label: "Nom : A à Z", value: "name" },
-                { label: "Plus anciens", value: "oldest" },
+                { label: translate("Plus récents"), value: "recent" },
+                { label: translate("Nom : A à Z"), value: "name" },
+                { label: translate("Plus anciens"), value: "oldest" },
               ]}
             />
           </div>
@@ -375,22 +377,22 @@ export function UsersPage() {
             <button
               type="button"
               aria-pressed={viewMode === "table"}
-              aria-label="Vue tableau"
+              aria-label={translate("Vue tableau")}
               onClick={() => setViewMode("table")}
               className={`users-view-option${viewMode === "table" ? " is-selected" : ""}`}
             >
               <ListIcon size={14} />
-              <span>Tableau</span>
+              <span>{translate("Tableau")}</span>
             </button>
             <button
               type="button"
               aria-pressed={viewMode === "grid"}
-              aria-label="Vue grille"
+              aria-label={translate("Vue grille")}
               onClick={() => setViewMode("grid")}
               className={`users-view-option${viewMode === "grid" ? " is-selected" : ""}`}
             >
               <SquaresFourIcon size={14} />
-              <span>Grille</span>
+              <span>{translate("Grille")}</span>
             </button>
           </div>
           <button
@@ -399,7 +401,7 @@ export function UsersPage() {
             onClick={() => setShowCreateModal(true)}
           >
             <PlusIcon size={15} weight="bold" />
-            <span>Créer un utilisateur</span>
+            <span>{translate("Créer un utilisateur")}</span>
           </button>
           <div ref={actionsRef} className="directory-more">
             <button
@@ -409,7 +411,7 @@ export function UsersPage() {
               aria-expanded={actionsOpen}
               onClick={() => setActionsOpen((open) => !open)}
             >
-              <span>Actions</span>
+              <span>{translate("Actions")}</span>
               <CaretDownIcon
                 size={13}
                 className={`caret${actionsOpen ? " is-open" : ""}`}
@@ -429,8 +431,7 @@ export function UsersPage() {
                     );
                   }}
                 >
-                  Importer un fichier (CSV)
-                </a>
+                  {translate("Importer un fichier (CSV)")}</a>
                 <button
                   role="menuitem"
                   disabled={exporting}
@@ -439,8 +440,7 @@ export function UsersPage() {
                     void exportUsers();
                   }}
                 >
-                  Exporter la liste (Excel)
-                </button>
+                  {translate("Exporter la liste (Excel)")}</button>
               </div>
             )}
           </div>
@@ -452,12 +452,12 @@ export function UsersPage() {
         <div
           className="status-chips"
           role="group"
-          aria-label="Statut des utilisateurs"
+          aria-label={translate("Statut des utilisateurs")}
         >
           {[
-            ["", "Tous"],
+            ["", translate("Tous")],
             ["active", "Actifs"],
-            ["pending", "En attente"],
+            ["pending", translate("En attente")],
             ["inactive", "Inactifs"],
           ].map(([value, label]) => (
             <button
@@ -490,9 +490,9 @@ export function UsersPage() {
             }
           >
             <ShieldCheckIcon size={15} />
-            <span>Rôle :</span>
+            <span>{translate("Rôle :")}</span>
             <strong>
-              {role ? roles[role as keyof typeof roles] || role : "Tous"}
+              {role ? translate(roles[role as keyof typeof roles] || role) : translate("Tous")}
             </strong>
             <CaretDownIcon
               size={13}
@@ -512,8 +512,7 @@ export function UsersPage() {
                   setOpenFilter(null);
                 }}
               >
-                Tous les rôles
-              </button>
+                {translate("Tous les rôles")}</button>
               {Object.entries(roles).map(([value, label]) => (
                 <button
                   key={value}
@@ -547,9 +546,9 @@ export function UsersPage() {
             }
           >
             <Building2 size={15} />
-            <span>Station :</span>
+            <span>{translate("Station :")}</span>
             <strong>
-              {stations?.find((s) => s.id === plannedStation)?.name || "Toutes"}
+              {stations?.find((s) => s.id === plannedStation)?.name || translate("Toutes")}
             </strong>
             <CaretDownIcon
               size={13}
@@ -569,8 +568,7 @@ export function UsersPage() {
                   setOpenFilter(null);
                 }}
               >
-                Toutes les stations
-              </button>
+                {translate("Toutes les stations")}</button>
               {(stations || []).map((s) => (
                 <button
                   key={s.id}
@@ -601,8 +599,7 @@ export function UsersPage() {
               setCurrentPage(1);
             }}
           >
-            Effacer les filtres
-          </button>
+            {translate("Effacer les filtres")}</button>
         )}
       </div>
 
@@ -614,19 +611,18 @@ export function UsersPage() {
 
       {listLoading || query !== debouncedQuery ? (
         <div className="admin-loading" role="status">
-          Chargement des utilisateurs…
-        </div>
+          {translate("Chargement des utilisateurs…")}</div>
       ) : visibleMembers.length ? (
         viewMode === "table" ? (
           <div className="admin-table-wrap">
             <table className="admin-table users-table mobile-card-table">
               <thead>
                 <tr>
-                  <th>Collaborateur</th>
-                  <th>Rôle</th>
-                  <th>Statut</th>
-                  <th>Station rattachée</th>
-                  <th className="users-cell-right">Actions</th>
+                  <th>{translate("Collaborateur")}</th>
+                  <th>{translate("Rôle")}</th>
+                  <th>{translate("Statut")}</th>
+                  <th>{translate("Station rattachée")}</th>
+                  <th className="users-cell-right">{translate("Actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -634,7 +630,7 @@ export function UsersPage() {
                   const info = statusInfo(member);
                   return (
                     <tr key={member.id}>
-                      <td data-label="Collaborateur">
+                      <td data-label={translate("Collaborateur")}>
                         <a
                           className="admin-person"
                           href={"/app/admin/utilisateurs/" + member.id}
@@ -655,24 +651,24 @@ export function UsersPage() {
                           </div>
                         </a>
                       </td>
-                      <td data-label="Rôle">
+                      <td data-label={translate("Rôle")}>
                         <span className="users-role-chip">
-                          {roles[member.role]}
+                          {translate(roles[member.role])}
                         </span>
                       </td>
-                      <td data-label="Statut">
+                      <td data-label={translate("Statut")}>
                         <span className={`admin-badge ${info.tone}`}>
-                          {info.label}
+                          {translate(info.label)}
                         </span>
                       </td>
-                      <td data-label="Station rattachée">
+                      <td data-label={translate("Station rattachée")}>
                         <span className="users-station-name">
                           {stations?.find(
                             (station) => station.id === member.stationId,
-                          )?.name || "Non affecté"}
+                          )?.name || translate("Non affecté")}
                         </span>
                       </td>
-                      <td data-label="Actions" className="users-cell-right">
+                      <td data-label={translate("Actions")} className="users-cell-right">
                         <div className="row-actions station-row-actions">
                           <a
                             className="admin-button secondary small"
@@ -686,14 +682,14 @@ export function UsersPage() {
                             }
                           >
                             <PencilSimple size={13} />
-                            <span>Modifier</span>
+                            <span>{translate("Modifier")}</span>
                           </a>
                           <button
                             type="button"
                             className={`station-toggle-btn ${member.disabledAt ? "success" : "danger"}`}
                             onClick={() => setConfirmingMember(member)}
                           >
-                            {member.disabledAt ? "Réactiver" : "Désactiver"}
+                            {translate(member.disabledAt ? "Réactiver" : "Désactiver")}
                           </button>
                         </div>
                       </td>
@@ -723,7 +719,7 @@ export function UsersPage() {
                       {initials(member.fullName)}
                     </span>
                     <span className={`admin-badge ${info.tone}`}>
-                      {info.label}
+                      {translate(info.label)}
                     </span>
                   </div>
 
@@ -738,7 +734,7 @@ export function UsersPage() {
                   <div className="station-contact-strip">
                     <div className="contact-item">
                       <ShieldCheckIcon size={14} />
-                      <span>{roles[member.role]}</span>
+                      <span>{translate(roles[member.role])}</span>
                     </div>
                     <div className="contact-item">
                       <Building2 size={14} />
@@ -759,14 +755,13 @@ export function UsersPage() {
                       }
                     >
                       <PencilSimple size={15} />
-                      Modifier
-                    </a>
+                      {translate("Modifier")}</a>
                     <button
                       type="button"
                       className={`station-toggle-btn ${member.disabledAt ? "success" : "danger"}`}
                       onClick={() => setConfirmingMember(member)}
                     >
-                      {member.disabledAt ? "Réactiver" : "Désactiver"}
+                      {translate(member.disabledAt ? "Réactiver" : "Désactiver")}
                     </button>
                   </div>
                 </section>
@@ -790,21 +785,21 @@ export function UsersPage() {
 
       <div className="admin-pagination">
         <span>
-          {total} résultat{total === 1 ? "" : "s"}
+          {total} {" "}{translate("résultat")}{total === 1 ? "" : "s"}
         </span>
         <div>
           <button
-            aria-label="Page précédente"
+            aria-label={translate("Page précédente")}
             disabled={listLoading || currentPage === 1}
             onClick={() => setCurrentPage(currentPage - 1)}
           >
             <ChevronLeft size={17} />
           </button>
           <span>
-            {currentPage} / {lastPage}
+            {currentPage} {" "}{translate("/")}{" "}{lastPage}
           </span>
           <button
-            aria-label="Page suivante"
+            aria-label={translate("Page suivante")}
             disabled={listLoading || currentPage === lastPage}
             onClick={() => setCurrentPage(currentPage + 1)}
           >

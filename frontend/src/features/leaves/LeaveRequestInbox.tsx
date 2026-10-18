@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../api/auth-api";
@@ -7,19 +8,12 @@ import {
   CheckCircleIcon,
   ClockIcon,
   XCircleIcon,
-} from "@phosphor-icons/react";
+} from "../../ui/icons";
 import { Modal } from "../../ui/Modal";
+import { formatDateRange } from "../../utils/french";
 import "./leaves.css";
 
 type Decision = "APPROVED" | "REJECTED";
-
-const dateLabel = (value: string) =>
-  new Intl.DateTimeFormat("fr-FR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(value));
 
 const leaveTypeLabel: Record<LeaveReviewItem["type"], string> = {
   ANNUAL: "Congé annuel",
@@ -89,12 +83,10 @@ export function LeaveRequestInbox() {
     <section className="leave-review" aria-labelledby="leave-review-title">
       <div className="leave-review-heading">
         <div>
-          <span className="leave-eyebrow">À traiter</span>
-          <h3 id="leave-review-title">Demandes de congé</h3>
+          <span className="leave-eyebrow">{translate("À traiter")}</span>
+          <h3 id="leave-review-title">{translate("Demandes de congé")}</h3>
           <p>
-            Les périodes approuvées alimentent ensuite le suivi des
-            remplacements.
-          </p>
+            {translate("Les périodes approuvées alimentent ensuite le suivi des remplacements.")}</p>
         </div>
         <span className="leave-count">{requests?.length ?? "—"}</span>
       </div>
@@ -106,17 +98,14 @@ export function LeaveRequestInbox() {
             className="admin-button secondary small"
             onClick={() => setRevision((value) => value + 1)}
           >
-            Réessayer
-          </button>
+            {translate("Réessayer")}</button>
         </div>
       ) : requests === null ? (
         <div className="leave-review-empty" role="status">
-          <ClockIcon size={19} /> Chargement des demandes…
-        </div>
+          <ClockIcon size={19} /> {" "}{translate("Chargement des demandes…")}</div>
       ) : !requests.length ? (
         <div className="leave-review-empty">
-          <CheckCircleIcon size={20} /> Aucune demande en attente.
-        </div>
+          <CheckCircleIcon size={20} /> {" "}{translate("Aucune demande en attente.")}</div>
       ) : (
         <div className="leave-review-list">
           {requests.map((request) => (
@@ -128,10 +117,10 @@ export function LeaveRequestInbox() {
               <div className="leave-review-person">
                 <strong>{request.swapperName}</strong>
                 <span>
-                  {leaveTypeLabel[request.type]} ·{" "}
-                  {dateLabel(request.startTime)} – {dateLabel(request.endTime)}
+                  {translate(leaveTypeLabel[request.type])} {" "}{translate("·")}{" "}
+                  {formatDateRange(request.startTime, request.endTime)}
                 </span>
-                <p>{request.reason}</p>
+                <p>{translate(request.reason)}</p>
               </div>
               <button
                 type="button"
@@ -143,8 +132,7 @@ export function LeaveRequestInbox() {
                   setDecisionError("");
                 }}
               >
-                Examiner
-              </button>
+                {translate("Examiner")}</button>
             </article>
           ))}
         </div>
@@ -153,10 +141,10 @@ export function LeaveRequestInbox() {
       <Modal
         open={!!selected}
         size="md"
-        title="Décider de la demande"
+        title={translate("Décider de la demande")}
         subtitle={
           selected
-            ? `${selected.swapperName} · ${leaveTypeLabel[selected.type]}`
+            ? `${selected.swapperName} · ${translate(leaveTypeLabel[selected.type])}`
             : undefined
         }
         onClose={() => !busy && setSelected(null)}
@@ -168,8 +156,7 @@ export function LeaveRequestInbox() {
               disabled={busy}
               onClick={() => setSelected(null)}
             >
-              Retour
-            </button>
+              {translate("Retour")}</button>
             <button
               type="submit"
               form="leave-decision-form"
@@ -194,34 +181,31 @@ export function LeaveRequestInbox() {
             <div className="leave-review-summary">
               <CalendarBlankIcon size={18} />
               <span>
-                Du {dateLabel(selected.startTime)} au{" "}
-                {dateLabel(selected.endTime)}
+                {formatDateRange(selected.startTime, selected.endTime)}
               </span>
             </div>
-            <p className="leave-review-reason">{selected.reason}</p>
+            <p className="leave-review-reason">{translate(selected.reason)}</p>
             <div
               className="leave-decision-options"
               role="group"
-              aria-label="Décision"
+              aria-label={translate("Décision")}
             >
               <button
                 type="button"
                 aria-pressed={decision === "APPROVED"}
                 onClick={() => setDecision("APPROVED")}
               >
-                <CheckCircleIcon size={17} /> Approuver
-              </button>
+                <CheckCircleIcon size={17} /> {" "}{translate("Approuver")}</button>
               <button
                 type="button"
                 aria-pressed={decision === "REJECTED"}
                 onClick={() => setDecision("REJECTED")}
               >
-                <XCircleIcon size={17} /> Refuser
-              </button>
+                <XCircleIcon size={17} /> {" "}{translate("Refuser")}</button>
             </div>
             {decision === "REJECTED" && (
               <div className="leave-form-field">
-                <label htmlFor="leave-rejection-reason">Motif du refus</label>
+                <label htmlFor="leave-rejection-reason">{translate("Motif du refus")}</label>
                 <textarea
                   id="leave-rejection-reason"
                   rows={3}
@@ -229,7 +213,7 @@ export function LeaveRequestInbox() {
                   required
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
-                  placeholder="Expliquez brièvement la décision"
+                  placeholder={translate("Expliquez brièvement la décision")}
                 />
               </div>
             )}

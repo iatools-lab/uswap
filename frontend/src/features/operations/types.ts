@@ -7,6 +7,8 @@ export type OperationShift = {
   label: string;
   startTime: string;
   endTime: string;
+  breakStart?: string | null;
+  breakEnd?: string | null;
   publishedAt: string | null;
   station: {
     id?: string;

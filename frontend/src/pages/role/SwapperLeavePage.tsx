@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../../api/auth-api";
 import { useSession } from "../../app/session";
@@ -41,8 +42,7 @@ export function SwapperLeavePage() {
     return (
       <div className="admin-loading" role="status">
         <LoaderCircle className="spin" />
-        Chargement de vos congés…
-      </div>
+        {translate("Chargement de vos congés…")}</div>
     );
 
   return (
@@ -60,8 +60,8 @@ export function SwapperLeavePage() {
           onClick={() => setProcessOpen((value) => !value)}
         >
           <span>
-            <small>Cheminement</small>
-            <strong>Comment votre demande est-elle traitée ?</strong>
+            <small>{translate("Cheminement")}</small>
+            <strong>{translate("Comment votre demande est-elle traitée ?")}</strong>
           </span>
           <span className="leave-process-toggle__action">
             {processOpen ? "Masquer" : "Afficher"}
@@ -70,45 +70,31 @@ export function SwapperLeavePage() {
         {processOpen && (
           <div id="leave-process-content" className="leave-process-content">
             <p>
-              Les congés planifiés et les absences imprévues suivent deux
-              parcours distincts.
-            </p>
+              {translate("Les congés planifiés et les absences imprévues suivent deux parcours distincts.")}</p>
             <div className="leave-process-columns">
               <article>
-                <strong>Congé planifié</strong>
+                <strong>{translate("Congé planifié")}</strong>
                 <ol>
                   <li>
-                    Vous envoyez votre demande depuis cette page, en précisant
-                    la période et le motif.
-                  </li>
+                    {translate("Vous envoyez votre demande depuis cette page, en précisant la période et le motif.")}</li>
                   <li>
-                    L’administration l’examine et vous notifie sa décision.
-                  </li>
+                    {translate("L’administration l’examine et vous notifie sa décision.")}</li>
                   <li>
-                    Si elle est approuvée, vos shifts concernés sont identifiés.
-                  </li>
+                    {translate("Si elle est approuvée, vos shifts concernés sont identifiés.")}</li>
                   <li>
-                    Le superviseur organise leur remplacement et le planning est
-                    actualisé.
-                  </li>
+                    {translate("Le superviseur organise leur remplacement et le planning est actualisé.")}</li>
                 </ol>
               </article>
               <article>
-                <strong>Absence imprévue</strong>
+                <strong>{translate("Absence imprévue")}</strong>
                 <ol>
                   <li>
-                    Depuis l’accueil, vous choisissez un shift publié et
-                    signalez votre indisponibilité.
-                  </li>
-                  <li>Le superviseur est prévenu immédiatement.</li>
+                    {translate("Depuis l’accueil, vous choisissez un shift publié et signalez votre indisponibilité.")}</li>
+                  <li>{translate("Le superviseur est prévenu immédiatement.")}</li>
                   <li>
-                    Le superviseur choisit un remplaçant compatible de la même
-                    station.
-                  </li>
+                    {translate("Le superviseur choisit un remplaçant compatible de la même station.")}</li>
                   <li>
-                    Le planning est mis à jour et les personnes concernées sont
-                    notifiées.
-                  </li>
+                    {translate("Le planning est mis à jour et les personnes concernées sont notifiées.")}</li>
                 </ol>
               </article>
             </div>

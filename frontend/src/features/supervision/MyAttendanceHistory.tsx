@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { useEffect, useState, useMemo } from "react";
 import { api } from "../../api/auth-api";
 import { LoaderCircle, Clock3 } from "../../ui/icons";
@@ -11,8 +12,7 @@ function renderAttendanceStatus(row: AttendanceHistoryRow) {
         className="attendance-status attendance-status--closed"
         title={row.correctionReason ?? undefined}
       >
-        Absence justifiée
-      </span>
+        {translate("Absence justifiée")}</span>
     );
   }
   if (row.corrected) {
@@ -21,22 +21,19 @@ function renderAttendanceStatus(row: AttendanceHistoryRow) {
         className="attendance-status attendance-status--closed"
         title={row.correctionReason ?? undefined}
       >
-        Corrigé
-      </span>
+        {translate("Corrigé")}</span>
     );
   }
   if (row.isAbsent) {
     return (
       <span className="attendance-status attendance-status--absent">
-        Absent
-      </span>
+        {translate("Absent")}</span>
     );
   }
   if (row.checkedOutAt) {
     return (
       <span className="attendance-status attendance-status--present">
-        Terminé
-      </span>
+        {translate("Terminé")}</span>
     );
   }
   if (row.checkedInAt) {
@@ -50,8 +47,7 @@ function renderAttendanceStatus(row: AttendanceHistoryRow) {
   }
   return (
     <span className="attendance-status attendance-status--expected">
-      Attendu
-    </span>
+      {translate("Attendu")}</span>
   );
 }
 
@@ -68,8 +64,7 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
 
     const load = async () => {
       const params = new URLSearchParams();
-      if (from)
-        params.set("from", new Date(`${from}T00:00:00`).toISOString());
+      if (from) params.set("from", new Date(`${from}T00:00:00`).toISOString());
       if (to) params.set("to", new Date(`${to}T23:59:59.999`).toISOString());
       if (swapperId) params.set("swapperId", swapperId);
       const query = params.toString();
@@ -107,24 +102,21 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
     <section className="admin-card">
       <div className="admin-card-heading">
         <div>
-          <h2>Mes pointages</h2>
+          <h2>{translate("Mes pointages")}</h2>
           <p className="operations-hint">
-            Historique de vos prises et fins de service.
-          </p>
+            {translate("Historique de vos prises et fins de service.")}</p>
         </div>
       </div>
       <div className="supervision-toolbar">
         <label>
-          Du
-          <input
+          {translate("Du")}<input
             type="date"
             value={from}
             onChange={(event) => setFrom(event.target.value)}
           />
         </label>
         <label>
-          Au
-          <input
+          {translate("Au")}<input
             type="date"
             value={to}
             onChange={(event) => setTo(event.target.value)}
@@ -141,12 +133,11 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
       {!completedRows ? (
         <div className="admin-loading" role="status">
           <LoaderCircle className="spin" />
-          Chargement de votre historique…
-        </div>
+          {translate("Chargement de votre historique…")}</div>
       ) : !completedRows.length ? (
         <div className="admin-empty">
           <Clock3 size={36} />
-          <h3>Aucun pointage effectué sur cette période</h3>
+          <h3>{translate("Aucun pointage effectué sur cette période")}</h3>
         </div>
       ) : (
         <div className="swapper-attendance-cards-list">
@@ -166,7 +157,7 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
 
               <div className="swapper-attendance-details">
                 <div className="time-block">
-                  <small>DÉBUT</small>
+                  <small>{translate("DÉBUT")}</small>
                   <strong>
                     {row.checkedInAt
                       ? formatDateTime(row.checkedInAt, row.station.timezone)
@@ -174,10 +165,9 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
                   </strong>
                 </div>
                 <div className="time-separator" aria-hidden="true">
-                  →
-                </div>
+                  {translate("→")}</div>
                 <div className="time-block">
-                  <small>FIN</small>
+                  <small>{translate("FIN")}</small>
                   <strong>
                     {row.checkedOutAt
                       ? formatDateTime(row.checkedOutAt, row.station.timezone)
@@ -185,8 +175,8 @@ export function MyAttendanceHistory({ swapperId }: { swapperId?: string }) {
                   </strong>
                 </div>
                 <div className="time-block duration-block">
-                  <small>PRÉVU</small>
-                  <strong>{row.plannedHours.toFixed(2)} h</strong>
+                  <small>{translate("PRÉVU")}</small>
+                  <strong>{row.plannedHours.toFixed(2)} {" "}{translate("h")}</strong>
                 </div>
               </div>
             </div>

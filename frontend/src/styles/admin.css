@@ -263,9 +263,26 @@
 }
 
 .admin-sidebar .brand-endorsement {
-  font-size: 10.5px;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 13px;
+  font-size: 8px;
+  white-space: nowrap;
   color: #9aadd3;
+}
+
+.admin-sidebar .brand-lockup {
+  gap: 2px;
+}
+
+.admin-sidebar .brand-upowa-logo {
+  width: 40px;
+  height: 12px;
+}
+
+.admin-sidebar .brand-upowa-logo img {
+  width: 53px;
 }
 
 .admin-sidebar nav {
@@ -617,7 +634,11 @@
   min-height: 38px;
   padding: 6px 14px;
   border-radius: 7px;
-  white-space: nowrap;
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
   font-size: 13.5px !important;
   font-weight: 500;
   text-decoration: none;
@@ -3024,16 +3045,24 @@
     display: none !important;
   }
   .admin-sidebar nav {
-    display: grid !important;
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr)) !important;
+    display: flex !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scrollbar-width: none !important;
+    overscroll-behavior-x: contain;
     gap: 0 !important;
     height: 100% !important;
     align-items: center !important;
     padding: 0 !important;
     margin: 0 !important;
   }
+  .admin-sidebar nav::-webkit-scrollbar {
+    display: none !important;
+  }
   .admin-sidebar nav > div {
-    min-width: 0;
+    flex: 0 0 68px;
+    min-width: 68px;
   }
   .admin-sidebar nav > div > div:first-child {
     display: contents !important;
@@ -3080,13 +3109,18 @@
     justify-content: center !important;
     gap: 3px !important;
     padding: 4px 2px !important;
-    font-size: 10px !important;
+    font-size: 9px !important;
     font-weight: 500 !important;
     color: #64748b !important;
     border-radius: 6px !important;
-    height: 52px !important;
+    height: 58px !important;
     text-decoration: none !important;
     background: transparent !important;
+  }
+  .role-workspace .admin-sidebar nav > a {
+    flex: 1 1 0 !important;
+    min-width: 64px !important;
+    white-space: nowrap !important;
   }
   .admin-sidebar nav a svg {
     width: 20px !important;

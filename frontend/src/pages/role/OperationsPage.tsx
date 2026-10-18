@@ -1,3 +1,5 @@
+import { currentLocale } from "../../app/i18n";
+import { translate } from "../../app/i18n";
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../../api/auth-api";
 import { useSession } from "../../app/session";
@@ -15,6 +17,8 @@ type BackendWorkspace = {
     id: string;
     startTime: string;
     endTime: string;
+    breakStart?: string | null;
+    breakEnd?: string | null;
     publishedAt: string | null;
     station: NonNullable<OperationData["station"]> & {
       latenessToleranceMinutes?: number;
@@ -53,7 +57,7 @@ function adaptWorkspace(payload: BackendWorkspace): OperationData {
     const hasAttendance = Boolean(checkInAt || checkOutAt || shift.attendance?.isAbsent);
     const timezone = shift.station.timezone || "Africa/Douala";
     const time = (value: string) =>
-      new Intl.DateTimeFormat("fr-CM", {
+      new Intl.DateTimeFormat(currentLocale(), {
         hour: "2-digit",
         minute: "2-digit",
         timeZone: timezone,
@@ -66,6 +70,8 @@ function adaptWorkspace(payload: BackendWorkspace): OperationData {
       label: `Service ${time(shift.startTime)} – ${time(shift.endTime)}`,
       startTime: shift.startTime,
       endTime: shift.endTime,
+      breakStart: shift.breakStart ?? null,
+      breakEnd: shift.breakEnd ?? null,
       publishedAt: shift.publishedAt,
       station: {
         id: shift.station.id,
@@ -127,13 +133,12 @@ export function OperationsPage() {
   if (failure)
     return (
       <section className="admin-card admin-empty" role="alert">
-        <h2>Chargement indisponible</h2>
+        <h2>{translate("Chargement indisponible")}</h2>
         <button
           className="admin-button"
           onClick={() => setRevision((value) => value + 1)}
         >
-          Réessayer
-        </button>
+          {translate("Réessayer")}</button>
       </section>
     );
 
@@ -141,8 +146,7 @@ export function OperationsPage() {
     return (
       <div className="admin-loading" role="status">
         <LoaderCircle className="spin" />
-        Chargement de votre espace…
-      </div>
+        {translate("Chargement de votre espace…")}</div>
     );
 
   return (

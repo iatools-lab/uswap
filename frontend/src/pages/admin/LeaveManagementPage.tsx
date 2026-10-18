@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -6,15 +7,20 @@ import {
   ClockIcon,
   MagnifyingGlassIcon,
   XCircleIcon,
-} from "@phosphor-icons/react";
+} from "../../ui/icons";
 import { api, ApiError, type Role } from "../../api/auth-api";
 import type {
   LeaveManagementItem,
   LeaveRequestView,
 } from "../../domain/sprint4";
 import { Modal } from "../../ui/Modal";
+import { Select } from "../../ui/Select";
 import { LoaderCircle } from "../../ui/icons";
+import { ExportExcelButton } from "../../ui/ExportExcelButton";
 import { notify } from "../../ui/Toast";
+import { formatDateRange } from "../../utils/french";
+import { exportToExcel } from "../../utils/excelExport";
+import { KpiCard } from "../../ui/KpiCard";
 import "../../features/leaves/leaves.css";
 import "./leave-management.css";
 
@@ -45,13 +51,6 @@ const STATUS_TONES: Record<LeaveRequestView["status"], string> = {
   CANCELLED: "neutral",
   SYNC_FAILED: "danger",
 };
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat("fr-FR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(value));
 const dayCount = (start: string, end: string) =>
   Math.max(
     1,
@@ -66,13 +65,16 @@ type Decision = "APPROVED" | "REJECTED";
 export function LeaveManagementPage({ role }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
-  const targetId = new URLSearchParams(location.search).get("leave");
+  const searchParams = new URLSearchParams(location.search);
+  const targetId = searchParams.get("leave");
   const [items, setItems] = useState<LeaveManagementItem[] | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"ALL" | LeaveRequestView["status"]>(
     "ALL",
   );
-  const [station, setStation] = useState("ALL");
+  const [station, setStation] = useState(searchParams.get("stationId") ?? "ALL");
+  const [fromDate, setFromDate] = useState(searchParams.get("from") ?? "");
+  const [toDate, setToDate] = useState(searchParams.get("to") ?? "");
   const [selected, setSelected] = useState<LeaveManagementItem | null>(null);
   const [decision, setDecision] = useState<Decision>("APPROVED");
   const [reason, setReason] = useState("");
@@ -102,16 +104,18 @@ export function LeaveManagementPage({ role }: Props) {
 
   const stations = useMemo(
     () =>
-      Array.from(new Set((items ?? []).map((item) => item.stationName))).sort(
-        (a, b) => a.localeCompare(b, "fr"),
-      ),
+      Array.from(
+        new Map((items ?? []).map((item) => [item.stationId ?? "", item.stationName])).entries(),
+      ).sort((a, b) => a[1].localeCompare(b[1], "fr")),
     [items],
   );
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("fr");
     return (items ?? []).filter((item) => {
       if (status !== "ALL" && item.status !== status) return false;
-      if (station !== "ALL" && item.stationName !== station) return false;
+      if (station !== "ALL" && item.stationId !== station) return false;
+      if (fromDate && item.endTime.slice(0, 10) < fromDate) return false;
+      if (toDate && item.startTime.slice(0, 10) > toDate) return false;
       if (!normalized) return true;
       return [
         item.swapperName,
@@ -123,7 +127,27 @@ export function LeaveManagementPage({ role }: Props) {
         .toLocaleLowerCase("fr")
         .includes(normalized);
     });
-  }, [items, query, station, status]);
+  }, [fromDate, items, query, station, status, toDate]);
+
+  function exportLeaves() {
+    if (!filtered.length) return;
+    exportToExcel({
+      data: filtered,
+      filename: `uswap-conges-${fromDate || "debut"}-${toDate || "fin"}`,
+      sheetName: "Congés",
+      columns: [
+        { header: translate("Swappeur"), key: "swapperName", width: 24 },
+        { header: translate("Type de congé"), key: (item) => translate(TYPE_LABELS[item.type]), width: 22 },
+        { header: translate("Station"), key: "stationName", width: 24 },
+        { header: translate("Début"), key: (item) => formatDateRange(item.startTime, item.startTime), width: 18 },
+        { header: translate("Fin"), key: (item) => formatDateRange(item.endTime, item.endTime), width: 18 },
+        { header: translate("Durée"), key: (item) => `${dayCount(item.startTime, item.endTime)} ${translate("jours")}`, width: 12 },
+        { header: translate("Statut"), key: (item) => translate(STATUS_LABELS[item.status]), width: 20 },
+        { header: translate("Motif"), key: "reason", width: 40 },
+      ],
+    });
+    notify("Exportation Excel terminée.", "success");
+  }
   const counts = useMemo(
     () => ({
       pending: (items ?? []).filter((item) => item.status === "PENDING").length,
@@ -182,141 +206,129 @@ export function LeaveManagementPage({ role }: Props) {
     <div className="leave-management">
       <section className="leave-management-intro">
         <div>
-          <span className="leave-eyebrow">Gestion des congés</span>
+          <span className="leave-eyebrow">{translate("Gestion des congés")}</span>
           <h2>
             {role === "ADMIN"
-              ? "Demandes de congé"
-              : "Congés de votre périmètre"}
+              ? translate("Demandes de congé")
+              : translate("Congés de votre périmètre")}
           </h2>
           <p>
             {role === "ADMIN"
-              ? "Centralisez les demandes, les décisions et l’historique des absences planifiées."
-              : "Examinez les demandes de votre équipe et anticipez les remplacements à organiser."}
+              ? translate("Centralisez les demandes, les décisions et l’historique des absences planifiées.")
+              : translate("Examinez les demandes de votre équipe et anticipez les remplacements à organiser.")}
           </p>
         </div>
-        <button
-          type="button"
-          className="admin-button secondary small"
-          onClick={() => setRevision((value) => value + 1)}
-          disabled={items === null}
-        >
-          <ClockIcon size={16} /> Actualiser
-        </button>
+        <ExportExcelButton onClick={exportLeaves} disabled={!filtered.length} />
       </section>
       {loadingError ? (
         <section className="admin-card leave-management-empty" role="alert">
           <XCircleIcon size={25} />
-          <h3>Chargement indisponible</h3>
+          <h3>{translate("Chargement indisponible")}</h3>
           <p>{loadingError}</p>
           <button
             type="button"
             className="admin-button secondary small"
             onClick={() => setRevision((value) => value + 1)}
           >
-            Réessayer
-          </button>
+            {translate("Réessayer")}</button>
         </section>
       ) : (
         <>
           <section
             className="leave-management-kpis"
-            aria-label="Résumé des congés"
+            aria-label={translate("Résumé des congés")}
           >
-            <article>
-              <span className="leave-management-kpi-icon warning">
-                <ClockIcon size={19} />
-              </span>
-              <div>
-                <strong>{items === null ? "—" : counts.pending}</strong>
-                <span>À examiner</span>
-              </div>
-            </article>
-            <article>
-              <span className="leave-management-kpi-icon success">
-                <CheckCircleIcon size={19} />
-              </span>
-              <div>
-                <strong>{items === null ? "—" : counts.approved}</strong>
-                <span>Demandes approuvées</span>
-              </div>
-            </article>
-            <article>
-              <span className="leave-management-kpi-icon blue">
-                <CalendarBlankIcon size={19} />
-              </span>
-              <div>
-                <strong>{items === null ? "—" : counts.days}</strong>
-                <span>Jours planifiés</span>
-              </div>
-            </article>
+            <KpiCard
+              compact
+              label={translate("À examiner")}
+              value={items === null ? "—" : counts.pending}
+              detail={translate("Demandes en attente")}
+              icon={<ClockIcon size={19} />}
+              tone={counts.pending > 0 ? "amber" : "neutral"}
+            />
+            <KpiCard
+              compact
+              label={translate("Approuvées")}
+              value={items === null ? "—" : counts.approved}
+              detail={translate("Demandes validées")}
+              icon={<CheckCircleIcon size={19} />}
+              tone="green"
+            />
+            <KpiCard
+              compact
+              label={translate("Jours planifiés")}
+              value={items === null ? "—" : counts.days}
+              detail={translate("Sur les congés approuvés")}
+              icon={<CalendarBlankIcon size={19} />}
+              tone="blue"
+            />
           </section>
           <section
             className="leave-management-panel"
             aria-labelledby="leave-management-list-title"
           >
             <div className="leave-management-panel-head">
-              <div>
-                <h3 id="leave-management-list-title">Toutes les demandes</h3>
+              <div className="leave-management-panel-heading">
+                <h3 id="leave-management-list-title">{translate("Toutes les demandes")}</h3>
                 <p>
                   {items === null
                     ? "Chargement…"
-                    : `${filtered.length} demande${filtered.length > 1 ? "s" : ""} affichée${filtered.length > 1 ? "s" : ""}`}
+                    : `${filtered.length} ${translate(filtered.length === 1 ? "demande" : "demandes")}`}
                 </p>
               </div>
-              <span className="leave-management-count">
-                {items === null ? "—" : items.length}
-              </span>
-            </div>
-            <div className="leave-management-filters">
-              <label className="leave-management-search">
-                <MagnifyingGlassIcon size={18} />
-                <span className="sr-only">Rechercher une demande</span>
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Rechercher un swappeur, une station…"
-                />
-              </label>
-              <label>
-                <span className="sr-only">Filtrer par statut</span>
-                <select
+              <div className="leave-management-filters">
+                <label className="leave-management-search">
+                  <MagnifyingGlassIcon size={18} />
+                  <span className="sr-only">{translate("Rechercher une demande")}</span>
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={translate("Rechercher…")}
+                  />
+                </label>
+                <Select
                   value={status}
-                  onChange={(event) =>
-                    setStatus(event.target.value as typeof status)
+                  size="sm"
+                  ariaLabel={translate("Filtrer par statut")}
+                  onChange={(value) =>
+                    setStatus(String(value) as typeof status)
                   }
-                >
-                  <option value="ALL">Tous les statuts</option>
-                  <option value="PENDING">En attente</option>
-                  <option value="APPROVED">Approuvés</option>
-                  <option value="REJECTED">Refusés</option>
-                  <option value="CANCELLED">Annulés</option>
-                </select>
-              </label>
-              <label>
-                <span className="sr-only">Filtrer par station</span>
-                <select
+                  options={[
+                    { value: "ALL", label: translate("Tous les statuts") },
+                    { value: "PENDING", label: translate("En attente") },
+                    { value: "APPROVED", label: translate("Approuvés") },
+                    { value: "REJECTED", label: translate("Refusés") },
+                    { value: "CANCELLED", label: translate("Annulés") },
+                  ]}
+                />
+                <Select
                   value={station}
-                  onChange={(event) => setStation(event.target.value)}
-                >
-                  <option value="ALL">Toutes les stations</option>
-                  {stations.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  size="sm"
+                  ariaLabel={translate("Filtrer par station")}
+                  onChange={(value) => setStation(String(value))}
+                  options={[
+                    { value: "ALL", label: translate("Toutes les stations") },
+                    ...stations.map(([id, name]) => ({ value: id, label: name })),
+                  ]}
+                />
+                <label className="leave-management-date-filter">
+                  <span>{translate("Du")}</span>
+                  <input type="date" aria-label={translate("Date de début")} value={fromDate} max={toDate || undefined} onChange={(event) => setFromDate(event.target.value)} />
+                </label>
+                <label className="leave-management-date-filter">
+                  <span>{translate("Au")}</span>
+                  <input type="date" aria-label={translate("Date de fin")} value={toDate} min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} />
+                </label>
+              </div>
             </div>
             {items === null ? (
               <div className="leave-management-empty" role="status">
-                <LoaderCircle className="spin" size={22} /> Chargement des
-                demandes…
-              </div>
+                <LoaderCircle className="spin" size={22} /> {" "}{translate("Chargement des demandes…")}</div>
             ) : filtered.length === 0 ? (
               <div className="leave-management-empty">
-                <CheckCircleIcon size={25} />
-                <h3>Aucune demande trouvée</h3>
-                <p>Modifiez les filtres pour élargir votre recherche.</p>
+                <MagnifyingGlassIcon size={25} />
+                <h3>{translate("Aucune demande trouvée")}</h3>
+                <p>{translate("Modifiez les filtres pour élargir votre recherche.")}</p>
               </div>
             ) : (
               <div className="leave-management-list">
@@ -331,23 +343,21 @@ export function LeaveManagementPage({ role }: Props) {
                         <span
                           className={`leave-status ${STATUS_TONES[item.status]}`}
                         >
-                          {STATUS_LABELS[item.status]}
+                          {translate(STATUS_LABELS[item.status])}
                         </span>
                       </div>
                       <p>
-                        {TYPE_LABELS[item.type]} · {item.stationName}
+                        {translate(TYPE_LABELS[item.type])} {" "}{translate("·")}{" "}{item.stationName}
                       </p>
                       <span className="leave-management-period">
                         <CalendarBlankIcon size={14} />{" "}
-                        {formatDate(item.startTime)} –{" "}
-                        {formatDate(item.endTime)} ·{" "}
-                        {dayCount(item.startTime, item.endTime)} jour
-                        {dayCount(item.startTime, item.endTime) > 1 ? "s" : ""}
+                        {formatDateRange(item.startTime, item.endTime)} {" "}{translate("·")}{" "}
+                        {dayCount(item.startTime, item.endTime)} {" "}{translate(dayCount(item.startTime, item.endTime) === 1 ? "jour" : "jours")}
                       </span>
                     </div>
                     <div className="leave-management-item-reason">
-                      <span>Motif</span>
-                      <p>{item.reason}</p>
+                      <span>{translate("Motif")}</span>
+                      <p>{translate(item.reason)}</p>
                     </div>
                     <div className="leave-management-item-action">
                       <button
@@ -357,7 +367,7 @@ export function LeaveManagementPage({ role }: Props) {
                       >
                         {item.status === "PENDING"
                           ? "Examiner"
-                          : "Voir le détail"}
+                          : translate("Voir le détail")}
                       </button>
                     </div>
                   </article>
@@ -390,8 +400,7 @@ export function LeaveManagementPage({ role }: Props) {
                 disabled={busy}
                 onClick={() => setSelected(null)}
               >
-                Annuler
-              </button>
+                {translate("Annuler")}</button>
               <button
                 type="button"
                 className={`admin-button ${decision === "APPROVED" ? "primary-cta" : "danger"}`}
@@ -411,8 +420,7 @@ export function LeaveManagementPage({ role }: Props) {
               className="admin-button secondary"
               onClick={() => setSelected(null)}
             >
-              Fermer
-            </button>
+              {translate("Fermer")}</button>
           )
         }
       >
@@ -422,31 +430,29 @@ export function LeaveManagementPage({ role }: Props) {
               <CalendarBlankIcon size={19} />
               <div>
                 <strong>
-                  {formatDate(selected.startTime)} –{" "}
-                  {formatDate(selected.endTime)}
+                  {formatDateRange(selected.startTime, selected.endTime)}
                 </strong>
                 <span>
-                  {dayCount(selected.startTime, selected.endTime)} jour
-                  {dayCount(selected.startTime, selected.endTime) > 1
+                  {dayCount(selected.startTime, selected.endTime)} {" "}{translate("jour")}{dayCount(selected.startTime, selected.endTime) > 1
                     ? "s"
                     : ""}{" "}
-                  · {TYPE_LABELS[selected.type]}
+                  {translate("·")}{" "}{translate(TYPE_LABELS[selected.type])}
                 </span>
               </div>
             </div>
             <div className="leave-management-detail-row">
-              <span>Statut</span>
+              <span>{translate("Statut")}</span>
               <span className={`leave-status ${STATUS_TONES[selected.status]}`}>
-                {STATUS_LABELS[selected.status]}
+                {translate(STATUS_LABELS[selected.status])}
               </span>
             </div>
             <div className="leave-management-detail-block">
-              <span>Motif</span>
-              <p>{selected.reason}</p>
+              <span>{translate("Motif")}</span>
+              <p>{translate(selected.reason)}</p>
             </div>
             {selected.attachmentName && (
               <div className="leave-management-detail-block">
-                <span>Justificatif</span>
+                <span>{translate("Justificatif")}</span>
                 <p>{selected.attachmentName}</p>
               </div>
             )}
@@ -454,40 +460,38 @@ export function LeaveManagementPage({ role }: Props) {
               <div
                 className="leave-decision-options"
                 role="group"
-                aria-label="Décision"
+                aria-label={translate("Décision")}
               >
                 <button
                   type="button"
                   aria-pressed={decision === "APPROVED"}
                   onClick={() => setDecision("APPROVED")}
                 >
-                  <CheckCircleIcon size={17} /> Approuver
-                </button>
+                  <CheckCircleIcon size={17} /> {" "}{translate("Approuver")}</button>
                 <button
                   type="button"
                   aria-pressed={decision === "REJECTED"}
                   onClick={() => setDecision("REJECTED")}
                 >
-                  <XCircleIcon size={17} /> Refuser
-                </button>
+                  <XCircleIcon size={17} /> {" "}{translate("Refuser")}</button>
               </div>
             )}
             {selected.status === "PENDING" && decision === "REJECTED" && (
               <label className="leave-form-field">
-                <span>Motif du refus</span>
+                <span>{translate("Motif du refus")}</span>
                 <textarea
-                  rows={3}
+                  rows={2}
                   minLength={5}
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
-                  placeholder="Expliquez brièvement la décision"
+                  placeholder={translate("Expliquez brièvement la décision")}
                 />
               </label>
             )}
             {selected.decisionReason && selected.status !== "PENDING" && (
               <div className="leave-management-detail-block">
-                <span>Décision</span>
-                <p>{selected.decisionReason}</p>
+                <span>{translate("Décision")}</span>
+                <p>{translate(selected.decisionReason)}</p>
               </div>
             )}
             {error && (

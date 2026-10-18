@@ -1,6 +1,7 @@
+import { translate } from "../../app/i18n";
 import { useMemo, useState, type FormEvent } from "react";
-import { ShieldWarningIcon } from "@phosphor-icons/react";
-import { api, type User } from "../../api/auth-api";
+import { ShieldWarningIcon } from "../../ui/icons";
+import { api, usingMock, type User } from "../../api/auth-api";
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
 import { notify } from "../../ui/Toast";
@@ -60,6 +61,12 @@ export function SwapperIncidentReport({
       setError("Ajoutez un objet et une description suffisamment précise.");
       return;
     }
+    if (!usingMock) {
+      setError(
+        "L’API connectée ne propose pas encore de route de déclaration d’incident pour les swappeurs. Le signalement fonctionne en mode démo; l’API devra l’exposer pour l’activer ici.",
+      );
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -99,17 +106,17 @@ export function SwapperIncidentReport({
           <ShieldWarningIcon size={19} />
         </span>
         <span className="swapper-incident-entry__copy">
-          <strong>Signaler un incident</strong>
-          <small>Un problème lié à votre service ou à votre sécurité ?</small>
+          <strong>{translate("Signaler un incident")}</strong>
+          <small>{translate("Un problème lié à votre shift ou à votre sécurité ?")}</small>
         </span>
-        <span className="swapper-incident-entry__action">Déclarer</span>
+        <span className="swapper-incident-entry__action">{translate("Déclarer")}</span>
       </button>
 
       <Modal
         open={open}
         onClose={() => !busy && setOpen(false)}
-        title="Signaler un incident"
-        subtitle="Décrivez une situation qui vous concerne. Votre superviseur pourra en assurer le suivi."
+        title={translate("Signaler un incident")}
+        subtitle={translate("Décrivez une situation qui vous concerne. Votre superviseur pourra en assurer le suivi.")}
         footer={
           <>
             <button
@@ -118,8 +125,7 @@ export function SwapperIncidentReport({
               disabled={busy}
               onClick={() => setOpen(false)}
             >
-              Annuler
-            </button>
+              {translate("Annuler")}</button>
             <button
               type="submit"
               form="swapper-incident-report"
@@ -146,20 +152,23 @@ export function SwapperIncidentReport({
               {error}
             </p>
           )}
-
+          {!usingMock && (
+            <p className="swapper-incident-api-note">
+              {translate("Le signalement est prêt en mode démo. L’API connectée ne propose pas encore cette action pour votre rôle.")}</p>
+          )}
           {stations.length > 1 ? (
             <label>
-              <span>Station concernée</span>
+              <span>{translate("Station concernée")}</span>
               <Select
                 value={selectedStationId}
-                ariaLabel="Station concernée"
+                ariaLabel={translate("Station concernée")}
                 onChange={(value) => setStationId(String(value))}
                 options={stations}
               />
             </label>
           ) : (
             <div className="swapper-incident-self">
-              <span>Déclarant</span>
+              <span>{translate("Déclarant")}</span>
               <strong>{user.fullName}</strong>
               <small>
                 {stations[0]?.label ??
@@ -170,37 +179,37 @@ export function SwapperIncidentReport({
           )}
           <div className="incident-form-row">
             <label>
-              <span>Catégorie</span>
+              <span>{translate("Catégorie")}</span>
               <Select
                 value={category}
-                ariaLabel="Catégorie d’incident"
+                ariaLabel={translate("Catégorie d’incident")}
                 onChange={(value) => setCategory(String(value))}
                 options={incidentCategories}
               />
             </label>
             <label>
-              <span>Gravité</span>
+              <span>{translate("Gravité")}</span>
               <Select
                 value={severity}
-                ariaLabel="Gravité de l’incident"
+                ariaLabel={translate("Gravité de l’incident")}
                 onChange={(value) => setSeverity(String(value))}
                 options={severities}
               />
             </label>
           </div>
           <label>
-            <span>Objet</span>
+            <span>{translate("Objet")}</span>
             <input
               required
               minLength={5}
               value={title}
               maxLength={100}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="Ex. Malaise pendant le service"
+              placeholder={translate("Ex. Malaise pendant un shift")}
             />
           </label>
           <label>
-            <span>Décrivez la situation</span>
+            <span>{translate("Décrivez la situation")}</span>
             <textarea
               required
               minLength={12}
@@ -208,13 +217,11 @@ export function SwapperIncidentReport({
               rows={5}
               maxLength={1200}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Précisez ce qui s’est passé et quand…"
+              placeholder={translate("Précisez ce qui s’est passé et quand…")}
             />
           </label>
           <small className="swapper-incident-private">
-            Ce signalement concerne votre situation. Les informations seront
-            transmises au superviseur.
-          </small>
+            {translate("Ce signalement concerne votre situation. Les informations seront transmises au superviseur.")}</small>
         </form>
       </Modal>
     </>

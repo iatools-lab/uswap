@@ -1,39 +1,37 @@
+import { currentLocale } from "../../app/i18n";
 import { useEffect, useState, useMemo, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import {translate,  useI18n } from "../../app/i18n";
 import { notify } from "../../ui/Toast";
-import { api } from "../../api/auth-api";
+import { api, usingMock } from "../../api/auth-api";
 import { Modal } from "../../ui/Modal";
+import { KpiCard } from "../../ui/KpiCard";
 import { SwapperIncidentReport } from "../incidents/SwapperIncidentReport";
 import { SwapperPanel } from "../supervision/SwapperPanel";
-import { CheckCircle, MapPin, Warning, Clock3 } from "../../ui/icons";
+import {
+  CheckCircle,
+  Clock3,
+  GaugeIcon,
+  LogIn,
+  LogOut,
+  MapPin,
+  Warning,
+} from "../../ui/icons";
 import { formatDate, isInWindow, isOpenShift, pickNextShift } from "./format";
 import type { OperationShift, OperationsViewProps, PunchResult } from "./types";
 import type { AttendanceHistoryRow } from "../supervision/types";
 
 function attendanceShiftFromHistory(row: AttendanceHistoryRow): OperationShift {
-  // Un créneau à venir n'a pas encore de pointage : son statut est EXPECTED.
-  // Sans ce cas, il retombait sur « PRESENT », donc l'écran annonçait un
-  // pointage déjà effectué pour un service qui n'avait pas commencé.
   const status: NonNullable<OperationShift["attendance"]>["status"] =
-    row.status === "EXPECTED" || row.isExpected
-      ? "EXPECTED"
-      : row.isJustified
-        ? "JUSTIFIED"
-        : row.isAbsent
-          ? "ABSENT"
-          : row.checkedOutAt
-            ? "CLOSED"
-            : row.isLate
-              ? "LATE"
-              : row.status === "CLOSED"
-                ? "CLOSED"
-                : "PRESENT";
-  const hasAttendance = Boolean(
-    row.checkedInAt ||
-      row.checkedOutAt ||
-      row.isAbsent ||
-      row.isJustified,
-  );
+    row.isJustified
+      ? "JUSTIFIED"
+      : row.isAbsent
+        ? "ABSENT"
+        : row.checkedOutAt
+          ? "CLOSED"
+          : row.isLate
+            ? "LATE"
+            : "PRESENT";
   return {
     id: row.shiftId,
     planningId: "",
@@ -45,7 +43,11 @@ function attendanceShiftFromHistory(row: AttendanceHistoryRow): OperationShift {
     station: row.station,
     swapper: { fullName: "" },
     attendance:
-      hasAttendance
+      row.checkedInAt ||
+      row.checkedOutAt ||
+      row.isAbsent ||
+      row.isJustified ||
+      row.corrected
         ? {
             status,
             checkedInAt: row.checkedInAt ?? "",
@@ -57,9 +59,6 @@ function attendanceShiftFromHistory(row: AttendanceHistoryRow): OperationShift {
 }
 
 function belongsInHistory(shift: OperationShift, now = Date.now()) {
-  // Un créneau n'entre dans l'historique qu'une fois terminé, ou s'il porte un
-  // pointage réel. Sans le test sur la date de fin, un service à venir
-  // apparaissait dans l'historique et était présenté comme absent.
   return (
     Date.parse(shift.endTime) < now ||
     Boolean(
@@ -73,14 +72,15 @@ function belongsInHistory(shift: OperationShift, now = Date.now()) {
 }
 
 function historyStatusLabel(shift: OperationShift) {
-  const ended = Date.parse(shift.endTime) < Date.now();
   if (shift.attendance?.status === "JUSTIFIED") return "Absence justifiée";
-  if (shift.attendance?.status === "ABSENT") return "Absent";
+  if (
+    shift.attendance?.status === "ABSENT" ||
+    (!shift.attendance && Date.parse(shift.endTime) < Date.now())
+  )
+    return "Absent";
   if (shift.attendance?.checkedOutAt) return "Terminé";
   if (shift.attendance?.isLate) return "En retard";
-  if (shift.attendance?.checkedInAt) return "À l’heure";
-  // Non pointé : le service est passé (absence constatée) ou à venir.
-  return ended ? "Absent" : "Non pointé";
+  return shift.attendance ? "À l’heure" : "Non pointé";
 }
 
 function historyStatusClass(shift: OperationShift) {
@@ -91,11 +91,10 @@ function historyStatusClass(shift: OperationShift) {
     return "attendance-status--closed";
   if (
     shift.attendance?.status === "ABSENT" ||
-    (!shift.attendance?.checkedInAt && Date.parse(shift.endTime) < Date.now())
+    (!shift.attendance && Date.parse(shift.endTime) < Date.now())
   )
     return "attendance-status--absent";
   if (shift.attendance?.isLate) return "attendance-status--late";
-  if (!shift.attendance?.checkedInAt) return "attendance-status--expected";
   return "attendance-status--present";
 }
 
@@ -117,8 +116,8 @@ function historyGroups(shifts: OperationShift[]) {
   return Array.from(groups.values());
 }
 
-function historyDate(shift: OperationShift) {
-  return new Intl.DateTimeFormat("fr-FR", {
+function historyDate(shift: OperationShift, locale = currentLocale()) {
+  return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -126,8 +125,8 @@ function historyDate(shift: OperationShift) {
   }).format(new Date(shift.startTime));
 }
 
-function historyTime(shift: OperationShift, value: string) {
-  return new Intl.DateTimeFormat("fr-FR", {
+function historyTime(shift: OperationShift, value: string, locale = currentLocale()) {
+  return new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: shift.station?.timezone || "Africa/Douala",
@@ -141,12 +140,77 @@ function sameStationDay(shift: OperationShift) {
   return day(shift.startTime) === day(shift.endTime);
 }
 
+function shiftPeriod(shift: OperationShift) {
+  const timeZone = shift.station?.timezone || "Africa/Douala";
+  const date = (value: string) =>
+    new Intl.DateTimeFormat(currentLocale(), {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone,
+    }).format(new Date(value));
+  const time = (value: string) =>
+    new Intl.DateTimeFormat(currentLocale(), {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone,
+    }).format(new Date(value));
+
+  return sameStationDay(shift)
+    ? `${date(shift.startTime)} · ${time(shift.startTime)} – ${time(shift.endTime)}`
+    : `${date(shift.startTime)}, ${time(shift.startTime)} – ${date(shift.endTime)}, ${time(shift.endTime)}`;
+}
+
+function compactDuration(milliseconds: number) {
+  const minutes = Math.max(0, Math.round(milliseconds / 60_000));
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (!hours) return `${remainder} min`;
+  return remainder ? `${hours} h ${remainder}` : `${hours} h`;
+}
+
+function clockMinutes(value: string, timeZone: string) {
+  const direct = value.match(/^(\d{1,2}):(\d{2})/);
+  if (direct) return Number(direct[1]) * 60 + Number(direct[2]);
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone,
+  }).formatToParts(new Date(value));
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
+  const minute = Number(
+    parts.find((part) => part.type === "minute")?.value ?? 0,
+  );
+  return hour * 60 + minute;
+}
+
+function shiftBreakRange(shift: OperationShift) {
+  if (!shift.breakStart || !shift.breakEnd) return null;
+  const timeZone = shift.station?.timezone || "Africa/Douala";
+  const shiftStart = Date.parse(shift.startTime);
+  const shiftEnd = Date.parse(shift.endTime);
+  const startClock = clockMinutes(shift.startTime, timeZone);
+  let pauseStartClock = clockMinutes(shift.breakStart, timeZone);
+  let pauseEndClock = clockMinutes(shift.breakEnd, timeZone);
+  while (pauseStartClock < startClock) pauseStartClock += 24 * 60;
+  while (pauseEndClock <= pauseStartClock) pauseEndClock += 24 * 60;
+  const start = shiftStart + (pauseStartClock - startClock) * 60_000;
+  const end = shiftStart + (pauseEndClock - startClock) * 60_000;
+  if (start < shiftStart || end > shiftEnd || end <= start) return null;
+  return { start, end };
+}
+
 function HistoryRows({
   shifts,
   targetId,
+  locale,
+  t,
 }: {
   shifts: OperationShift[];
   targetId?: string | null;
+  locale: string;
+  t: (value: string) => string;
 }) {
   return (
     <div className="swapper-history-groups">
@@ -155,7 +219,7 @@ function HistoryRows({
           <header className="swapper-history-group__heading">
             <strong>{group.name}</strong>
             <span>
-              {group.shifts.length} shift{group.shifts.length === 1 ? "" : "s"}
+              {group.shifts.length} {" "}{translate("shift")}{group.shifts.length === 1 ? "" : "s"}
             </span>
           </header>
           <div className="swapper-history-group__rows">
@@ -168,17 +232,17 @@ function HistoryRows({
                   (shift.id === targetId ? " is-notification-target" : "")
                 }
               >
-                <time dateTime={shift.startTime}>{historyDate(shift)}</time>
+                <time dateTime={shift.startTime}>{historyDate(shift, locale)}</time>
                 <span className="swapper-history-row__hours">
-                  {historyTime(shift, shift.startTime)}
-                  <span aria-hidden="true">→</span>
-                  {historyTime(shift, shift.endTime)}
-                  {!sameStationDay(shift) && <small>lendemain</small>}
+                  {historyTime(shift, shift.startTime, locale)}
+                  <span aria-hidden="true">{translate("→")}</span>
+                  {historyTime(shift, shift.endTime, locale)}
+                  {!sameStationDay(shift) && <small>{t("lendemain")}</small>}
                 </span>
                 <span
                   className={`attendance-status ${historyStatusClass(shift)}`}
                 >
-                  {historyStatusLabel(shift)}
+                  {t(historyStatusLabel(shift))}
                 </span>
               </article>
             ))}
@@ -190,6 +254,7 @@ function HistoryRows({
 }
 
 export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
+  const { t, locale } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
   const openShifts = data.shifts.filter(isOpenShift);
@@ -219,6 +284,54 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
   const [historyFilter, setHistoryFilter] = useState<
     "ALL" | "PRESENT" | "LATE" | "ABSENT"
   >("ALL");
+  const [clockNow, setClockNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const serviceProgress = useMemo(() => {
+    if (!targetShift) return null;
+    const start = Date.parse(targetShift.startTime);
+    const end = Date.parse(targetShift.endTime);
+    const span = Math.max(0, end - start);
+    const elapsed = Math.min(span, Math.max(0, clockNow - start));
+    const pause = shiftBreakRange(targetShift);
+    const pauseDuration = pause ? pause.end - pause.start : 0;
+    const elapsedPause = pause
+      ? Math.min(pauseDuration, Math.max(0, clockNow - pause.start))
+      : 0;
+    const effectiveTotal = Math.max(0, span - pauseDuration);
+    const effectiveElapsed = Math.max(0, elapsed - elapsedPause);
+    return {
+      percent: span ? Math.round((elapsed / span) * 100) : 0,
+      elapsed: compactDuration(effectiveElapsed),
+      total: compactDuration(effectiveTotal),
+      live: start <= clockNow && clockNow <= end,
+      startLabel: historyTime(targetShift, targetShift.startTime, locale),
+      endLabel: historyTime(targetShift, targetShift.endTime, locale),
+      pause: pause
+        ? {
+            startLabel: historyTime(
+              targetShift,
+              new Date(pause.start).toISOString(),
+              locale,
+            ),
+            endLabel: historyTime(
+              targetShift,
+              new Date(pause.end).toISOString(),
+              locale,
+            ),
+            left: span ? ((pause.start - start) / span) * 100 : 0,
+            width: span ? (pauseDuration / span) * 100 : 0,
+            center: span
+              ? (((pause.start + pause.end) / 2 - start) / span) * 100
+              : 50,
+          }
+        : null,
+    };
+  }, [clockNow, locale, targetShift]);
 
   useEffect(() => {
     if (!shouldOpenHistory || historyRows === null) return;
@@ -367,6 +480,18 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
 
   async function executePunch() {
     if (!targetShift || !punchKind) return;
+    if (navigator.onLine === false) {
+      setError(
+        "Connexion indisponible : aucun pointage n’a été enregistré. Reconnectez-vous sur votre lieu de travail puis réessayez.",
+      );
+      return;
+    }
+    if (!usingMock) {
+      setError(
+        "Le pointage par géolocalisation attend la prise en charge de cette règle par l’API.",
+      );
+      return;
+    }
     if (!navigator.geolocation) {
       setError("La géolocalisation n’est pas disponible sur cet appareil.");
       return;
@@ -430,18 +555,20 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
     setPunchKind(kind);
   };
 
-  const shiftNow = Date.now();
-  // Même marge que le backend : le pointage ouvre 15 min avant le début.
-  const earlyCheckInMs = 15 * 60_000;
+  const shiftNow = clockNow;
+  const checkoutAvailableAt = targetShift
+    ? Date.parse(targetShift.endTime) - 15 * 60_000
+    : Number.POSITIVE_INFINITY;
   const canCheckIn = Boolean(
     targetShift &&
     !targetShift.attendance?.checkedInAt &&
-    shiftNow >= Date.parse(targetShift.startTime) - earlyCheckInMs &&
+    shiftNow >= Date.parse(targetShift.startTime) &&
     shiftNow <= Date.parse(targetShift.endTime),
   );
   const canCheckOut = Boolean(
     targetShift?.attendance?.checkedInAt &&
     !targetShift.attendance.checkedOutAt &&
+    shiftNow >= checkoutAvailableAt &&
     shiftNow <= Date.parse(targetShift.endTime) + 5 * 60_000,
   );
   const hourInDouala = Number(
@@ -484,9 +611,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
           </span>
           {typeof result.distanceMeters === "number" && (
             <small className="ops-location-confirmation">
-              <MapPin size={14} /> Vérifié à {result.distanceMeters} m de la
-              station
-            </small>
+              <MapPin size={14} /> {" "}{translate("Vérifié à")}{" "}{result.distanceMeters} {" "}{translate("m de la station")}</small>
           )}
         </p>
       )}
@@ -502,72 +627,72 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
       )}
 
       <section className="admin-card swapper-welcome">
-        <span className="admin-eyebrow">Espace personnel</span>
+        <span className="admin-eyebrow">{t("Espace personnel")}</span>
         <h2>
-          {greeting}
+          {t(greeting)}
           {firstName ? `, ${firstName}` : ""}
         </h2>
-        <p>Retrouvez ici votre présence et vos prochains services.</p>
+        <p>{t("Retrouvez ici votre présence et vos prochains shifts.")}</p>
       </section>
 
-      <section className="admin-card swapper-performance">
-        <header className="swapper-performance__heading">
-          <div>
-            <h2>Votre présence</h2>
-            <p>Sur vos shifts terminés</p>
-          </div>
-        </header>
+      <section aria-label={t("Votre présence")}>
         {kpiStats.total > 0 ? (
-          <div className="swapper-performance__body">
-            <div
-              className="swapper-performance__ring"
-              style={{
-                background: `conic-gradient(#10a66a 0% ${kpiStats.onTimePct}%, #e99a16 ${kpiStats.onTimePct}% ${kpiStats.onTimePct + kpiStats.latePct}%, #e24c4c ${kpiStats.onTimePct + kpiStats.latePct}% 100%)`,
-              }}
-              role="img"
-              aria-label={`Présence ${kpiStats.presenceRate} %, ${kpiStats.onTime} à l’heure, ${kpiStats.late} en retard et ${kpiStats.absent} absences`}
-            >
-              <span>
-                <strong>{kpiStats.presenceRate}%</strong>
-                <small>Présence</small>
-              </span>
-            </div>
+          <KpiCard
+            className="swapper-performance"
+            label={t("Votre présence")}
+            value={`${kpiStats.presenceRate}%`}
+            detail={`${t("Sur ")}${kpiStats.total} ${t(kpiStats.total === 1 ? "shift terminé" : "shifts terminés")}`}
+            icon={<GaugeIcon size={18} aria-hidden="true" />}
+            tone={
+              kpiStats.presenceRate >= 80
+                ? "green"
+                : kpiStats.presenceRate >= 60
+                  ? "amber"
+                  : "red"
+            }
+            progress={kpiStats.presenceRate}
+          >
             <div className="swapper-performance__legend">
               <div>
                 <span>
-                  <i className="is-present" />À l’heure
+                  <i className="is-present" />{t("À l’heure")}
                 </span>
                 <strong>
                   {kpiStats.onTime}
-                  <small>{kpiStats.onTimePct}%</small>
+                  <small>{kpiStats.onTimePct}{translate("%")}</small>
                 </strong>
               </div>
               <div>
                 <span>
                   <i className="is-late" />
-                  En retard
+                  {t("En retard")}
                 </span>
                 <strong>
                   {kpiStats.late}
-                  <small>{kpiStats.latePct}%</small>
+                  <small>{kpiStats.latePct}{translate("%")}</small>
                 </strong>
               </div>
               <div>
                 <span>
                   <i className="is-absent" />
-                  Absent
+                  {t("Absent")}
                 </span>
                 <strong>
                   {kpiStats.absent}
-                  <small>{kpiStats.absentPct}%</small>
+                  <small>{kpiStats.absentPct}{translate("%")}</small>
                 </strong>
               </div>
             </div>
-          </div>
+          </KpiCard>
         ) : (
-          <p className="swapper-performance__empty">
-            Vos indicateurs apparaîtront après votre premier shift terminé.
-          </p>
+          <KpiCard
+            className="swapper-performance"
+            label={t("Votre présence")}
+            value="—"
+            detail={t("Vos indicateurs apparaîtront après votre premier shift terminé.")}
+            icon={<GaugeIcon size={18} />}
+            tone="neutral"
+          />
         )}
       </section>
 
@@ -577,38 +702,96 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
           <div className="operations-unified-header">
             <div>
               <span className="admin-eyebrow">
-                {isInWindow(targetShift)
-                  ? "Shift en cours (Live)"
-                  : "Prochain shift cible"}
+                {isInWindow(targetShift) ? t("Shift en cours") : t("Prochain shift")}
               </span>
               <h2>{targetShift.station?.name}</h2>
               <p className="operations-unified-time">
-                {formatDate(targetShift.startTime)} –{" "}
-                {formatDate(targetShift.endTime)}
+                {shiftPeriod(targetShift)}
               </p>
             </div>
             <span
               className={`attendance-status ${
                 targetShift.attendance?.checkedOutAt
                   ? "attendance-status--closed"
-                  : targetShift.attendance?.checkedInAt
+                  : targetShift.attendance
                     ? targetShift.attendance.isLate
                       ? "attendance-status--late"
                       : "attendance-status--present"
-                    : "attendance-status--expected"
+                    : isInWindow(targetShift)
+                      ? "attendance-status--present"
+                      : "attendance-status--expected"
               }`}
             >
               {targetShift.attendance?.checkedOutAt
-                ? "Terminé"
-                : targetShift.attendance?.checkedInAt
+                ? t("Terminé")
+                : targetShift.attendance
                   ? targetShift.attendance.isLate
-                    ? "Présent · en retard"
-                    : "Début déjà pointé"
+                    ? t("Présent · en retard")
+                    : t("Début déjà pointé")
                   : isInWindow(targetShift)
-                    ? "Créneau en cours"
-                    : "Accessible"}
+                    ? t("Créneau en cours")
+                    : t("Accessible")}
             </span>
           </div>
+
+          {serviceProgress && (
+            <div className="operations-timeline">
+              <div className="operations-timeline__summary">
+                <span>
+                  {serviceProgress.live ? t("Temps effectué") : t("Durée prévue")}
+                </span>
+                <strong>
+                  {serviceProgress.live
+                    ? `${serviceProgress.elapsed} sur ${serviceProgress.total}`
+                    : serviceProgress.total}
+                </strong>
+              </div>
+              <div className="operations-timeline__rail" aria-hidden="true">
+                <span
+                  className="operations-timeline__fill"
+                  style={{ width: `${serviceProgress.percent}%` }}
+                />
+                {serviceProgress.pause && (
+                  <span
+                    className="operations-timeline__pause"
+                    style={{
+                      left: `${serviceProgress.pause.left}%`,
+                      width: `${serviceProgress.pause.width}%`,
+                    }}
+                  />
+                )}
+                {serviceProgress.live && (
+                  <span
+                    className="operations-timeline__now"
+                    style={{ left: `${serviceProgress.percent}%` }}
+                  />
+                )}
+              </div>
+              <div className="operations-timeline__labels">
+                <span className="is-start">
+                  <small>{t("Début")}</small>
+                  <strong>{serviceProgress.startLabel}</strong>
+                </span>
+                {serviceProgress.pause && (
+                  <span
+                    className="is-pause"
+                    style={{
+                      left: `${Math.min(74, Math.max(26, serviceProgress.pause.center))}%`,
+                    }}
+                  >
+                    <small>{t("Pause")}</small>
+                    <strong>
+                      {serviceProgress.pause.startLabel}{translate("–")}{serviceProgress.pause.endLabel}
+                    </strong>
+                  </span>
+                )}
+                <span className="is-end">
+                  <small>{t("Fin")}</small>
+                  <strong>{serviceProgress.endLabel}</strong>
+                </span>
+              </div>
+            </div>
+          )}
 
           <div className="operations-unified-divider" />
 
@@ -619,7 +802,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
                 className="admin-button primary-cta"
                 onClick={() => handleDirectAction("CHECKIN")}
               >
-                <MapPin size={18} /> Prendre mon service
+                <LogIn size={18} /> {t("Pointer mon shift")}
               </button>
             )}
             {canCheckOut && (
@@ -628,16 +811,19 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
                 className="admin-button secondary"
                 onClick={() => handleDirectAction("CHECKOUT")}
               >
-                <CheckCircle size={18} /> Terminer mon service
+                <LogOut size={18} /> {t("Terminer mon shift")}
               </button>
             )}
             {!canCheckIn && !canCheckOut && (
               <p className="operations-hint">
                 {targetShift.attendance?.checkedOutAt
-                  ? "Ce shift est clôturé."
-                  : Date.now() < Date.parse(targetShift.startTime) - earlyCheckInMs
-                    ? `Le pointage s’ouvrira 15 min avant le début du shift, soit à ${formatDate(new Date(Date.parse(targetShift.startTime) - earlyCheckInMs).toISOString(), targetShift.station.timezone, true)}.`
-                    : "Le pointage de ce shift n’est plus disponible. Contactez le superviseur en cas de correction nécessaire."}
+                  ? t("Ce shift est clôturé.")
+                  : targetShift.attendance?.checkedInAt &&
+                      shiftNow < checkoutAvailableAt
+                      ? `${t("La fin de service sera disponible à")} ${historyTime(targetShift, new Date(checkoutAvailableAt).toISOString(), locale)}.`
+                    : shiftNow < Date.parse(targetShift.startTime)
+                      ? t("Le pointage sera disponible 15 minutes avant le début du shift.")
+                      : t("Le pointage de ce shift n’est plus disponible. Contactez le superviseur en cas de correction nécessaire.")}
               </p>
             )}
           </div>
@@ -652,21 +838,11 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
             <Clock3 size={20} />
           </span>
           <div>
-            <span className="admin-eyebrow">Pointage</span>
-            <h2>Aucun shift publié à venir</h2>
+            <span className="admin-eyebrow">{t("Pointage")}</span>
+            <h2>{t("Aucun shift à venir")}</h2>
             <p>
-              Un shift doit d’abord être publié par le superviseur puis vous être
-              affecté pour que le pointage apparaisse ici. Si vous attendez un
-              service, vérifiez vos plannings ou contactez votre superviseur.
-              Vos anciens services restent consultables dans l’historique.
+              {t("Les prochains shifts publiés et affectés à votre compte apparaîtront ici. Vos anciens shifts restent consultables dans l’historique.")}
             </p>
-            <button
-              type="button"
-              className="admin-button secondary"
-              onClick={() => navigate("/app/mon-espace/plannings")}
-            >
-              Voir mes plannings publiés
-            </button>
           </div>
         </section>
       )}
@@ -685,15 +861,14 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
             alignItems: "center",
           }}
         >
-          <h2>Historique de pointage</h2>
+          <h2>{t("Historique de pointage")}</h2>
           {completedShifts.length > 5 && (
             <button
               type="button"
               className="admin-button secondary small"
               onClick={() => setHistoryModalOpen(true)}
             >
-              Voir plus
-            </button>
+              {translate("Voir plus")}</button>
           )}
         </div>
 
@@ -704,15 +879,14 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
         )}
         {historyRows === null ? (
           <div className="admin-loading" role="status">
-            <Clock3 size={18} /> Chargement de votre historique…
-          </div>
+            <Clock3 size={18} /> {" "}{translate("Chargement de votre historique…")}</div>
         ) : !recentPointages.length ? (
           <div className="admin-empty">
             <Clock3 size={36} />
-            <h3>Aucun pointage antérieur sur cette période</h3>
+            <h3>{t("Aucun pointage antérieur sur cette période")}</h3>
           </div>
         ) : (
-          <HistoryRows shifts={recentPointages} />
+          <HistoryRows shifts={recentPointages} locale={locale} t={t} />
         )}
       </section>
 
@@ -720,11 +894,11 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
       <Modal
         open={historyModalOpen}
         size="lg"
-        title="Historique de pointage complet"
+        title={t("Historique de pointage complet")}
         subtitle={
           requestedHistoryId
-            ? "Le pointage concerné par la notification est mis en évidence."
-            : "Retrouvez l'ensemble de vos pointages."
+            ? t("Le pointage concerné par la notification est mis en évidence.")
+            : t("Retrouvez l'ensemble de vos pointages.")
         }
         onClose={() => {
           setHistoryModalOpen(false);
@@ -734,8 +908,7 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
         {requestedHistoryId &&
           !completedShifts.some((shift) => shift.id === requestedHistoryId) && (
             <p className="attendance-target-notice" role="status">
-              Ce pointage n’est plus présent dans l’historique chargé. Les
-              autres pointages restent consultables ci-dessous.
+              {t("Ce pointage n’est plus présent dans l’historique chargé. Les autres pointages restent consultables ci-dessous.")}
             </p>
           )}
         <div
@@ -759,24 +932,26 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
               }}
             >
               {filter === "ALL"
-                ? "Tous"
+                ? t("Tous")
                 : filter === "PRESENT"
-                  ? "À l'heure"
+                  ? t("À l’heure")
                   : filter === "LATE"
-                    ? "En retard"
-                    : "Absences"}
+                    ? t("En retard")
+                    : t("Absences")}
             </button>
           ))}
         </div>
 
         {!filteredModalShifts.length ? (
           <div className="admin-empty">
-            <h3>Aucun résultat pour ce filtre</h3>
+            <h3>{t("Aucun résultat pour ce filtre")}</h3>
           </div>
         ) : (
           <HistoryRows
             shifts={filteredModalShifts}
             targetId={requestedHistoryId}
+            locale={locale}
+            t={t}
           />
         )}
       </Modal>
@@ -786,10 +961,9 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
         size="md"
         title={
           punchKind === "CHECKOUT"
-            ? "Terminer le service"
-            : "Prendre le service"
+            ? "Terminer le shift"
+            : "Pointer le shift"
         }
-        subtitle={targetShift?.station.name ?? "Station du shift"}
         onClose={() => !busy && setPunchKind(null)}
         footer={
           <>
@@ -799,36 +973,45 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
               disabled={busy}
               onClick={() => setPunchKind(null)}
             >
-              Annuler
-            </button>
+              {translate("Annuler")}</button>
             <button
               className="admin-button primary-cta"
               type="button"
-              disabled={busy}
+              disabled={busy || !usingMock}
               onClick={() => void executePunch()}
             >
-              {busy ? "Vérification…" : "Vérifier ma position et pointer"}
+              {busy ? "Confirmation…" : usingMock ? "Confirmer" : "API requise"}
             </button>
           </>
         }
       >
-        <div className="ops-geolocation-prompt">
-          <span className="ops-geolocation-prompt__icon">
-            <MapPin size={22} />
-          </span>
-          <div>
-            <>
-              <strong>Votre position sera vérifiée au moment du pointage.</strong>
-              <p>
-                Vous devez être à moins {targetShift?.station.geofenceRadiusMeters ?? data.station?.geofenceRadiusMeters ?? 150} m de {targetShift?.station.name ?? "la station"}. Le pointage est refusé hors de ce périmètre. {punchKind === "CHECKIN" ? <>Sans prise de service après {targetShift?.station.latenessToleranceMinutes ?? data.station?.latenessToleranceMinutes ?? 5} min de tolérance, l’absence est enregistrée automatiquement.</> : "Votre position sera vérifiée à nouveau pour enregistrer la fin du service."}
-              </p>
-            </>
+        {targetShift && (
+          <div className="ops-punch-summary">
+            <div>
+              <span>{targetShift.station.name}</span>
+              <strong>{shiftPeriod(targetShift)}</strong>
+            </div>
+            {serviceProgress && (
+              <div className="ops-punch-summary__duration">
+                <span>
+                  {serviceProgress.live ? "Temps effectué" : "Durée prévue"}
+                </span>
+                <strong>
+                  {serviceProgress.live
+                    ? `${serviceProgress.elapsed} / ${serviceProgress.total}`
+                    : serviceProgress.total}
+                </strong>
+              </div>
+            )}
           </div>
-        </div>
-        <p className="operations-hint">
-          La localisation est demandée uniquement pour cette action. Si elle
-          est refusée, aucun pointage n’est enregistré.
-        </p>
+        )}
+        {usingMock ? (
+          <p className="ops-location-note">
+            {translate("Il vous sera demandé de partager votre position.")}</p>
+        ) : (
+          <p className="operations-hint">
+            {translate("Le pointage géolocalisé attend sa prise en charge par l’API.")}</p>
+        )}
         {error && (
           <p className="error-message" role="alert">
             {error}

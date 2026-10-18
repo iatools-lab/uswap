@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { CloudArrowUpIcon, WifiSlashIcon } from "@phosphor-icons/react";
+import {
+  CloudArrowUpIcon,
+  DownloadSimpleIcon,
+  WifiSlashIcon,
+  XIcon,
+} from "./icons";
 import { pending, subscribeOutbox } from "../features/offline/outbox";
+import { useI18n } from "../app/i18n";
 
 type InstallEvent = Event & {
   prompt: () => Promise<void>;
@@ -12,12 +18,15 @@ type InstallEvent = Event & {
  * l'installation de l'application. Enregistre le service worker en production.
  */
 export function PwaStatus() {
+  const { t } = useI18n();
   const [online, setOnline] = useState(navigator.onLine);
   const [install, setInstall] = useState<InstallEvent | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const [installPaused, setInstallPaused] = useState(false);
   const [queued, setQueued] = useState(0);
-  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
-  const [updating, setUpdating] = useState(false);
+  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(
+    null,
+  );
   const updateRequested = useRef(false);
 
   useEffect(() => {
@@ -83,40 +92,37 @@ export function PwaStatus() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!waitingWorker || updateRequested.current) return;
+    updateRequested.current = true;
+    waitingWorker.postMessage({ type: "SKIP_WAITING" });
+  }, [waitingWorker]);
+
+  useEffect(() => {
+    if (!install || dismissed || installPaused) return;
+    const timeout = window.setTimeout(() => setDismissed(true), 9000);
+    return () => window.clearTimeout(timeout);
+  }, [dismissed, install, installPaused]);
+
   if (!online || queued > 0) {
     return (
-      <div className={`pwa-status pwa-status--sync ${online ? "is-syncing" : "is-offline"}`} role="status">
+      <div
+        className={`pwa-status pwa-status--sync ${online ? "is-syncing" : "is-offline"}`}
+        role="status"
+      >
         {online ? <CloudArrowUpIcon /> : <WifiSlashIcon />}
-        <span><strong>{online ? "Synchronisation en attente" : "Mode hors connexion"}</strong><small>{queued ? `${queued} opération(s) conservée(s) sur cet appareil` : "Votre dernier planning reste disponible"}</small></span>
-      </div>
-    );
-  }
-
-  if (waitingWorker && !dismissed) {
-    return (
-      <div className="pwa-status pwa-status--update" role="status">
         <span>
-          <strong>Une nouvelle version de uSwap est prête.</strong>
-          <small>Actualisez pour utiliser les dernières améliorations.</small>
+          <strong>
+            {online
+              ? t("Synchronisation en attente")
+              : t("Mode hors connexion")}
+          </strong>
+          <small>
+            {queued
+              ? `${queued} ${t(queued === 1 ? "opération conservée" : "opérations conservées")} ${t("sur cet appareil")}`
+              : t("Votre dernier planning reste disponible")}
+          </small>
         </span>
-        <button
-          type="button"
-          disabled={updating}
-          onClick={() => {
-            updateRequested.current = true;
-            setUpdating(true);
-            waitingWorker.postMessage({ type: "SKIP_WAITING" });
-          }}
-        >
-          {updating ? "Mise à jour…" : "Actualiser"}
-        </button>
-        <button
-          type="button"
-          aria-label="Fermer la notification de mise à jour"
-          onClick={() => setDismissed(true)}
-        >
-          Plus tard
-        </button>
       </div>
     );
   }
@@ -131,17 +137,31 @@ export function PwaStatus() {
   }
 
   return (
-    <div className="pwa-status">
-      <span>uSwap sur votre écran d’accueil</span>
-      <button type="button" onClick={promptInstall}>
-        Installer
-      </button>
+    <div
+      className="pwa-status pwa-status--install"
+      role="status"
+      onMouseEnter={() => setInstallPaused(true)}
+      onMouseLeave={() => setInstallPaused(false)}
+      onFocusCapture={() => setInstallPaused(true)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          setInstallPaused(false);
+      }}
+    >
+      <span className="pwa-status-install-copy">
+        <span className="pwa-status-install-icon" aria-hidden="true">
+          <DownloadSimpleIcon size={17} />
+        </span>
+        <span>{t("uSwap sur votre écran d’accueil")}</span>
+      </span>
+      <button type="button" onClick={promptInstall}>{t("Installer")}</button>
       <button
         type="button"
-        aria-label="Fermer la proposition d’installation"
+        className="pwa-status-dismiss"
+        aria-label={t("Fermer la proposition d’installation")}
         onClick={() => setDismissed(true)}
       >
-        Fermer
+        <XIcon size={17} />
       </button>
     </div>
   );

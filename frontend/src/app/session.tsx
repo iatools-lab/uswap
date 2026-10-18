@@ -9,7 +9,17 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { api, forgetSession, login, logout, normalizeUserRole, refresh, rolePaths, type Session, type User } from "../api/auth-api";
+import {
+  api,
+  forgetSession,
+  login,
+  logout,
+  normalizeUserRole,
+  refresh,
+  rolePaths,
+  type Session,
+  type User,
+} from "../api/auth-api";
 import { isAccountPath, isSessionPath } from "./paths";
 
 type SessionContextValue = {
@@ -62,7 +72,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       document.title = "Mon espace · uSwap";
       const stay =
         preservePath &&
-        (isSessionPath(data.user, location.pathname) || isAccountPath(location.pathname));
+        (isSessionPath(data.user, location.pathname) ||
+          isAccountPath(location.pathname));
       if (!stay) navigate(rolePaths[data.user.role], { replace: true });
     },
     [location.pathname, navigate],
@@ -76,7 +87,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setDeadline(0);
     setWarning(false);
     document.title = "Connexion · uSwap";
-    if (location.pathname !== "/auth/login" && !isAccountPath(location.pathname))
+    if (
+      location.pathname !== "/auth/login" &&
+      !isAccountPath(location.pathname)
+    )
       navigate("/auth/login", { replace: true });
   }, [location.pathname, navigate]);
 
@@ -89,10 +103,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener("pagehide", hide);
     window.addEventListener("pageshow", restore);
-    const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("uswap-session");
+    const channel =
+      typeof BroadcastChannel === "undefined"
+        ? null
+        : new BroadcastChannel("uswap-session");
     if (channel)
       channel.onmessage = (event) => {
-        if (event.data === "logout" && !isAccountPath(window.location.pathname)) {
+        if (
+          event.data === "logout" &&
+          !isAccountPath(window.location.pathname)
+        ) {
           clear();
           setError("Votre session a été fermée.");
         }
@@ -104,8 +124,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
   }, [clear]);
 
-  useLayoutEffect(() => {
-  }, [location.pathname, location.search, location.hash]);
+  useLayoutEffect(() => {}, [
+    location.pathname,
+    location.search,
+    location.hash,
+  ]);
 
   useEffect(() => {
     const keepForgot = location.pathname === "/auth/forgot-password";
@@ -158,16 +181,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         expire();
         return;
       }
-      if (tokenDeadline.current - Date.now() <= 60_000 && remaining > 60_000) renew();
+      if (tokenDeadline.current - Date.now() <= 60_000 && remaining > 60_000)
+        renew();
     };
-    const activityChannel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("uswap-activity");
+    const activityChannel =
+      typeof BroadcastChannel === "undefined"
+        ? null
+        : new BroadcastChannel("uswap-activity");
     let lastBroadcast = 0;
     if (activityChannel)
       activityChannel.onmessage = (event) => {
-        if (event.data?.userId === session.user.id && typeof event.data.deadline === "number")
+        if (
+          event.data?.userId === session.user.id &&
+          typeof event.data.deadline === "number"
+        )
           idleDeadline.current = Math.max(
             idleDeadline.current,
-            Math.min(event.data.deadline, Date.parse(session.absoluteExpiresAt || session.sessionExpiresAt)),
+            Math.min(
+              event.data.deadline,
+              Date.parse(session.absoluteExpiresAt || session.sessionExpiresAt),
+            ),
           );
       };
     const activity = () => {
@@ -178,18 +211,28 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       );
       if (Date.now() - lastBroadcast > 1000) {
         lastBroadcast = Date.now();
-        activityChannel?.postMessage({ userId: session.user.id, deadline: idleDeadline.current });
+        activityChannel?.postMessage({
+          userId: session.user.id,
+          deadline: idleDeadline.current,
+        });
       }
     };
     const timer = setInterval(tick, 1000);
     const check = () => {
       tick();
-      if (document.visibilityState === "visible" && idleDeadline.current > Date.now() && !renewing.current)
+      if (
+        document.visibilityState === "visible" &&
+        idleDeadline.current > Date.now() &&
+        !renewing.current
+      )
         api<{ user: User }>("/auth/me")
           .then((response) => {
             const user = normalizeUserRole(response.user);
             setSession((current) => (current ? { ...current, user } : null));
-            if (!isSessionPath(user, window.location.pathname) && !isAccountPath(window.location.pathname))
+            if (
+              !isSessionPath(user, window.location.pathname) &&
+              !isAccountPath(window.location.pathname)
+            )
               navigate(rolePaths[user.role], { replace: true });
           })
           .catch(() => clear());
@@ -244,7 +287,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   function onAccessLost() {
     clear();
-    setError("Votre session ou vos droits ont changé. Veuillez vous reconnecter.");
+    setError(
+      "Votre session ou vos droits ont changé. Veuillez vous reconnecter.",
+    );
   }
 
   return (

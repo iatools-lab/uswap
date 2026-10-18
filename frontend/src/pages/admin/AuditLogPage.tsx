@@ -1,6 +1,10 @@
+import { currentLocale } from "../../app/i18n";
+import { translate } from "../../app/i18n";
 import { useEffect, useMemo, useState } from "react";
-import { api } from "../../api/auth-api";
+import { api, usingMock } from "../../api/auth-api";
 import { Select } from "../../ui/Select";
+import { ExportExcelButton } from "../../ui/ExportExcelButton";
+import { exportToExcel } from "../../utils/excelExport";
 import { ClockCounterClockwise, MagnifyingGlass } from "../../ui/icons";
 import "./audit-log.css";
 
@@ -33,7 +37,7 @@ const categoryNames: Record<AuditCategory, string> = {
 };
 
 const formatDateTime = (value: string) =>
-  new Intl.DateTimeFormat("fr-FR", {
+  new Intl.DateTimeFormat(currentLocale(), {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
@@ -47,6 +51,7 @@ export function AuditLogPage() {
   const [periodFilter, setPeriodFilter] = useState("30");
 
   useEffect(() => {
+    if (!usingMock) return;
     let active = true;
     api<AuditData>("/admin/audit")
       .then((result) => active && setData(result))
@@ -97,6 +102,41 @@ export function AuditLogPage() {
     });
   }, [actionFilter, data, periodFilter, query, userFilter]);
 
+  function exportAuditLog() {
+    if (!filtered.length) return;
+    exportToExcel({
+      data: filtered,
+      filename: `uswap-journal-audit-${new Date().toISOString().slice(0, 10)}`,
+      sheetName: "Journal d’audit",
+      columns: [
+        { header: translate("Date"), key: (event) => formatDateTime(event.createdAt), width: 22 },
+        { header: translate("Catégorie"), key: (event) => translate(categoryNames[event.category]), width: 20 },
+        { header: translate("Action"), key: (event) => translate(event.action), width: 24 },
+        { header: translate("Acteur"), key: (event) => event.actorName ?? "—", width: 24 },
+        { header: translate("Objet"), key: (event) => `${event.title} · ${event.objectName}`, width: 36 },
+        { header: translate("Station"), key: (event) => event.stationName ?? "—", width: 24 },
+        { header: translate("Détail"), key: "description", width: 44 },
+        { header: translate("Résultat"), key: (event) => translate(event.result), width: 20 },
+      ],
+    });
+  }
+
+  if (!usingMock) {
+    return (
+      <section className="audit-log-page">
+        <div className="audit-log-notice" role="status">
+          <ClockCounterClockwise size={22} />
+          <div>
+            <strong>
+              {translate("Le journal d’audit central n’est pas encore exposé par l’API.")}</strong>
+            <p>
+              {translate("Cette vue est prête pour les données de démonstration et attend la route backend correspondante.")}</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (!data)
     return (
       <div className="admin-loading">
@@ -112,32 +152,36 @@ export function AuditLogPage() {
         </div>
         <div>
           <p>
-            Événements enregistrés sur les comptes, les incidents, les
-            affectations et les réglages.
-          </p>
+            {translate("Événements enregistrés sur les comptes, les incidents, les affectations et les réglages.")}</p>
         </div>
-        <span className="audit-log-total">
-          {`${filtered.length} action${filtered.length > 1 ? "s" : ""}`}
-        </span>
+        <div className="audit-log-tools">
+          <span className="audit-log-total">
+            {`${filtered.length} ${translate(filtered.length === 1 ? "action" : "actions")}`}
+          </span>
+          <ExportExcelButton onClick={exportAuditLog} disabled={!filtered.length} />
+        </div>
       </header>
 
-      <div className="audit-log-filters" aria-label="Filtres du journal d’audit">
+      <div
+        className="audit-log-filters"
+        aria-label={translate("Filtres du journal d’audit")}
+      >
         <label className="audit-log-search">
           <MagnifyingGlass size={18} />
           <input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Rechercher un objet ou un détail"
-            aria-label="Rechercher dans le journal d’audit"
+            placeholder={translate("Rechercher un objet ou un détail")}
+            aria-label={translate("Rechercher dans le journal d’audit")}
           />
         </label>
         <Select
           value={userFilter}
-          ariaLabel="Filtrer par utilisateur"
+          ariaLabel={translate("Filtrer par utilisateur")}
           onChange={(value) => setUserFilter(String(value))}
           options={[
-            { value: "", label: "Tous les comptes" },
+            { value: "", label: translate("Tous les comptes") },
             ...data.people.map((person) => ({
               value: person.id,
               label: person.fullName,
@@ -148,24 +192,24 @@ export function AuditLogPage() {
         />
         <Select
           value={actionFilter}
-          ariaLabel="Filtrer par action"
+          ariaLabel={translate("Filtrer par action")}
           onChange={(value) => setActionFilter(String(value))}
           options={[
-            { value: "", label: "Toutes les actions" },
-            ...actions.map((action) => ({ value: action, label: action })),
+            { value: "", label: translate("Toutes les actions") },
+            ...actions.map((action) => ({ value: action, label: translate(action) })),
           ]}
           size="sm"
           minWidth="190px"
         />
         <Select
           value={periodFilter}
-          ariaLabel="Filtrer par période"
+          ariaLabel={translate("Filtrer par période")}
           onChange={(value) => setPeriodFilter(String(value))}
           options={[
-            { value: "7", label: "7 derniers jours" },
-            { value: "30", label: "30 derniers jours" },
-            { value: "90", label: "90 derniers jours" },
-            { value: "ALL", label: "Toute la période" },
+            { value: "7", label: translate("7 derniers jours") },
+            { value: "30", label: translate("30 derniers jours") },
+            { value: "90", label: translate("90 derniers jours") },
+            { value: "ALL", label: translate("Toute la période") },
           ]}
           size="sm"
           minWidth="165px"
@@ -176,32 +220,40 @@ export function AuditLogPage() {
         <ol className="audit-log-list" aria-live="polite">
           {filtered.map((event) => (
             <li className="audit-log-entry" key={event.id}>
-              <span className={`audit-log-entry__marker ${event.category.toLowerCase()}`} />
+              <span
+                className={`audit-log-entry__marker ${event.category.toLowerCase()}`}
+              />
               <div className="audit-log-entry__main">
                 <div className="audit-log-entry__heading">
-                  <span className={`audit-log-category ${event.category.toLowerCase()}`}>
-                    {categoryNames[event.category]}
+                  <span
+                    className={`audit-log-category ${event.category.toLowerCase()}`}
+                  >
+                    {translate(categoryNames[event.category])}
                   </span>
-                  <time dateTime={event.createdAt}>{formatDateTime(event.createdAt)}</time>
+                  <time dateTime={event.createdAt}>
+                    {formatDateTime(event.createdAt)}
+                  </time>
                 </div>
-                <h3>{event.title}</h3>
-                <p>{event.description}</p>
+                <h3>{translate(event.title)}</h3>
+                <p>{translate(event.description)}</p>
                 <dl>
                   <div>
-                    <dt>Acteur</dt>
-                    <dd>{event.actorName ?? "Non renseigné dans cette entrée"}</dd>
+                    <dt>{translate("Acteur")}</dt>
+                    <dd>
+                      {translate(event.actorName ?? "Non renseigné dans cette entrée")}
+                    </dd>
                   </div>
                   <div>
-                    <dt>Objet</dt>
-                    <dd>{event.objectName}</dd>
+                    <dt>{translate("Objet")}</dt>
+                    <dd>{translate(event.objectName)}</dd>
                   </div>
                   <div>
-                    <dt>Contexte</dt>
-                    <dd>{event.stationName ?? "Réseau"}</dd>
+                    <dt>{translate("Contexte")}</dt>
+                    <dd>{translate(event.stationName ?? "Réseau")}</dd>
                   </div>
                   <div>
-                    <dt>Résultat</dt>
-                    <dd className="audit-log-result">{event.result}</dd>
+                    <dt>{translate("Résultat")}</dt>
+                    <dd className="audit-log-result">{translate(event.result)}</dd>
                   </div>
                 </dl>
               </div>
@@ -211,8 +263,8 @@ export function AuditLogPage() {
       ) : (
         <div className="audit-log-empty">
           <ClockCounterClockwise size={28} />
-          <strong>Aucune action pour ces filtres</strong>
-          <span>Modifiez la période, l’utilisateur ou votre recherche.</span>
+          <strong>{translate("Aucune action pour ces filtres")}</strong>
+          <span>{translate("Modifiez la période, l’utilisateur ou votre recherche.")}</span>
         </div>
       )}
     </section>

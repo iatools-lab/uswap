@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../api/auth-api";
 import { FileSpreadsheet, LoaderCircle } from "../../ui/icons";
@@ -110,11 +111,9 @@ export function ChangeHistory({ user }: SupervisionProps) {
     <section className="admin-card">
       <div className="admin-card-heading">
         <div>
-          <h2>Historique des changements d’affectation</h2>
+          <h2>{translate("Historique des changements d’affectation")}</h2>
           <p className="operations-hint">
-            Remplacements et permutations en lecture seule, filtrables par
-            période, station et swappeur.
-          </p>
+            {translate("Remplacements et permutations en lecture seule, filtrables par période, station et swappeur.")}</p>
         </div>
         <button
           type="button"
@@ -123,32 +122,28 @@ export function ChangeHistory({ user }: SupervisionProps) {
           onClick={exportExcel}
         >
           <FileSpreadsheet size={16} />
-          Exporter Excel
-        </button>
+          {translate("Exporter Excel")}</button>
       </div>
       <div className="supervision-toolbar">
         <label>
-          Du
-          <input
+          {translate("Du")}<input
             type="date"
             value={from}
             onChange={(event) => setFrom(event.target.value)}
           />
         </label>
         <label>
-          Au
-          <input
+          {translate("Au")}<input
             type="date"
             value={to}
             onChange={(event) => setTo(event.target.value)}
           />
         </label>
         <label>
-          Type
-          <Select
+          {translate("Type")}<Select
             value={type}
             size="sm"
-            ariaLabel="Type de changement"
+            ariaLabel={translate("Type de changement")}
             onChange={(value) => setType(String(value))}
             options={[
               { value: "", label: "Tous" },
@@ -159,21 +154,19 @@ export function ChangeHistory({ user }: SupervisionProps) {
           />
         </label>
         <label>
-          Station
-          <input
+          {translate("Station")}<input
             type="search"
             value={stationSearch}
             onChange={(event) => setStationSearch(event.target.value)}
-            placeholder="Filtrer une station…"
+            placeholder={translate("Filtrer une station…")}
           />
         </label>
         <label>
-          Swappeur
-          <input
+          {translate("Swappeur")}<input
             type="search"
             value={swapperSearch}
             onChange={(event) => setSwapperSearch(event.target.value)}
-            placeholder="Nom du swappeur…"
+            placeholder={translate("Nom du swappeur…")}
           />
         </label>
       </div>
@@ -185,8 +178,7 @@ export function ChangeHistory({ user }: SupervisionProps) {
       {!rows ? (
         <div className="admin-loading" role="status">
           <LoaderCircle className="spin" />
-          Chargement de l’historique…
-        </div>
+          {translate("Chargement de l’historique…")}</div>
       ) : !visibleRows.length ? (
         <div className="admin-empty">
           <h3>
@@ -200,11 +192,11 @@ export function ChangeHistory({ user }: SupervisionProps) {
           rows={visibleRows}
           columns={columns}
           rowKey={(row) => row.id}
-          ariaLabel="Historique des changements d’affectation"
+          ariaLabel={translate("Historique des changements d’affectation")}
           className="ops-table"
         />
       )}
-      <p className="operations-hint">Historique en lecture seule.</p>
+      <p className="operations-hint">{translate("Historique en lecture seule.")}</p>
     </section>
   );
 }

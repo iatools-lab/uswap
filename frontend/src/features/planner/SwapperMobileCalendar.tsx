@@ -1,3 +1,5 @@
+import { currentLocale } from "../../app/i18n";
+import { translate } from "../../app/i18n";
 import { useMemo, useState } from "react";
 import {
   ArrowLeftIcon,
@@ -6,7 +8,7 @@ import {
   CaretRightIcon,
   ClockIcon,
   MapPinIcon,
-} from "@phosphor-icons/react";
+} from "../../ui/icons";
 import { Modal } from "../../ui/Modal";
 import "./swapper-mobile-calendar.css";
 
@@ -57,7 +59,9 @@ function shiftState(shift: MobileOccurrence, now = Date.now()): ShiftState {
 }
 
 function monthCells(cursor: Date) {
-  const first = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), 1));
+  const first = new Date(
+    Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth(), 1),
+  );
   const firstWeekday = (first.getUTCDay() + 6) % 7;
   const start = new Date(first);
   start.setUTCDate(start.getUTCDate() - firstWeekday);
@@ -73,14 +77,14 @@ function monthCells(cursor: Date) {
 }
 
 const monthTitle = (cursor: Date) =>
-  cursor.toLocaleDateString("fr-FR", {
+  cursor.toLocaleDateString(currentLocale(), {
     timeZone: "UTC",
     month: "long",
     year: "numeric",
   });
 
 const longDate = (iso: string) =>
-  new Date(`${iso}T00:00:00Z`).toLocaleDateString("fr-FR", {
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString(currentLocale(), {
     timeZone: "UTC",
     weekday: "long",
     day: "numeric",
@@ -89,7 +93,7 @@ const longDate = (iso: string) =>
   });
 
 const clock = (value: string, timezone: string) =>
-  new Date(value).toLocaleTimeString("fr-FR", {
+  new Date(value).toLocaleTimeString(currentLocale(), {
     timeZone: timezone,
     hour: "2-digit",
     minute: "2-digit",
@@ -120,39 +124,52 @@ export function SwapperMobileCalendar({
       rows.sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
     return grouped;
   }, [planning.occurrences]);
-  const selected = selectedDay ? shiftsByDay.get(selectedDay) ?? [] : [];
+  const selected = selectedDay ? (shiftsByDay.get(selectedDay) ?? []) : [];
   const today = isoDay(new Date());
 
   function moveMonth(direction: number) {
     setCursor(
-      new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + direction, 1)),
+      new Date(
+        Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + direction, 1),
+      ),
     );
   }
 
   return (
-    <section className="swapper-calendar" aria-label="Mon calendrier de shifts">
+    <section className="swapper-calendar" aria-label={translate("Mon calendrier de shifts")}>
       <header className="swapper-calendar__header">
-        <button type="button" className="swapper-calendar__back" onClick={onBack}>
-          <ArrowLeftIcon size={17} /> Mes plannings
-        </button>
-        <span className="admin-badge active">Publié</span>
+        <button
+          type="button"
+          className="swapper-calendar__back"
+          onClick={onBack}
+        >
+          <ArrowLeftIcon size={17} /> {" "}{translate("Mes plannings")}</button>
+        <span className="admin-badge active">{translate("Publié")}</span>
         <h2>{planning.name || "Mon planning"}</h2>
-        <p>Consultez vos services et ouvrez une date pour agir rapidement.</p>
+        <p>{translate("Consultez vos shifts et ouvrez une date pour agir rapidement.")}</p>
       </header>
 
       <div className="swapper-calendar__surface">
         <div className="swapper-calendar__nav">
-          <button type="button" aria-label="Mois précédent" onClick={() => moveMonth(-1)}>
+          <button
+            type="button"
+            aria-label={translate("Mois précédent")}
+            onClick={() => moveMonth(-1)}
+          >
             <CaretLeftIcon size={18} />
           </button>
           <strong>{monthTitle(cursor)}</strong>
-          <button type="button" aria-label="Mois suivant" onClick={() => moveMonth(1)}>
+          <button
+            type="button"
+            aria-label={translate("Mois suivant")}
+            onClick={() => moveMonth(1)}
+          >
             <CaretRightIcon size={18} />
           </button>
         </div>
 
         <div className="swapper-calendar__weekdays" aria-hidden="true">
-          {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((label, index) => (
+          {["L", "M", "M", "J", "V", "S", "D"].map((label, index) => (
             <span key={`${label}-${index}`}>{label}</span>
           ))}
         </div>
@@ -160,7 +177,9 @@ export function SwapperMobileCalendar({
         <div className="swapper-calendar__grid">
           {cells.map((cell) => {
             const shifts = shiftsByDay.get(cell.iso) ?? [];
-            const states = [...new Set(shifts.map((shift) => shiftState(shift)))];
+            const states = [
+              ...new Set(shifts.map((shift) => shiftState(shift))),
+            ];
             return (
               <button
                 type="button"
@@ -170,7 +189,7 @@ export function SwapperMobileCalendar({
                 onClick={() => setSelectedDay(cell.iso)}
                 aria-label={
                   shifts.length
-                    ? `${longDate(cell.iso)}, ${shifts.length} shift${shifts.length > 1 ? "s" : ""}`
+                    ? `${longDate(cell.iso)}, ${shifts.length} shift${shifts.length === 1 ? "" : "s"}`
                     : longDate(cell.iso)
                 }
               >
@@ -185,11 +204,14 @@ export function SwapperMobileCalendar({
           })}
         </div>
 
-        <div className="swapper-calendar__legend" aria-label="Légende des shifts">
+        <div
+          className="swapper-calendar__legend"
+          aria-label={translate("Légende des shifts")}
+        >
           {(Object.keys(stateMeta) as ShiftState[]).map((state) => (
             <span key={state}>
               <i className={stateMeta[state].className} aria-hidden="true" />
-              {stateMeta[state].label}
+              {translate(stateMeta[state].label)}
             </span>
           ))}
         </div>
@@ -199,7 +221,7 @@ export function SwapperMobileCalendar({
         open={Boolean(selectedDay)}
         size="md"
         title={selectedDay ? longDate(selectedDay) : "Détail des shifts"}
-        subtitle={`${selected.length} service${selected.length > 1 ? "s" : ""} prévu${selected.length > 1 ? "s" : ""}`}
+        subtitle={`${selected.length} shift${selected.length === 1 ? "" : "s"} prévu${selected.length === 1 ? "" : "s"}`}
         onClose={() => setSelectedDay(null)}
       >
         <div className="swapper-shift-detail-list">
@@ -212,21 +234,28 @@ export function SwapperMobileCalendar({
               <article className="swapper-shift-detail" key={shift.id}>
                 <div className="swapper-shift-detail__heading">
                   <div>
-                    <span className="swapper-shift-detail__eyebrow">{shift.templateVersion.label}</span>
+                    <span className="swapper-shift-detail__eyebrow">
+                      {translate(shift.templateVersion.label)}
+                    </span>
                     <h3>{shift.station.name}</h3>
                   </div>
                   <span className={`swapper-shift-state ${meta.className}`}>
-                    <i aria-hidden="true" /> {meta.label}
+                    <i aria-hidden="true" /> {translate(meta.label)}
                   </span>
                 </div>
 
                 <dl>
                   <div>
-                    <dt><ClockIcon size={15} /> Horaires</dt>
-                    <dd>{clock(shift.startTime, shift.station.timezone)} – {clock(shift.endTime, shift.station.timezone)}</dd>
+                    <dt>
+                      <ClockIcon size={15} /> {" "}{translate("Horaires")}</dt>
+                    <dd>
+                      {clock(shift.startTime, shift.station.timezone)} {" "}{translate("–")}{" "}
+                      {clock(shift.endTime, shift.station.timezone)}
+                    </dd>
                   </div>
                   <div>
-                    <dt><CalendarBlankIcon size={15} /> Pause</dt>
+                    <dt>
+                      <CalendarBlankIcon size={15} /> {" "}{translate("Pause")}</dt>
                     <dd>
                       {shift.templateVersion.breakStart
                         ? `${shift.templateVersion.breakStart} – ${shift.templateVersion.breakEnd} · ${shift.templateVersion.breakMinutes} min`
@@ -234,7 +263,8 @@ export function SwapperMobileCalendar({
                     </dd>
                   </div>
                   <div>
-                    <dt><MapPinIcon size={15} /> Station</dt>
+                    <dt>
+                      <MapPinIcon size={15} /> {" "}{translate("Station")}</dt>
                     <dd>{shift.station.name}</dd>
                   </div>
                 </dl>
@@ -242,14 +272,20 @@ export function SwapperMobileCalendar({
                 {(canPunch || canReportAbsence) && (
                   <div className="swapper-shift-detail__actions">
                     {canPunch && (
-                      <button type="button" className="admin-button primary-cta" onClick={() => onPunch(shift.id)}>
-                        Pointer
-                      </button>
+                      <button
+                        type="button"
+                        className="admin-button primary-cta"
+                        onClick={() => onPunch(shift.id)}
+                      >
+                        {translate("Pointer")}</button>
                     )}
                     {canReportAbsence && (
-                      <button type="button" className="admin-button secondary" onClick={() => onAbsence(shift.id)}>
-                        Signaler une absence
-                      </button>
+                      <button
+                        type="button"
+                        className="admin-button secondary"
+                        onClick={() => onAbsence(shift.id)}
+                      >
+                        {translate("Signaler une absence")}</button>
                     )}
                   </div>
                 )}

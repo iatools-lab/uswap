@@ -6,8 +6,9 @@ import {
   Clock,
   MapPin,
   UsersThreeIcon,
-} from "@phosphor-icons/react";
+} from "../../ui/icons";
 import { interceptNav } from "../../app/spaNav";
+import {translate,  useI18n } from "../../app/i18n";
 import { Modal } from "../../ui/Modal";
 import {
   ReplacementDialog,
@@ -18,6 +19,7 @@ import { IncidentCenter } from "../incidents/IncidentCenter";
 import { OperationsDashboard } from "../reports/OperationsDashboard";
 
 export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
+  const { t, locale } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
   const [replacementShift, setReplacementShift] = useState<string | null>(null);
@@ -88,14 +90,14 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
   );
 
   const formatDate = (value: string, timezone?: string) =>
-    new Intl.DateTimeFormat("fr-CM", {
+    new Intl.DateTimeFormat(locale, {
       weekday: "short",
       day: "2-digit",
       month: "short",
       timeZone: timezone || "Africa/Douala",
     }).format(new Date(value));
   const formatTime = (value: string, timezone?: string) =>
-    new Intl.DateTimeFormat("fr-CM", {
+    new Intl.DateTimeFormat(locale, {
       hour: "2-digit",
       minute: "2-digit",
       timeZone: timezone || "Africa/Douala",
@@ -119,8 +121,8 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
         <Modal
           open
           size="lg"
-          title={`Prochains shifts · ${activeGroup.station.name}`}
-          subtitle="Horaires publiés et personnes affectées"
+          title={`${t("Prochains shifts")} · ${activeGroup.station.name}`}
+          subtitle={t("Horaires publiés et personnes affectées")}
           onClose={() => setSelectedStation(null)}
           footer={
             <>
@@ -129,7 +131,7 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
                 className="admin-button secondary"
                 onClick={() => setSelectedStation(null)}
               >
-                Fermer
+                {t("Fermer")}
               </button>
               <button
                 type="button"
@@ -142,7 +144,7 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
                   )
                 }
               >
-                Ouvrir dans le planning
+                {t("Ouvrir dans le planning")}
               </button>
             </>
           }
@@ -154,7 +156,7 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
               </span>
               <div>
                 <strong>{activeGroup.station.name}</strong>
-                <span>Affectations publiées, classées par heure de début</span>
+                <span>{t("Affectations publiées, classées par heure de début")}</span>
               </div>
             </div>
             <div className="supervisor-upcoming-dialog__list">
@@ -170,20 +172,20 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
                     </div>
                     <div className="supervisor-upcoming-dialog__shift">
                       <div>
-                        <strong>{shift.label}</strong>
+                        <strong>{translate(shift.label)}</strong>
                         <span>
                           <Clock size={15} aria-hidden="true" />
                           {formatTime(
                             shift.startTime,
                             shift.station.timezone,
                           )}{" "}
-                          – {formatTime(shift.endTime, shift.station.timezone)}
+                          {translate("–")}{" "}{formatTime(shift.endTime, shift.station.timezone)}
                         </span>
                       </div>
                       <span
                         className={`supervisor-upcoming-dialog__state${inProgress ? " is-live" : ""}`}
                       >
-                        {inProgress ? "En cours" : "À venir"}
+                        {inProgress ? t("En cours") : t("À venir")}
                       </span>
                     </div>
                     <div className="supervisor-upcoming-dialog__person">
@@ -203,13 +205,12 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
         aria-labelledby="supervisor-overview-title"
       >
         <div>
-          <span className="premium-eyebrow">Pilotage des opérations</span>
+          <span className="premium-eyebrow">{t("Pilotage des opérations")}</span>
           <h2 id="supervisor-overview-title">
-            Votre périmètre, en un coup d’œil
+            {t("Votre périmètre, en un coup d’œil")}
           </h2>
           <p>
-            Repérez les shifts à couvrir, puis suivez les présences, incidents
-            et services à venir par station.
+            {t("Repérez les shifts à couvrir, puis suivez les présences, incidents et shifts à venir par station.")}
           </p>
         </div>
         <div className="supervisor-overview__actions">
@@ -218,14 +219,14 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
             href={pointagesPath}
             onClick={(event) => interceptNav(event, navigate, pointagesPath)}
           >
-            Voir les pointages
+            {t("Voir les pointages")}
           </a>
           <a
             className="admin-button secondary"
             href={plannerPath}
             onClick={(event) => interceptNav(event, navigate, plannerPath)}
           >
-            Ouvrir le planning
+            {t("Ouvrir le planning")}
           </a>
         </div>
       </section>
@@ -240,21 +241,21 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
         <section className="admin-card supervisor-upcoming">
           <div className="admin-card-heading">
             <div>
-              <h2>Prochains shifts</h2>
+              <h2>{t("Prochains shifts")}</h2>
               <p className="operations-hint">
-                Les services publiés, regroupés par station.
+                {t("Les shifts publiés, regroupés par station.")}
               </p>
             </div>
           </div>
           {!published.length ? (
             <div className="admin-empty">
-              <h3>Aucun shift publié</h3>
-              <p>Les prochains services apparaîtront ici après publication.</p>
+              <h3>{t("Aucun shift publié")}</h3>
+              <p>{t("Les prochains shifts apparaîtront ici après publication.")}</p>
             </div>
           ) : (
             <ul
               className="supervisor-shift-list"
-              aria-label="Shifts regroupés par station"
+              aria-label={t("Shifts regroupés par station")}
             >
               {stationGroups.map((group) => {
                 const next = group.shifts[0];
@@ -272,18 +273,16 @@ export function SupervisorHome({ data, onChanged }: OperationsViewProps) {
                         <strong>{group.station.name}</strong>
                         <span>
                           <CalendarIcon size={15} aria-hidden="true" />
-                          Prochain :{" "}
+                          {translate("Prochain :")}{" "}
                           {formatDate(
                             next.startTime,
                             next.station.timezone,
-                          )} à{" "}
+                          )} {" "}{translate("à")}{" "}
                           {formatTime(next.startTime, next.station.timezone)}
                         </span>
                         <span>
                           <UsersThreeIcon size={15} aria-hidden="true" />
-                          {group.shifts.length} service
-                          {group.shifts.length > 1 ? "s" : ""} programmé
-                          {group.shifts.length > 1 ? "s" : ""}
+                          {group.shifts.length} {translate("shift")}{group.shifts.length === 1 ? "" : "s"} {translate("programmé")}{group.shifts.length === 1 ? "" : "s"}
                         </span>
                       </div>
                       <CaretRight size={18} weight="bold" aria-hidden="true" />

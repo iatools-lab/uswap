@@ -1,6 +1,7 @@
-import { useEffect, useRef, useId, type ReactNode } from 'react';
-import { XIcon } from '@phosphor-icons/react';
-import './modal.css';
+import { translate } from "../app/i18n";
+import { useEffect, useRef, useId, type ReactNode } from "react";
+import { XIcon } from "./icons";
+import "./modal.css";
 
 type ModalProps = {
   open: boolean;
@@ -29,8 +30,9 @@ export function Modal({
   size = "md",
 }: ModalProps) {
   const panelRef = useRef<HTMLDialogElement>(null);
-  const titleId=useId();
-  const closeRef=useRef(onClose);closeRef.current=onClose;
+  const titleId = useId();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   const lastFocused = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -41,56 +43,60 @@ export function Modal({
     requestAnimationFrame(() => {
       panelRef.current
         ?.querySelector<HTMLElement>(
-          '.modal-body [autofocus], .modal-body input:not(:disabled), .modal-body select:not(:disabled), .modal-body textarea:not(:disabled), .modal-body button:not(:disabled), .modal-footer button:not(:disabled), .modal-close',
+          ".modal-body [autofocus], .modal-body input:not(:disabled), .modal-body select:not(:disabled), .modal-body textarea:not(:disabled), .modal-body button:not(:disabled), .modal-footer button:not(:disabled), .modal-close",
         )
-        ?.focus();
+        ?.focus({ preventScroll: true });
     });
 
-    const previousOverflow=document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
     return () => {
       panelRef.current?.close();
       document.body.style.overflow = previousOverflow;
-      lastFocused.current?.focus?.();
+      lastFocused.current?.focus?.({ preventScroll: true });
     };
   }, [open]);
 
   if (!open) return null;
 
   return (
-      <dialog
-        className={`modal-panel modal-panel--${size}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        ref={panelRef}
-        onCancel={e=>{e.preventDefault();e.stopPropagation();closeRef.current();}}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) closeRef.current();
-        }}
-      >
-        <div className="modal-drag-handle" aria-hidden="true" />
+    <dialog
+      className={`modal-panel modal-panel--${size}`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      tabIndex={-1}
+      ref={panelRef}
+      onCancel={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeRef.current();
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) closeRef.current();
+      }}
+    >
+      <div className="modal-drag-handle" aria-hidden="true" />
 
-        <div className="modal-header">
-          <div>
-            <h2 id={titleId}>{title}</h2>
-            {subtitle && <p className="modal-subtitle">{subtitle}</p>}
-          </div>
-          <button
-            type="button"
-            className="modal-close"
-            onClick={onClose}
-            aria-label="Fermer la fenêtre"
-          >
-            <XIcon size={20} weight="bold" />
-          </button>
+      <div className="modal-header">
+        <div>
+          <h2 id={titleId}>{title}</h2>
+          {subtitle && <p className="modal-subtitle">{subtitle}</p>}
         </div>
+        <button
+          type="button"
+          className="modal-close"
+          onClick={onClose}
+          aria-label={translate("Fermer la fenêtre")}
+        >
+          <XIcon size={20} weight="bold" />
+        </button>
+      </div>
 
-        <div className="modal-body">{children}</div>
+      <div className="modal-body">{children}</div>
 
-        {footer && <div className="modal-footer">{footer}</div>}
-      </dialog>
+      {footer && <div className="modal-footer">{footer}</div>}
+    </dialog>
   );
 }

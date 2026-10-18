@@ -1,3 +1,5 @@
+import { currentLocale } from "../../app/i18n";
+import { translate } from "../../app/i18n";
 import { Modal } from "../../ui/Modal";
 import { useEffect, useState, type FormEvent } from "react";
 import {
@@ -5,7 +7,7 @@ import {
   PlusIcon,
   PencilSimpleIcon,
   ClockCounterClockwiseIcon,
-} from "@phosphor-icons/react";
+} from "../../ui/icons";
 import { api } from "../../api/auth-api";
 import { notify } from "../../ui/Toast";
 import "./shift-templates.css";
@@ -195,9 +197,9 @@ export function ShiftTemplates({
     <section className="shift-templates">
       <div className="shift-templates-head">
         <div>
-          <h2 className="shift-templates-title">Horaires disponibles</h2>
+          <h2 className="shift-templates-title">{translate("Horaires disponibles")}</h2>
           <p className="planner-muted shift-templates-subtitle">
-            Créez et maintenez les créneaux proposés pour {station.name} ·{" "}
+            {translate("Créez et maintenez les créneaux proposés pour")}{" "}{station.name} {" "}{translate("·")}{" "}
             {station.timezone}
           </p>
         </div>
@@ -208,14 +210,12 @@ export function ShiftTemplates({
           disabled={busy || !station.isActive}
           onClick={() => edit()}
         >
-          <PlusIcon size={16} weight="bold" /> Nouveau modèle
-        </button>
+          <PlusIcon size={16} weight="bold" /> {" "}{translate("Nouveau modèle")}</button>
       </div>
 
       {!station.isActive && (
         <div className="shift-templates-notice" role="status">
-          Cette station est inactive. Ses modèles restent consultables.
-        </div>
+          {translate("Cette station est inactive. Ses modèles restent consultables.")}</div>
       )}
 
       {error && (
@@ -229,8 +229,7 @@ export function ShiftTemplates({
               setRevision((r) => r + 1);
             }}
           >
-            Recharger les modèles
-          </button>
+            {translate("Recharger les modèles")}</button>
         </div>
       )}
 
@@ -253,13 +252,12 @@ export function ShiftTemplates({
             >
               <div className="user-form-grid shift-template-form-grid">
                 <label className="wide">
-                  Libellé
-                  <input
+                  {translate("Libellé")}<input
                     required
                     maxLength={80}
                     autoFocus
-                    placeholder="Ex. Équipe de nuit"
-                    value={form.label}
+                    placeholder={translate("Ex. Équipe de nuit")}
+                    value={translate(form.label)}
                     onChange={(e) =>
                       setForm({ ...form, label: e.target.value })
                     }
@@ -267,8 +265,7 @@ export function ShiftTemplates({
                 </label>
 
                 <label>
-                  Heure de début
-                  <input
+                  {translate("Heure de début")}<input
                     type="time"
                     required
                     value={form?.startTime}
@@ -279,8 +276,7 @@ export function ShiftTemplates({
                 </label>
 
                 <label>
-                  Heure de fin
-                  <input
+                  {translate("Heure de fin")}<input
                     type="time"
                     required
                     value={form?.endTime}
@@ -291,8 +287,7 @@ export function ShiftTemplates({
                 </label>
 
                 <label>
-                  Début de pause (optionnel)
-                  <input
+                  {translate("Début de pause (optionnel)")}<input
                     type="time"
                     value={form.breakStart}
                     onChange={(e) =>
@@ -302,8 +297,7 @@ export function ShiftTemplates({
                 </label>
 
                 <label>
-                  Fin de pause (optionnel)
-                  <input
+                  {translate("Fin de pause (optionnel)")}<input
                     type="time"
                     value={form.breakEnd}
                     onChange={(e) =>
@@ -315,7 +309,7 @@ export function ShiftTemplates({
 
               <div className="planner-hint shift-template-duration-box">
                 <p>
-                  Pause : {breakDuration} min · Temps effectif hors pause :{" "}
+                  {translate("Pause :")}{" "}{breakDuration} {" "}{translate("min · Temps effectif hors pause :")}{" "}
                   <strong>{durationLabel(netDuration)}</strong>
                 </p>
                 <p className="template-duration" role="status">
@@ -343,16 +337,14 @@ export function ShiftTemplates({
                 disabled={busy}
                 onClick={() => setForm(null)}
               >
-                Annuler
-              </button>
+                {translate("Annuler")}</button>
               <button
                 className="admin-button"
                 disabled={
                   busy || !rawDuration || !form.label.trim() || !!breakError
                 }
               >
-                Enregistrer le modèle
-              </button>
+                {translate("Enregistrer le modèle")}</button>
             </div>
           </form>
         </Modal>
@@ -368,15 +360,12 @@ export function ShiftTemplates({
         >
           <div className="planner-panel shift-template-confirm">
             <p>
-              Voulez-vous vraiment{" "}
-              {confirm.isActive ? "désactiver" : "réactiver"} «{" "}
-              <strong>{confirm.label}</strong> » ?
-            </p>
+              {translate("Voulez-vous vraiment")}{" "}
+              {confirm.isActive ? "désactiver" : "réactiver"} {" "}{translate("«")}{" "}
+              <strong>{translate(confirm.label)}</strong> {" "}{translate("» ?")}</p>
             {confirm.isActive && (
               <p className="planner-muted">
-                Il ne sera plus proposé pour les nouvelles affectations. Les
-                horaires déjà créés dans les plannings seront conservés.
-              </p>
+                {translate("Il ne sera plus proposé pour les nouvelles affectations. Les horaires déjà créés dans les plannings seront conservés.")}</p>
             )}
             <div className="planner-actions shift-template-confirm-actions">
               <button
@@ -385,8 +374,7 @@ export function ShiftTemplates({
                 disabled={busy}
                 onClick={() => setConfirm(null)}
               >
-                Annuler
-              </button>
+                {translate("Annuler")}</button>
               <button
                 type="button"
                 className={`admin-button ${confirm.isActive ? "secondary" : ""}`}
@@ -405,8 +393,7 @@ export function ShiftTemplates({
                   )
                 }
               >
-                Confirmer
-              </button>
+                {translate("Confirmer")}</button>
             </div>
           </div>
         </Modal>
@@ -414,13 +401,12 @@ export function ShiftTemplates({
 
       {loading ? (
         <p role="status" className="shift-templates-loading">
-          Chargement des modèles…
-        </p>
+          {translate("Chargement des modèles…")}</p>
       ) : !items.length ? (
         <div className="admin-card admin-empty shift-templates-empty">
           <ClockIcon size={32} />
-          <h3>Aucun modèle de shift</h3>
-          <p>Définissez les horaires utilisés dans cette station.</p>
+          <h3>{translate("Aucun modèle de shift")}</h3>
+          <p>{translate("Définissez les horaires utilisés dans cette station.")}</p>
         </div>
       ) : (
         /* Grille de cartes */
@@ -431,7 +417,7 @@ export function ShiftTemplates({
               key={item.id}
             >
               <div className="shift-template-card-head">
-                <h3>{item.label}</h3>
+                <h3>{translate(item.label)}</h3>
                 <span
                   className={`admin-badge ${item.isActive ? "active" : "draft"}`}
                 >
@@ -441,7 +427,7 @@ export function ShiftTemplates({
 
               <div>
                 <p className="template-hours shift-template-card-hours">
-                  {item?.startTime} – {item?.endTime}
+                  {item?.startTime} {" "}{translate("–")}{" "}{item?.endTime}
                 </p>
                 <p className="shift-template-card-subtitle">
                   {durationLabel(item.durationMinutes)}
@@ -452,9 +438,8 @@ export function ShiftTemplates({
               {item.breakStart && (
                 <div className="shift-template-break">
                   <p className="planner-muted">
-                    Pause : {item.breakStart} – {item.breakEnd} ·{" "}
-                    {item.breakMinutes} min
-                  </p>
+                    {translate("Pause :")}{" "}{item.breakStart} {" "}{translate("–")}{" "}{item.breakEnd} {" "}{translate("·")}{" "}
+                    {item.breakMinutes} {" "}{translate("min")}</p>
                 </div>
               )}
 
@@ -465,8 +450,7 @@ export function ShiftTemplates({
                   disabled={busy || !station.isActive}
                   onClick={() => edit(item)}
                 >
-                  <PencilSimpleIcon size={14} /> Modifier
-                </button>
+                  <PencilSimpleIcon size={14} /> {" "}{translate("Modifier")}</button>
                 <button
                   type="button"
                   className={`text-button shift-template-toggle ${item.isActive ? "danger" : "success"}`}
@@ -484,8 +468,7 @@ export function ShiftTemplates({
                   disabled={busy}
                   onClick={() => showHistory(item)}
                 >
-                  <ClockCounterClockwiseIcon size={14} /> Historique
-                </button>
+                  <ClockCounterClockwiseIcon size={14} /> {" "}{translate("Historique")}</button>
               </div>
             </article>
           ))}
@@ -501,22 +484,21 @@ export function ShiftTemplates({
           <section className="planner-panel shift-template-history">
             {!history.length ? (
               <p className="shift-template-card-subtitle">
-                Aucun historique disponible.
-              </p>
+                {translate("Aucun historique disponible.")}</p>
             ) : (
               <ol className="template-history-list shift-template-history-list">
                 {history.map((v) => (
                   <li key={v.id}>
                     <strong>
-                      Version {v.revision} · {v.label}
+                      {translate("Version")}{" "}{v.revision} {" "}{translate("·")}{" "}{translate(v.label)}
                     </strong>
                     <p>
-                      {v?.startTime} – {v?.endTime} ·{" "}
-                      {durationLabel(v.durationMinutes)} ·{" "}
+                      {v?.startTime} {" "}{translate("–")}{" "}{v?.endTime} {" "}{translate("·")}{" "}
+                      {durationLabel(v.durationMinutes)} {" "}{translate("·")}{" "}
                       {v.isActive ? "Actif" : "Inactif"}
                     </p>
                     <time>
-                      {new Date(v.createdAt).toLocaleString("fr-FR", {
+                      {new Date(v.createdAt).toLocaleString(currentLocale(), {
                         timeZone: station.timezone,
                       })}
                     </time>
@@ -530,8 +512,7 @@ export function ShiftTemplates({
                 className="admin-button secondary"
                 onClick={() => setHistory(null)}
               >
-                Fermer
-              </button>
+                {translate("Fermer")}</button>
             </div>
           </section>
         </Modal>

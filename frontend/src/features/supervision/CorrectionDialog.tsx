@@ -1,3 +1,4 @@
+import { translate } from "../../app/i18n";
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../../api/auth-api";
 import { notify } from "../../ui/Toast";
@@ -112,8 +113,10 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
         {
           reason: reason.trim(),
           attachmentId,
-          checkedInAt: !isAbsent && checkedIn ? new Date(checkedIn).toISOString() : null,
-          checkedOutAt: !isAbsent && checkedOut ? new Date(checkedOut).toISOString() : null,
+          checkedInAt:
+            !isAbsent && checkedIn ? new Date(checkedIn).toISOString() : null,
+          checkedOutAt:
+            !isAbsent && checkedOut ? new Date(checkedOut).toISOString() : null,
           isLate,
           isAbsent,
           isJustified: isAbsent,
@@ -138,7 +141,7 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
       open
       size="lg"
       onClose={busy ? () => undefined : onClose}
-      title="Corriger le pointage"
+      title={translate("Corriger le pointage")}
       footer={
         <>
           <button
@@ -147,8 +150,7 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
             onClick={onClose}
             disabled={busy}
           >
-            Annuler
-          </button>
+            {translate("Annuler")}</button>
           <button
             type="button"
             className="admin-button primary-cta"
@@ -156,13 +158,12 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
             disabled={busy}
           >
             {busy && <LoaderCircle className="spin" size={16} />}
-            Enregistrer
-          </button>
+            {translate("Enregistrer")}</button>
         </>
       }
     >
       <div className="correction-identity">
-        <span className="correction-identity__eyebrow">Pointage concerné</span>
+        <span className="correction-identity__eyebrow">{translate("Pointage concerné")}</span>
         <div className="correction-identity__main">
           <strong>{row.swapper.fullName}</strong>
           <time>{formatDateTime(row.startTime, row.station.timezone)}</time>
@@ -170,9 +171,7 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
       </div>
 
       <p className="operations-hint correction-hint">
-        Les horaires reprennent automatiquement la période du shift. Le motif
-        et le justificatif restent obligatoires.
-      </p>
+        {translate("Les horaires reprennent automatiquement la période du shift. Le motif et le justificatif restent obligatoires.")}</p>
 
       {error && (
         <p key={errorKey} className="error-message" role="alert">
@@ -183,16 +182,14 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
       <fieldset disabled={busy} className="ops-form correction-form">
         <div className="user-form-grid">
           <label>
-            Début du shift
-            <input
+            {translate("Début du shift")}<input
               type="datetime-local"
               value={checkedIn}
               onChange={(event) => setCheckedIn(event.target.value)}
             />
           </label>
           <label>
-            Fin du shift
-            <input
+            {translate("Fin du shift")}<input
               type="datetime-local"
               value={checkedOut}
               onChange={(event) => setCheckedOut(event.target.value)}
@@ -213,15 +210,15 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
             <UploadSimple size={22} />
             <span>
               <strong>{file ? file.name : "Joindre un justificatif"}</strong>
-              <small>PDF ou image · 5 Mo max · facultatif</small>
+              <small>{translate("PDF ou image · 5 Mo max · facultatif")}</small>
             </span>
           </label>
           {file && (
             <button
               type="button"
               className="supervision-attachment-remove"
-              aria-label="Retirer le justificatif"
-              title="Retirer le justificatif"
+              aria-label={translate("Retirer le justificatif")}
+              title={translate("Retirer le justificatif")}
               onClick={() => {
                 setFile(null);
                 setError("");
@@ -233,14 +230,14 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
         </div>
 
         <label className="ops-field">
-          Motif <span className="supervision-required">*</span>
+          {translate("Motif")}{" "}<span className="supervision-required">{translate("*")}</span>
           <textarea
             required
             minLength={5}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             rows={3}
-            placeholder="Pointage oublié, présence confirmée par le superviseur…"
+            placeholder={translate("Pointage oublié, présence confirmée par le superviseur…")}
           />
         </label>
 
@@ -253,7 +250,7 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
               disabled={isAbsent}
             />
             <span>
-              <strong>En retard</strong>
+              <strong>{translate("En retard")}</strong>
             </span>
           </label>
           <label className={isAbsent ? "is-on is-alert" : ""}>
@@ -263,7 +260,7 @@ export function CorrectionDialog({ row, onCorrected, onClose }: Props) {
               onChange={(event) => setIsAbsent(event.target.checked)}
             />
             <span>
-              <strong>Absence justifiée</strong>
+              <strong>{translate("Absence justifiée")}</strong>
             </span>
           </label>
         </div>

@@ -1,29 +1,25 @@
 import type { ReactNode } from "react";
-import { Zap } from "../ui/icons";
+import { BrandSignature } from "../ui/BrandSignature";
+import { LanguageSwitcher, useI18n } from "../app/i18n";
 
 export function AuthLayout({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   return (
     <main className="auth-layout">
-      <aside className="brand-panel" aria-label="Bienvenue sur uSwap">
-        <a className="brand" href="/" aria-label="uSwap, Powered by uPowa — accueil">
-          <span className="brand-symbol">
-            <Zap size={25} fill="currentColor" />
-          </span>
-          <span className="brand-lockup">
-            <span className="brand-name">
-              u<span className="brand-swap">Swap</span>
-              <span className="brand-dot">.</span>
-            </span>
-            <span className="brand-endorsement">
-              Powered by <strong>uPowa</strong>
-            </span>
-          </span>
+      <LanguageSwitcher />
+      <aside className="brand-panel" aria-label={t("Bienvenue sur uSwap")}>
+        <a
+          className="brand"
+          href="/"
+          aria-label={t("uSwap, Powered by uPowa — accueil")}
+        >
+          <BrandSignature />
         </a>
         <div className="brand-story">
           <h1>
-            La gestion de vos stations,
+            {t("La gestion de vos stations,")}
             <br />
-            <span>en un seul endroit.</span>
+            <span>{t("en un seul endroit.")}</span>
           </h1>
         </div>
       </aside>

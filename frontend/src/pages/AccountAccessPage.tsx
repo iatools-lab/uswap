@@ -9,7 +9,11 @@ const titles = {
   forgot: "Mot de passe oublié",
 } as const;
 
-export function AccountAccessPage({ mode }: { mode: "forgot" | "activate" | "reset" }) {
+export function AccountAccessPage({
+  mode,
+}: {
+  mode: "forgot" | "activate" | "reset";
+}) {
   const location = useLocation();
   useEffect(() => {
     document.title = `${titles[mode]} · uSwap`;

@@ -1,0 +1,46 @@
+.language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  padding: 3px;
+  border: 1px solid #dce3ef;
+  border-radius: 9px;
+  background: #f5f7fb;
+}
+.language-switcher button {
+  min-width: 31px;
+  height: 27px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #687790;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.language-switcher button[aria-pressed="true"] {
+  background: #fff;
+  color: #092b85;
+  box-shadow: 0 1px 3px #172b4d20;
+}
+.language-switcher button:focus-visible {
+  outline: 2px solid #fd5716;
+  outline-offset: 2px;
+}
+.auth-layout {
+  position: relative;
+}
+.auth-layout > .language-switcher {
+  position: absolute;
+  z-index: 5;
+  top: 24px;
+  right: 28px;
+}
+@media (max-width: 760px) {
+  .auth-layout > .language-switcher {
+    top: 12px;
+    right: 12px;
+  }
+}

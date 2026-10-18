@@ -1,3 +1,5 @@
+import { currentLocale } from "../../app/i18n";
+import { translate } from "../../app/i18n";
 import { useEffect, useMemo, useState } from "react";
 import {
   ChartBarIcon,
@@ -6,10 +8,11 @@ import {
   GaugeIcon,
   UsersThreeIcon,
   WarningCircleIcon,
-} from "@phosphor-icons/react";
+} from "../../ui/icons";
 import { api, download } from "../../api/auth-api";
 import { Select } from "../../ui/Select";
 import { Modal } from "../../ui/Modal";
+import { KpiCard } from "../../ui/KpiCard";
 import "./reports.css";
 
 type Dashboard = {
@@ -197,12 +200,10 @@ export function OperationsDashboard({
     <section className="ops-dashboard" aria-busy={loading}>
       <div className="ops-dashboard-head">
         <div>
-          <span>Analyse opérationnelle</span>
-          <h2>Tableau de bord du réseau</h2>
+          <span>{translate("Analyse opérationnelle")}</span>
+          <h2>{translate("Tableau de bord du réseau")}</h2>
           <p>
-            Les indicateurs suivent la période et les filtres sélectionnés.
-            Ouvrez un indicateur pour consulter les détails.
-          </p>
+            {translate("Les indicateurs suivent la période et les filtres sélectionnés. Ouvrez un indicateur pour consulter les détails.")}</p>
         </div>
         <div className="ops-dashboard-export-actions">
           <button
@@ -211,21 +212,18 @@ export function OperationsDashboard({
             onClick={() => void exportReport("XLSX")}
           >
             <DownloadSimpleIcon />
-            Exporter Excel
-          </button>
+            {translate("Exporter Excel")}</button>
           <button
             className="admin-button secondary"
             disabled={!data}
             onClick={() => void exportReport("CSV")}
           >
-            CSV
-          </button>
+            {translate("CSV")}</button>
         </div>
       </div>
       <div className="ops-dashboard-filters">
         <label>
-          Du
-          <input
+          {translate("Du")}<input
             type="date"
             value={from}
             max={to}
@@ -233,8 +231,7 @@ export function OperationsDashboard({
           />
         </label>
         <label>
-          Au
-          <input
+          {translate("Au")}<input
             type="date"
             value={to}
             min={from}
@@ -242,11 +239,10 @@ export function OperationsDashboard({
           />
         </label>
         <label>
-          Planning
-          <Select
+          {translate("Planning")}<Select
             size="sm"
             value={planningId || "ALL"}
-            ariaLabel="Planning publié du rapport"
+            ariaLabel={translate("Planning publié du rapport")}
             onChange={(value) => {
               const selectedId = String(value);
               setPlanningId(selectedId);
@@ -276,45 +272,43 @@ export function OperationsDashboard({
               }
             }}
             options={[
-              { value: "ALL", label: "Tous les plannings publiés" },
+              { value: "ALL", label: translate("Tous les plannings publiés") },
               ...plannings.map((item) => ({
                 value: item.id,
-                label: item.name,
+                label: translate(item.name),
               })),
             ]}
           />
         </label>
         <label>
-          Station
-          <Select
+          {translate("Station")}<Select
             size="sm"
             value={station}
-            ariaLabel="Station du rapport"
+            ariaLabel={translate("Station du rapport")}
             onChange={(value) => {
               setStation(String(value));
               setSwapper("");
             }}
             options={[
-              { value: "", label: "Toutes les stations" },
+              { value: "", label: translate("Toutes les stations") },
               ...(data?.stations.map((item) => ({
                 value: item.id,
-                label: item.name,
+                label: translate(item.name),
               })) ?? []),
             ]}
           />
         </label>
         <label>
-          Swappeur
-          <Select
+          {translate("Swappeur")}<Select
             size="sm"
             value={swapper}
-            ariaLabel="Swappeur du rapport"
+            ariaLabel={translate("Swappeur du rapport")}
             onChange={(value) => setSwapper(String(value))}
             options={[
-              { value: "", label: "Tous les swappeurs" },
+              { value: "", label: translate("Tous les swappeurs") },
               ...(data?.swappers.map((item) => ({
                 value: item.id,
-                label: item.name,
+                label: translate(item.name),
               })) ?? []),
             ]}
           />
@@ -328,8 +322,7 @@ export function OperationsDashboard({
             className="admin-button secondary"
             onClick={() => setReload((value) => value + 1)}
           >
-            Réessayer
-          </button>
+            {translate("Réessayer")}</button>
         </div>
       )}
       {data && (
@@ -355,11 +348,16 @@ export function OperationsDashboard({
                   <article key={row.id}>
                     <strong>{row.name}</strong>
                     <span>
-                      {row.filled}/{row.total} postes couverts
-                    </span>
+                      {row.filled}{translate("/")}{row.total} {" "}{translate("postes couverts")}</span>
                     <span className={row.risk === "AT_RISK" ? "is-risk" : ""}>
-                      {row.futureVacant} futur(s) vacant(s) · {row.pastVacant}{" "}
-                      passé(s)
+                      {row.futureVacant}{" "}
+                      {row.futureVacant === 1
+                        ? "poste vacant à venir"
+                        : "postes vacants à venir"}{" "}
+                      {translate("·")}{" "}{row.pastVacant}{" "}
+                      {row.pastVacant === 1
+                        ? "poste vacant passé"
+                        : "postes vacants passés"}
                     </span>
                   </article>
                 ))}
@@ -367,7 +365,7 @@ export function OperationsDashboard({
             ) : detail === "hours" ? (
               <div className="kpi-detail-list">
                 <article>
-                  <strong>Par semaine</strong>
+                  <strong>{translate("Par semaine")}</strong>
                   <span>
                     {data.hoursByWeek
                       .map((row) => `${row.week}: ${row.hours} h`)
@@ -375,7 +373,7 @@ export function OperationsDashboard({
                   </span>
                 </article>
                 <article>
-                  <strong>Par mois</strong>
+                  <strong>{translate("Par mois")}</strong>
                   <span>
                     {data.hoursByMonth
                       .map((row) => `${row.month}: ${row.hours} h`)
@@ -385,14 +383,14 @@ export function OperationsDashboard({
                 {data.hoursByStation.map((row) => (
                   <article key={row.station}>
                     <strong>{row.station}</strong>
-                    <span>{row.hours} h planifiées</span>
+                    <span>{row.hours} {" "}{translate("h planifiées")}</span>
                   </article>
                 ))}
                 {data.hours.map((row) => (
                   <article key={`${row.name}-${row.station}`}>
                     <strong>{row.name}</strong>
                     <span>{row.station}</span>
-                    <span>{row.hours} h planifiées</span>
+                    <span>{row.hours} {" "}{translate("h planifiées")}</span>
                   </article>
                 ))}
               </div>
@@ -401,9 +399,9 @@ export function OperationsDashboard({
                 {data.changes.map((row, index) => (
                   <article key={`${row.date}-${index}`}>
                     <strong>{row.station}</strong>
-                    <span>{new Date(row.date).toLocaleString("fr-FR")}</span>
+                    <span>{new Date(row.date).toLocaleString(currentLocale())}</span>
                     <span>
-                      {row.from || "Poste vacant"} → {row.to || "Poste vacant"}
+                      {row.from || "Poste vacant"} {" "}{translate("→")}{" "}{row.to || "Poste vacant"}
                     </span>
                   </article>
                 ))}
@@ -414,11 +412,11 @@ export function OperationsDashboard({
                   <article key={row.id}>
                     <strong>{row.swapper}</strong>
                     <span>
-                      {row.station} · {row.label}
+                      {row.station} {" "}{translate("·")}{" "}{translate(row.label)}
                     </span>
                     <span>
-                      {labels[row.status] || row.status} ·{" "}
-                      {new Date(row.startTime).toLocaleString("fr-FR")}
+                      {labels[row.status] || row.status} {" "}{translate("·")}{" "}
+                      {new Date(row.startTime).toLocaleString(currentLocale())}
                     </span>
                   </article>
                 ))}
@@ -429,62 +427,69 @@ export function OperationsDashboard({
             <button
               type="button"
               onClick={() => setDetail("coverage")}
-              title="Taux de postes affectés sur tous les postes planifiés. Ouvrir le détail."
+              title={translate("Taux de postes affectés sur tous les postes planifiés. Ouvrir le détail.")}
             >
-              <GaugeIcon />
-              <div>
-                <small>Couverture</small>
-                <strong>{data.kpis.coverageRate}%</strong>
-                <span>{data.kpis.shifts} shifts analysés</span>
-                <em>
-                  {data.kpis.futureVacant} futur(s) · {data.kpis.pastVacant}{" "}
-                  passé(s)
-                </em>
-              </div>
+              <KpiCard
+                label={translate("Couverture")}
+                value={`${data.kpis.coverageRate}%`}
+                detail={`${data.kpis.shifts} ${data.kpis.shifts === 1 ? "shift analysé" : "shifts analysés"}`}
+                hint={`${data.kpis.futureVacant} à couvrir · ${data.kpis.pastVacant} passé${data.kpis.pastVacant === 1 ? "" : "s"}`}
+                icon={<GaugeIcon />}
+                tone={data.kpis.futureVacant > 0 ? "amber" : "green"}
+                progress={data.kpis.coverageRate}
+                compact
+              />
             </button>
             <button
               type="button"
               onClick={() => setDetail("attendance")}
-              title="Part des affectations avec une présence, un retard ou une fin de service enregistrée."
+              title={translate("Part des affectations avec une présence, un retard ou une fin de service enregistrée.")}
             >
-              <UsersThreeIcon />
-              <div>
-                <small>Assiduité</small>
-                <strong>{data.kpis.attendanceRate}%</strong>
-                <span>{data.kpis.absences} absence(s)</span>
-              </div>
+              <KpiCard
+                label={translate("Assiduité")}
+                value={`${data.kpis.attendanceRate}%`}
+                detail={`${data.kpis.absences} ${data.kpis.absences === 1 ? "absence" : "absences"}`}
+                icon={<UsersThreeIcon />}
+                tone={data.kpis.absences > 0 ? "amber" : "green"}
+                progress={data.kpis.attendanceRate}
+                compact
+              />
             </button>
             <button
               type="button"
               onClick={() => setDetail("hours")}
-              title="Somme des heures prévues pour les swappeurs du périmètre."
+              title={translate("Somme des heures prévues pour les swappeurs du périmètre.")}
             >
-              <ClockIcon />
-              <div>
-                <small>Charge planifiée</small>
-                <strong>{Math.round(data.kpis.totalHours)} h</strong>
-                <span>{data.kpis.approvedLeaves} congé(s) approuvé(s)</span>
-              </div>
+              <KpiCard
+                label={translate("Charge planifiée")}
+                value={`${Math.round(data.kpis.totalHours)} h`}
+                detail={`${data.kpis.approvedLeaves} ${data.kpis.approvedLeaves === 1 ? "congé approuvé" : "congés approuvés"}`}
+                icon={<ClockIcon />}
+                tone="blue"
+                compact
+              />
             </button>
             <button
               type="button"
               onClick={() => setDetail("movements")}
-              title="Remplacements, permutations et réaffectations enregistrés sur la période."
+              title={translate("Remplacements, permutations et réaffectations enregistrés sur la période.")}
             >
-              <WarningCircleIcon />
-              <div>
-                <small>Mouvements</small>
-                <strong>{data.kpis.movements}</strong>
-                <span>{data.kpis.late} retard(s)</span>
-              </div>
+              <KpiCard
+                label={translate("Mouvements")}
+                value={data.kpis.movements}
+                detail={`${data.kpis.late} ${data.kpis.late === 1 ? "retard" : "retards"}`}
+                icon={<WarningCircleIcon />}
+                tone={data.kpis.late > 0 ? "amber" : "neutral"}
+                compact
+              />
             </button>
           </div>
           <div className="ops-dashboard-grid">
             <article className="ops-chart">
               <header>
                 <div>
-                  <h3>Répartition des présences</h3>
-                  <p>État des services sur la période</p>
+                  <h3>{translate("Répartition des présences")}</h3>
+                  <p>{translate("État des shifts sur la période")}</p>
                 </div>
                 <ChartBarIcon />
               </header>
@@ -508,8 +513,8 @@ export function OperationsDashboard({
             <article className="ops-chart">
               <header>
                 <div>
-                  <h3>Couverture par station</h3>
-                  <p>Postes pourvus et incidents ouverts</p>
+                  <h3>{translate("Couverture par station")}</h3>
+                  <p>{translate("Postes pourvus et incidents ouverts")}</p>
                 </div>
               </header>
               <div className="station-performance">
@@ -518,8 +523,8 @@ export function OperationsDashboard({
                     <span>
                       <strong>{row.name}</strong>
                       <small>
-                        {row.filled}/{row.total} postes · {row.incidents}{" "}
-                        incident(s)
+                        {row.filled}{translate("/")}{row.total} {" "}{translate("postes ·")}{" "}{row.incidents}{" "}
+                        {row.incidents === 1 ? "incident" : "incidents"}
                         {row.futureVacant > 0
                           ? ` · ${row.futureVacant} à couvrir`
                           : ""}
@@ -529,7 +534,7 @@ export function OperationsDashboard({
                       <i>
                         <b style={{ width: `${row.coverage}%` }} />
                       </i>
-                      <strong>{row.coverage}%</strong>
+                      <strong>{row.coverage}{translate("%")}</strong>
                     </div>
                   </div>
                 ))}
@@ -538,8 +543,8 @@ export function OperationsDashboard({
             <article className="ops-chart ops-chart-wide">
               <header>
                 <div>
-                  <h3>Heures planifiées par swappeur</h3>
-                  <p>Les charges les plus importantes de la période</p>
+                  <h3>{translate("Heures planifiées par swappeur")}</h3>
+                  <p>{translate("Les charges les plus importantes de la période")}</p>
                 </div>
               </header>
               <div className="hours-chart">
@@ -557,7 +562,7 @@ export function OperationsDashboard({
                         }}
                       />
                     </i>
-                    <strong>{row.hours} h</strong>
+                    <strong>{row.hours} {" "}{translate("h")}</strong>
                   </div>
                 ))}
               </div>

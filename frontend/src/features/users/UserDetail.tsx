@@ -1,3 +1,5 @@
+import { currentLocale } from "../../app/i18n";
+import { translate } from "../../app/i18n";
 import { notify } from "../../ui/Toast";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, roles, type Role } from "../../api/auth-api";
@@ -6,7 +8,7 @@ import {
   ClockCounterClockwiseIcon,
   ShieldCheckIcon,
   UserCircleIcon,
-} from "@phosphor-icons/react";
+} from "../../ui/icons";
 import { Modal } from "../../ui/Modal";
 import { StationPicker } from "../stations/StationPicker";
 import { Select } from "../../ui/Select";
@@ -68,7 +70,7 @@ const formatDate = (value: string) => {
   if (!value) return "—";
   const date = new Date(value);
   if (isNaN(date.getTime())) return String(value);
-  return date.toLocaleString("fr-FR", {
+  return date.toLocaleString(currentLocale(), {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -205,7 +207,7 @@ export function UserDetail({
       <div className="user-detail-topbar">
         <button type="button" className="user-detail-back" onClick={onBack}>
           <ArrowLeft size={16} />
-          <span>Retour aux utilisateurs</span>
+          <span>{translate("Retour aux utilisateurs")}</span>
         </button>
       </div>
 
@@ -219,8 +221,7 @@ export function UserDetail({
         <div className="admin-card admin-empty user-detail-loading">
           {error ? (
             <button type="button" className="admin-button" onClick={load}>
-              Réessayer
-            </button>
+              {translate("Réessayer")}</button>
           ) : (
             <LoaderCircle className="spin" size={28} />
           )}
@@ -238,7 +239,7 @@ export function UserDetail({
                   </span>
                   <div>
                     <h3>{user.fullName}</h3>
-                    <span>Gestion et paramètres du compte</span>
+                    <span>{translate("Gestion et paramètres du compte")}</span>
                   </div>
                 </div>
 
@@ -249,7 +250,7 @@ export function UserDetail({
                   onClick={() => setHistoryModalOpen(true)}
                 >
                   <ClockCounterClockwiseIcon size={15} />
-                  <span>Historique ({user.audit?.length || 0})</span>
+                  <span>{translate("Historique (")}{user.audit?.length || 0}{translate(")")}</span>
                 </button>
               </div>
 
@@ -257,7 +258,7 @@ export function UserDetail({
                 <div className="user-detail-grid">
                   <div className="user-detail-field">
                     <label htmlFor="fullName">
-                      NOM COMPLET <span className="required">*</span>
+                      {translate("NOM COMPLET")}{" "}<span className="required">{translate("*")}</span>
                     </label>
                     <input
                       id="fullName"
@@ -270,7 +271,7 @@ export function UserDetail({
 
                   <div className="user-detail-field">
                     <label htmlFor="email">
-                      ADRESSE E-MAIL <span className="required">*</span>
+                      {translate("ADRESSE E-MAIL")}{" "}<span className="required">{translate("*")}</span>
                     </label>
                     <input
                       id="email"
@@ -284,7 +285,7 @@ export function UserDetail({
 
                   <div className="user-detail-field">
                     <label>
-                      RÔLE <span className="required">*</span>
+                      {translate("RÔLE")}{" "}<span className="required">{translate("*")}</span>
                     </label>
                     <Select
                       value={form.role}
@@ -301,7 +302,7 @@ export function UserDetail({
 
                   <div className="user-detail-field">
                     <label htmlFor="phoneNumber">
-                      TÉLÉPHONE <span className="optional">(facultatif)</span>
+                      {translate("TÉLÉPHONE")}{" "}<span className="optional">{translate("(facultatif)")}</span>
                     </label>
                     <input
                       id="phoneNumber"
@@ -314,7 +315,7 @@ export function UserDetail({
 
                   <div className="user-detail-field is-wide">
                     <label htmlFor="address">
-                      ADRESSE <span className="optional">(facultatif)</span>
+                      {translate("ADRESSE")}{" "}<span className="optional">{translate("(facultatif)")}</span>
                     </label>
                     <input
                       id="address"
@@ -327,13 +328,13 @@ export function UserDetail({
                   {form.role === "SWAPPER" && (
                     <div className="user-detail-field is-wide">
                       <label>
-                        STATION RATTACHÉE <span className="required">*</span>
+                        {translate("STATION RATTACHÉE")}{" "}<span className="required">{translate("*")}</span>
                       </label>
                       <StationPicker
                         value={form.stationId || ""}
                         onChange={(val) => set("stationId", val || null)}
                         stations={stations}
-                        placeholder="Sélectionner une station"
+                        placeholder={translate("Sélectionner une station")}
                         allowEmpty={false}
                       />
                     </div>
@@ -344,8 +345,7 @@ export function UserDetail({
               <div className="user-detail-footer">
                 {isDirty && !busy && (
                   <span className="user-detail-dirty-hint" role="status">
-                    Modifications non enregistrées
-                  </span>
+                    {translate("Modifications non enregistrées")}</span>
                 )}
                 <div className="user-detail-footer-actions">
                   <button
@@ -354,8 +354,7 @@ export function UserDetail({
                     disabled={busy || !isDirty}
                     onClick={cancelChanges}
                   >
-                    Annuler
-                  </button>
+                    {translate("Annuler")}</button>
                   <button
                     type="submit"
                     className="admin-button"
@@ -366,8 +365,7 @@ export function UserDetail({
                     }
                   >
                     {busy && <LoaderCircle className="spin" size={16} />}
-                    Enregistrer les modifications
-                  </button>
+                    {translate("Enregistrer les modifications")}</button>
                 </div>
               </div>
             </form>
@@ -376,7 +374,7 @@ export function UserDetail({
             <aside className="admin-card user-detail-aside">
               <div className="user-detail-aside-head">
                 <ShieldCheckIcon size={20} />
-                <h3>Accès et sécurité</h3>
+                <h3>{translate("Accès et sécurité")}</h3>
               </div>
 
               <div className="user-detail-status-box">
@@ -394,7 +392,7 @@ export function UserDetail({
 
                 {user.invitationSentAt && (
                   <time>
-                    Dernier envoi : {formatDate(user.invitationSentAt)}
+                    {translate("Dernier envoi :")}{" "}{formatDate(user.invitationSentAt)}
                   </time>
                 )}
 
@@ -402,7 +400,7 @@ export function UserDetail({
                   user.invitationExpiresAt &&
                   user.invitationSentAt && (
                     <time>
-                      Expiration : {formatDate(user.invitationExpiresAt)}
+                      {translate("Expiration :")}{" "}{formatDate(user.invitationExpiresAt)}
                     </time>
                   )}
               </div>
@@ -438,8 +436,7 @@ export function UserDetail({
                       disabled={busy}
                       onClick={() => setConfirmActivate(true)}
                     >
-                      Activer le compte manuellement
-                    </button>
+                      {translate("Activer le compte manuellement")}</button>
                   )}
 
                 <button
@@ -457,10 +454,7 @@ export function UserDetail({
               {confirmActivate && (
                 <div className="user-detail-confirm is-info">
                   <p>
-                    Activer le compte de «&nbsp;{user.fullName}&nbsp;» sans que
-                    le collaborateur ait ouvert le lien reçu par e-mail ? Un
-                    lien pour définir son mot de passe lui sera envoyé.
-                  </p>
+                    {translate("Activer le compte de « ")}{user.fullName}{translate(" » sans que le collaborateur ait ouvert le lien reçu par e-mail ? Un lien pour définir son mot de passe lui sera envoyé.")}</p>
                   <div className="user-detail-confirm-actions">
                     <button
                       type="button"
@@ -468,8 +462,7 @@ export function UserDetail({
                       disabled={busy}
                       onClick={() => setConfirmActivate(false)}
                     >
-                      Annuler
-                    </button>
+                      {translate("Annuler")}</button>
                     <button
                       type="button"
                       className="admin-button small"
@@ -482,8 +475,7 @@ export function UserDetail({
                         );
                       }}
                     >
-                      Activer le compte
-                    </button>
+                      {translate("Activer le compte")}</button>
                   </div>
                 </div>
               )}
@@ -502,8 +494,7 @@ export function UserDetail({
                       disabled={busy}
                       onClick={() => setConfirm(false)}
                     >
-                      Annuler
-                    </button>
+                      {translate("Annuler")}</button>
                     <button
                       type="button"
                       className="admin-button small danger"
@@ -523,8 +514,7 @@ export function UserDetail({
                         )
                       }
                     >
-                      Confirmer
-                    </button>
+                      {translate("Confirmer")}</button>
                   </div>
                 </div>
               )}
@@ -540,8 +530,7 @@ export function UserDetail({
             <div className="user-detail-history">
               {!user.audit || !user.audit.length ? (
                 <p className="user-detail-history-empty">
-                  Aucune modification enregistrée pour ce profil.
-                </p>
+                  {translate("Aucune modification enregistrée pour ce profil.")}</p>
               ) : (
                 user.audit.map((item) => {
                   const changedEntries = Object.entries(labels).filter(
