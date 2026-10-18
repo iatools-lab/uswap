@@ -63,7 +63,8 @@ export class AutomationService {
 
     for (const occurrence of occurrences) {
       const toleranceMs =
-        occurrence.station.latenessToleranceMinutes * 60_000;
+        (occurrence.latenessToleranceOverrideMinutes ??
+          occurrence.station.latenessToleranceMinutes) * 60_000;
       const start = occurrence.startTime.getTime();
       const end = occurrence.endTime.getTime();
       if (now < start + toleranceMs) continue;

@@ -1,8 +1,4 @@
-﻿import {
-  AttendanceStatus,
-  PlanningStatus,
-  Role,
-} from '@prisma/client';
+﻿import { AttendanceStatus, PlanningStatus, Role } from '@prisma/client';
 import {
   BadRequestException,
   ForbiddenException,
@@ -90,9 +86,7 @@ export class AttendanceService {
       shift.planning?.status !== PlanningStatus.PUBLISHED ||
       shift.swapperId !== swapperId
     ) {
-      throw new ForbiddenException(
-        'Ce shift publié ne vous est pas affecté.',
-      );
+      throw new ForbiddenException('Ce shift publié ne vous est pas affecté.');
     }
 
     const station = shift.station;
@@ -123,7 +117,7 @@ export class AttendanceService {
       station.longitude,
     );
 
-    const accuracy = Number.isFinite(accuracyMeters as number)
+    const accuracy = Number.isFinite(accuracyMeters)
       ? Math.max(0, Math.round(accuracyMeters as number))
       : 0;
 
@@ -199,27 +193,29 @@ export class AttendanceService {
         },
       });
 
-      await this.prisma.attendanceCorrection.create({
-        data: {
-          attendanceId: attendance.id,
-          correctedById: swapperId,
-          oldStatus: existing?.status ?? AttendanceStatus.EXPECTED,
-          newStatus: status,
-          oldCheckInAt: existing?.checkInAt ?? null,
-          newCheckInAt: now,
-          reason: isLate
-            ? `Pointage GPS en retard (${distanceMeters} m du site).`
-            : `Pointage GPS à l'heure (${distanceMeters} m du site).`,
-        },
-      }).catch(() => {
-        // The audit row is best-effort: a schema without the correction table
-        // must not block the pointage itself.
-      });
+      await this.prisma.attendanceCorrection
+        .create({
+          data: {
+            attendanceId: attendance.id,
+            correctedById: swapperId,
+            oldStatus: existing?.status ?? AttendanceStatus.EXPECTED,
+            newStatus: status,
+            oldCheckInAt: existing?.checkInAt ?? null,
+            newCheckInAt: now,
+            reason: isLate
+              ? `Pointage GPS en retard (${distanceMeters} m du site).`
+              : `Pointage GPS à l'heure (${distanceMeters} m du site).`,
+          },
+        })
+        .catch(() => {
+          // The audit row is best-effort: a schema without the correction table
+          // must not block the pointage itself.
+        });
 
       return {
         kind: 'CHECKIN' as const,
         status: isLate ? ('LATE' as const) : ('PRESENT' as const),
-        presence: isLate ? 'PRESENT' as const : 'PRESENT' as const,
+        presence: isLate ? ('PRESENT' as const) : ('PRESENT' as const),
         checkedInAt: now.toISOString(),
         toleranceMinutes: tolerance,
         timezone: station.timezone,
@@ -240,9 +236,7 @@ export class AttendanceService {
     }
 
     if (attendance.checkOutAt) {
-      throw new BadRequestException(
-        'La fin de service est déjà enregistrée.',
-      );
+      throw new BadRequestException('La fin de service est déjà enregistrée.');
     }
 
     if (now.getTime() > shift.endTime.getTime() + 5 * 60_000) {
@@ -898,10 +892,7 @@ export class AttendanceService {
     if (!actor) {
       throw new NotFoundException('Compte introuvable');
     }
-    if (
-      actor.role !== Role.SUPERVISOR &&
-      actor.role !== Role.ADMIN
-    ) {
+    if (actor.role !== Role.SUPERVISOR && actor.role !== Role.ADMIN) {
       throw new ForbiddenException(
         'Accès non autorisé au suivi des pointages.',
       );

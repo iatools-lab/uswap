@@ -89,7 +89,9 @@ export class LeaveService {
     // La clé d'idempotence rend la réconciliation hors connexion sûre, mais
     // l'écran en ligne ne l'envoie pas : on en génère une plutôt que de
     // rejeter la demande en 400 « Référence de synchronisation manquante ».
-    const key = dto.idempotencyKey?.trim() || `leave-${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const key =
+      dto.idempotencyKey?.trim() ||
+      `leave-${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
     // A replayed queue item returns the request it already created.
     const replay = await this.prisma.leaveRequest.findUnique({
@@ -325,11 +327,7 @@ export class LeaveService {
   }
 
   /** Décision d'un administrateur : APPROVED ou REJECTED sur une demande en attente. */
-  async decide(
-    id: string,
-    decision: string,
-    reason?: string,
-  ) {
+  async decide(id: string, decision: string, reason?: string) {
     const normalized = (decision ?? '').toUpperCase();
 
     if (normalized !== 'APPROVED' && normalized !== 'REJECTED') {
@@ -353,9 +351,7 @@ export class LeaveService {
 
     const days = this.daysBetween(request.startDate, request.endDate);
     const status =
-      normalized === 'APPROVED'
-        ? LeaveStatus.APPROVED
-        : LeaveStatus.REJECTED;
+      normalized === 'APPROVED' ? LeaveStatus.APPROVED : LeaveStatus.REJECTED;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const [result] = await Promise.all([
@@ -507,7 +503,8 @@ export class LeaveService {
             year,
             usedDays: 0,
             pendingDays: 0,
-            entitledDays: existing.entitledDays > 0 ? existing.entitledDays : 30,
+            entitledDays:
+              existing.entitledDays > 0 ? existing.entitledDays : 30,
             syncedAt: new Date(),
           },
         });

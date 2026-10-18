@@ -83,9 +83,7 @@ export class OperationsService {
 
     const id = randomUUID();
     const extension =
-      file.mimetype === 'application/pdf'
-        ? 'pdf'
-        : file.mimetype.split('/')[1];
+      file.mimetype === 'application/pdf' ? 'pdf' : file.mimetype.split('/')[1];
     const directory = join(process.cwd(), 'uploads', 'absences');
 
     await mkdir(directory, { recursive: true });

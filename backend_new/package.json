@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
-    "start:dev": "tsx watch src/main.ts",
+    "start:dev": "nest start --watch",
     "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\"",
     "prisma:generate": "prisma generate",
@@ -44,6 +44,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@nestjs/cli": "^11.0.24",
     "@types/bcryptjs": "^2.4.6",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",

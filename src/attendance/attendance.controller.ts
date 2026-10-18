@@ -11,10 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import {
-  AttendanceStatus,
-  Role,
-} from '@prisma/client';
+import { AttendanceStatus, Role } from '@prisma/client';
 
 import { AttendanceService } from './attendance.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';

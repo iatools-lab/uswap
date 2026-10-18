@@ -115,7 +115,9 @@ export class LeaveController {
   /** Alias sprint 6 de la decision, sans le prefixe /admin. */
   @Patch('leaves/:id/decision')
   @Roles(Role.ADMIN, Role.SUPERVISOR)
-  @ApiOperation({ summary: 'Approuver ou refuser une demande de conge (sprint 6)' })
+  @ApiOperation({
+    summary: 'Approuver ou refuser une demande de conge (sprint 6)',
+  })
   decideAlias(
     @Param('id') id: string,
     @Body() body: { decision: string; reason?: string },

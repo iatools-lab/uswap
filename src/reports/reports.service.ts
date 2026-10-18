@@ -139,10 +139,7 @@ export class ReportsService {
   // ============================================================
 
   async dashboard(actor: Actor, query: QueryReportDashboardDto) {
-    if (
-      actor.role !== Role.SUPERVISOR &&
-      actor.role !== Role.ADMIN
-    ) {
+    if (actor.role !== Role.SUPERVISOR && actor.role !== Role.ADMIN) {
       throw new ForbiddenException('Accès non autorisé aux rapports.');
     }
 
@@ -531,11 +528,7 @@ export class ReportsService {
     actor: Actor,
     query: QueryReportDashboardDto & { format?: string },
   ) {
-    if (
-      !([Role.ADMIN, Role.SUPERVISOR] as Role[]).includes(
-        actor.role,
-      )
-    ) {
+    if (!([Role.ADMIN, Role.SUPERVISOR] as Role[]).includes(actor.role)) {
       throw new ForbiddenException('Accès non autorisé aux exports.');
     }
     const format = String(query.format ?? 'XLSX').toUpperCase();
@@ -918,41 +911,46 @@ export class ReportsService {
    * - `SETTINGS`   : réglages réseau (GlobalSettingRevision)
    */
   async auditLog() {
-    const [accountLogs, incidentActions, shiftChanges, settingsRevisions, people] =
-      await Promise.all([
-        this.prisma.userAuditLog.findMany({
-          orderBy: { createdAt: 'desc' },
-          take: 200,
-          include: {
-            user: { select: { id: true, fullName: true } },
-          },
-        }),
-        this.prisma.incidentAction.findMany({
-          orderBy: { createdAt: 'desc' },
-          take: 200,
-          include: {
-            author: { select: { id: true, fullName: true } },
-            incident: { select: { id: true, title: true, stationId: true } },
-          },
-        }),
-        this.prisma.shiftChange.findMany({
-          orderBy: { createdAt: 'desc' },
-          take: 200,
-          include: {
-            changedBy: { select: { id: true, fullName: true } },
-            newSwapper: { select: { id: true, fullName: true } },
-            previousSwapper: { select: { id: true, fullName: true } },
-          },
-        }),
-        this.prisma.globalSettingRevision.findMany({
-          orderBy: { createdAt: 'desc' },
-          take: 200,
-        }),
-        this.prisma.user.findMany({
-          select: { id: true, fullName: true },
-          orderBy: { fullName: 'asc' },
-        }),
-      ]);
+    const [
+      accountLogs,
+      incidentActions,
+      shiftChanges,
+      settingsRevisions,
+      people,
+    ] = await Promise.all([
+      this.prisma.userAuditLog.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+        include: {
+          user: { select: { id: true, fullName: true } },
+        },
+      }),
+      this.prisma.incidentAction.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+        include: {
+          author: { select: { id: true, fullName: true } },
+          incident: { select: { id: true, title: true, stationId: true } },
+        },
+      }),
+      this.prisma.shiftChange.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+        include: {
+          changedBy: { select: { id: true, fullName: true } },
+          newSwapper: { select: { id: true, fullName: true } },
+          previousSwapper: { select: { id: true, fullName: true } },
+        },
+      }),
+      this.prisma.globalSettingRevision.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      }),
+      this.prisma.user.findMany({
+        select: { id: true, fullName: true },
+        orderBy: { fullName: 'asc' },
+      }),
+    ]);
 
     const stationIds = new Set<string>();
     incidentActions.forEach((action) => {

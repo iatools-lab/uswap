@@ -360,8 +360,4 @@ export class CorrectionsService {
   }
 }
 
-export const CORRECTIONS_ROLES = [
-  Role.ADMIN,
-  Role.SUPERVISOR,
-  Role.SUPERVISOR,
-];
+export const CORRECTIONS_ROLES = [Role.ADMIN, Role.SUPERVISOR, Role.SUPERVISOR];

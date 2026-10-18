@@ -89,7 +89,9 @@ export class AttendanceService {
           latitude: occurrence.station.latitude,
           longitude: occurrence.station.longitude,
           geofenceRadiusMeters: occurrence.station.geofenceRadiusMeters,
-          latenessToleranceMinutes: occurrence.station.latenessToleranceMinutes,
+          latenessToleranceMinutes:
+            occurrence.latenessToleranceOverrideMinutes ??
+            occurrence.station.latenessToleranceMinutes,
         },
         swapper: { fullName: user.fullName },
         attendance: occurrence.attendance
@@ -138,7 +140,9 @@ export class AttendanceService {
           id: occurrence.station.id,
           name: occurrence.station.name,
           timezone: occurrence.station.timezone,
-          latenessToleranceMinutes: occurrence.station.latenessToleranceMinutes,
+          latenessToleranceMinutes:
+            occurrence.latenessToleranceOverrideMinutes ??
+            occurrence.station.latenessToleranceMinutes,
         },
         swapper: primary
           ? { id: primary.userId, fullName: primary.user.fullName }
@@ -260,7 +264,9 @@ export class AttendanceService {
     const start = occurrence.startTime.getTime();
     const end = occurrence.endTime.getTime();
     const now = Date.now();
-    const tolerance = station.latenessToleranceMinutes;
+    const tolerance =
+      occurrence.latenessToleranceOverrideMinutes ??
+      station.latenessToleranceMinutes;
     const existing = await this.prisma.attendance.findUnique({
       where: { shiftId: occurrence.id },
     });
@@ -517,7 +523,9 @@ export class AttendanceService {
           checkedOutAt: record?.checkedOutAt?.toISOString() ?? null,
           isLate: record?.isLate ?? false,
           justified: status === 'JUSTIFIED',
-          toleranceMinutes: occurrence.station.latenessToleranceMinutes,
+          toleranceMinutes:
+            occurrence.latenessToleranceOverrideMinutes ??
+            occurrence.station.latenessToleranceMinutes,
         };
       }),
     );
@@ -584,7 +592,9 @@ export class AttendanceService {
             id: occurrence.station.id,
             name: occurrence.station.name,
             timezone: occurrence.station.timezone,
-            latenessToleranceMinutes: occurrence.station.latenessToleranceMinutes,
+            latenessToleranceMinutes:
+              occurrence.latenessToleranceOverrideMinutes ??
+              occurrence.station.latenessToleranceMinutes,
           },
           swapper: { id: assignment.userId, fullName: assignment.user.fullName },
           shift: {
@@ -596,6 +606,7 @@ export class AttendanceService {
               name: occurrence.station.name,
               timezone: occurrence.station.timezone,
               latenessToleranceMinutes:
+                occurrence.latenessToleranceOverrideMinutes ??
                 occurrence.station.latenessToleranceMinutes,
             },
             swapper: { id: assignment.userId, fullName: assignment.user.fullName },

@@ -51,9 +51,7 @@ export class OperationsController {
   @Roles(Role.SWAPPER)
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file'))
-  uploadAbsenceAttachment(
-    @UploadedFile() file?: UploadedAbsenceAttachment,
-  ) {
+  uploadAbsenceAttachment(@UploadedFile() file?: UploadedAbsenceAttachment) {
     return this.operationsService.saveAbsenceAttachment(file);
   }
 

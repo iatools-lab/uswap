@@ -125,31 +125,31 @@ export class PlanningService {
             : actor?.role === Role.SUPERVISOR && actor.stationId
               ? { shifts: { some: shiftWhere } }
               : undefined,
-          include: {
-            shifts: {
-              where: shiftWhere,
-              include: {
-                station: true,
-                template: true,
-                swapper: {
-                  select: {
-                    id: true,
-                    fullName: true,
-                    email: true,
-                    phoneNumber: true,
-                  },
+        include: {
+          shifts: {
+            where: shiftWhere,
+            include: {
+              station: true,
+              template: true,
+              swapper: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  email: true,
+                  phoneNumber: true,
                 },
-                attendances: true,
               },
-              orderBy: {
-                startTime: 'asc',
-              },
+              attendances: true,
+            },
+            orderBy: {
+              startTime: 'asc',
             },
           },
-          orderBy: {
-            startDate: 'desc',
-          },
-        })
+        },
+        orderBy: {
+          startDate: 'desc',
+        },
+      })
       .then((rows) => rows.map((row) => this.withOccurrences(row)));
   }
 
@@ -585,7 +585,10 @@ export class PlanningService {
         }
 
         const selectedWeekdays = stationSelection.weekdays;
-        if (selectedWeekdays?.length && !this.matchesWeekday(day, selectedWeekdays)) {
+        if (
+          selectedWeekdays?.length &&
+          !this.matchesWeekday(day, selectedWeekdays)
+        ) {
           continue;
         }
 
@@ -744,7 +747,7 @@ export class PlanningService {
             createdShifts.push({
               ...created,
               swapper: null,
-            } as (typeof createdShifts)[number]);
+            });
 
             existingKeys.add(occurrenceKey);
 
