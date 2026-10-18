@@ -129,10 +129,18 @@ export class IncidentsService {
     if (actor.role === Role.SWAPPER) {
       const self = await this.prisma.user.findUnique({
         where: { id: actor.id },
-        select: { id: true, fullName: true, stationId: true, role: true, isActive: true },
+        select: {
+          id: true,
+          fullName: true,
+          stationId: true,
+          role: true,
+          isActive: true,
+        },
       });
       if (!self?.isActive || self.role !== Role.SWAPPER || !self.stationId) {
-        throw new BadRequestException('Votre compte n’est pas rattaché à une station active.');
+        throw new BadRequestException(
+          'Votre compte n’est pas rattaché à une station active.',
+        );
       }
       stationId = self.stationId;
       affectedSwapperId = actor.id;
