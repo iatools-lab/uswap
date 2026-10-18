@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, PlanningStatus, type Planning } from '@prisma/client';
+import {
+  Prisma,
+  PlanningStatus,
+  type Planning,
+  type Occurrence,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ConflictDomain,
@@ -65,12 +70,15 @@ export class PlanningService {
   /* Lecture                                                           */
   /* ---------------------------------------------------------------- */
 
-  async list(params: {
-    stationId?: string;
-    from?: string;
-    to?: string;
-    status?: string;
-  }) {
+  async list(
+    params: {
+      stationId?: string;
+      from?: string;
+      to?: string;
+      status?: string;
+    },
+    actor?: AuthenticatedUser,
+  ) {
     const where: Prisma.PlanningWhereInput = {};
     if (params.status) where.status = params.status as PlanningStatus;
     if (params.stationId) where.stationIds = { has: params.stationId };
@@ -78,11 +86,45 @@ export class PlanningService {
       where.periodStart = params.from ? { gte: new Date(params.from) } : undefined;
       where.periodEnd = params.to ? { lte: new Date(params.to) } : undefined;
     }
+    // Confidentialité : un agent ne voit que les plannings publiés.
+    if (actor && this.scope.publishedOnly(actor)) {
+      where.status = PlanningStatus.PUBLISHED;
+    }
     const plannings = await this.prisma.planning.findMany({
       where,
       orderBy: [{ periodStart: 'desc' }, { name: 'asc' }],
     });
-    return plannings.map((planning) => serializePlanning(planning));
+    if (!plannings.length) return [];
+
+    // Périmètre des postes : un agent ne voit que les siens.
+    const occurrenceWhere: Prisma.OccurrenceWhereInput = {
+      planningId: { in: plannings.map((planning) => planning.id) },
+    };
+    if (actor) Object.assign(occurrenceWhere, this.scope.occurrenceScope(actor));
+
+    const occurrences = await this.prisma.occurrence.findMany({
+      where: occurrenceWhere,
+      orderBy: { startTime: 'asc' },
+    });
+
+    const byPlanning = new Map<string, Occurrence[]>();
+    for (const occurrence of occurrences) {
+      const bucket = byPlanning.get(occurrence.planningId);
+      if (bucket) bucket.push(occurrence);
+      else byPlanning.set(occurrence.planningId, [occurrence]);
+    }
+
+    const ctx = await this.scope.serializeContext();
+    return plannings.map((planning) => {
+      const rows = byPlanning.get(planning.id) ?? [];
+      const visibleStationIds = [...new Set(rows.map((item) => item.stationId))];
+      const visibleStations = visibleStationIds.map((stationId) => ({
+        id: stationId,
+        name: ctx.stationNames.get(stationId) ?? 'Station inconnue',
+        timezone: 'Africa/Douala',
+      }));
+      return serializePlanningView(planning, rows, ctx, visibleStations);
+    });
   }
 
   async detail(id: string, actor?: AuthenticatedUser) {
@@ -174,6 +216,8 @@ export class PlanningService {
       breakEnd: occurrence.breakEnd,
       breakMinutes: occurrence.breakMinutes,
       requiredStaff: occurrence.requiredStaff,
+      latenessToleranceOverrideMinutes:
+        occurrence.latenessToleranceOverrideMinutes ?? null,
       assignedStaff: occurrence.assignments.length,
       swapperId: occurrence.assignments[0]?.userId ?? null,
       swapperName: occurrence.assignments[0]?.user.fullName ?? null,
@@ -379,21 +423,33 @@ export class PlanningService {
    */
   async publish(id: string, actor: AuthenticatedUser) {
     const planning = await this.requirePlanning(id);
-    const vacancies = await this.prisma.planningVacancy.count({
+    // Un planning sans aucun poste ne peut pas être publié : c'est la même
+    // règle que `validatePlanning` (erreur EMPTY). On garde les deux chemins
+    // cohérents pour que « Vérifier » et « Publier » ne se contredisent jamais.
+    const occurrenceCount = await this.prisma.occurrence.count({
       where: { planningId: id },
     });
-    const firstStation = planning.stationIds[0];
-    if (vacancies && firstStation) {
-      const allow = await this.vacancyPolicy(firstStation);
-      if (!allow) {
-        throw new ConflictDomain(
-          'PUBLISH_BLOCKED_BY_VACANCIES',
-          `Publication refusée : ${vacancies} ${
-            vacancies === 1 ? 'poste reste vacant' : 'postes restent vacants'
-          }.`,
-          409,
-        );
-      }
+    if (occurrenceCount === 0) {
+      throw new ConflictDomain(
+        'PLANNING_EMPTY',
+        'Publication refusée : ajoutez au moins un poste avant de publier.',
+        409,
+      );
+    }
+    // Même source de vérité que `validatePlanning` : on bloque uniquement si
+    // une station du planning interdit explicitement les postes vacants ET
+    // qu'il en reste. `vacancyReport` ne retient que ces stations bloquantes,
+    // ce qui garantit la cohérence entre « Vérifier » et « Publier ».
+    const { vacant, blockingStations } =
+      await this.constraints.vacancyReport(id);
+    if (blockingStations.length > 0) {
+      throw new ConflictDomain(
+        'PUBLISH_BLOCKED_BY_VACANCIES',
+        `Publication refusée : ${vacant} ${
+          vacant === 1 ? 'poste reste vacant' : 'postes restent vacants'
+        } sur ${blockingStations.join(', ')}.`,
+        409,
+      );
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -432,7 +488,7 @@ export class PlanningService {
       targetId: id,
     });
 
-    return { ...serializePlanning(result), published: true, vacancies };
+    return { ...serializePlanning(result), published: true, vacancies: vacant };
   }
 
   async setAssignments(
@@ -838,22 +894,33 @@ export class PlanningService {
       orderBy: { startTime: 'asc' },
     });
     if (!vacancies.length) {
-      return { assigned: 0, planning: await this.detail(planningId) };
+      return {
+        assigned: 0,
+        vacant: 0,
+        coveredSwappers: 0,
+        unassignedSwappers: 0,
+        workloadSpread: 0,
+        planning: await this.detail(planningId),
+      };
     }
 
-    const stationId = vacancies[0].stationId;
+    // Tous les agents actifs : on ne se limite pas a une station. Un poste peut
+    // etre couvert par un agent d'une autre station (renfort ponctuel), ce que
+    // les contraintes signalent comme un simple avertissement `CROSS_STATION`.
     const pool = await this.prisma.user.findMany({
-      where: {
-        role: 'SWAPPER',
-        isActive: true,
-        OR: [{ stationId }, { stationId: null }],
-      },
+      where: { role: 'SWAPPER', isActive: true },
       select: { id: true },
       orderBy: { fullName: 'asc' },
     });
 
     let assigned = 0;
+    const covered = new Set<string>();
+    const hoursBySwapper = new Map<string, number>();
+
     for (const occurrence of vacancies) {
+      const hours =
+        (occurrence.endTime.getTime() - occurrence.startTime.getTime()) /
+        3_600_000;
       for (const candidate of pool) {
         const report = await this.constraints.occurrenceReport(
           occurrence.id,
@@ -882,6 +949,11 @@ export class PlanningService {
           where: { occurrenceId: occurrence.id },
         });
         assigned += 1;
+        covered.add(candidate.id);
+        hoursBySwapper.set(
+          candidate.id,
+          (hoursBySwapper.get(candidate.id) ?? 0) + hours,
+        );
         break;
       }
     }
@@ -900,35 +972,151 @@ export class PlanningService {
       metadata: { assigned },
     });
 
-    return { assigned, planning: await this.detail(planningId) };
+    const hoursValues = [...hoursBySwapper.values()];
+    const workloadSpread = hoursValues.length
+      ? Math.round((Math.max(...hoursValues) - Math.min(...hoursValues)) * 100) /
+        100
+      : 0;
+
+    return {
+      assigned,
+      vacant: vacancies.length - assigned,
+      coveredSwappers: covered.size,
+      unassignedSwappers: Math.max(0, pool.length - covered.size),
+      workloadSpread,
+      planning: await this.detail(planningId),
+    };
   }
 
   /**
-   * Validation d'un planning : renvoie `valid` et la liste des postes encore
-   * vacants. Le bouton « Publier » du frontend lit `report.valid`.
+   * Validation d'un planning : renvoie `valid`, les erreurs bloquantes, les
+   * avertissements et les totaux. Le bouton « Publier » du frontend lit
+   * `report.valid`, et la modale de publication lit `report.errors`,
+   * `report.warnings` et `report.totals` : tous ces champs doivent être présents.
    */
   async validatePlanning(planningId: string) {
     const planning = await this.requirePlanning(planningId);
     const occurrences = await this.prisma.occurrence.findMany({
       where: { planningId },
-      select: { id: true },
+      orderBy: { startTime: 'asc' },
     });
+
+    const errors: { code: string; message: string; occurrenceId?: string }[] = [];
+    const warnings: {
+      code: string;
+      message: string;
+      occurrenceId?: string;
+    }[] = [];
+
+    // Un planning sans poste ne peut pas être publié.
+    if (!occurrences.length) {
+      errors.push({
+        code: 'EMPTY',
+        message: 'Aucun poste dans ce planning : générez d’abord les créneaux.',
+      });
+    }
+
+    const perSwapper = new Map<string, number>();
+    let totalHours = 0;
+    const byStation = new Map<
+      string,
+      { total: number; assigned: number; vacant: number; stationName: string }
+    >();
+
+    for (const occurrence of occurrences) {
+      const hours =
+        (occurrence.endTime.getTime() - occurrence.startTime.getTime()) /
+        3_600_000;
+      totalHours += hours;
+      if (occurrence.swapperId) {
+        perSwapper.set(
+          occurrence.swapperId,
+          (perSwapper.get(occurrence.swapperId) ?? 0) + hours,
+        );
+      }
+      const entry = byStation.get(occurrence.stationId) ?? {
+        total: 0,
+        assigned: 0,
+        vacant: 0,
+        stationName: occurrence.label,
+      };
+      entry.total += 1;
+      if (occurrence.swapperId) entry.assigned += 1;
+      else entry.vacant += 1;
+      byStation.set(occurrence.stationId, entry);
+    }
+
+    // Limite hebdomadaire par station (avertissement, non bloquant).
+    const stationRows = await this.prisma.station.findMany({
+      where: { id: { in: Array.from(byStation.keys()) } },
+      select: { id: true, weeklyHoursLimit: true, name: true },
+    });
+    const limits = new Map(
+      stationRows.map((row) => [
+        row.id,
+        { limit: row.weeklyHoursLimit, name: row.name },
+      ]),
+    );
+    // Cohérence des noms de station avec les libellés partagés.
+    const stationNames = await this.scope.serializeContext();
+    for (const [stationId, entry] of byStation) {
+      entry.stationName = stationNames.stationNames.get(stationId) ?? entry.stationName;
+    }
+
+    for (const occurrence of occurrences) {
+      const config = limits.get(occurrence.stationId);
+      const swapperTotal = occurrence.swapperId
+        ? (perSwapper.get(occurrence.swapperId) ?? 0)
+        : 0;
+      if (!occurrence.swapperId) {
+        warnings.push({
+          code: 'VACANCY',
+          message: `Le poste du ${occurrence.startTime.toLocaleString('fr-FR')} est encore vacant.`,
+          occurrenceId: occurrence.id,
+        });
+        continue;
+      }
+      if (config && swapperTotal > config.limit) {
+        warnings.push({
+          code: 'WEEKLY_LIMIT',
+          message: `Un swappeur dépasse la limite hebdomadaire de ${config.limit} h à ${config.name}.`,
+          occurrenceId: occurrence.id,
+        });
+        break;
+      }
+    }
+
+    // Règle de publication : certaines stations interdisent les postes vacants.
+    // On réutilise `vacancyReport` pour rester cohérent avec `publish()`.
     const vacancyReport = await this.constraints.vacancyReport(planningId);
-    const blockingStation =
-      vacancyReport.blockingStations.length > 0;
-    const valid = occurrences.length > 0 && !blockingStation;
+    if (vacancyReport.blockingStations.length > 0) {
+      errors.push({
+        code: 'PUBLISH_BLOCKED_BY_VACANCIES',
+        message: `Publication bloquée : ${vacancyReport.vacant} poste(s) vacant(s) sur ${vacancyReport.blockingStations.join(', ')}.`,
+      });
+    }
+
+    const assigned = occurrences.filter((row) => row.swapperId).length;
+    const vacant = occurrences.length - assigned;
+
     return {
-      valid,
+      // `valid` doit être renvoyé explicitement : l'écran de planning lit
+      // `report.valid` pour activer le bouton « Confirmer la publication ».
+      valid: errors.length === 0,
       planningId,
       revision: planning.revision,
-      occurrences: occurrences.length,
-      vacancies: vacancyReport.vacant,
-      blockingStations: vacancyReport.blockingStations,
-      reason: !occurrences.length
-        ? 'Aucun poste dans ce planning : générez d’abord les créneaux.'
-        : blockingStation
-          ? `Publication bloquée : ${vacancyReport.vacant} poste(s) vacant(s).`
-          : null,
+      errors,
+      warnings,
+      totals: {
+        occurrences: occurrences.length,
+        assigned,
+        vacant,
+        hours: Math.round(totalHours * 100) / 100,
+      },
+      byStation: Array.from(byStation.entries()).map(([stationId, row]) => ({
+        stationId,
+        ...row,
+      })),
     };
   }
 
@@ -970,6 +1158,7 @@ export class PlanningService {
       notes?: string | null;
       startTime?: string;
       endTime?: string;
+      latenessToleranceOverrideMinutes?: number | null;
     },
     actor: AuthenticatedUser,
   ) {
@@ -1051,13 +1240,25 @@ export class PlanningService {
         }
       }
 
-      if (body.notes !== undefined || body.startTime || body.endTime) {
+      if (
+        body.notes !== undefined ||
+        body.startTime ||
+        body.endTime ||
+        body.latenessToleranceOverrideMinutes !== undefined
+      ) {
         await tx.occurrence.update({
           where: { id: occurrenceId },
           data: {
             ...(body.notes !== undefined ? { notes: body.notes } : {}),
             ...(body.startTime ? { startTime: new Date(body.startTime) } : {}),
             ...(body.endTime ? { endTime: new Date(body.endTime) } : {}),
+            // `null` efface l'override ; un nombre entier borne par le DTO.
+            ...(body.latenessToleranceOverrideMinutes !== undefined
+              ? {
+                  latenessToleranceOverrideMinutes:
+                    body.latenessToleranceOverrideMinutes,
+                }
+              : {}),
             revision: { increment: 1 },
           },
         });
@@ -1113,13 +1314,16 @@ export class PlanningService {
           endTime: source.endTime,
         },
       });
-      await tx.planning.update({
+      const planning = await tx.planning.update({
         where: { id: planningId },
         data: { revision: { increment: 1 } },
+        select: { revision: true },
       });
-      return copy;
+      return { copy, revision: planning.revision };
     });
-    return { ok: true, id: created.id };
+    // Le frontend réutilise `revision` pour enchaîner les PATCH d'affectation :
+    // le renvoyer ici évite d'envoyer `undefined` au prochain appel.
+    return { ok: true, id: created.copy.id, revision: created.revision };
   }
 
   /** Retire un poste. Le dernier poste d'un créneau est vidé, pas supprimé. */

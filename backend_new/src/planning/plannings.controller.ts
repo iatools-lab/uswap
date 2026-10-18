@@ -11,9 +11,12 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import {
   IsArray,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
+  Max,
+  Min,
 } from 'class-validator';
 import {
   PlanningService,
@@ -164,6 +167,14 @@ class OccurrenceUpdateBody {
   @IsString()
   endTime?: string;
 
+  // Tolerance propre au creneau (prioritaire sur celle de la station).
+  // `null` efface l'override ; absent laisse la valeur inchangee.
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(240)
+  latenessToleranceOverrideMinutes?: number | null;
+
   @IsOptional()
   @IsNumber()
   revision?: number;
@@ -185,12 +196,13 @@ export class PlanningsController {
   @ApiQuery({ name: 'to', required: false })
   @ApiQuery({ name: 'status', required: false })
   list(
+    @CurrentUser() actor: AuthenticatedUser,
     @Query('stationId') stationId?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('status') status?: string,
   ) {
-    return this.planning.list({ stationId, from, to, status });
+    return this.planning.list({ stationId, from, to, status }, actor);
   }
 
   @Get('notices')

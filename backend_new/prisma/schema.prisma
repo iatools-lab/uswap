@@ -446,6 +446,8 @@ model Occurrence {
   breakEnd        String?
   breakMinutes    Int      @default(0)
   requiredStaff   Int      @default(1)
+  // Tolerance de retard propre au creneau (sinon celle de la station, US 2038).
+  latenessToleranceOverrideMinutes Int?
   notes           String?
   revision        Int      @default(1)
   status          String   @default("PLANNED")

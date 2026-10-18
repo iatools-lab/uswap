@@ -264,6 +264,9 @@ export function serializeOccurrence(
     breakStart: occurrence.breakStart,
     breakEnd: occurrence.breakEnd,
     breakMinutes: occurrence.breakMinutes,
+    // Tolérance propre au créneau (sinon celle de la station).
+    latenessToleranceOverrideMinutes:
+      occurrence.latenessToleranceOverrideMinutes ?? null,
   };
 }
 
