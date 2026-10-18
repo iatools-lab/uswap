@@ -286,6 +286,9 @@ haut, puis marquée par un tag.
 | `uswap-frontend-s5.1.0` | Frontend sprint 5 |
 | `uswap-frontend-s5.2.0` | Frontend Dylane sprint 5.2, mock et interface |
 | `uswap-v5.3.0` | **Sprint 5 intégré : frontend + backend raccordés** |
+| `Uswap-V6.2` | Intégration planning / pointage (v6.2.0) |
+| `Uswap-V6.3` | Intégration interface et services |
+| `Uswap-V6.4` | **Incidents swappeur + tolérance par créneau** |
 
 ---
 
@@ -308,3 +311,49 @@ Voir `US-2069-2078-COMPLIANCE.md` pour la matrice de conformité détaillée.
 ## Livraison frontend Dylane - sprint 5.2.0
 
 Le tag `uswap-frontend-s5.2.0` publie la version de l’interface développée côté Dylane, avec ses parcours mock et les écarts API documentés. La [note de livraison illustrée (PDF)](output/pdf/uswap-frontend-s5.2.0-livraison.pdf) contient les captures du frontend, les schémas métier et les vérifications effectuées. Le code backend existant n’est pas modifié par cette livraison.
+
+---
+
+## Uswap-V6.4 — Déclaration d'incident par le swappeur, tolérance par créneau
+
+Version d'intégration `Uswap-V6.4`, publiée depuis la branche `danielle` après merge
+dans `develop`.
+
+### Points clés
+
+- **Déclaration d'incident rétablie pour le swappeur** : le formulaire de signalement
+  de l'espace swappeur bloquait l'appel API hors mode démo (« API non disponible »).
+  La route `POST /incidents` existe pourtant et autorise le rôle `SWAPPER`. Le
+  garde-fou obsolète a été supprimé : un swappeur connecté déclare désormais son
+  incident via l'API réelle, et le superviseur (`admin@upowa.org` inclus) le voit
+  dans le centre d'incidents.
+- **Tolérance de retard propre au créneau (US 2038)** : nouvelle colonne
+  `latenessToleranceOverrideMinutes` sur `Occurrence`, exposée par le serializer et
+  modifiable via la mise à jour d'un créneau (valeur `0–240`, `null` pour effacer
+  l'override). À défaut, la tolérance de la station s'applique.
+- **Pointage, congés, rapports et portée de planning** : durcissements côté API
+  (attendance, décisions de congés, rapports consolidés, portée de planning par
+  acteur) et ajustements d'écrans côté frontend (pointage géolocalisé, planner,
+  audit, réglages globaux).
+- **Outillage** : ajout de `backend_new/_scripts/verify-swapper-incident.mjs`
+  (vérifie `SWAPPER → POST /incidents → 201`), `check-tolerance-override.mjs`,
+  `backup-db.ps1` et des scripts QA planner.
+
+### Vérifications effectuées
+
+| Parcours | Résultat |
+|---|---|
+| `SWAPPER` (`awa.nkolo@upowa.org`) → `POST /incidents` | **201** — incident créé |
+| `ADMIN` (`admin@upowa.org`) → `GET /incidents` | **200** — incident visible, `metrics.total` cohérent |
+| Build TypeScript du frontend | aucun diagnostic |
+| API `GET /incidents/:id` | **200** — incident persistant, statut `REPORTED` |
+
+### Contenu de la livraison
+
+| Domaine | Fichiers principaux |
+|---|---|
+| Incidents | `frontend_new/.../features/incidents/SwapperIncidentReport.tsx`, `src/incidents/incidents.service.ts` |
+| Planning (tolérance) | `backend_new/prisma/schema.prisma`, migration `20261014160000_occurrence_tolerance_override`, `backend_new/src/common/serializers/index.ts`, `backend_new/src/planning/plannings.controller.ts` |
+| Services API | `src/attendance/*`, `src/leave/*`, `src/operations/*`, `src/reports/*`, `src/planning/planning.service.ts` |
+| Frontend | `frontend_new/frontend/src/features/operations/SwapperHome.tsx`, `features/planner/*`, `pages/admin/*`, `api/mock/*` |
+| Scripts | `backend_new/_scripts/verify-swapper-incident.mjs`, `check-tolerance-override.mjs`, `backup-db.ps1`, `qa-planner*.mjs` |
