@@ -1018,12 +1018,6 @@ function PlanningEditor({
 
   async function assignAutomatically() {
     if (!canEdit || p.status !== "DRAFT" || busy) return;
-    if (!usingMock) {
-      setError(
-        "L’API connectée ne garantit pas encore un shift stable ni l’équité des heures. Utilisez l’affectation manuelle jusqu’à l’alignement du service.",
-      );
-      return;
-    }
     setBusy(true);
     setError("");
     try {
@@ -2497,9 +2491,14 @@ function Assignment({
     setError("");
     try {
       let revision = p.revision;
+      // A vacancy must be filled first: patching a vacant slot with a swapper
+      // adds the person, whereas any extra selection needs its own duplicated
+      // slot. Reusing the vacant occurrence for the first pick left the slot
+      // unfilled and made the assignment fail.
+      const fillVacancyFirst = selectedIds.length > 0 && !o.swapper;
       for (let index = 0; index < selectedIds.length; index += 1) {
         let occurrenceId = o.id;
-        if (index > 0) {
+        if (!(fillVacancyFirst && index === 0)) {
           const duplicate = await api<{ id: string; revision: number }>(
             `/plannings/${p.id}/occurrences/${o.id}/duplicate`,
             { revision },

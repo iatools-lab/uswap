@@ -54,7 +54,14 @@ export function GlobalSettingsPage() {
     try {
       const data = await api<Response>(
         "/admin/settings",
-        { ...form, webhookSecret: secret },
+        {
+          sessionMinutes: form.sessionMinutes,
+          invitationValidityHours: form.invitationValidityHours,
+          maxAttachmentMb: form.maxAttachmentMb,
+          notificationRetentionDays: form.notificationRetentionDays,
+          supportEmail: form.supportEmail,
+          ...(secret ? { webhookSecret: secret } : {}),
+        },
         "PATCH",
       );
       setForm(data.settings);

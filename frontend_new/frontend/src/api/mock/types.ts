@@ -94,6 +94,8 @@ export type MockOccurrence = {
   breakEnd: string | null;
   breakMinutes: number;
   swapperId: string | null;
+  /** Tolérance de retard propre à ce créneau (sinon celle de la station). */
+  latenessToleranceOverrideMinutes?: number | null;
   startTime: string;
   endTime: string;
 };
@@ -105,6 +107,8 @@ export type MockAttendance = {
   checkedInAt: string | null;
   checkedOutAt: string | null;
   isLate: boolean;
+  /** Tolérance appliquée au moment du pointage, conservée pour l'affichage. */
+  toleranceMinutes?: number;
   justified: boolean;
   correction: {
     reason: string;

@@ -471,12 +471,6 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
 
   async function executePunch() {
     if (!targetShift || !punchKind) return;
-    if (!usingMock) {
-      setError(
-        "Le pointage par géolocalisation attend la prise en charge de cette règle par l’API.",
-      );
-      return;
-    }
     if (!navigator.geolocation) {
       setError("La géolocalisation n’est pas disponible sur cet appareil.");
       return;
@@ -969,10 +963,10 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
             <button
               className="admin-button primary-cta"
               type="button"
-              disabled={busy || !usingMock}
+              disabled={busy}
               onClick={() => void executePunch()}
             >
-              {busy ? "Confirmation…" : usingMock ? "Confirmer" : "API requise"}
+              {busy ? "Confirmation…" : "Confirmer"}
             </button>
           </>
         }
@@ -1003,7 +997,8 @@ export function SwapperHome({ user, data, onChanged }: OperationsViewProps) {
           </p>
         ) : (
           <p className="operations-hint">
-            Le pointage géolocalisé attend sa prise en charge par l’API.
+            Autorisez la géolocalisation : votre position sera vérifiée par
+            rapport au périmètre de la station lors de la confirmation.
           </p>
         )}
         {error && (

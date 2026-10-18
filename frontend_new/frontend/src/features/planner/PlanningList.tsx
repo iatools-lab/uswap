@@ -136,7 +136,8 @@ export function PlanningList({
   if (isSwapper) {
     const visiblePlans = plans
       .filter(
-        (plan) => plan.status === "PUBLISHED" && plan.occurrences.length > 0,
+        (plan) =>
+          plan.status === "PUBLISHED" && (plan.occurrences?.length ?? 0) > 0,
       )
       .filter((plan) => {
         if (swapperPeriod === "ALL") return true;
@@ -152,7 +153,7 @@ export function PlanningList({
           : Date.parse(a.startDate) - Date.parse(b.startDate);
       });
     const publishedPlans = plans.filter(
-      (plan) => plan.status === "PUBLISHED" && plan.occurrences.length > 0,
+      (plan) => plan.status === "PUBLISHED" && (plan.occurrences?.length ?? 0) > 0,
     );
     return (
       <section
@@ -213,7 +214,7 @@ export function PlanningList({
             {visiblePlans.map((plan) => {
               const stations = stationNamesOf(plan);
               const completed = planningHasEnded(plan.endDate);
-              const nextShift = plan.occurrences
+              const nextShift = (plan.occurrences ?? [])
                 .filter(
                   (occurrence) =>
                     occurrence.startTime &&
@@ -276,8 +277,9 @@ export function PlanningList({
                       <span>{stations.join(", ") || "Station"}</span>
                     </span>
                     <span>
-                      <CalendarBlankIcon size={14} /> {plan.occurrences.length}{" "}
-                      shift{plan.occurrences.length === 1 ? "" : "s"}
+                      <CalendarBlankIcon size={14} />{" "}
+                      {plan.occurrences?.length ?? 0} shift
+                      {(plan.occurrences?.length ?? 0) === 1 ? "" : "s"}
                     </span>
                     {completed && (
                       <span className="swapper-planning-entry__complete">
@@ -422,7 +424,7 @@ export function PlanningList({
                 {rows.map((plan) => {
                   const duration = periodDuration(plan.startDate, plan.endDate);
                   const shiftCount =
-                    plan._count?.occurrences ?? plan.occurrences.length;
+                    plan._count?.occurrences ?? plan.occurrences?.length ?? 0;
                   const stations = stationNamesOf(plan);
                   const draft = plan.status !== "PUBLISHED";
                   return (

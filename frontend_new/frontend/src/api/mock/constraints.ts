@@ -102,7 +102,9 @@ export function runAutomation(db: MockDb, now: number): void {
     if (!station) continue;
     const start = Date.parse(occurrence.startTime);
     const end = Date.parse(occurrence.endTime);
-    const tolerance = station.latenessToleranceMinutes * 60000;
+    const tolerance =
+      (occurrence.latenessToleranceOverrideMinutes ??
+        station.latenessToleranceMinutes) * 60000;
     if (now < start + tolerance) continue;
     const record = attendanceRecord(db, occurrence.id);
     const missedCheckin = !record;

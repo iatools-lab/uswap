@@ -903,6 +903,23 @@ export const planningRoutes: MockRoute[] = [
           "Ce planning a été modifié entre-temps. Rechargez-le avant d'affecter.",
         );
       const swapperId = ctx.body.swapperId ? String(ctx.body.swapperId) : null;
+      const hasToleranceOverride = Object.hasOwn(
+        ctx.body,
+        "latenessToleranceOverrideMinutes",
+      );
+      const toleranceOverride = ctx.body.latenessToleranceOverrideMinutes;
+      if (
+        hasToleranceOverride &&
+        toleranceOverride !== null &&
+        (typeof toleranceOverride !== "number" ||
+          !Number.isInteger(toleranceOverride) ||
+          toleranceOverride < 0 ||
+          toleranceOverride > 240)
+      )
+        throw new MockHttpError(
+          400,
+          "La tolérance ponctuelle doit être un nombre entier entre 0 et 240 minutes.",
+        );
       const swapWithId = ctx.body.swapWith ? String(ctx.body.swapWith) : null;
       const counterpart = swapWithId
         ? (ctx.db.occurrences.find(
@@ -950,6 +967,10 @@ export const planningRoutes: MockRoute[] = [
       if (afterUser && !afterUser.isActive)
         throw new MockHttpError(409, "Sélectionnez un swappeur actif.");
       occurrence.swapperId = swapperId;
+      if (hasToleranceOverride)
+        occurrence.latenessToleranceOverrideMinutes = swapperId
+          ? (toleranceOverride as number | null)
+          : null;
       if (counterpart) counterpart.swapperId = beforeUser?.id ?? null;
       planning.revision += 1;
       if (beforeUser?.id !== afterUser?.id || counterpart) {
