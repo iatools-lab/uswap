@@ -21,8 +21,14 @@ export function AbsenceDeclaration({
   shifts: OperationShift[];
   onDeclared: () => void;
 }) {
+  // Un shift déjà pointé ou déjà déclaré absent ne doit plus être proposé.
   const eligible = shifts.filter(
-    (shift) => shift.publishedAt && Date.parse(shift.endTime) > Date.now(),
+    (shift) =>
+      shift.publishedAt &&
+      Date.parse(shift.endTime) > Date.now() &&
+      shift.attendance?.status !== "ABSENT" &&
+      shift.attendance?.status !== "JUSTIFIED" &&
+      !shift.attendance?.checkedOutAt,
   );
   const [open, setOpen] = useState(false);
   const [shiftId, setShiftId] = useState("");
@@ -89,11 +95,8 @@ export function AbsenceDeclaration({
       setError("Indiquez un motif.");
       return;
     }
-    if (!file) {
-      setError("Ajoutez une pièce justificative.");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
+    // Le justificatif est facultatif : on ne bloque jamais la déclaration.
+    if (file && file.size > 5 * 1024 * 1024) {
       setError("Le justificatif dépasse 5 Mo.");
       return;
     }
@@ -106,15 +109,19 @@ export function AbsenceDeclaration({
     const payload = { shiftId, reason: reason.trim(), clientRef };
     try {
       if (!navigator.onLine) throw new ApiError(0, "hors connexion");
-      const form = new FormData();
-      form.append("file", file);
-      const attachment = await api<{ id: string }>(
-        "/operations/absences/attachments",
-        form,
-      );
+      let attachmentId: string | null = null;
+      if (file) {
+        const form = new FormData();
+        form.append("file", file);
+        const attachment = await api<{ id: string }>(
+          "/operations/absences/attachments",
+          form,
+        );
+        attachmentId = attachment.id;
+      }
       await api("/operations/absences", {
         ...payload,
-        attachmentId: attachment.id,
+        ...(attachmentId ? { attachmentId } : {}),
       });
       reset();
       setOpen(false);
@@ -126,7 +133,7 @@ export function AbsenceDeclaration({
       if (network) {
         await enqueue("/operations/absences", "POST", {
           ...payload,
-          attachment: file,
+          ...(file ? { attachment: file } : {}),
         });
         reset();
         setError("");
@@ -230,7 +237,7 @@ export function AbsenceDeclaration({
                 type="submit"
                 form="absence-declaration"
                 className="admin-button primary-cta"
-                disabled={busy || !shiftId || !file}
+                disabled={busy || !shiftId || reason.trim().length < 3}
               >
                 {busy && <LoaderCircle className="spin" size={16} />}
                 Envoyer
@@ -298,7 +305,7 @@ export function AbsenceDeclaration({
                     <strong>
                       {file ? file.name : "Joindre un justificatif"}
                     </strong>
-                    <small>PDF ou image · 5 Mo max · obligatoire</small>
+                    <small>PDF ou image · 5 Mo max</small>
                   </span>
                 </label>
                 {file && (

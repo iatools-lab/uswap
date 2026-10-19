@@ -150,8 +150,13 @@ export class PlanningService {
     });
 
     const ctx = await this.scope.serializeContext();
+    // Un planning « enveloppe » peut ne pas encore avoir de poste : on expose
+    // les stations declarees a la creation ET celles reellement utilisees.
     const visibleStationIds = [
-      ...new Set(occurrences.map((item) => item.stationId)),
+      ...new Set([
+        ...planning.stationIds,
+        ...occurrences.map((item) => item.stationId),
+      ]),
     ];
     const visibleStations = visibleStationIds.map((stationId) => ({
       id: stationId,
@@ -773,9 +778,23 @@ export class PlanningService {
     if (!stationId) throw this.invalid('Sélectionnez une station.');
 
     const candidates = await this.buildCandidates(planning, stationId, body);
+    const ctx = await this.scope.serializeContext();
     return {
       previewHash: await this.hashPreview(planningId, stationId, candidates),
-      occurrences: candidates,
+      // Le frontend lit `stationName` et `timezone` sur chaque ligne d'aperçu.
+      occurrences: candidates.map((candidate) => ({
+        ...candidate,
+        stationName:
+          ctx.stationNames.get(candidate.stationId) ?? 'Station inconnue',
+        timezone: 'Africa/Douala',
+        durationHours:
+          Math.round(
+            ((new Date(candidate.endTime).getTime() -
+              new Date(candidate.startTime).getTime()) /
+              3_600_000) *
+              100,
+          ) / 100,
+      })),
       positionsPerShift: 1,
       duplicates: await this.findDuplicates(planningId, candidates),
       outside: [],
@@ -814,12 +833,36 @@ export class PlanningService {
       (c) => !duplicateKeys.has(`${c.stationId}|${c.shiftTemplateId}|${c.startTime}`),
     );
 
+    // Revue des agents déjà planifiés sur le même créneau : la liste du
+    // planning est enregistrée même quand le modèle n'existe plus, on ne peut
+    // donc pas compter sur `detectConflicts` (indexé par affectation).
+    const conflicts = await this.assignedOverlaps(
+      planningId,
+      stationId,
+      toCreate,
+    );
+    if (conflicts.length) {
+      const details = conflicts
+        .slice(0, 3)
+        .map((conflict) => `${conflict.fullName} le ${conflict.day}`)
+        .join(', ');
+      throw new ConflictDomain(
+        'SHIFT_CONFLICT',
+        `Déjà planifié sur ces créneaux : ${details}${
+          conflicts.length > 3 ? '…' : ''
+        }.`,
+        409,
+        { conflicts },
+      );
+    }
+
     if (!toCreate.length) {
-      return this.detail(planningId);
+      // Rien de neuf : on renvoie quand meme la vue courante pour que le
+      // frontend puisse rafraichir (et signaler l'absence de changement).
+      return { ...(await this.detail(planningId, actor)), added: 0 };
     }
 
     await this.prisma.$transaction(async (tx) => {
-      let sequence = existing.length;
       for (const candidate of toCreate) {
         const occurrence = await tx.occurrence.create({
           data: {
@@ -834,6 +877,11 @@ export class PlanningService {
             breakEnd: candidate.breakEnd,
             breakMinutes: candidate.breakMinutes,
             requiredStaff: 1,
+            // Un poste ajouté à un planning déjà publié est publié d'emblée :
+            // sinon il reste invisible pour les agents et pour leur pointage.
+            ...(planning.status === PlanningStatus.PUBLISHED
+              ? { status: 'PUBLISHED' }
+              : {}),
             startTime: new Date(candidate.startTime),
             endTime: new Date(candidate.endTime),
           },
@@ -849,7 +897,6 @@ export class PlanningService {
             missing: 1,
           },
         });
-        sequence += 1;
       }
       await tx.planning.update({
         where: { id: planningId },
@@ -873,7 +920,8 @@ export class PlanningService {
       });
     });
 
-    return this.detail(planningId, actor);
+    const view = await this.detail(planningId, actor);
+    return { ...view, added: toCreate.length };
   }
 
   /**
@@ -1365,9 +1413,10 @@ export class PlanningService {
         await tx.occurrenceAssignment.deleteMany({
           where: { occurrenceId },
         });
+        await tx.planningVacancy.deleteMany({ where: { occurrenceId } });
         await tx.occurrence.update({
           where: { id: occurrenceId },
-          data: { swapperId: null },
+          data: { swapperId: null, requiredStaff: 0 },
         });
         await tx.planning.update({
           where: { id: planningId },
@@ -1378,6 +1427,13 @@ export class PlanningService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      // Les dependances (affectations, vacances, pointages, absences) sont
+      // purgees explicitement : une suppression silencieuse laisserait des
+      // lignes orphelines et l'ecran continuerait d'afficher le poste.
+      await tx.occurrenceAssignment.deleteMany({ where: { occurrenceId } });
+      await tx.planningVacancy.deleteMany({ where: { occurrenceId } });
+      await tx.absence.deleteMany({ where: { shiftId: occurrenceId } });
+      await tx.attendance.deleteMany({ where: { shiftId: occurrenceId } });
       await tx.occurrence.delete({ where: { id: occurrenceId } });
       await tx.planning.update({
         where: { id: planningId },
@@ -1484,6 +1540,76 @@ export class PlanningService {
       }
     }
     return candidates;
+  }
+
+  /**
+   * Agents du planning déjà positionnés sur un créneau qui chevauche l'un des
+   * candidats (même station, dates et horaires compatibles).
+   */
+  private async assignedOverlaps(
+    planningId: string,
+    stationId: string,
+    candidates: { startTime: string; endTime: string; label: string }[],
+  ) {
+    const rows = await this.prisma.occurrence.findMany({
+      where: { planningId, assignments: { some: {} } },
+      select: {
+        id: true,
+        day: true,
+        label: true,
+        shiftLabel: true,
+        startTime: true,
+        endTime: true,
+        stationId: true,
+        assignments: {
+          select: { user: { select: { id: true, fullName: true } } },
+        },
+      },
+    });
+    const labelOf = (row: { label: string; shiftLabel: string | null }) =>
+      (row.shiftLabel ?? row.label ?? '').trim().toLowerCase();
+    const minutesOf = (date: Date) =>
+      date.getUTCHours() * 60 + date.getUTCMinutes();
+    const minutesOfTime = (time: string) =>
+      Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+
+    const conflicts: {
+      userId: string;
+      fullName: string;
+      day: string;
+      existingOccurrenceId: string;
+    }[] = [];
+    for (const candidate of candidates) {
+      const day = candidate.startTime.slice(0, 10);
+      const candidateLabel = candidate.label.trim().toLowerCase();
+      for (const row of rows) {
+        if (row.day !== day) continue;
+        // Le poste ajouté couvre le même service : même station, ou — pour un
+        // renfort inter-stations — même libellé de créneau.
+        if (!(row.stationId === stationId || labelOf(row) === candidateLabel)) {
+          continue;
+        }
+        if (
+          !overlaps(
+            minutesOf(row.startTime),
+            minutesOf(row.endTime),
+            minutesOfTime(candidate.startTime.slice(11, 16)),
+            minutesOfTime(candidate.endTime.slice(11, 16)),
+          )
+        ) {
+          continue;
+        }
+        for (const assignment of row.assignments) {
+          conflicts.push({
+            userId: assignment.user.id,
+            fullName: assignment.user.fullName,
+            day,
+            existingOccurrenceId: row.id,
+          });
+        }
+      }
+    }
+    return dedupe(conflicts);
   }
 
   private async findDuplicates(

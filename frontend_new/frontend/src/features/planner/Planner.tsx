@@ -1147,15 +1147,36 @@ function PlanningEditor({
       if (!confirm)
         setPreview(await api<Preview>(`/plannings/${p.id}/preview`, payload));
       else {
-        await api(`/plannings/${p.id}/generate`, payload);
+        const previousIds = new Set(occurrences.map((o) => o.id));
+        const result = await api<Planning & { added?: number }>(
+          `/plannings/${p.id}/generate`,
+          payload,
+        );
         setPreview(null);
         setAdding(false);
-        await refresh();
+        // Vue à jour renvoyée par l'API : les nouveaux postes apparaissent
+        // immédiatement, sans dépendre d'un second appel.
+        if (result && Array.isArray(result.occurrences)) onUpdate(result);
+        else await refresh();
+        if (result?.added === 0) {
+          notify(
+            "Aucun shift ajouté : ces créneaux existent déjà dans le planning.",
+          );
+          return;
+        }
+        // Le calendrier n'affiche qu'une fenêtre : recentrer sur le premier
+        // shift ajouté, sinon l'ajout semble sans effet.
+        const added = (result?.occurrences ?? []).find(
+          (occurrence) => !previousIds.has(occurrence.id),
+        );
+        if (added) setAnchor(utcIso(new Date(added.startTime)));
         notify("Shifts ajoutés au brouillon.");
       }
     } catch (e) {
+      // On garde l'aperçu affiché : l'erreur doit rester lisible dans l'étape
+      // courante au lieu de renvoyer l'utilisateur au formulaire.
       setError((e as Error).message);
-      setPreview(null);
+      notify(`Ajout impossible : ${(e as Error).message}`, "error");
     } finally {
       setBusy(false);
     }

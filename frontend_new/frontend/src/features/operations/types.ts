@@ -21,7 +21,14 @@ export type OperationShift = {
   };
   swapper: { fullName: string };
   attendance: {
-    status: "PRESENT" | "LATE" | "CLOSED" | "JUSTIFIED" | "ABSENT";
+    // "EXPECTED" = poste à venir, aucun pointage (ni absence) enregistré.
+    status:
+      | "PRESENT"
+      | "LATE"
+      | "CLOSED"
+      | "JUSTIFIED"
+      | "ABSENT"
+      | "EXPECTED";
     checkedInAt: string;
     checkedOutAt: string | null;
     isLate: boolean;

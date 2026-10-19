@@ -27,18 +27,24 @@ type BackendWorkspace = {
     swapper: { fullName: string };
     attendance: {
       checkInAt: string | null;
+      /** Ancienne orthographe encore renvoyée par certains écrans. */
+      checkedInAt?: string | null;
       checkOutAt: string | null;
       isLate: boolean;
       isAbsent: boolean;
+      absence?: { id: string; reason: string } | null;
     } | null;
   }>;
 };
 
 function adaptWorkspace(payload: BackendWorkspace): OperationData {
   const shifts: OperationShift[] = payload.shifts.map((shift) => {
-    const checkInAt = shift.attendance?.checkInAt ?? null;
+    const checkInAt =
+      shift.attendance?.checkInAt ?? shift.attendance?.checkedInAt ?? null;
     const checkOutAt = shift.attendance?.checkOutAt ?? null;
     const late = shift.attendance?.isLate ?? false;
+    // Sans pointage, le statut est inconnu ("EXPECTED") : renvoyer "ABSENT"
+    // classait tout shift a venir comme absence dans l'historique.
     const status: NonNullable<OperationShift["attendance"]>["status"] =
       checkOutAt
         ? "CLOSED"
@@ -48,7 +54,7 @@ function adaptWorkspace(payload: BackendWorkspace): OperationData {
             : "PRESENT"
           : shift.attendance?.isAbsent
             ? "ABSENT"
-            : "ABSENT";
+            : "EXPECTED";
     const timezone = shift.station.timezone || "Africa/Douala";
     const time = (value: string) =>
       new Intl.DateTimeFormat("fr-CM", {

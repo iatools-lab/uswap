@@ -29,16 +29,39 @@ export function isInWindow(shift: OperationShift, now = Date.now()) {
   return Date.parse(shift.startTime) <= now && now <= Date.parse(shift.endTime);
 }
 
+/**
+ * Shift que l'agent doit voir en premier : celui en cours, sinon le suivant
+ * par ordre chronologique (le plus proche dans le temps).
+ *
+ * Une prise de service enregistrée sans fin de service reste le shift
+ * courant, et un shift déjà déclaré absent ne peut pas être « le prochain ».
+ */
 export function pickNextShift(shifts: OperationShift[]) {
   const now = Date.now();
-  const open = shifts.filter((shift) => isOpenShift(shift, now));
-  const live = open.find((shift) => isInWindow(shift, now));
+  const sorted = [...shifts].sort(
+    (a, b) => Date.parse(a.startTime) - Date.parse(b.startTime),
+  );
+
+  const live = sorted.find((shift) => isInWindow(shift, now));
   if (live) return live;
+
+  // Prise de service faite mais fin non pointée : le service est en cours.
+  const started = sorted.find(
+    (shift) =>
+      shift.attendance !== null &&
+      !shift.attendance.checkedOutAt &&
+      (shift.attendance.status === "PRESENT" ||
+        shift.attendance.status === "LATE"),
+  );
+  if (started) return started;
+
   return (
-    open
-      .filter((shift) => Date.parse(shift.startTime) > now)
-      .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))[0] ||
-    null
+    sorted.find(
+      (shift) =>
+        Date.parse(shift.startTime) > now &&
+        !shift.attendance?.checkedOutAt &&
+        shift.attendance?.status !== "ABSENT",
+    ) ?? null
   );
 }
 
