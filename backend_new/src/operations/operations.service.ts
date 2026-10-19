@@ -82,6 +82,8 @@ export class OperationsService {
         400,
       );
     }
+    // Un identifiant fourni doit exister, mais l'absence du justificatif ne
+    // bloque plus la déclaration.
     await this.attachments.assertExists(payload.attachmentId);
 
     const occurrence = await this.prisma.occurrence.findUnique({
@@ -115,6 +117,8 @@ export class OperationsService {
       if (replayed) return { id: replayed.id, replayed: true };
     }
 
+    // La piece jointe est facultative : une absence imprévue doit pouvoir
+    // être signalée immédiatement, le justificatif peut suivre plus tard.
     const alreadyOpen = await this.prisma.absence.findFirst({
       where: { shiftId: occurrence.id, status: 'OPEN' },
     });

@@ -9,6 +9,7 @@ réparties sur plusieurs stations.
 > fonctionnelle en local (base de données, backend, frontend, comptes de démo).
 
 
+- **Version courante** : `Uswap-Final_V1.0` — version finale (backend + frontend intégrés)
 - **Base backend** : `uswap-v5.3.0` — backend intégré du sprint 5
 - **Frontend Dylane** : `uswap-frontend-s5.2.0` — interface et mocks livrés séparément
 - **Backend** : NestJS 11 + Prisma 6 + PostgreSQL
@@ -106,14 +107,31 @@ du cookie de session `HttpOnly`.
 
 ## Stack technique
 
+### Vue d'ensemble (monorepo)
+
+| Couche | Technologie | Emplacement |
+|---|---|---|
+| Frontend | React 19.3 + Vite + TypeScript 5.8 + React Router 7.18 | `frontend_new/frontend` |
+| Backend | NestJS 11 + TypeScript 5.7 | `backend_new` |
+| ORM / base | Prisma 6 + PostgreSQL (`@prisma/adapter-pg`, `pg`) | `backend_new/prisma` |
+| Authentification | JWT (short-lived) + refresh token `HttpOnly`, cookies, Argon2 | `backend_new/src/auth` |
+| Documentation API | Swagger / OpenAPI 11 | `http://localhost:3000/api-docs` |
+| E-mails | Nodemailer + Resend (ou SMTP Gmail) | `backend_new/src/mail` |
+| Exports | CSV + XLSX (`xlsx`) côté serveur et côté navigateur | `backend_new/src/reports`, `features/operations` |
+| UI | Tabler Icons, Tremor, Poppins, CSS maison | `frontend_new/frontend/src` |
+| Glisser-déposer | `@dnd-kit/core` (planner) | `features/planner` |
+| Hors ligne / PWA | Service worker, cache du planning, file de synchronisation | `frontend_new/frontend/src` |
+| QA | Playwright, scripts Node (`audit-contract`, `test-e2e`), ESLint, Prettier | `scripts`, `backend_new/_scripts` |
+
 ### Frontend
 - React 19.3.0 / React DOM 19.3.0
-- Vite 8.0.14
-- TypeScript ~5.8.3
+- Vite 6.3 / TypeScript ~5.8.3
 - React Router 7.18.3
+- `@dnd-kit/core` 6.3 (planner drag & drop), `@tabler/icons-react`, `@tremor/react`
+- `xlsx` 0.18 (export navigateur)
 
 ### Backend
-- NestJS ^11.0.1
+- NestJS ^11.0.1 (`@nestjs/jwt`, `@nestjs/passport`, `@nestjs/swagger`)
 - TypeScript ^5.7.3
 - Prisma Client ^6.19.3 (+ `@prisma/adapter-pg`, `pg`)
 - Swagger ^11.4.7
@@ -288,7 +306,8 @@ haut, puis marquée par un tag.
 | `uswap-v5.3.0` | **Sprint 5 intégré : frontend + backend raccordés** |
 | `Uswap-V6.2` | Intégration planning / pointage (v6.2.0) |
 | `Uswap-V6.3` | Intégration interface et services |
-| `Uswap-V6.4` | **Incidents swappeur + tolérance par créneau** |
+| `Uswap-V6.4` | Incidents swappeur + tolérance par créneau |
+| `Uswap-Final_V1.0` | **Version finale : backend + frontend intégrés** |
 
 ---
 
@@ -357,3 +376,51 @@ dans `develop`.
 | Services API | `src/attendance/*`, `src/leave/*`, `src/operations/*`, `src/reports/*`, `src/planning/planning.service.ts` |
 | Frontend | `frontend_new/frontend/src/features/operations/SwapperHome.tsx`, `features/planner/*`, `pages/admin/*`, `api/mock/*` |
 | Scripts | `backend_new/_scripts/verify-swapper-incident.mjs`, `check-tolerance-override.mjs`, `backup-db.ps1`, `qa-planner*.mjs` |
+
+---
+
+## Uswap-Final_V1.0 — Version finale
+
+Tag `Uswap-Final_V1.0`, publié depuis la branche `danielle` après merge dans
+`develop`. Cette version clôture la livraison : elle aligne l'écran opérations
+du swappeur, le planner et la déclaration d'absence sur les règles métier.
+
+### Points clés
+
+- **Prochain shift et pointage fiables** : seuls les postes d'un **planning
+  publié** sont visibles par l'agent (un brouillon ne s'affiche plus comme
+  « prochain shift »). `publishedAt` est toujours renseigné et une absence
+  déclarée est exposée dans le contrat de pointage (`status: ABSENT` + détail
+  de l'absence), ce qui évite de proposer de pointer ou de re-signaler un
+  shift déjà couvert.
+- **Sélection du shift courant** : le shift en cours, puis celui dont la prise
+  de service est enregistrée sans fin de service, puis le prochain shift
+  chronologique non absent. Les statuts inconnus utilisent `EXPECTED` au lieu
+  d'être assimilés à une absence.
+- **Planner** : l'ajout de créneaux renvoie la vue à jour et le nombre de
+  postes créés (`added`), détecte les conflits d'agents déjà planifiés
+  (`SHIFT_CONFLICT`, 409), publie d'emblée les postes ajoutés à un planning
+  publié, recentre le calendrier sur le premier shift ajouté et conserve
+  l'aperçu affiché en cas d'erreur. Les postes vacants sont nettoyés à la
+  suppression d'une occurrence ; les stations déclarées à la création du
+  planning restent visibles.
+- **Déclaration d'absence** : le **justificatif devient facultatif** (5 Mo
+  max s'il est fourni) et la déclaration est possible hors connexion (mise en
+  file avec `clientRef`). Les shifts déjà pointés ou déjà absents ne sont plus
+  proposés.
+
+### Vérifications effectuées
+
+| Parcours | Résultat |
+|---|---|
+| Typage backend (`tsc --noEmit -p tsconfig.build.json`) | 0 diagnostic |
+| Typage frontend (`tsc -b`) | 0 diagnostic |
+| Tests unitaires | aucun `*.spec.ts` dans le dépôt |
+
+### Contenu de la livraison
+
+| Domaine | Fichiers principaux |
+|---|---|
+| Pointage / shifts | `backend_new/src/attendance/attendance.service.ts`, `frontend_new/.../features/operations/format.ts`, `types.ts`, `pages/role/OperationsPage.tsx` |
+| Planner | `backend_new/src/planning/planning.service.ts`, `frontend_new/.../features/planner/Planner.tsx` |
+| Absences | `backend_new/src/operations/operations.service.ts`, `frontend_new/.../features/supervision/AbsenceDeclaration.tsx` |

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, AttendanceStatus } from '@prisma/client';
+import { Prisma, AttendanceStatus, PlanningStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConstraintsService } from '../planning/constraints.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -52,9 +52,16 @@ export class AttendanceService {
     const windowStart = new Date(Date.now() - 2 * 86_400_000);
     const now = new Date();
 
+    // Un agent ne voit que les postes d'un planning publié : un brouillon ne
+    // doit jamais apparaître comme « prochain shift » ni ouvrir le pointage.
+    // La source de vérité est le PLANNING, pas le statut du poste : lors de la
+    // publication, seules les occurrences qui existaient à ce moment-là sont
+    // passées en PUBLISHED ; celles générées avant la publication restaient
+    // « PLANNED » et disparaissaient de cet écran — d'où un « prochain shift »
+    // qui sautait le premier service de l'agent.
     const occurrences = await this.prisma.occurrence.findMany({
       where: {
-        status: 'PUBLISHED',
+        planning: { status: PlanningStatus.PUBLISHED },
         endTime: { gt: windowStart },
         assignments: { some: { userId: user.id } },
       },
@@ -62,8 +69,14 @@ export class AttendanceService {
       take: limit,
       include: {
         station: true,
+        planning: { select: { publishedAt: true } },
         attendance: {
           include: { corrections: { orderBy: { createdAt: 'desc' }, take: 1 } },
+        },
+        absences: {
+          where: { swapperId: user.id },
+          orderBy: { reportedAt: 'desc' },
+          take: 1,
         },
       },
     });
@@ -81,7 +94,11 @@ export class AttendanceService {
         endTime: occurrence.endTime.toISOString(),
         breakStart: occurrence.breakStart,
         breakEnd: occurrence.breakEnd,
-        publishedAt: null,
+        // Le frontend filtre les absences imprévues sur ce champ : `null`
+        // rendait tout shift inéligible (« aucun shift à signaler »).
+        publishedAt:
+          occurrence.planning?.publishedAt?.toISOString() ??
+          occurrence.createdAt.toISOString(),
         station: {
           id: occurrence.station.id,
           name: occurrence.station.name,
@@ -107,7 +124,25 @@ export class AttendanceService {
               isLate: occurrence.attendance.isLate,
               isAbsent: occurrence.attendance.status === 'ABSENT',
             }
-          : null,
+          : // Une absence déclarée n'est pas encore un pointage : on l'expose
+            // dans le même contrat pour que l'écran cesse de proposer de
+            // signaler à nouveau (ou de pointer) un shift déjà couvert.
+            occurrence.absences[0]
+            ? {
+                status: 'ABSENT',
+                checkInAt: null,
+                checkOutAt: null,
+                isLate: false,
+                isAbsent: true,
+                absence: {
+                  id: occurrence.absences[0].id,
+                  origin: occurrence.absences[0].origin,
+                  status: occurrence.absences[0].status,
+                  reason: occurrence.absences[0].reason,
+                  reportedAt: occurrence.absences[0].reportedAt.toISOString(),
+                },
+              }
+            : null,
       })),
     };
   }
