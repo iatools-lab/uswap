@@ -172,9 +172,8 @@ docker compose $T exec -T db pg_dump -U uswap -d uswap -Fc \
 # Application (le profil `tools` doit être activé pour créer le service)
 docker compose $T --profile tools run --rm migrate
 
-# Vérifier l'état
-docker compose $T --profile tools run --rm --entrypoint \
-  npx migrate --yes prisma@6.19.3 migrate status
+# Vérifier l'état : `migrate` est l'entrypoint, `status` la sous-commande
+docker compose $T --profile tools run --rm migrate status
 ```
 
 **Interdits en production** : `prisma migrate dev`, `prisma migrate reset`,
@@ -314,9 +313,8 @@ docker compose $T up -d --build                   # mise à jour après git pull
       message ne doit apparaître que si le compte était réellement désactivé).
 - [ ] Une page métier charge des données réelles (pas de données fictives).
 - [ ] Upload d'un justificatif d'absence ≤ 5 Mo puis téléchargement.
-- [ ] `docker compose $T --profile tools run --rm --entrypoint \
-      npx migrate --yes prisma@6.19.3 migrate status` indique « up to date »
-      (optionnel si déjà vérifié).
+- [ ] `docker compose $T --profile tools run --rm migrate status` indique
+      « up to date » (optionnel si déjà vérifié).
 - [ ] Sauvegarde planifiée de `uswap-pgdata` + `uswap-uploads` en place.
 - [ ] `.env` : permissions `600`, propriétaire root, hors Git.
 - [ ] Aucune erreur 5xx récurrente dans `logs backend` pendant 24 h.
@@ -348,7 +346,7 @@ docker compose $T up -d --build                   # mise à jour après git pull
 | Aucun secret en clair dans les fichiers Docker livrés | ✅ (seulement des `${VAR}`) |
 | `npm test` backend (`vitest run`) | ⚠️ aucun fichier de test présent dans `src/` |
 | `npm run lint` backend | ⚠️ échec préexistant (63 problèmes, fichiers métier non modifiés) |
-| `docker compose config` (syntaxe / ancrage relatif) | ⚠️ YAML validé (`yaml-lint`, parsing `js-yaml`) mais **pas** `docker compose config` |
+| `deploy/compose.yaml` (syntaxe / ancrage relatif) | ⚠️ YAML validé (`yaml-lint`, parsing `js-yaml`) mais **pas** `docker compose config` |
 | Construction des images / démarrage / healthchecks | ❌ **non exécuté** |
 | Vérification syntaxique `nginx.conf` | ❌ **non exécuté** (`nginx -t` impossible sans image) |
 

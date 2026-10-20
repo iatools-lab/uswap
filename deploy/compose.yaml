@@ -29,10 +29,6 @@ services:
     volumes:
       # Donnees PostgreSQL de uSwap, isolees des autres applications du serveur.
       - uswap-pgdata:/var/lib/postgresql/data
-      # Pieces jointes (justificatifs d'absence / correction) : le code les
-      # stocke dans la base, mais UPLOAD_DIR est un repertoire d'execution qui
-      # doit survivre a une recreation du conteneur.
-      - uswap-uploads:/app/var/uploads
     networks:
       - uswap-internal
     # Pas de section `ports:` : PostgreSQL n'est JAMAIS expose hors du reseau
@@ -85,10 +81,26 @@ services:
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:no-reply@uswap.example.org}
       ENABLE_WEB_PUSH: ${ENABLE_WEB_PUSH:-false}
       UPLOAD_DIR: var/uploads
-      # Réinitialise le mot de passe du compte ADMIN s'il est désactivé
+      # Reinitialise le mot de passe du compte ADMIN s'il est desactive
       # (AdminBootstrapService.onModuleInit). Sans cette variable le code
-      # retombe sur une valeur littérale connue : à définir explicitement.
+      # retombe sur une valeur litterale connue : a definir explicitement.
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?definir ADMIN_BOOTSTRAP_PASSWORD dans deploy/.env}
+      # Reglages metier lus au demarrage pour les NOUVELLES stations ; les
+      # valeurs deja stockees en base (ecran /admin/settings) restent maitresses.
+      TOLERANCE_MINUTES: ${TOLERANCE_MINUTES:-5}
+      GEOFENCE_RADIUS_METERS: ${GEOFENCE_RADIUS_METERS:-150}
+      MIN_REST_HOURS: ${MIN_REST_HOURS:-8}
+      WEEKLY_HOURS_LIMIT: ${WEEKLY_HOURS_LIMIT:-48}
+      DEFAULT_EMAIL_DOMAIN: ${DEFAULT_EMAIL_DOMAIN:-uswap.local}
+      INVITATION_VALIDITY_HOURS: ${INVITATION_VALIDITY_HOURS:-48}
+      NOTIFICATION_RETENTION_DAYS: ${NOTIFICATION_RETENTION_DAYS:-90}
+      MAX_ATTACHMENT_MB: ${MAX_ATTACHMENT_MB:-5}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@uswap.local}
+      # Integration RH externe (desactivee par defaut).
+      LEAVE_SYNC_ENABLED: ${LEAVE_SYNC_ENABLED:-false}
+      LEAVE_SYNC_ENDPOINT: ${LEAVE_SYNC_ENDPOINT:-}
+      LEAVE_SYNC_TOKEN: ${LEAVE_SYNC_TOKEN:-}
+      LEAVE_SYNC_WEBHOOK_SECRET: ${LEAVE_SYNC_WEBHOOK_SECRET:-}
     depends_on:
       db:
         condition: service_healthy
@@ -117,7 +129,9 @@ services:
     ports:
       - "127.0.0.1:${FRONTEND_HOST_PORT:-8080}:80"
 
-  # Service manuel : `docker compose ... run --rm migrate`.
+  # Service manuel, deux usages :
+  #   docker compose ... --profile tools run --rm migrate            -> migrate deploy
+  #   docker compose ... --profile tools run --rm migrate status     -> etat des migrations
   # Joue les migrations Prisma deja versionnees (prisma/migrations) avec le
   # binaire `prisma` (devDependency, donc absent de l'image de production).
   # NE JAMAIS remplacer par `migrate dev`, `migrate reset` ou `db push` en
@@ -127,7 +141,8 @@ services:
     profiles: ["tools"]
     image: uswap/backend:${USWAP_TAG:-local}
     restart: "no"
-    entrypoint: ["npx", "--yes", "prisma@6.19.3", "migrate", "deploy"]
+    entrypoint: ["npx", "--yes", "prisma@6.19.3", "migrate"]
+    command: ["deploy"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-uswap}:${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD dans deploy/.env}@db:5432/${POSTGRES_DB:-uswap}?schema=public
       NODE_ENV: production
