@@ -5,7 +5,7 @@ pour l'application uSwap / UpOwa (`backend_new` + `frontend_new/frontend`).
 
 **Version de référence : tag `Uswap-Final_V1.1`** (livraison du 2026-10-19,
 commit `20d3684`, identique à la tête de `develop`). Les fichiers Docker de ce
-guide sont ajoutés par-dessus ce tag, sur la branche `feature/dockerization` :
+guide sont ajoutés par-dessus ce tag, sur la branche `develop` :
 aucun fichier métier de la version finale n'a été modifié.
 
 > État vérifié au 2026-10-20 : **les images n'ont pas encore été construites**
@@ -116,13 +116,11 @@ export T="-f deploy/compose.yaml --env-file deploy/.env"
 cd /opt/uswap-github
 git fetch --tags origin
 git switch develop && git pull --ff-only        # doit être sur Uswap-Final_V1.1
-git switch feature/dockerization
 git describe --tags                            # attendu : Uswap-Final_V1.1
 ```
 
-> La branche `feature/dockerization` n'existe pour l'instant que sur le poste
-de préparation. Après son `git push`, le serveur la récupérera avec
-`git fetch origin && git switch -c feature/dockerization origin/feature/dockerization`.
+> La branche `develop` porte cette configuration. Si elle n'est pas encore
+poussée, la récupérer avec `git switch develop && git pull --ff-only`.
 Le tag `Uswap-Final_V1.1` seul ne contient pas les fichiers Docker.
 
 ```bash
