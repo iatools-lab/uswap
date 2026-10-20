@@ -19,7 +19,7 @@ git-diff-stat.txt
 .windsurf/
 skills-lock.json
 
-# Version de travail locale (copie du projet), non versionnée
+# Version de travail locale (copie du projet), non versionnï¿½e
 Uswap-V6.1/
 
 
@@ -55,3 +55,9 @@ backups/
 
 # Local personal images
 me--.jpeg
+
+# Fichiers d'environnement Docker (deploy/) : jamais versionnes, seuls les
+# modeles le sont.
+.env
+.env.*
+!.env.example

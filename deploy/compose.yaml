@@ -1,0 +1,149 @@
+# uSwap — configuration Docker Compose de production (squelette)
+#
+# Ce fichier est volontairement AUTONOME : noms de projet, de reseau et de
+# volumes propres a uSwap. Il ne touche ni aux conteneurs, ni aux volumes, ni
+# aux bases PostgreSQL des autres applications du serveur.
+#
+# Utilisation (depuis le depot, sur le serveur Ubuntu) :
+#   cp deploy/.env.example deploy/.env      # puis renseigner les valeurs
+#   docker compose -f deploy/compose.yaml --env-file deploy/.env config
+#   docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --build
+#
+# Aucune migration n'est jouee automatiquement : le service `migrate` est un
+# profil manuel (voir README_DOCKER.md, section Migrations).
+
+name: uswap
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-uswap}
+      POSTGRES_USER: ${POSTGRES_USER:-uswap}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD dans deploy/.env}
+      # Modele d'instance vierge : collation deterministe, independante de la
+      # locale de l'hote. La migration etant la source de verite, l'image doit
+      # rester la MEME version majeure sur un volume existant (voir README).
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      # Donnees PostgreSQL de uSwap, isolees des autres applications du serveur.
+      - uswap-pgdata:/var/lib/postgresql/data
+      # Pieces jointes (justificatifs d'absence / correction) : le code les
+      # stocke dans la base, mais UPLOAD_DIR est un repertoire d'execution qui
+      # doit survivre a une recreation du conteneur.
+      - uswap-uploads:/app/var/uploads
+    networks:
+      - uswap-internal
+    # Pas de section `ports:` : PostgreSQL n'est JAMAIS expose hors du reseau
+    # Docker. Seul le backend le joint par le nom de service `db`.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-uswap} -d ${POSTGRES_DB:-uswap}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build:
+      context: ../backend_new
+      dockerfile: Dockerfile
+    image: uswap/backend:${USWAP_TAG:-local}
+    restart: unless-stopped
+    init: true
+    # Fichiers generes par le backend (mailer JSON, pieces jointes).
+    volumes:
+      - uswap-uploads:/app/var/uploads
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Nom de service Docker : resolu sur le reseau uswap-internal.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-uswap}:${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD dans deploy/.env}@db:5432/${POSTGRES_DB:-uswap}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?definir JWT_SECRET dans deploy/.env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?definir JWT_REFRESH_SECRET dans deploy/.env}
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+      JWT_REFRESH_TTL_SECONDS: ${JWT_REFRESH_TTL_SECONDS:-604800}
+      SESSION_IDLE_SECONDS: ${SESSION_IDLE_SECONDS:-1800}
+      SESSION_ABSOLUTE_SECONDS: ${SESSION_ABSOLUTE_SECONDS:-43200}
+      REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-uswap_refresh}
+      # HTTPS -> cookie Secure ; meme origine => SameSite=lax. `none` n'est
+      # utile qu'en cross-site et exige COOKIE_SECURE=true.
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      COOKIE_SAMESITE: ${COOKIE_SAMESITE:-lax}
+      # Origine publique du frontend (liens d'invitation / reset).
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-https://uswap.example.org}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://uswap.example.org}
+      MAIL_DRIVER: ${MAIL_DRIVER:-console}
+      MAIL_FROM: ${MAIL_FROM:-uSwap <no-reply@uswap.example.org>}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:no-reply@uswap.example.org}
+      ENABLE_WEB_PUSH: ${ENABLE_WEB_PUSH:-false}
+      UPLOAD_DIR: var/uploads
+      # Réinitialise le mot de passe du compte ADMIN s'il est désactivé
+      # (AdminBootstrapService.onModuleInit). Sans cette variable le code
+      # retombe sur une valeur littérale connue : à définir explicitement.
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:?definir ADMIN_BOOTSTRAP_PASSWORD dans deploy/.env}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - uswap-internal
+    # Port non publie vers Internet : ecoute uniquement sur la boucle locale de
+    # l'hote, pour un Nginx d'hote ou du diagnostic (curl depuis le serveur).
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-3000}:3000"
+
+  frontend:
+    build:
+      context: ../frontend_new/frontend
+      dockerfile: Dockerfile
+      args:
+        # Valeur PUBLIQUE integree au bundle. Doit rester "/api" : le proxy
+        # Nginx du conteneur ajoute le backend.
+        VITE_API_URL: /api
+        VITE_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+    image: uswap/frontend:${USWAP_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - uswap-internal
+    ports:
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-8080}:80"
+
+  # Service manuel : `docker compose ... run --rm migrate`.
+  # Joue les migrations Prisma deja versionnees (prisma/migrations) avec le
+  # binaire `prisma` (devDependency, donc absent de l'image de production).
+  # NE JAMAIS remplacer par `migrate dev`, `migrate reset` ou `db push` en
+  # production. `migrate deploy` est strictement additif : il applique les
+  # migrations manquantes deja versionnees, sans regeneration destructive.
+  migrate:
+    profiles: ["tools"]
+    image: uswap/backend:${USWAP_TAG:-local}
+    restart: "no"
+    entrypoint: ["npx", "--yes", "prisma@6.19.3", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-uswap}:${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD dans deploy/.env}@db:5432/${POSTGRES_DB:-uswap}?schema=public
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - uswap-internal
+
+networks:
+  uswap-internal:
+    name: uswap-internal
+    driver: bridge
+
+volumes:
+  uswap-pgdata:
+    name: uswap-pgdata
+  uswap-uploads:
+    name: uswap-uploads

@@ -1,0 +1,18 @@
+# Contexte de build frontend_new/frontend.
+node_modules
+dist
+*.log
+*.tsbuildinfo
+dev.log
+dev.err.log
+
+# Secrets : tout VITE_* finit dans le bundle, aucun .env local ne doit entrer.
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+Dockerfile
+.dockerignore
+docs

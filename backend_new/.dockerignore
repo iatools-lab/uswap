@@ -1,0 +1,29 @@
+# Contexte de build backend_new : ne jamais y faire entrer de secrets ni
+# d'artefacts locaux.
+node_modules
+dist
+coverage
+test
+*.log
+
+# Secrets (toutes variantes)
+.env
+.env.*
+!.env.example
+
+# Base locale éventuelle (SQLite de développement) et sauvegardes
+prisma/dev.db
+prisma/dev.db-journal
+backups
+*.dump
+*.sql
+*.zip
+*.rar
+
+# Fichiers d'exécution locaux
+var
+_scripts
+.git
+.gitignore
+Dockerfile
+.dockerignore
