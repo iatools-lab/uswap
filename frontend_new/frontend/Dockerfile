@@ -17,8 +17,8 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
     NPM_CONFIG_FUND=false
 # Vite charge TOUS les .env* de sa racine, pas seulement le mode courant :
 # un .env de developpement copie par erreur l'emporterait sur .env.production.
-# Le .dockerignore l'exclut deja, on echoue explicitement plutot que de deviner.
-RUN test ! -e .env
+# Le .dockerignore l'exclut deja. On verifie donc APRES la copie des sources
+# (avant, le controle passait sur un repertoire encore vide et ne verifiait rien).
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig.json vite.config.ts index.html ./
@@ -33,7 +33,8 @@ COPY src ./src
 # peut entrer dans l'image.
 ARG VITE_API_URL=/api
 ARG VITE_VAPID_PUBLIC_KEY=
-RUN test -n "$VITE_API_URL" \
+RUN test ! -e .env \
+ && test -n "$VITE_API_URL" \
  && printf 'VITE_API_URL=%s\nVITE_VAPID_PUBLIC_KEY=%s\n' \
       "$VITE_API_URL" "$VITE_VAPID_PUBLIC_KEY" > .env.production \
  && npm run build

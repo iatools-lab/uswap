@@ -1,5 +1,25 @@
 import { defineConfig } from "vite";
 
+/**
+ * Cible du proxy vers l'API NestJS.
+ *
+ * "localhost" est volontaire : le backend ecoute sur toutes les interfaces et
+ * cette cible fonctionne quelle que soit la pile reseau du systeme. Une cible
+ * litterale ("127.0.0.1" ou "::1") casse des que le backend n'ecoute que sur
+ * l'autre pile — cas frequent sous Node >= 18, qui prefere IPv6 : Vite
+ * remonte alors "AggregateError [ECONNREFUSED]" sur /auth/login.
+ * Surchargeable par API_PROXY_TARGET pour un backend distant.
+ */
+const apiProxyTarget = process.env.API_PROXY_TARGET ?? "http://localhost:3000";
+
+const apiProxy = {
+  "/api": {
+    target: apiProxyTarget,
+    changeOrigin: true,
+    rewrite: (path: string) => path.replace(/^\/api/, ""),
+  },
+};
+
 export default defineConfig({
   server: {
     host: "127.0.0.1",
@@ -9,23 +29,11 @@ export default defineConfig({
      * http://localhost:3000 vers http://127.0.0.1:5173 il serait cross-site,
      * et un cookie SameSite=Lax n'est alors jamais joint a la requete.
      */
-    proxy: {
-      "/api": {
-        target: "http://localhost:3000",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
-      },
-    },
+    proxy: apiProxy,
   },
   preview: {
     host: "127.0.0.1",
-    proxy: {
-      "/api": {
-        target: "http://localhost:3000",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
-      },
-    },
+    proxy: apiProxy,
   },
   build: {
     rollupOptions: {

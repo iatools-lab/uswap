@@ -42,7 +42,11 @@ services:
 
   backend:
     build:
-      context: ../backend_new
+      # Contexte surchargeable. Le depot peut etre clone sous
+      # /opt/uswap (sources dans ./frontend et ./backend_new) ou sous
+      # /opt/uswap-github (sources dans ./frontend_new/frontend) : un chemin
+      # relatif fixe casse l'un des deux. Voir README_DOCKER.md, section 5.
+      context: ${BACKEND_BUILD_CONTEXT:-../backend_new}
       dockerfile: Dockerfile
     image: uswap/backend:${USWAP_TAG:-local}
     restart: unless-stopped
@@ -113,13 +117,17 @@ services:
 
   frontend:
     build:
-      context: ../frontend_new/frontend
+      # Voir BACKEND_BUILD_CONTEXT : par defaut, arborescence a plat
+      # (/opt/uswap/frontend), qui contient bien le Dockerfile.
+      context: ${FRONTEND_BUILD_CONTEXT:-../frontend}
       dockerfile: Dockerfile
       args:
         # Valeur PUBLIQUE integree au bundle. Doit rester "/api" : le proxy
         # Nginx du conteneur ajoute le backend.
         VITE_API_URL: /api
-        VITE_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+        # Meme cle que cote backend (deploy/.env). Si elle differe, les
+        # notifications push ne peuvent pas etre dechiffrees par le navigateur.
+        VITE_VAPID_PUBLIC_KEY: ${VITE_VAPID_PUBLIC_KEY:-}
     image: uswap/frontend:${USWAP_TAG:-local}
     restart: unless-stopped
     depends_on:

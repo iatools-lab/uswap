@@ -105,14 +105,89 @@ Toutes les commandes s'exécutent depuis la racine du dépôt. Le fichier
 `deploy/compose.yaml`) ; `--env-file` n'est donné ici que pour rester explicite.
 Réutilisez l'alias `T` tout au long du guide :
 
+### 5.0 Arborescence attendue (à vérifier AVANT de construire)
+
+Les chemins `build.context` sont relatifs à `deploy/`. Deux dispositions sont
+possibles, et la mauvaise produit des erreurs trompeuses du type
+`frontend/Dockerfile: No such file or directory` ou
+`failed to read dockerfile: open Dockerfile` :
+
+| Disposition | Sources | `deploy/.env` |
+| --- | --- | --- |
+| **A. À plat** (défaut) | `/opt/uswap/frontend`, `/opt/uswap/backend_new` | rien à ajouter |
+| **B. Dépôt cloné** | `/opt/uswap-github/frontend_new/frontend`, `/opt/uswap-github/backend_new` | `FRONTEND_BUILD_CONTEXT=../frontend_new/frontend` et `BACKEND_BUILD_CONTEXT=../backend_new` |
+
+Dans les deux cas, le dossier frontend **doit** contenir `Dockerfile`,
+`package.json`, `package-lock.json`, `index.html`, `vite.config.ts`,
+`tsconfig.json`, `src/`, `public/` et `deploy/nginx.conf`.
+
+> Constat du 2026-10-21 sur `Sirh-Server` : `/opt/uswap` ne contenait qu'un
+> `frontend/` (sans `Dockerfile`) et un `deploy/`. Aucun `backend_new/` n'était
+> présent. Le build ne pouvait donc pas aboutir : ce n'était pas un problème de
+> droits, mais un déploiement partiel. Voir §5.1.
+
+Le script de contrôle (lecture seule, n'installe rien) :
+
+```bash
+cd /opt/uswap            # ou /opt/uswap-github
+bash deploy/check-server.sh
+```
+
+Il vérifie les fichiers attendus dans chaque contexte, la présence de
+`deploy/.env` (permissions 600, valeurs `CHANGER-*` remplacées), les migrations
+Prisma et la disponibilité des ports 8080 / 3000. Il sort en code 1 si un build
+ne peut pas aboutir.
+
+### 5.1 Dépôt incomplet : reconstituer les sources
+
+Si `check-server.sh` signale un contexte introuvable, choisir la source des
+sources :
+
+**Option 1 — Git (recommandée)**
+
+```bash
+git clone <url-du-depot> /opt/uswap-github
+cd /opt/uswap-github
+git describe --tags    # attendu : Uswap-Final_V1.1 (image de référence)
+```
+Puis, dans `deploy/.env` :
+```dotenv
+FRONTEND_BUILD_CONTEXT=../frontend_new/frontend
+BACKEND_BUILD_CONTEXT=../backend_new
+```
+
+**Option 2 — Copie contrôlée depuis le poste de développement**
+
+Copier **les sources sans les secrets ni les artefacts** :
+
+```bash
+# Depuis le poste Windows (amener le dossier en /tmp sur le serveur)
+robocopy backend_new  /tmp/uswap-upload/backend_new  /E /XD node_modules dist backups _scripts \
+  /XF *.log .env *.zip *.rar *.dump *.sql
+robocopy frontend_new\frontend /tmp/uswap-upload/frontend /E /XD node_modules dist \
+  /XF *.log .env *.tsbuildinfo
+# Puis sur le serveur : conserver les .env.example, jamais les .env réels
+```
+
+Vérifier ensuite que les deux `package-lock.json` sont présents (sans eux,
+`npm ci` échoue volontairement), puis relancer `check-server.sh`.
+
+**Ne jamais copier** : `deploy/.env`, `backend_new/.env`,
+`frontend_new/frontend/.env`, `node_modules/`, `dist/`, les dumps de base.
+
+### 5.2 Procédure complète
+
 ```bash
 cd /opt/uswap-github
 export T="-f deploy/compose.yaml --env-file deploy/.env"
 ```
 
 ```bash
+# 0. Contrôle de l'arborescence (voir §5.0) : doit se terminer sans erreur
+bash deploy/check-server.sh
+
 # 1. Récupérer la version finale et la branche de dockerisation
-#    (réseau Git interne ou copie contrôlée)
+#    (réseau Git interne ou copie contrôlée) — voir §5.1 pour une copie locale
 cd /opt/uswap-github
 git fetch --tags origin
 git switch develop && git pull --ff-only        # doit être sur Uswap-Final_V1.1
@@ -128,13 +203,18 @@ Le tag `Uswap-Final_V1.1` seul ne contient pas les fichiers Docker.
 cp deploy/.env.example deploy/.env
 #    Renseigner : POSTGRES_PASSWORD, ADMIN_BOOTSTRAP_PASSWORD, JWT_SECRET,
 #    JWT_REFRESH_SECRET, PUBLIC_APP_URL, CORS_ORIGIN, MAIL_*, VAPID_* puis
-#    vérifier les ports.
+#    vérifier les ports. Si les sources sont dans un dépôt cloné, ajouter
+#    FRONTEND_BUILD_CONTEXT / BACKEND_BUILD_CONTEXT (voir §5.0).
 chmod 600 deploy/.env
 
 # 3. Générer les secrets (exemples)
 openssl rand -base64 48   # JWT_SECRET
 openssl rand -base64 48   # JWT_REFRESH_SECRET
 openssl rand -base64 32   # POSTGRES_PASSWORD
+# Astuce non interactive :
+sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n')|" deploy/.env
+sed -i "s|^JWT_REFRESH_SECRET=.*|JWT_REFRESH_SECRET=$(openssl rand -base64 48 | tr -d '\n')|" deploy/.env
+sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d '\n')|" deploy/.env
 
 # 4. Vérifier la configuration. La sortie de `config` contient les valeurs
 #    résolues (donc les secrets) : ne pas la journaliser.
@@ -317,7 +397,27 @@ docker compose $T up -d --build                   # mise à jour après git pull
 - [ ] `.env` : permissions `600`, propriétaire root, hors Git.
 - [ ] Aucune erreur 5xx récurrente dans `logs backend` pendant 24 h.
 
-## 12. Opérations manuelles restantes
+## 12. Dépannage des erreurs de déploiement
+
+| Message observé | Cause réelle | Correction |
+| --- | --- | --- |
+| `cat: frontend/Dockerfile: No such file or directory` | Déploiement partiel : le dossier `frontend/` contient le code mais pas nos fichiers Docker, ou les sources sont ailleurs | §5.0 puis §5.1 |
+| `failed to read dockerfile: open /var/lib/docker/tmp/buildkit-mount…/Dockerfile` | `build.context` pointe vers un dossier sans `Dockerfile` | `FRONTEND_BUILD_CONTEXT` / `BACKEND_BUILD_CONTEXT` dans `deploy/.env` |
+| `error during connect` / `Cannot connect to the Docker daemon` | Le service ne tourne pas ou l'utilisateur n'est pas dans le groupe `docker` | `systemctl status docker`, `sudo docker …` (ici `root`, donc plutôt Docker arrêté) |
+| `permission denied while trying to connect to the Docker daemon socket` | Utilisateur hors groupe `docker` | `sudo usermod -aG docker <utilisateur>` puis reconnexion |
+| `npm ci` : `The npm ci command can only install with an existing package-lock.json` | `package-lock.json` non copié | Copier le lockfile (§5.1) |
+| `npm ci` : `EBADENGINE` | Version de Node de l'image trop ancienne | Ne pas éditer le `FROM` : les Dockerfiles utilisent déjà `node:22` |
+| `prisma migrate deploy` : `P3005 database schema is not empty` | Migrations appliquées deux fois ou base restaurée sans `_prisma_migrations` | Ne jamais utiliser `migrate reset` en production : recréer un volume vide, ou restaurer un dump cohérent (§9) |
+| `P1001 Can't reach database server` | Backend démarré avant que `db` soit `healthy` | `docker compose … ps`, puis `up -d` (le `depends_on` attend le healthcheck) |
+| `port is already allocated` | Port 8080 ou 3000 déjà pris sur l'hôte | `FRONTEND_HOST_PORT` / `BACKEND_HOST_PORT` dans `deploy/.env` (`check-server.sh` le détecte) |
+| page servie mais `mode démo` | Image frontend construite sans `VITE_API_URL` | Reconstruire l'image (le Dockerfile refuse `VITE_API_URL` vide) |
+| `permission denied` sur `uswap-uploads` | Le conteneur tourne avec `USER node` (UID 1000) | `docker compose … exec -u root backend chown -R node:node /app/var` |
+
+Node.js **10.19.0** sur l'hôte (`node --version`) est sans importance :
+les images se construisent dans `node:22-bookworm-slim`. L'hôte n'exécute
+que Docker ; n'installez pas de Node sur le serveur.
+
+## 13. Opérations manuelles restantes
 
 1. Créer `deploy/.env` avec des secrets propres à l'environnement
    (`POSTGRES_PASSWORD`, `ADMIN_BOOTSTRAP_PASSWORD`, `JWT_SECRET`,
@@ -331,7 +431,7 @@ docker compose $T up -d --build                   # mise à jour après git pull
 8. Planifier les sauvegardes (cron) et tester une restauration.
 9. Valider la surveillance (healthchecks Docker, journaux, alertes disque).
 
-## 13. Validation réalisée localement
+## 14. Validation réalisée localement
 
 | Vérification | Résultat |
 | --- | --- |
@@ -347,6 +447,7 @@ docker compose $T up -d --build                   # mise à jour après git pull
 | `deploy/compose.yaml` (syntaxe / ancrage relatif) | ⚠️ YAML validé (`yaml-lint`, parsing `js-yaml`) mais **pas** `docker compose config` |
 | Construction des images / démarrage / healthchecks | ❌ **non exécuté** |
 | Vérification syntaxique `nginx.conf` | ❌ **non exécuté** (`nginx -t` impossible sans image) |
+| `deploy/check-server.sh` (3 scénarios : sources absentes, à plat, dépôt cloné) | ✅ testé en simulation le 2026-10-21 |
 
 **À faire en premier sur une machine avec Docker** :
 
@@ -361,7 +462,7 @@ curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/api/auth/session
 curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/app/admin          # attendu : 200 (index.html)
 ```
 
-## 14. Inventaire de livraison
+## 15. Inventaire de livraison
 
 **À versionner / remettre (dans le dépôt Git)**
 

@@ -1,1 +1,5 @@
 *.pdf binary
+
+# Scripts shell : TOUJOURS en LF, meme si le depot est travaille sous Windows.
+# Un script bash en CRLF echoue sur Linux avec "$'\r': command not found".
+*.sh text eol=lf
