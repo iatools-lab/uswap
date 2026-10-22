@@ -3,3 +3,13 @@
 # Scripts shell : TOUJOURS en LF, meme si le depot est travaille sous Windows.
 # Un script bash en CRLF echoue sur Linux avec "$'\r': command not found".
 *.sh text eol=lf
+
+# Migrations Prisma : TOUJOURS en LF. Leur contenu est envoye tel quel a
+# PostgreSQL par `prisma migrate deploy`, depuis un conteneur Linux. Un BOM
+# UTF-8 en tete fait echouer la migration (syntax error at or near "--") et un
+# CRLF n'apporte rien. Git doit restituer le fichier a l'identique sur Linux
+# comme sous Windows.
+*.sql text eol=lf
+
+# Fichiers de configuration destines a un conteneur Linux.
+*.conf text eol=lf
