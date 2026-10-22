@@ -1,17 +1,25 @@
-import Card from "@tremor/react/dist/components/layout-elements/Card/Card.js";
+/**
+ * Carte de produit cartesien (KPI).
+ *
+ * Historiquement rendue par le `Card` de @tremor/react. Ce composant n'apportait
+ * qu'une <div> portant des classes Tailwind, or Tailwind n'est pas installe :
+ * ces classes ne produisaient aucun style. Le rendu vient entierement de
+ * `kpi-card.css`, dont les classes `tremor-kpi*` sont conservees pour ne pas
+ * toucher aux feuilles existantes (dont admin-home.css).
+ */
 import type { ReactNode } from "react";
 import "./kpi-card.css";
 
 export type KpiTone = "navy" | "blue" | "green" | "amber" | "red" | "neutral";
 
-const TREMOR_COLORS: Record<KpiTone, string> = {
-  navy: "indigo",
-  blue: "blue",
-  green: "emerald",
-  amber: "amber",
-  red: "rose",
-  neutral: "slate",
-};
+const KPI_TONES: ReadonlySet<KpiTone> = new Set([
+  "navy",
+  "blue",
+  "green",
+  "amber",
+  "red",
+  "neutral",
+]);
 
 export function KpiCard({
   label,
@@ -39,11 +47,11 @@ export function KpiCard({
   const normalizedProgress =
     progress === undefined ? undefined : Math.max(0, Math.min(100, progress));
 
+  const toneClass = KPI_TONES.has(tone) ? tone : "navy";
+
   return (
-    <Card
-      decoration="top"
-      decorationColor={TREMOR_COLORS[tone] as never}
-      className={`tremor-kpi tremor-kpi--${tone}${compact ? " tremor-kpi--compact" : ""}${className ? ` ${className}` : ""}`}
+    <div
+      className={`tremor-kpi tremor-kpi--${toneClass}${compact ? " tremor-kpi--compact" : ""}${className ? ` ${className}` : ""}`}
     >
       <div className="tremor-kpi__head">
         <span className="tremor-kpi__label">{label}</span>
@@ -64,6 +72,6 @@ export function KpiCard({
       )}
       {hint && <div className="tremor-kpi__hint">{hint}</div>}
       {children}
-    </Card>
+    </div>
   );
 }
