@@ -332,21 +332,13 @@ export class NotificationsService implements OnModuleInit {
     variables: Record<string, string>,
   ): Promise<void> {
     const { subject, html, text } = renderTemplate(template, variables);
-    const record = await this.prisma.emailLog.create({
-      data: { to, subject, template, status: 'PENDING' },
-    });
+    // `deliver` cree et met a jour la ligne EmailLog (PENDING -> SENT/FAILED).
+    // Ne PAS en creer une seconde ici : elle resterait bloquee en PENDING et
+    // ferait croire a un envoi en attente qui n'arrivera jamais.
     try {
-      await this.deliver(to, subject, html, text);
-      await this.prisma.emailLog.update({
-        where: { id: record.id },
-        data: { status: 'SENT', sentAt: new Date() },
-      });
+      await this.deliver(to, subject, html, text, template);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Echec d’envoi.';
-      await this.prisma.emailLog.update({
-        where: { id: record.id },
-        data: { status: 'FAILED', error: message },
-      });
       this.logger.error(`E-mail ${template} vers ${to} non envoye : ${message}`);
       throw error;
     }
@@ -409,7 +401,7 @@ export class NotificationsService implements OnModuleInit {
             ? `${this.config.get('publicAppUrl', { infer: true })}${options.targetUrl}`
             : '',
         });
-        await this.deliver(recipient, subject, html, text);
+        await this.deliver(recipient, subject, html, text, 'NOTIFICATION');
         await this.recordDelivery(notificationId, userId, channel, {
           status: 'SENT',
           recipient,
