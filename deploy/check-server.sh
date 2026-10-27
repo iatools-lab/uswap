@@ -105,11 +105,38 @@ else
   grep -q 'provider = "postgresql"' "$backend_dir/prisma/schema.prisma" 2>/dev/null \
     && pass "  datasource PostgreSQL" \
     || bad "  prisma/schema.prisma n'est pas en PostgreSQL"
+  for f in prisma/bootstrap.ts prisma/reset.ts; do
+    [ -f "$backend_dir/$f" ] && pass "  $f" || bad "  $f manquant (initialisation serveur)"
+  done
+fi
+echo
+
+# ------------------------------------------------------- comptes initiaux ---
+echo "4. Comptes crees a l'initialisation (service bootstrap)"
+bootstrap_ok=1
+for key in SUPERADMIN_EMAIL SUPERADMIN_PASSWORD; do
+  value="$(env_get "$key")"
+  if [ -z "$value" ] || printf '%s' "$value" | grep -q 'CHANGER-'; then
+    bad "$key non renseigne dans deploy/.env"
+    bootstrap_ok=0
+  else
+    pass "$key renseigne"
+  fi
+done
+if [ "$bootstrap_ok" = "1" ]; then
+  super_pass="$(env_get SUPERADMIN_PASSWORD)"
+  if [ "${#super_pass}" -lt 12 ]; then
+    bad "SUPERADMIN_PASSWORD doit contenir au moins 12 caracteres"
+  else
+    pass "SUPERADMIN_PASSWORD respecte la longueur minimale"
+  fi
+  # Ne JAMAIS afficher le mot de passe : seule l'adresse est montree.
+  pass "super administrateur : $(env_get SUPERADMIN_EMAIL)"
 fi
 echo
 
 # ------------------------------------------------------------------ ports ---
-echo "4. Ports deja utilises (Docker publie 127.0.0.1)"
+echo "5. Ports deja utilises (Docker publie 127.0.0.1)"
 echo
 get_port() { sed -n "s/^[[:space:]]*$1:[[:space:]]*//p" deploy/.env 2>/dev/null | head -n1 | tr -d '\r'; }
 front_port="$(get_port FRONTEND_HOST_PORT)"; front_port="${front_port:-8080}"

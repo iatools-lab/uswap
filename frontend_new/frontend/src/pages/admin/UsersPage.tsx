@@ -12,7 +12,14 @@ import { UserCreateModal } from "../../features/users/UserCreateModal";
 import { notify } from "../../ui/Toast";
 import { interceptNav } from "../../app/spaNav";
 import { useSession } from "../../app/session";
-import { api, ApiError, roles, type User } from "../../api/auth-api";
+import {
+  api,
+  ApiError,
+  assignableRoles,
+  roles,
+  type User,
+} from "../../api/auth-api";
+import { useAppPath } from "../../app/appBase";
 import { Select } from "../../ui/Select";
 import {
   Building2,
@@ -54,10 +61,15 @@ const statusInfo = (member: Member): { label: string; tone: string } => {
 };
 
 export function UsersPage() {
-  const { onAccessLost } = useSession();
+  const { onAccessLost, session } = useSession();
+  // Espace courant : /app/admin ou /app/super-admin (écran partagé).
+  const path = useAppPath();
   const location = useLocation();
   const navigate = useNavigate();
-  const creating = location.pathname === "/app/admin/utilisateurs/nouveau";
+  const creating = location.pathname === path("/app/admin/utilisateurs/nouveau");
+  // La liste des rôles proposée dépend du signataire (un administrateur ne
+  // peut pas créer de super administrateur).
+  const allowedRoles = assignableRoles(session?.user.role);
   const [sort, setSort] = useState("recent");
   const [showCreateModal, setShowCreateModal] = useState(creating);
   const [members, setMembers] = useState<Member[] | null>(null);
@@ -240,21 +252,42 @@ export function UsersPage() {
     }
   }
 
+  /**
+   * Bascule l'état d'un compte.
+   *
+   * Le succès n'est annoncé qu'après relecture de la fiche : c'est la réponse du
+   * serveur (`enabled` + `message`) qui fait foi, jamais l'état supposé avant
+   * l'appel. Une réactivation doit vraiment ramener `disabledAt` à `null`.
+   */
   async function handleToggleStatus() {
     if (!confirmingMember) return;
+    const target = confirmingMember;
     setActionBusy(true);
     try {
       const current = await api<{
         updatedAt: string;
         disabledAt: string | null;
-      }>("/users/" + confirmingMember.id);
-      await api(
-        "/users/" + confirmingMember.id + "/status",
-        { enabled: !!current.disabledAt, updatedAt: current.updatedAt },
+      }>("/users/" + target.id);
+      const enable = !!current.disabledAt;
+      const response = await api<{ enabled?: boolean; message?: string }>(
+        "/users/" + target.id + "/status",
+        { enabled: enable, updatedAt: current.updatedAt },
         "PATCH",
       );
+      // Confirmation par relecture : on n'affiche le succès que si la base a
+      // bien enregistré l'état demandé.
+      const saved = await api<{ disabledAt: string | null }>(
+        "/users/" + target.id,
+      );
+      if (!!saved.disabledAt === enable) {
+        throw new Error(
+          "La mise à jour n'a pas été enregistrée. Rechargez la page et réessayez.",
+        );
+      }
       notify(
-        confirmingMember.disabledAt ? "Compte réactivé." : "Compte désactivé.",
+        response.message ??
+          (enable ? "Compte réactivé." : "Compte désactivé."),
+        "success",
       );
       setConfirmingMember(null);
       setRevision((value) => value + 1);
@@ -267,7 +300,7 @@ export function UsersPage() {
 
   function closeCreate() {
     setShowCreateModal(false);
-    if (creating) navigate("/app/admin/utilisateurs");
+    if (creating) navigate(path("/app/admin/utilisateurs"));
   }
 
   const visibleMembers = members || [];
@@ -424,13 +457,13 @@ export function UsersPage() {
               <div className="directory-dropdown-menu" role="menu">
                 <a
                   role="menuitem"
-                  href="/app/admin/utilisateurs/import"
+                  href={path("/app/admin/utilisateurs/import")}
                   onClick={(event) => {
                     setActionsOpen(false);
                     interceptNav(
                       event,
                       navigate,
-                      "/app/admin/utilisateurs/import",
+                      path("/app/admin/utilisateurs/import"),
                     );
                   }}
                 >
@@ -519,7 +552,7 @@ export function UsersPage() {
               >
                 Tous les rôles
               </button>
-              {Object.entries(roles).map(([value, label]) => (
+              {allowedRoles.map((value) => (
                 <button
                   key={value}
                   type="button"
@@ -532,7 +565,7 @@ export function UsersPage() {
                     setOpenFilter(null);
                   }}
                 >
-                  {label}
+                  {roles[value]}
                 </button>
               ))}
             </div>
@@ -642,12 +675,12 @@ export function UsersPage() {
                       <td data-label="Collaborateur">
                         <a
                           className="admin-person"
-                          href={"/app/admin/utilisateurs/" + member.id}
+                          href={path("/app/admin/utilisateurs/" + member.id)}
                           onClick={(event) =>
                             interceptNav(
                               event,
                               navigate,
-                              "/app/admin/utilisateurs/" + member.id,
+                              path("/app/admin/utilisateurs/" + member.id),
                             )
                           }
                         >
@@ -681,12 +714,12 @@ export function UsersPage() {
                         <div className="row-actions station-row-actions">
                           <a
                             className="admin-button secondary small"
-                            href={"/app/admin/utilisateurs/" + member.id}
+                            href={path("/app/admin/utilisateurs/" + member.id)}
                             onClick={(event) =>
                               interceptNav(
                                 event,
                                 navigate,
-                                "/app/admin/utilisateurs/" + member.id,
+                                path("/app/admin/utilisateurs/" + member.id),
                               )
                             }
                           >
@@ -754,12 +787,12 @@ export function UsersPage() {
                   <div className="station-card-actions">
                     <a
                       className="admin-button secondary small"
-                      href={"/app/admin/utilisateurs/" + member.id}
+                      href={path("/app/admin/utilisateurs/" + member.id)}
                       onClick={(event) =>
                         interceptNav(
                           event,
                           navigate,
-                          "/app/admin/utilisateurs/" + member.id,
+                          path("/app/admin/utilisateurs/" + member.id),
                         )
                       }
                     >

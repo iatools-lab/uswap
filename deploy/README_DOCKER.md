@@ -257,19 +257,48 @@ docker compose $T --profile tools run --rm migrate status
 **Interdits en production** : `prisma migrate dev`, `prisma migrate reset`,
 `prisma db push`, `docker compose down -v`, `docker system prune`.
 
-### Jeu de démonstration (optionnel, environnement de recette uniquement)
+### Initialisation d'un serveur vierge (obligatoire, une seule fois)
 
-Le seed crée des comptes de démonstration (`admin@upowa.org`, etc.) avec un
-mot de passe défini par `DEMO_PASSWORD` (valeur par défaut dans
-`prisma/seed.ts`). **Ne pas exécuter sur une base de production** sans
-décision explicite du superviseur.
+Sur une base neuve, après `migrate`, le service `bootstrap` crée le
+**référentiel** (réglages globaux, stations, modèles de shift), le **super
+administrateur** (`SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`) puis les
+préférences de notification. Aucun agent, planning, pointage, congé ou incident
+n'est créé : la plateforme démarre propre.
 
 ```bash
 export T="-f deploy/compose.yaml --env-file deploy/.env"
 
-docker compose $T --profile tools run --rm \
-  --entrypoint npx migrate --yes tsx prisma/seed.ts
+docker compose $T --profile tools run --rm bootstrap
 ```
+
+Le script est **idempotent** : il peut être rejoué à chaque déploiement. Il ne
+supprime jamais de données et ne réécrit pas le mot de passe d'un compte
+existant (un mot de passe changé par l'utilisateur reste valable).
+
+### Jeu de démonstration (recette uniquement, jamais en production)
+
+`npm run seed` crée des comptes et des données de démonstration (agents,
+planning, service du jour). Il exige `DEMO_PASSWORD` et s'exécute dans un
+conteneur temporaire :
+
+```bash
+docker compose $T run --rm --entrypoint sh backend \
+  -c "npm install --no-save --no-audit --no-fund && npm run seed"
+```
+
+Pour repartir d'une base propre après une phase de démonstration, sans toucher
+au référentiel ni aux comptes réels :
+
+```bash
+docker compose $T run --rm --entrypoint sh backend \
+  -c "npm install --no-save --no-audit --no-fund && npm run db:reset -- --confirm"
+```
+
+`db:reset` supprime plannings, services, pointages, absences, congés,
+incidents, notifications, journaux et comptes de test (`@upowa.org`,
+`@uswap.test`, `@example.*`), et **conserve** les stations, les modèles de
+shift, les réglages et les comptes réels (adresses `@gmail.com` par exemple).
+Sans `--confirm`, il affiche seulement les volumes concernés.
 
 ## 7. Nginx de l'hôte (HTTPS)
 
@@ -318,7 +347,7 @@ Deux scénarios :
 
 | Scénario | Procédure |
 | --- | --- |
-| **A. Base dédiée neuve** (par défaut) | `up -d` puis `migrate`, puis création des comptes réels (invitations / import utilisateurs). Aucun seed de démo. |
+| **A. Base dédiée neuve** (par défaut) | `up -d`, puis `migrate`, puis `bootstrap` (référentiel + super administrateur). Les autres comptes se créent ensuite depuis l'interface (invitations) ou par import. Aucun seed de démo. |
 | **B. Reprise de la base existante** | Restaurer le dump de production dans le conteneur `db` **avant** de démarrer le backend (§9), puis `up -d`. Le volume de l'ancienne base reste intact jusqu'à validation. |
 
 Si le superviseur préfère réutiliser le **PostgreSQL déjà installé sur

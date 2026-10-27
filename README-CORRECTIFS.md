@@ -11,7 +11,7 @@ supprimé ni ajouté).
 
 ## Les 8 corrections
 
-### 1. Accents cassés (« publiÃ© », « â€” »…)
+### 1. Accents cassés (« publié », « ” »…)
 Une partie des fichiers avait été ré-encodée (UTF-8 relu en Windows-1252), ce qui
 doublait les accents. `scripts/fix-mojibake.cjs` répare uniquement les séquences
 corrompues — la corruption étant partielle, un ré-encodage global aurait cassé

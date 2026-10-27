@@ -222,7 +222,7 @@ export class AuthService {
   async sendInvitation(
     userId: string,
     options: { resend?: boolean } = {},
-  ): Promise<{ url: string; expiresAt: Date }> {
+  ): Promise<{ url: string; expiresAt: Date; invitationStatus: string }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new DomainException(
@@ -278,7 +278,12 @@ export class AuthService {
         });
       });
 
-    return { url, expiresAt };
+    const status = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { invitationStatus: true },
+    });
+
+    return { url, expiresAt, invitationStatus: status?.invitationStatus ?? 'SENT' };
   }
 
   async sendPasswordReset(user: User): Promise<void> {
@@ -302,10 +307,27 @@ export class AuthService {
    * Repare l'acces administrateur, comme la maquette frontend : un compte
    * administrateur ne doit jamais rester inaccessible apres une remise a zero.
    * Le changement est journalise.
+   *
+   * **Uniquement s'il n'existe aucun compte de pilotage actif.** Auparavant, le
+   * simple fait de desactiver le premier administrateur suffisait a le voir
+   * reactive (avec un mot de passe impose) au redemarrage suivant : c'est
+   * exactement ce qui rendait la desactivation "impossible a reactiver
+   * manuellement" et faisait apparaitre un message inattendu.
    */
   async ensureAdminAccess(password: string): Promise<void> {
+    const staff = await this.prisma.user.findMany({
+      where: {
+        role: { in: ['SUPER_ADMIN', 'ADMIN'] },
+        isActive: true,
+        disabledAt: null,
+      },
+      select: { id: true },
+      take: 1,
+    });
+    if (staff.length) return;
+
     const admin = await this.prisma.user.findFirst({
-      where: { role: 'ADMIN' },
+      where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] } },
       orderBy: { createdAt: 'asc' },
     });
     if (!admin) return;
@@ -335,6 +357,7 @@ export class AuthService {
 
   private roleLabel(role: string): string {
     const labels: Record<string, string> = {
+      SUPER_ADMIN: 'Super administrateur',
       ADMIN: 'Administrateur',
       SUPERVISOR: 'Superviseur',
       SWAPPER: 'Agent',

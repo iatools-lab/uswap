@@ -221,9 +221,14 @@ export class ConstraintsService {
       });
     }
 
+    // L'avertissement porte sur la semaine *du creneau*, pas sur la semaine en
+    // cours : un ancien planning ne doit pas rendre un agent indisponible
+    // aujourd'hui (c'etait la cause du dialogue « Ajouter des swappeurs »
+    // entierement gris, aucun candidat ne repondant « disponible »).
     const weeklyLimitWarning = await this.weeklyLimitWarning(
       station,
       input.swapperId,
+      weekStart,
     );
     if (weeklyLimitWarning) warnings.push(weeklyLimitWarning);
 
@@ -295,8 +300,8 @@ export class ConstraintsService {
   private async weeklyLimitWarning(
     station: Station,
     swapperId: string,
+    weekStart: string = weekKeyOf(new Date().toISOString()),
   ): Promise<ConstraintIssue | null> {
-    const weekStart = weekKeyOf(new Date().toISOString());
     const hours = await this.hoursInWeek(swapperId, weekStart);
     if (hours > station.weeklyHoursLimit * 0.9) {
       return {

@@ -2,12 +2,14 @@
  * Roles reconnus par le systeme — identiques a `Role` cote frontend.
  */
 export enum Role {
+  SUPER_ADMIN = 'SUPER_ADMIN',
   ADMIN = 'ADMIN',
   SUPERVISOR = 'SUPERVISOR',
   SWAPPER = 'SWAPPER',
 }
 
 export const ROLE_LABELS: Record<Role, string> = {
+  [Role.SUPER_ADMIN]: 'Super administrateur',
   [Role.ADMIN]: 'Administrateur',
   [Role.SUPERVISOR]: 'Superviseur',
   [Role.SWAPPER]: 'Agent',

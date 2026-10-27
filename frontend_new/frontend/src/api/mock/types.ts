@@ -6,7 +6,7 @@
  * connaître la différence entre les données fictives et un vrai service.
  */
 
-export type Role = "ADMIN" | "SUPERVISOR" | "SWAPPER";
+export type Role = "SUPER_ADMIN" | "ADMIN" | "SUPERVISOR" | "SWAPPER";
 
 export type AttendanceStatus =
   "EXPECTED" | "PRESENT" | "LATE" | "CLOSED" | "ABSENT" | "JUSTIFIED";

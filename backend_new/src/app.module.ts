@@ -21,6 +21,7 @@ import { AdminModule } from './admin/admin.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AutomationModule } from './automation/automation.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { MaintenanceModule } from './maintenance/maintenance.module';
 import { RolesGuard } from './common/guards/roles.guard';
 import { SessionMiddleware } from './common/middleware/session.middleware';
 
@@ -50,6 +51,7 @@ import { SessionMiddleware } from './common/middleware/session.middleware';
     AdminModule,
     AutomationModule,
     DashboardModule,
+    MaintenanceModule,
   ],
   providers: [
     {

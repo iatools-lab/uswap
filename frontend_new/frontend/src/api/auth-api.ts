@@ -3,7 +3,7 @@ import { DEMO_PASSWORD, MOCK_LATENCY_MS, delay } from "./mock";
 import { FICTITIOUS_DOMAIN, MOCK_LOGIN_PROFILES } from "./mock/seed";
 import { MockHttpError, type MockCtx } from "./mock/types";
 
-export type Role = "ADMIN" | "SUPERVISOR" | "SWAPPER";
+export type Role = "SUPER_ADMIN" | "ADMIN" | "SUPERVISOR" | "SWAPPER";
 
 export type UserIcon = {
   id: string;
@@ -27,16 +27,31 @@ export type Session = {
 };
 
 export const roles: Record<Role, string> = {
+  SUPER_ADMIN: "Super administrateur",
   ADMIN: "Administrateur",
   SUPERVISOR: "Superviseur",
   SWAPPER: "Swappeur",
 };
 
 export const rolePaths: Record<Role, string> = {
+  SUPER_ADMIN: "/app/super-admin",
   ADMIN: "/app/admin",
   SUPERVISOR: "/app/supervision",
   SWAPPER: "/app/mon-espace",
 };
+
+/**
+ * Roles attribuables par l'utilisateur connecte.
+ *
+ * - Super administrateur : tous, y compris le sien.
+ * - Administrateur : jamais de super administrateur.
+ * - Superviseur : tous (il gere les comptes).
+ */
+export function assignableRoles(actor: Role | undefined): Role[] {
+  if (actor === "SUPER_ADMIN" || actor === "SUPERVISOR")
+    return ["SUPER_ADMIN", "ADMIN", "SUPERVISOR", "SWAPPER"];
+  return ["ADMIN", "SUPERVISOR", "SWAPPER"];
+}
 
 export const mockPeople: User[] = MOCK_LOGIN_PROFILES;
 

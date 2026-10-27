@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { StepperModal, type StepItem } from "../../ui/StepperModal";
 import { UserRound, Eye, EyeOff, CheckCheck } from "../../ui/icons";
-import { api, roles } from "../../api/auth-api";
+import { api, assignableRoles, roles, type Role } from "../../api/auth-api";
+import { useSession } from "../../app/session";
 import { StationPicker } from "../stations/StationPicker";
 import { Select } from "../../ui/Select";
 interface UserCreateModalProps {
@@ -34,6 +35,12 @@ export function UserCreateModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const requiresStation = role === "SWAPPER";
+
+  // Le rôle du signataire détermine la liste proposée : un administrateur ne
+  // peut jamais créer de super administrateur, un superviseur peut créer tous
+  // les rôles. Le serveur applique la même règle (défense en profondeur).
+  const { session } = useSession();
+  const allowedRoles = assignableRoles(session?.user.role);
 
   const resetForm = () => {
     setFullName("");
@@ -151,7 +158,7 @@ export function UserCreateModal({
       label: "Rôle & Station",
       isValid: () =>
         !!role &&
-        Object.keys(roles).includes(role) &&
+        allowedRoles.includes(role as Role) &&
         (!requiresStation || !!stationId),
       content: (
         <div className="stepper-form-layout">
@@ -167,9 +174,9 @@ export function UserCreateModal({
                 }
               }}
               placeholder="Sélectionner un rôle"
-              options={Object.entries(roles).map(([val, label]) => ({
-                label,
-                value: val,
+              options={allowedRoles.map((value) => ({
+                label: roles[value],
+                value,
               }))}
             />
           </div>

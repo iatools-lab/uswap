@@ -71,6 +71,15 @@ class CreatePlanningBody implements CreatePlanningDto {
   @IsString()
   idempotencyKey?: string;
 
+  /**
+   * Créneaux envoyés avec le planning (génération guidée). Sans cette
+   * déclaration, la whitelist de validation retirait la propriété et le
+   * serveur créait un planning **vide** en répondant 201.
+   */
+  @IsOptional()
+  @IsArray()
+  assignments?: CreatePlanningDto['assignments'];
+
   /** Le frontend envoie `startDate`/`endDate` : alias de la période. */
   @IsOptional()
   @IsString()
@@ -336,7 +345,14 @@ export class PlanningsController {
   @Roles(Role.ADMIN, Role.SUPERVISOR)
   @HttpCode(200)
   @ApiOperation({ summary: 'Contrôle la couverture avant publication' })
-  validate(@Param('id') id: string) {
+  // Les écrans envoient `{ revision }` : sans `@Body()`, la whitelist globale
+  // rejetait la propriété en 400 ("property revision should not exist") et le
+  // contrôle était indisponible pour tous les candidats — l'écran d'affectation
+  // restait donc entièrement grisé.
+  validate(
+    @Param('id') id: string,
+    @Body() _body?: { revision?: number },
+  ) {
     return this.planning.validatePlanning(id);
   }
 
@@ -344,7 +360,10 @@ export class PlanningsController {
   @Patch(':id/validate')
   @Roles(Role.ADMIN, Role.SUPERVISOR)
   @ApiOperation({ summary: 'Alias de la validation de planification' })
-  validatePatch(@Param('id') id: string) {
+  validatePatch(
+    @Param('id') id: string,
+    @Body() _body?: { revision?: number },
+  ) {
     return this.planning.validatePlanning(id);
   }
 
@@ -352,14 +371,22 @@ export class PlanningsController {
   @Roles(Role.ADMIN, Role.SUPERVISOR)
   @HttpCode(200)
   @ApiOperation({ summary: 'Publie la planification et notifie les agents' })
-  publish(@Param('id') id: string, @CurrentUser() actor: AuthenticatedUser) {
+  publish(
+    @Param('id') id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Body() _body?: { revision?: number },
+  ) {
     return this.planning.publish(id, actor);
   }
 
   @Patch(':id/publish')
   @Roles(Role.ADMIN, Role.SUPERVISOR)
   @ApiOperation({ summary: 'Alias de publication de planification' })
-  publishPatch(@Param('id') id: string, @CurrentUser() actor: AuthenticatedUser) {
+  publishPatch(
+    @Param('id') id: string,
+    @CurrentUser() actor: AuthenticatedUser,
+    @Body() _body?: { revision?: number },
+  ) {
     return this.planning.publish(id, actor);
   }
 
@@ -406,7 +433,7 @@ export class PlanningsController {
   validateOccurrence(
     @Param('id') id: string,
     @Param('occurrenceId') occurrenceId: string,
-    @Body() body: { swapperId?: string },
+    @Body() body: { swapperId?: string; revision?: number },
   ) {
     return this.planning.validateOccurrence(id, occurrenceId, body.swapperId ?? '');
   }
@@ -417,7 +444,7 @@ export class PlanningsController {
   validateOccurrencePatch(
     @Param('id') id: string,
     @Param('occurrenceId') occurrenceId: string,
-    @Body() body: { swapperId?: string },
+    @Body() body: { swapperId?: string; revision?: number },
   ) {
     return this.planning.validateOccurrence(id, occurrenceId, body.swapperId ?? '');
   }
@@ -448,6 +475,9 @@ export class PlanningsController {
       conflictPolicy: body.conflictPolicy,
       requiredStaff: body.requiredStaff,
       idempotencyKey: body.idempotencyKey,
+      ...(Array.isArray(body.assignments) && body.assignments.length
+        ? { assignments: body.assignments }
+        : {}),
     };
   }
 }

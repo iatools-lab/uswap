@@ -347,7 +347,12 @@ export function Planner({ user }: { user: User }) {
   const cacheKey = `uswap:planning-cache:${user.id}`;
   const navigate = useNavigate();
   const [planningName, setPlanningName] = useState("");
-  const writable = user.role === "ADMIN" || user.role === "SUPERVISOR";
+  // Le super administrateur herite des droits de l'administrateur (cote API,
+  // ROLE_RANK) : sans cela, son espace de pilotage etait en lecture seule.
+  const writable =
+    user.role === "ADMIN" ||
+    user.role === "SUPERVISOR" ||
+    user.role === "SUPER_ADMIN";
   const [plans, setPlans] = useState<Planning[]>([]);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [current, setCurrent] = useState<Planning | null>(null);
@@ -599,8 +604,16 @@ export function Planner({ user }: { user: User }) {
       <PlanningEditor
         key={current.id}
         planning={current}
-        writable={user.role === "SUPERVISOR" || user.role === "ADMIN"}
-        canPublish={user.role === "SUPERVISOR" || user.role === "ADMIN"}
+        writable={
+          user.role === "SUPERVISOR" ||
+          user.role === "ADMIN" ||
+          user.role === "SUPER_ADMIN"
+        }
+        canPublish={
+          user.role === "SUPERVISOR" ||
+          user.role === "ADMIN" ||
+          user.role === "SUPER_ADMIN"
+        }
         onUpdate={setCurrent}
         onBack={() => {
           setCurrent(null);
@@ -2605,9 +2618,16 @@ function Assignment({
   const activeUser = activeInfoId
     ? users?.find((user) => user.id === activeInfoId)
     : undefined;
-  const selectionReady =
-    selectedIds.length > 0 &&
-    selectedIds.every((id) => reports[id]?.value?.valid);
+  // Le bouton s'active des qu'une personne est choisie : ce sont les *erreurs*
+  // bloquantes (chevauchement, conge, repos…) qui interdisent l'enregistrement,
+  // pas les avertissements. Un controle indisponible ne doit pas non plus
+  // verrouiller tout le dialogue — le serveur revalide de toute façon a
+  // l'enregistrement.
+  const selectionReady = selectedIds.length > 0;
+  const blockingSelection = selectedIds.some((id) => {
+    const state = reports[id];
+    return !!state && !state.loading && !state.error && state.value?.valid === false;
+  });
   const dateInStation = (value: string) =>
     new Date(value).toLocaleDateString("fr-FR", {
       day: "2-digit",
@@ -2901,6 +2921,11 @@ function Assignment({
         <button
           className="admin-button"
           disabled={busy || !!error || !selectionReady}
+          title={
+            blockingSelection
+              ? "Au moins un swappeur sélectionné est en conflit sur ce créneau."
+              : undefined
+          }
         >
           {busy
             ? "Enregistrement…"

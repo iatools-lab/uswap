@@ -1,18 +1,18 @@
-/**
- * Contrôle des notifications — Étape 4.
+﻿/**
+ * ContrÃ´le des notifications â€” Ã‰tape 4.
  *
- * Déclenche des événements métier réels et vérifie que :
- *   1. une notification interne est créée pour le bon destinataire ;
- *   2. une ligne de livraison (canal) est journalisée ;
- *   3. un e-mail est journalisé (`EmailLog`) lorsque le canal est activé.
+ * DÃ©clenche des Ã©vÃ©nements mÃ©tier rÃ©els et vÃ©rifie que :
+ *   1. une notification interne est crÃ©Ã©e pour le bon destinataire ;
+ *   2. une ligne de livraison (canal) est journalisÃ©e ;
+ *   3. un e-mail est journalisÃ© (`EmailLog`) lorsque le canal est activÃ©.
  *
- * Le canal e-mail est "console" par défaut : l'e-mail est écrit dans les logs
- * et journalisé en base, sans envoi SMTP réel.
+ * Le canal e-mail est "console" par dÃ©faut : l'e-mail est Ã©crit dans les logs
+ * et journalisÃ© en base, sans envoi SMTP rÃ©el.
  *
  * Usage :  cd backend_new && node _scripts/check-notifications.mjs
  */
 const BASE = process.env.API_BASE ?? 'http://localhost:3000';
-const PASSWORD = process.env.SHAPE_PASSWORD ?? 'Uswap2026!Demo';
+const PASSWORD = process.env.SHAPE_PASSWORD ?? process.env.DEMO_PASSWORD ?? '';
 
 let pass = 0;
 let fail = 0;
@@ -82,17 +82,17 @@ async function main() {
     preferences.status === 200 && preferences.body !== undefined,
     `status=${preferences.status}`);
 
-  console.log('\n=== ÉVÉNEMENT: déclaration d’indisponibilité (swappeur) ===');
+  console.log('\n=== Ã‰VÃ‰NEMENT: dÃ©claration dâ€™indisponibilitÃ© (swappeur) ===');
   const before = (await notificationsOf(supervisor)).length;
 
-  // Trouver un poste publié du swappeur pour déclarer une absence.
+  // Trouver un poste publiÃ© du swappeur pour dÃ©clarer une absence.
   const workspace = await api('/workspace', swapper);
   const shifts = Array.isArray(workspace.body?.shifts) ? workspace.body.shifts : [];
-  check('swappeur: au moins un poste publié disponible', shifts.length > 0, `count=${shifts.length}`);
+  check('swappeur: au moins un poste publiÃ© disponible', shifts.length > 0, `count=${shifts.length}`);
 
   if (shifts.length) {
-    // Choisir un poste SANS absence déjà déclarée : le contrôle peut être
-    // relancé plusieurs fois sans buter sur la règle d'unicité.
+    // Choisir un poste SANS absence dÃ©jÃ  dÃ©clarÃ©e : le contrÃ´le peut Ãªtre
+    // relancÃ© plusieurs fois sans buter sur la rÃ¨gle d'unicitÃ©.
     const declared = new Set();
     let target = null;
     for (const shift of shifts) {
@@ -105,32 +105,32 @@ async function main() {
       method: 'POST',
       body: JSON.stringify({}),
     });
-    // L'upload attend du multipart : on tolère un 400/415, ce n'est pas le sujet ici.
+    // L'upload attend du multipart : on tolÃ¨re un 400/415, ce n'est pas le sujet ici.
     const declaration = await api('/operations/absences', swapper, {
       method: 'POST',
       body: JSON.stringify({
         shiftId: target.id,
-        reason: 'Contrôle automatique Étape 4',
+        reason: 'ContrÃ´le automatique Ã‰tape 4',
         attachmentId: null,
         clientRef: `check-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       }),
     });
     check(
-      'déclaration d’absence acceptée',
+      'dÃ©claration dâ€™absence acceptÃ©e',
       [200, 201, 409].includes(declaration.status),
       `status=${declaration.status} ${JSON.stringify(declaration.body).slice(0, 140)}`,
     );
-    // Un 409 « déjà déclarée » prouve aussi que la règle d'unicité tient.
+    // Un 409 Â« dÃ©jÃ  dÃ©clarÃ©e Â» prouve aussi que la rÃ¨gle d'unicitÃ© tient.
     const declared409 = declaration.status === 409 && declaration.body?.code === 'ABSENCE_ALREADY_DECLARED';
-    check('déclaration traitée (201 ou unicité 409)',
+    check('dÃ©claration traitÃ©e (201 ou unicitÃ© 409)',
       [200, 201].includes(declaration.status) || declared409,
       `status=${declaration.status}`);
 
     const after = (await notificationsOf(supervisor)).length;
-    check('supervision notifiée (file de notifications)', after >= before, `avant=${before} après=${after}`);
+    check('supervision notifiÃ©e (file de notifications)', after >= before, `avant=${before} aprÃ¨s=${after}`);
   }
 
-  console.log('\n=== ÉVÉNEMENT: demande de congé (swappeur) ===');
+  console.log('\n=== Ã‰VÃ‰NEMENT: demande de congÃ© (swappeur) ===');
   const supBefore = (await notificationsOf(supervisor)).length;
   const leaveStart = new Date(
     Date.now() + (60 + Math.floor(Math.random() * 200)) * 86_400_000,
@@ -142,45 +142,45 @@ async function main() {
       startDate: leaveStart.toISOString().slice(0, 10),
       endDate: leaveEnd.toISOString().slice(0, 10),
       type: 'ANNUAL',
-      reason: 'Contrôle automatique Étape 4',
+      reason: 'ContrÃ´le automatique Ã‰tape 4',
     }),
   });
-  check('demande de congé créée (201)',
+  check('demande de congÃ© crÃ©Ã©e (201)',
     leave.status === 201 || (leave.status === 409 && leave.body?.code === 'LEAVE_OVERLAP'),
     `status=${leave.status} ${JSON.stringify(leave.body).slice(0, 140)}`);
 
   const supAfter = (await notificationsOf(supervisor)).length;
-  check('supervision notifiée de la demande de congé', supAfter >= supBefore,
-    `avant=${supBefore} après=${supAfter}`);
+  check('supervision notifiÃ©e de la demande de congÃ©', supAfter >= supBefore,
+    `avant=${supBefore} aprÃ¨s=${supAfter}`);
 
-  // Décision -> le swappeur doit être notifié.
+  // DÃ©cision -> le swappeur doit Ãªtre notifiÃ©.
   if (leave.body?.id) {
     const swBefore = (await notificationsOf(swapper)).length;
     const decision = await api(`/leaves/${leave.body.id}/decision`, supervisor, {
       method: 'PATCH',
-      body: JSON.stringify({ decision: 'APPROVED', reason: 'Contrôle Étape 4' }),
+      body: JSON.stringify({ decision: 'APPROVED', reason: 'ContrÃ´le Ã‰tape 4' }),
     });
-    check('décision de congé acceptée', decision.status === 200 || decision.status === 201,
+    check('dÃ©cision de congÃ© acceptÃ©e', decision.status === 200 || decision.status === 201,
       `status=${decision.status}`);
     const swAfter = (await notificationsOf(swapper)).length;
-    check('swappeur notifié de la décision', swAfter > swBefore, `avant=${swBefore} après=${swAfter}`);
+    check('swappeur notifiÃ© de la dÃ©cision', swAfter > swBefore, `avant=${swBefore} aprÃ¨s=${swAfter}`);
   }
 
-  console.log('\n=== ÉVÉNEMENT: publication de planning ===');
+  console.log('\n=== Ã‰VÃ‰NEMENT: publication de planning ===');
   const swBefore = (await notificationsOf(swapper)).length;
   const plans = await api('/plannings', supervisor);
   const plan = Array.isArray(plans.body) ? plans.body.find((p) => p.status === 'DRAFT') : null;
   if (plan) {
     const published = await api(`/plannings/${plan.id}/publish`, supervisor, { method: 'POST' });
-    check('publication traitée', [200, 201, 409].includes(published.status),
+    check('publication traitÃ©e', [200, 201, 409].includes(published.status),
       `status=${published.status}`);
     const swAfter = (await notificationsOf(swapper)).length;
-    check('agent notifié (ou planning vide)', swAfter >= swBefore, `avant=${swBefore} après=${swAfter}`);
+    check('agent notifiÃ© (ou planning vide)', swAfter >= swBefore, `avant=${swBefore} aprÃ¨s=${swAfter}`);
   } else {
-    console.log('  (aucun brouillon à publier — ignoré)');
+    console.log('  (aucun brouillon Ã  publier â€” ignorÃ©)');
   }
 
-  console.log('\n=== PRÉFÉRENCES: canal e-mail ===');
+  console.log('\n=== PRÃ‰FÃ‰RENCES: canal e-mail ===');
   const update = await api('/notifications/preferences', admin, {
     method: 'PATCH',
     body: JSON.stringify({ email: true, inApp: true }),

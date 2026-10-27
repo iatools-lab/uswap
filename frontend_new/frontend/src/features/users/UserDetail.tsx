@@ -1,6 +1,7 @@
 import { notify } from "../../ui/Toast";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { api, roles, type Role } from "../../api/auth-api";
+import { api, assignableRoles, roles, type Role } from "../../api/auth-api";
+import { useSession } from "../../app/session";
 import { ArrowLeft, LoaderCircle, Mail } from "../../ui/icons";
 import {
   ClockCounterClockwiseIcon,
@@ -64,17 +65,20 @@ const labels: Record<string, string> = {
   disabledAt: "Date de désactivation",
 };
 
+// Heure de la station (Africa/Douala) : l'heure du navigateur decalait les
+// fiches de toute l'equipe selon le fuseau du poste.
 const formatDate = (value: string) => {
   if (!value) return "—";
   const date = new Date(value);
   if (isNaN(date.getTime())) return String(value);
-  return date.toLocaleString("fr-FR", {
+  return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "Africa/Douala",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  });
+  }).format(date);
 };
 
 export function UserDetail({
@@ -88,6 +92,10 @@ export function UserDetail({
   onBack: () => void;
   onChanged: () => void;
 }) {
+  const { session } = useSession();
+  // Un administrateur ne peut pas promouvoir un compte en super administrateur ;
+  // le serveur refuserait de toute façon.
+  const roleOptions = assignableRoles(session?.user.role);
   const [user, setUser] = useState<Detail | null>(null);
   const [form, setForm] = useState<Detail | null>(null);
   const [busy, setBusy] = useState(false);
@@ -132,18 +140,35 @@ export function UserDetail({
     void load();
   }, [id]);
 
-  async function action(run: () => Promise<unknown>, successMessage: string) {
+  /**
+   * Exécute une action puis **recharge la fiche** : le message de succès n'est
+   * affiché qu'après relecture des données réellement enregistrées.
+   * `verify` permet d'exiger un état précis (réactivation effective…).
+   */
+  async function action(
+    run: () => Promise<unknown>,
+    successMessage: string,
+    verify?: (fresh: Detail) => boolean,
+  ) {
     setBusy(true);
     setError("");
 
     try {
       await run();
-      await load();
+      const fresh = await api<Detail>("/users/" + id);
+      setUser(fresh);
+      setForm(fresh);
+      if (verify && !verify(fresh)) {
+        throw new Error(
+          "La mise à jour n'a pas été enregistrée en base. Rechargez la page et réessayez.",
+        );
+      }
       notify(successMessage);
       setConfirm(false);
       onChanged();
     } catch (e) {
       setError((e as Error).message);
+      await load();
     } finally {
       setBusy(false);
     }
@@ -292,10 +317,15 @@ export function UserDetail({
                         set("role", value as Role);
                         set("stationId", "");
                       }}
-                      options={Object.entries(roles).map(([key, label]) => ({
-                        label,
-                        value: key,
-                      }))}
+                      // Le rôle actuel reste visible même s'il sort du périmètre
+                      // du signataire : on ne « perd » pas la valeur affichée,
+                      // le serveur refuse simplement le changement non autorisé.
+                      options={[
+                        ...(form.role && !roleOptions.includes(form.role)
+                          ? [form.role]
+                          : []),
+                        ...roleOptions,
+                      ].map((value) => ({ label: roles[value], value }))}
                     />
                   </div>
 
@@ -520,6 +550,10 @@ export function UserDetail({
                               "PATCH",
                             ),
                           "Statut du compte mis à jour.",
+                          (fresh) =>
+                            !!user.disabledAt
+                              ? fresh.disabledAt === null && fresh.isActive
+                              : fresh.disabledAt !== null,
                         )
                       }
                     >

@@ -7,6 +7,11 @@
 #   powershell -ExecutionPolicy Bypass -File ".\_scripts\backup-db.ps1"
 #   powershell -ExecutionPolicy Bypass -File ".\_scripts\backup-db.ps1" -Database uswap
 #
+# AUCUN mot de passe n'est ecrit dans ce fichier. Il est lu, dans cet ordre :
+#   1. -Password (parametre explicite)
+#   2. la variable d'environnement PGPASSWORD
+#   3. la variable DATABASE_URL du fichier backend_new/.env
+#
 # Produit un dump SQL lisible (-Fp) ET un dump binaire (-Fc) dans backend_new/backups/.
 # ---------------------------------------------------------------------------
 param(
@@ -14,7 +19,7 @@ param(
     [string]$DbHost   = "localhost",
     [int]   $Port     = 5432,
     [string]$DbUser   = "postgres",
-    [string]$Password = "danielle1234@@@@"
+    [string]$Password = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,6 +39,28 @@ if (-not (Test-Path $backDir)) { New-Item -ItemType Directory -Path $backDir | O
 $stamp    = Get-Date -Format "yyyyMMdd-HHmmss"
 $sqlFile  = Join-Path $backDir "$Database-$stamp.sql"
 $dumpFile = Join-Path $backDir "$Database-$stamp.dump"
+
+if (-not $Password) { $Password = $env:PGPASSWORD }
+
+# Repli : mot de passe lu depuis backend_new/.env (jamais versionne).
+if (-not $Password) {
+    $envFile = Join-Path (Split-Path -Parent $PSScriptRoot) ".env"
+    if (Test-Path $envFile) {
+        $url = (Select-String -Path $envFile -Pattern '^DATABASE_URL=' |
+            Select-Object -First 1).Line
+        if ($url -match '://([^:]+):([^@]+)@([^:/]+)') {
+            $encoded = $matches[2]
+            if (-not $DbUser -or $DbUser -eq "postgres" -and $matches[1]) { $DbUser = [uri]::UnescapeDataString($matches[1]) }
+            $Password = [uri]::UnescapeDataString($encoded)
+            if (-not $PSBoundParameters.ContainsKey("DbHost")) { $DbHost = $matches[3] }
+        }
+    }
+}
+
+if (-not $Password) {
+    Write-Error "Mot de passe introuvable : utilisez -Password, PGPASSWORD ou DATABASE_URL dans backend_new/.env."
+    exit 1
+}
 
 $env:PGPASSWORD = $Password
 

@@ -1,4 +1,4 @@
-import { PrismaClient, Role, PlanningStatus } from '@prisma/client';
+﻿import { PrismaClient, Role, PlanningStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import 'dotenv/config';
 
@@ -13,9 +13,15 @@ const TIMEZONE = 'Africa/Douala';
  * Safe to run multiple times: records are matched on a natural key and nothing
  * is ever deleted, so accounts you created in the UI stay intact.
  *
- * All demo accounts use the same password (DEMO_PASSWORD, default below).
+ * All demo accounts use the same password, read from DEMO_PASSWORD
+ * (backend_new/.env). No literal password is stored in this repository.
  */
-const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'Uswap2026!Demo';
+const DEMO_PASSWORD = (process.env.DEMO_PASSWORD ?? '').trim();
+if (!DEMO_PASSWORD) {
+  throw new Error(
+    "DEMO_PASSWORD n'est pas defini : renseignez-le dans .env avant le seed.",
+  );
+}
 
 type StationKey = 'douala' | 'yaounde';
 
@@ -37,7 +43,7 @@ const STATIONS: {
 }[] = [
   {
     key: 'douala',
-    name: 'Bonabéri',
+    name: 'BonabÃ©ri',
     location: 'Douala, Cameroun',
     latitude: 4.0777,
     longitude: 9.6627,
@@ -46,8 +52,8 @@ const STATIONS: {
   },
   {
     key: 'yaounde',
-    name: 'Yaoundé Centre',
-    location: 'Yaoundé, Cameroun',
+    name: 'YaoundÃ© Centre',
+    location: 'YaoundÃ©, Cameroun',
     latitude: 3.848,
     longitude: 11.5021,
     minRestHours: 8,
@@ -69,7 +75,7 @@ const USERS: DemoUser[] = [
   },
   {
     email: 'chef@upowa.org',
-    fullName: 'Superviseur Bonabéri',
+    fullName: 'Superviseur BonabÃ©ri',
     role: Role.SUPERVISOR,
     stationKey: 'douala',
   },
@@ -222,7 +228,7 @@ async function seedStationScopes(
     },
   });
 
-  console.log('  scope     superviseur -> Yaoundé Centre');
+  console.log('  scope     superviseur -> YaoundÃ© Centre');
 }
 
 async function seedPlanning(
@@ -395,7 +401,7 @@ async function seedShifts(
 async function main() {
   console.log('');
   console.log('========================================');
-  console.log('  Uswap — demo seed');
+  console.log('  Uswap â€” demo seed');
   console.log('========================================');
 
   console.log('\nStations');

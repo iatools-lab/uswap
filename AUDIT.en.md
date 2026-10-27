@@ -56,7 +56,7 @@ But `JwtStrategy.validate()` returns `{ id, email, role, exp }` (the field is **
 
 The real `.env` file **is present at the project root** (plus `frontend/.env` and `frontend.env`). It contains:
 
-- `DATABASE_URL` with the **Postgres password in clear text** (`postgres:danielle1234@@@@`).
+- `DATABASE_URL` with the **Postgres password in clear text** (value masked in this document: `postgres:****@localhost:5432/uswap`).
 - `JWT_SECRET` with a real value (therefore forgeable if the repo is public).
 - `ADMIN_SEED_PASSWORD="ChangeMoiRapidement123"`.
 
@@ -225,7 +225,7 @@ Or `JwtStrategy.validate()` retourne `{ id, email, role, exp }` (le champ s'appe
 
 Le fichier `.env` réel **est présent à la racine du projet** (et `frontend/.env`, `frontend.env` aussi). Il contient :
 
-- `DATABASE_URL` avec **le mot de passe Postgres en clair** (`postgres:danielle1234@@@@`).
+- `DATABASE_URL` avec **le mot de passe Postgres en clair** (valeur masquée dans ce document : `postgres:****@localhost:5432/uswap`).
 - `JWT_SECRET` avec une valeur réelle (donc forgeable si le dépôt est public).
 - `ADMIN_SEED_PASSWORD="ChangeMoiRapidement123"`.
 

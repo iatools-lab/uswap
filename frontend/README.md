@@ -79,7 +79,7 @@ routage redirige automatiquement après connexion.
 - **Langue** — Toute l'interface est en **français**. Les textes affichés
   doivent rester en français, y compris les messages d'erreur.
 - **Encodage** — Les fichiers sources sont en **UTF-8**. Les accents ne doivent
-  jamais être réécrits en séquences de type `Ã©` (voir
+  jamais être réécrits en séquences de type `é` (voir
   `scripts/fix-mojibake.cjs` à la racine du projet).
 - **Icônes** — Toutes les icônes viennent de `@phosphor-icons/react` via le pont
   `src/ui/icons.ts`, qui fournit aussi les alias de compatibilité.

@@ -8,13 +8,34 @@ const adminExact = [
   "/app/admin/audit",
   "/app/admin/conges",
   "/app/admin/compte",
+  "/app/admin/parametres",
   "/app/admin/utilisateurs/nouveau",
   "/app/admin/utilisateurs/import",
 ];
 
+/** Espace super administrateur : mêmes écrans, chemin dédié, plus la maintenance. */
+const superAdminExact = [
+  "/app/super-admin",
+  "/app/super-admin/utilisateurs",
+  "/app/super-admin/stations",
+  "/app/super-admin/plannings",
+  "/app/super-admin/conges",
+  "/app/super-admin/audit",
+  "/app/super-admin/parametres",
+  "/app/super-admin/nettoyage",
+  "/app/super-admin/compte",
+  "/app/super-admin/utilisateurs/nouveau",
+  "/app/super-admin/utilisateurs/import",
+];
+
+const isUserDetail = (path: string, base: string) =>
+  new RegExp(`^${base}/utilisateurs/[a-f0-9-]{36}$`).test(path);
+
 export const isAdminPath = (path: string) =>
-  adminExact.includes(path) ||
-  /^\/app\/admin\/utilisateurs\/[a-f0-9-]{36}$/.test(path);
+  adminExact.includes(path) || isUserDetail(path, "/app/admin");
+
+export const isSuperAdminPath = (path: string) =>
+  superAdminExact.includes(path) || isUserDetail(path, "/app/super-admin");
 
 export const isRolePath = (user: User, path: string) =>
   [
@@ -32,5 +53,8 @@ export const isAccountPath = (path: string) =>
   path === "/auth/reset-password" ||
   path === "/auth/forgot-password";
 
-export const isSessionPath = (user: User, path: string) =>
-  user.role === "ADMIN" ? isAdminPath(path) : isRolePath(user, path);
+export const isSessionPath = (user: User, path: string) => {
+  if (user.role === "SUPER_ADMIN") return isSuperAdminPath(path);
+  if (user.role === "ADMIN") return isAdminPath(path);
+  return isRolePath(user, path);
+};

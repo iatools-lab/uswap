@@ -77,7 +77,12 @@ export const configuration = () => ({
   smtpPort: num(process.env.SMTP_PORT, 587),
   smtpSecure: bool(process.env.SMTP_SECURE, false),
   smtpUser: process.env.SMTP_USER ?? '',
-  smtpPassword: process.env.SMTP_PASSWORD ?? '',
+  // `SMTP_PASS` est le nom documente dans `.env.example` du depot : les deux
+  // orthographes sont acceptees, sinon un SMTP correctement configure
+  // n'envoie jamais rien (authentification sans mot de passe).
+  smtpPassword: process.env.SMTP_PASS ?? process.env.SMTP_PASSWORD ?? '',
+  /** Expédition via un SMTP dont le certificat exige TLS strict. */
+  smtpRequireTls: bool(process.env.SMTP_REQUIRE_TLS, false),
 
   // Web Push
   vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',

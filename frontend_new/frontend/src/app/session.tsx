@@ -142,7 +142,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (active) accept(data, true);
       })
       .catch(() => {
-        if (active) clear();
+        if (!active) return;
+        // Aucune session restaurable : on nettoie les traces locales sans
+        // rediriger. `clear()` redirige vers /auth/login, ce qui faisait
+        // clignoter l'ecran de connexion et effacait le message d'erreur.
+        forgetSession();
+        setSession(null);
       })
       .finally(() => {
         if (active) setChecking(false);
@@ -150,7 +155,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [accountMode]);
+  }, [accountMode, accept]);
 
   useEffect(() => {
     if (!session) return;

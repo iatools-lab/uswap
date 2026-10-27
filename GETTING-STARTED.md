@@ -160,7 +160,8 @@ VITE_API_URL=/api
 
 ## 10. Se connecter (comptes de démonstration)
 
-Mot de passe commun : **`Uswap2026!Demo`**
+Mot de passe commun : la valeur de `DEMO_PASSWORD` dans `backend_new/.env`
+(jamais inscrite dans le dépôt ; voir `backend_new/.env.example`).
 (surchargeable via `DEMO_PASSWORD` avant de lancer le seed)
 
 | Rôle | Adresse e-mail |

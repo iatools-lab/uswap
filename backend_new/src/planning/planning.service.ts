@@ -27,6 +27,11 @@ import {
 } from './planning.coverage';
 import { ConstraintsService } from './constraints.service';
 import { type AuthenticatedUser } from '../common/guards/roles.guard';
+import {
+  addDaysKey,
+  minutesOfDay,
+  stationIso,
+} from '../common/utils/datetime';
 
 export interface AssignmentDto {
   stationId: string;
@@ -271,13 +276,22 @@ export class PlanningService {
       }
     }
 
-    const stations = await this.prisma.station.findMany({
+    const stationRows = await this.prisma.station.findMany({
       where: { id: { in: stationIds } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, timezone: true },
     });
+    const stations = stationRows;
     if (stations.length !== stationIds.length) {
       throw this.invalid('Une des stations sélectionnées n’existe plus.');
     }
+    // Heures saisies = heures locales de chaque station : on les convertit avec
+    // le fuseau du poste, et non avec l'UTC du serveur.
+    const timeZoneByStation = new Map(
+      stationRows.map((station) => [
+        station.id,
+        station.timezone || 'Africa/Douala',
+      ]),
+    );
 
     const assignments = this.normaliseAssignments(
       payload.assignments ?? [],
@@ -339,11 +353,17 @@ export class PlanningService {
             // moment de la generation, comme le fait le frontend.
             label: assignment.shiftLabel ?? 'Service',
             day: assignment.day,
-            startTime: this.combineDateAndTime(assignment.day, assignment.startTime),
+            startTime: this.combineDateAndTime(
+              assignment.day,
+              assignment.startTime,
+              false,
+              timeZoneByStation.get(assignment.stationId),
+            ),
             endTime: this.combineDateAndTime(
               assignment.day,
               assignment.endTime,
               assignment.endTime <= assignment.startTime,
+              timeZoneByStation.get(assignment.stationId),
             ),
             breakStart: assignment.breakStart ?? null,
             breakEnd: assignment.breakEnd ?? null,
@@ -367,8 +387,12 @@ export class PlanningService {
               occurrenceId: occurrence.id,
               stationId: assignment.stationId,
               day: assignment.day,
-              startTime: assignment.startTime,
-              endTime: assignment.endTime,
+              // `PlanningVacancy.startTime/endTime` sont des `DateTime` :
+              // passer "16:00" faisait échouer toute la transaction et
+              // renvoyait un 500 sur la creation d'un planning comportant un
+              // poste vacant. On reprend les instants du creneau cree.
+              startTime: occurrence.startTime,
+              endTime: occurrence.endTime,
               missing: unassigned(assignment),
             },
           });
@@ -1294,12 +1318,34 @@ export class PlanningService {
         body.endTime ||
         body.latenessToleranceOverrideMinutes !== undefined
       ) {
+        // L'ecran envoie une heure locale ("16:00"), la generation un instant
+        // ISO complet. Les deux formes sont acceptees : `new Date("16:00")`
+        // produit une date invalide et faisait echouer la transaction (500).
+        const timeZone = await this.stationTimeZone(occurrence.stationId);
+        const nextStart = body.startTime
+          ? this.resolveOccurrenceTime(
+              body.startTime,
+              occurrence.day,
+              occurrence.startTime,
+              timeZone,
+            )
+          : null;
+        const nextEnd = body.endTime
+          ? this.resolveOccurrenceTime(
+              body.endTime,
+              occurrence.day,
+              occurrence.endTime,
+              timeZone,
+              // Une heure de fin anterieure au debut designe le lendemain.
+              nextStart ?? occurrence.startTime,
+            )
+          : null;
         await tx.occurrence.update({
           where: { id: occurrenceId },
           data: {
             ...(body.notes !== undefined ? { notes: body.notes } : {}),
-            ...(body.startTime ? { startTime: new Date(body.startTime) } : {}),
-            ...(body.endTime ? { endTime: new Date(body.endTime) } : {}),
+            ...(nextStart ? { startTime: nextStart } : {}),
+            ...(nextEnd ? { endTime: nextEnd } : {}),
             // `null` efface l'override ; un nombre entier borne par le DTO.
             ...(body.latenessToleranceOverrideMinutes !== undefined
               ? {
@@ -1468,6 +1514,22 @@ export class PlanningService {
       where: { id: occurrence.stationId },
       select: { name: true },
     });
+    // Les colonnes `outSwapper` / `inSwapper` ne sont pas des identifiants :
+    // ce sont les NOMS affiches dans les rapports. Les laisser vides donnait
+    // des mouvements "De — / Vers —" inexplicables.
+    const people = await tx.user.findMany({
+      where: {
+        id: {
+          in: [occurrence.swapperId, inSwapperId].filter(
+            (value): value is string => Boolean(value),
+          ),
+        },
+      },
+      select: { id: true, fullName: true },
+    });
+    const nameOf = (id: string | null) =>
+      people.find((person) => person.id === id)?.fullName ?? null;
+
     await tx.shiftChange.create({
       data: {
         shiftId: occurrence.id,
@@ -1478,6 +1540,9 @@ export class PlanningService {
         station: station?.name ?? '',
         outSwapperId: occurrence.swapperId,
         inSwapperId,
+        outSwapper: nameOf(occurrence.swapperId),
+        inSwapper: nameOf(inSwapperId),
+        reason: `Affectation enregistree par ${actor.fullName}`,
       },
     });
   }
@@ -1488,6 +1553,7 @@ export class PlanningService {
     stationId: string,
     body: { templateIds?: string[]; weekdays?: number[] },
   ) {
+    const timeZone = await this.stationTimeZone(stationId);
     const templates = await this.prisma.shiftTemplate.findMany({
       where: {
         stationId,
@@ -1520,12 +1586,18 @@ export class PlanningService {
 
     for (const day of days) {
       for (const template of templates) {
-        const startTime = this.combineDateAndTime(day, template.startTime);
+        const startTime = this.combineDateAndTime(
+          day,
+          template.startTime,
+          false,
+          timeZone,
+        );
         const crossesMidnight = template.endTime <= template.startTime;
         const endTime = this.combineDateAndTime(
           day,
           template.endTime,
           crossesMidnight,
+          timeZone,
         );
         candidates.push({
           stationId,
@@ -1568,8 +1640,12 @@ export class PlanningService {
     });
     const labelOf = (row: { label: string; shiftLabel: string | null }) =>
       (row.shiftLabel ?? row.label ?? '').trim().toLowerCase();
+    // Les instants en base sont en UTC ; les candidats portent une heure locale.
+    // On compare les deux dans le fuseau de la station, sinon un service de
+    // 16 h et un candidat de 16 h ne se reconnaissent pas.
+    const timeZone = await this.stationTimeZone(stationId);
     const minutesOf = (date: Date) =>
-      date.getUTCHours() * 60 + date.getUTCMinutes();
+      minutesOfDay(date.getTime(), timeZone);
     const minutesOfTime = (time: string) =>
       Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
 
@@ -1593,8 +1669,8 @@ export class PlanningService {
           !overlaps(
             minutesOf(row.startTime),
             minutesOf(row.endTime),
-            minutesOfTime(candidate.startTime.slice(11, 16)),
-            minutesOfTime(candidate.endTime.slice(11, 16)),
+            minutesOf(new Date(candidate.startTime)),
+            minutesOf(new Date(candidate.endTime)),
           )
         ) {
           continue;
@@ -1788,20 +1864,64 @@ export class PlanningService {
   }
 
   /**
-   * Combine un jour (AAAA-MM-JJ) et une heure locale (HH:MM) en un instant.
-   * Quand le creneau franchit minuit, la fin est repoussee au lendemain — meme
-   * regle que la generation de creneaux du frontend.
+   * Convertit une heure de modification en instant.
+   *
+   * - `HH:MM` (forme envoyee par l'ecran) : heure locale du jour du creneau,
+   *   donc dans le fuseau de la station.
+   * - Instant ISO complet : repris tel quel.
+   */
+  private resolveOccurrenceTime(
+    value: string,
+    day: string,
+    fallback: Date,
+    timeZone: string,
+    compareWith?: Date,
+  ): Date {
+    if (/^\d{2}:\d{2}(:\d{2})?$/.test(value.trim())) {
+      const next = new Date(stationIso(day, value.slice(0, 5), timeZone));
+      // Fin avant le debut → le service se termine le lendemain.
+      if (compareWith && next.getTime() <= compareWith.getTime()) {
+        return new Date(stationIso(addDaysKey(day, 1), value.slice(0, 5), timeZone));
+      }
+      return next;
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+  }
+
+  /**
+   * Combine un jour (AAAA-MM-JJ) et une heure **locale de station** (HH:MM) en
+   * un instant UTC. Quand le creneau franchit minuit, la fin est repoussee au
+   * lendemain.
+   *
+   * L'heure saisie etait auparavant luue comme de l'UTC puis affichee dans le
+   * fuseau de la station (Africa/Douala, UTC+1) : un service de 16 h apparaissait
+   * a 17 h. `stationIso` fait la conversion inverse de l'affichage, donc 16 h
+   * reste 16 h partout.
+   *
+   * Sans fuseau connu (cas d'un appel interne ancre), on retombe sur l'ancien
+   * comportement : l'instant n'est jamais invente.
    */
   private combineDateAndTime(
     day: string,
     time: string,
     nextDay = false,
+    timeZone?: string,
   ): Date {
-    const [year, month, date] = day.split('-').map(Number);
+    const targetDay = nextDay ? addDaysKey(day, 1) : day;
+    if (timeZone) return new Date(stationIso(targetDay, time, timeZone));
+    const [year, month, date] = targetDay.split('-').map(Number);
     const [hours, minutes] = time.split(':').map(Number);
-    return new Date(
-      Date.UTC(year, month - 1, date + (nextDay ? 1 : 0), hours, minutes),
-    );
+    return new Date(Date.UTC(year, month - 1, date, hours, minutes));
+  }
+
+  /** Fuseau de la station d'un planning (fallback Douala, fuseau du produit). */
+  private async stationTimeZone(stationId: string): Promise<string> {
+    const station = await this.prisma.station.findUnique({
+      where: { id: stationId },
+      select: { timezone: true },
+    });
+    return station?.timezone || 'Africa/Douala';
   }
 }
 

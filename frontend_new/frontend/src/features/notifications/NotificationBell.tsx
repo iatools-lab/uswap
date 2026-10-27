@@ -294,11 +294,15 @@ export function NotificationBell() {
         ),
       );
     }
-    const basePath = location.pathname.startsWith("/app/admin")
-      ? "/app/admin"
-      : location.pathname.startsWith("/app/supervision")
-        ? "/app/supervision"
-        : "/app/mon-espace";
+    // Le super administrateur partage les écrans de l'administrateur mais sous
+    // `/app/super-admin` : les liens de notification doivent rester dedans.
+    const basePath = location.pathname.startsWith("/app/super-admin")
+      ? "/app/super-admin"
+      : location.pathname.startsWith("/app/admin")
+        ? "/app/admin"
+        : location.pathname.startsWith("/app/supervision")
+          ? "/app/supervision"
+          : "/app/mon-espace";
     const suppliedTarget = item.targetUrl?.trim();
     // N’accepter que des chemins internes ; une notification ne doit jamais
     // pouvoir rediriger vers un site externe.
@@ -312,8 +316,8 @@ export function NotificationBell() {
       safeTarget ??
       (item.kind === "ACCESS_PENDING"
         ? item.targetId
-          ? `/app/admin/utilisateurs/${encodeURIComponent(item.targetId)}`
-          : "/app/admin/utilisateurs?status=pending"
+          ? `${basePath}/utilisateurs/${encodeURIComponent(item.targetId)}`
+          : `${basePath}/utilisateurs?status=pending`
         : item.kind.startsWith("PLANNING_") || item.kind === "ASSIGNMENT"
           ? `${basePath}/plannings${item.targetId ? `?planning=${encodeURIComponent(item.targetId)}` : ""}`
           : item.kind.includes("LEAVE")
@@ -474,11 +478,13 @@ export function NotificationBell() {
               className="notification-bell__preferences"
               onClick={() => {
                 setOpen(false);
-                const base = location.pathname.startsWith("/app/admin")
-                  ? "/app/admin"
-                  : location.pathname.startsWith("/app/supervision")
-                    ? "/app/supervision"
-                    : "/app/mon-espace";
+                const base = location.pathname.startsWith("/app/super-admin")
+                  ? "/app/super-admin"
+                  : location.pathname.startsWith("/app/admin")
+                    ? "/app/admin"
+                    : location.pathname.startsWith("/app/supervision")
+                      ? "/app/supervision"
+                      : "/app/mon-espace";
                 navigate(`${base}/compte?section=notifications`);
               }}
             >

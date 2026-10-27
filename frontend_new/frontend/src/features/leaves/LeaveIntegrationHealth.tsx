@@ -63,6 +63,7 @@ export function LeaveIntegrationHealth() {
               {new Intl.DateTimeFormat("fr-FR", {
                 dateStyle: "medium",
                 timeStyle: "short",
+                timeZone: "Africa/Douala",
               }).format(new Date(health.lastSyncAt))}
             </small>
           )}

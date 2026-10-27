@@ -131,19 +131,26 @@ export function renderTemplate(
       };
     }
     case 'SCHEDULED_REPORT': {
+      const attachment = variables.filename
+        ? `Le fichier ${variables.format ?? ''} est joint à ce message : ${variables.filename}`
+        : '';
       return {
         subject: `Rapport uSwap · ${variables.reportName}`,
         text: [
           `Le rapport « ${variables.reportName} » est disponible.`,
           variables.period ? `Periode : ${variables.period}` : '',
           variables.summary ?? '',
+          attachment,
         ]
           .filter(Boolean)
           .join('\n'),
         html: layout(`Rapport · ${variables.reportName}`, [
-          escape(variables.period ?? ''),
+          `<strong>Periode :</strong> ${escape(variables.period ?? '')}`,
           escape(variables.summary ?? ''),
-        ]),
+          attachment
+            ? `<span style="color:#6b7a99;font-size:13px;">${escape(attachment)}</span>`
+            : '',
+        ].filter(Boolean)),
       };
     }
     case 'NOTIFICATION':

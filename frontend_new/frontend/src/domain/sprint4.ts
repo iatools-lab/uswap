@@ -107,6 +107,13 @@ export const sprint4Permissions: Record<
   SWAPPER: ["LEAVE_SELF"],
   SUPERVISOR: ["INCIDENT_MANAGE", "DASHBOARD_SCOPE"],
   ADMIN: ["INTEGRATION_HEALTH", "SCHEDULE_REPORT"],
+  // Le super administrateur herite de tout et garde la main sur la plateforme.
+  SUPER_ADMIN: [
+    "INCIDENT_MANAGE",
+    "DASHBOARD_SCOPE",
+    "INTEGRATION_HEALTH",
+    "SCHEDULE_REPORT",
+  ],
 };
 
 export function canUseSprint4(

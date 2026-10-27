@@ -42,15 +42,22 @@ services:
 
   backend:
     build:
-      # Contexte surchargeable. Le depot peut etre clone sous
-      # /opt/uswap (sources dans ./frontend et ./backend_new) ou sous
-      # /opt/uswap-github (sources dans ./frontend_new/frontend) : un chemin
-      # relatif fixe casse l'un des deux. Voir README_DOCKER.md, section 5.
+      # Contexte surchargeable. Valeur par defaut = arborescence REELLE du
+      # depot (backend_new/ et frontend_new/frontend/). Un autre clone peut
+      # surcharger via BACKEND_BUILD_CONTEXT dans deploy/.env.
       context: ${BACKEND_BUILD_CONTEXT:-../backend_new}
       dockerfile: Dockerfile
     image: uswap/backend:${USWAP_TAG:-local}
     restart: unless-stopped
     init: true
+    # Une notification en e-mail ne doit jamais bloquer une requete HTTP ; la
+    # sonde verifie que l'API repond (204 attendu sur /auth/session sans cookie).
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/auth/session').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     # Fichiers generes par le backend (mailer JSON, pieces jointes).
     volumes:
       - uswap-uploads:/app/var/uploads
@@ -73,17 +80,21 @@ services:
       # Origine publique du frontend (liens d'invitation / reset).
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-https://uswap.example.org}
       CORS_ORIGIN: ${CORS_ORIGIN:-https://uswap.example.org}
-      MAIL_DRIVER: ${MAIL_DRIVER:-console}
+      # Par defaut `smtp` : en production, `console` n'envoie rien du tout
+      # (invitations et notifications restent dans les journaux).
+      MAIL_DRIVER: ${MAIL_DRIVER:-smtp}
       MAIL_FROM: ${MAIL_FROM:-uSwap <no-reply@uswap.example.org>}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-false}
       SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      # `SMTP_PASS` est le nom documente ; `SMTP_PASSWORD` reste lu par le code.
+      SMTP_PASSWORD: ${SMTP_PASS:-${SMTP_PASSWORD:-}}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:no-reply@uswap.example.org}
-      ENABLE_WEB_PUSH: ${ENABLE_WEB_PUSH:-false}
+      DISABLE_WEB_PUSH: ${DISABLE_WEB_PUSH:-true}
       UPLOAD_DIR: var/uploads
       # Reinitialise le mot de passe du compte ADMIN s'il est desactive
       # (AdminBootstrapService.onModuleInit). Sans cette variable le code
@@ -117,9 +128,9 @@ services:
 
   frontend:
     build:
-      # Voir BACKEND_BUILD_CONTEXT : par defaut, arborescence a plat
-      # (/opt/uswap/frontend), qui contient bien le Dockerfile.
-      context: ${FRONTEND_BUILD_CONTEXT:-../frontend}
+      # Voir BACKEND_BUILD_CONTEXT : la racine est frontend_new/frontend dans
+      # ce depot (c'est elle qui contient Dockerfile, src/ et deploy/nginx.conf).
+      context: ${FRONTEND_BUILD_CONTEXT:-../frontend_new/frontend}
       dockerfile: Dockerfile
       args:
         # Valeur PUBLIQUE integree au bundle. Doit rester "/api" : le proxy
@@ -130,6 +141,14 @@ services:
         VITE_VAPID_PUBLIC_KEY: ${VITE_VAPID_PUBLIC_KEY:-}
     image: uswap/frontend:${USWAP_TAG:-local}
     restart: unless-stopped
+    # Sonde HTTP : le conteneur n'est "healthy" que si Nginx sert vraiment le
+    # bundle (et le healthz du Dockerfile devient exploitable par Compose).
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       - backend
     networks:
@@ -145,6 +164,42 @@ services:
   # NE JAMAIS remplacer par `migrate dev`, `migrate reset` ou `db push` en
   # production. `migrate deploy` est strictement additif : il applique les
   # migrations manquantes deja versionnees, sans regeneration destructive.
+  # --- Initialisation d'un serveur vierge (une seule fois) ------------------
+  # Cree le referentiel (reglages, stations, modeles de shift), le super
+  # administrateur et ses preferences. Idempotent : peut etre rejoue, il ne
+  # supprime jamais de donnees et ne reecrit pas un mot de passe existant.
+  #
+  #   docker compose ... --profile tools run --rm bootstrap
+  #
+  # `npm install` (sans --omit=dev) est necessaire : tsx et prisma sont des
+  # outils de developpement, volontairement absents de l'image de production.
+  bootstrap:
+    profiles: ["tools"]
+    image: uswap/backend:${USWAP_TAG:-local}
+    restart: "no"
+    entrypoint: ["sh", "-c", "npm install --no-save --no-audit --no-fund && npm run bootstrap"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-uswap}:${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD dans deploy/.env}@db:5432/${POSTGRES_DB:-uswap}?schema=public
+      NODE_ENV: production
+      # Comptes crees/mis a jour par `npm run bootstrap`.
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:?definir SUPERADMIN_EMAIL dans deploy/.env}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:?definir SUPERADMIN_PASSWORD dans deploy/.env}
+      SUPERADMIN_FULLNAME: ${SUPERADMIN_FULLNAME:-Super administrateur}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_FULLNAME: ${ADMIN_FULLNAME:-Administrateur}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@uswap.local}
+      TOLERANCE_MINUTES: ${TOLERANCE_MINUTES:-5}
+      GEOFENCE_RADIUS_METERS: ${GEOFENCE_RADIUS_METERS:-150}
+      MIN_REST_HOURS: ${MIN_REST_HOURS:-8}
+      WEEKLY_HOURS_LIMIT: ${WEEKLY_HOURS_LIMIT:-48}
+      INVITATION_VALIDITY_HOURS: ${INVITATION_VALIDITY_HOURS:-48}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - uswap-internal
+
   migrate:
     profiles: ["tools"]
     image: uswap/backend:${USWAP_TAG:-local}

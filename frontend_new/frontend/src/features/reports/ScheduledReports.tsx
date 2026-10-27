@@ -7,10 +7,12 @@ import {
   RowsIcon,
 } from "../../ui/icons";
 import { api } from "../../api/auth-api";
+import { notify } from "../../ui/Toast";
 import { Modal } from "../../ui/Modal";
 import { KpiCard } from "../../ui/KpiCard";
 import { Select } from "../../ui/Select";
 import { formatDateRange } from "../../utils/french";
+import { formatDateTime } from "../../utils/datetime";
 import "./reports.css";
 
 type Run = {
@@ -104,6 +106,23 @@ export function ScheduledReports() {
     const rows = await api<Run[]>(`/admin/reports/schedules/${item.id}/runs`);
     setRuns({ report: item, rows });
   }
+  // Envoi immediat : permet de verifier tout de suite que le destinataire
+  // recoit bien la piece jointe, sans attendre la prochaine echeance.
+  async function sendNow(item: Report) {
+    try {
+      const result = await api<{ ok: boolean; status: string; error?: string | null }>(
+        `/admin/reports/schedules/${item.id}/send`,
+        {},
+        "POST",
+      );
+      if (result.ok) notify(`Rapport « ${item.name} » envoyé.`);
+      else
+        notify(`Envoi impossible : ${result.error ?? result.status}`, "error");
+    } catch (error) {
+      notify((error as Error).message, "error");
+    }
+    setRevision((v) => v + 1);
+  }
   return (
     <section className="scheduled-reports">
       <div className="scheduled-reports-head">
@@ -150,12 +169,10 @@ export function ScheduledReports() {
                 </small>
               </div>
               <span>
-                <ClockIcon /> Prochain envoi{" "}
-                {new Intl.DateTimeFormat("fr-FR", {
-                  dateStyle: "medium",
-                }).format(new Date(item.nextRunAt))}
+                <ClockIcon /> Prochain envoi {formatDateTime(item.nextRunAt)}
               </span>
               <div className="scheduled-report-actions">
+                <button onClick={() => void sendNow(item)}>Envoyer maintenant</button>
                 <button onClick={() => void showRuns(item)}>
                   <RowsIcon /> Historique
                 </button>
@@ -246,8 +263,7 @@ export function ScheduledReports() {
               <article key={run.id}>
                 <strong>{run.status}</strong>
                 <span>
-                  {new Date(run.generatedAt).toLocaleString("fr-FR")} ·{" "}
-                  {run.format}
+                  {formatDateTime(run.generatedAt)} · {run.format}
                 </span>
                 <span>
                   {run.errorMessage ||

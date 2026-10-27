@@ -12,6 +12,7 @@ import {
   subscribeOutbox,
 } from "../offline/outbox";
 import { formatDateTime } from "./format";
+import { formatTime } from "../../utils/datetime";
 import type { OperationShift } from "../operations/types";
 
 export function AbsenceDeclaration({
@@ -184,11 +185,7 @@ export function AbsenceDeclaration({
                   className="admin-button secondary small"
                   onClick={() => void discard(item.id)}
                 >
-                  Annuler ·{" "}
-                  {new Date(item.queuedAt).toLocaleTimeString("fr-FR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  Annuler · {formatTime(item.queuedAt)}
                 </button>
               ))}
             </div>

@@ -1,4 +1,11 @@
-import { Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { CaretDownIcon } from "../ui/icons";
 import { AccountMenu } from "../features/account/AccountMenu";
@@ -6,6 +13,7 @@ import { NotificationBell } from "../features/notifications/NotificationBell";
 import { interceptNav } from "../app/spaNav";
 import { RouteFallback } from "../app/RouteFallback";
 import { useSession } from "../app/session";
+import { appBase } from "../app/appBase";
 import { SidebarToggle } from "./SidebarToggle";
 import { AppTopbar } from "./AppTopbar";
 import { BrandSignature } from "../ui/BrandSignature";
@@ -16,36 +24,54 @@ import {
   Gear,
   LayoutDashboard,
   History,
+  BroomIcon as Broom,
   UserRound,
   Users,
 } from "../ui/icons";
 import "../styles/admin.css";
 import "../styles/shell.css";
 
-const sections = [
-  { path: "/app/admin", label: "Accueil", Icon: LayoutDashboard },
-  { path: "/app/admin/utilisateurs", label: "Utilisateurs", Icon: Users },
-  { path: "/app/admin/stations", label: "Stations", Icon: Building2 },
-  { path: "/app/admin/plannings", label: "Plannings", Icon: Clock3 },
-  { path: "/app/admin/conges", label: "Congés", Icon: CalendarBlank },
-  { path: "/app/admin/audit", label: "Journal d’audit", Icon: History },
-  { path: "/app/admin/parametres", label: "Réglages globaux", Icon: Gear },
-  { path: "/app/admin/compte", label: "Paramètres du compte", Icon: UserRound },
-];
+/**
+ * Sections de l'espace de pilotage. Elles sont les mêmes pour l'administrateur
+ * et le super administrateur : seul le préfixe change, et le super
+ * administrateur dispose en plus du menu « Nettoyage des données ».
+ */
+function buildSections(base: string, superAdmin: boolean) {
+  const rows = [
+    { behind: "", label: "Accueil", Icon: LayoutDashboard },
+    { behind: "/utilisateurs", label: "Utilisateurs", Icon: Users },
+    { behind: "/stations", label: "Stations", Icon: Building2 },
+    { behind: "/plannings", label: "Plannings", Icon: Clock3 },
+    { behind: "/conges", label: "Congés", Icon: CalendarBlank },
+    { behind: "/audit", label: "Journal d’audit", Icon: History },
+    { behind: "/parametres", label: "Réglages globaux", Icon: Gear },
+    ...(superAdmin
+      ? [
+          {
+            behind: "/nettoyage",
+            label: "Nettoyage des données",
+            Icon: Broom,
+          },
+        ]
+      : []),
+    { behind: "/compte", label: "Paramètres du compte", Icon: UserRound },
+  ];
+  return rows.map((row) => ({ ...row, path: `${base}${row.behind}` }));
+}
 
 const sectionDescriptions: Record<string, string> = {
-  "/app/admin":
-    "Suivez l’activité du réseau et accédez rapidement aux tâches prioritaires.",
-  "/app/admin/utilisateurs":
+  "": "Suivez l’activité du réseau et accédez rapidement aux tâches prioritaires.",
+  "/utilisateurs":
     "Gérez les collaborateurs, leurs rôles, leurs stations et leurs accès.",
-  "/app/admin/stations":
+  "/stations":
     "Configurez les stations, leurs règles, leurs shifts et leur localisation.",
-  "/app/admin/plannings": "Créez, publiez et ajustez les horaires des équipes.",
-  "/app/admin/conges":
-    "Examinez les demandes et suivez les périodes approuvées.",
-  "/app/admin/audit": "Consultez les actions enregistrées et leur contexte.",
-  "/app/admin/parametres": "Définissez les règles communes de la plateforme.",
-  "/app/admin/compte":
+  "/plannings": "Créez, publiez et ajustez les horaires des équipes.",
+  "/conges": "Examinez les demandes et suivez les périodes approuvées.",
+  "/audit": "Consultez les actions enregistrées et leur contexte.",
+  "/parametres": "Définissez les règles communes de la plateforme.",
+  "/nettoyage":
+    "Supprimez les données de recette pour repartir sur une configuration réelle.",
+  "/compte":
     "Mettez à jour vos informations et vos préférences de compte.",
 };
 
@@ -55,8 +81,16 @@ export function AdminShell() {
   const navigate = useNavigate();
   const title = useRef<HTMLHeadingElement>(null);
   const currentPathOnly = location.pathname;
+  const base = appBase(session?.user.role);
+  const sections = useMemo(
+    () => buildSections(base, session?.user.role === "SUPER_ADMIN"),
+    [base, session?.user.role],
+  );
+  const sectionDescriptionsFor = (path: string) =>
+    sectionDescriptions[path.slice(base.length).split("?")[0]] ??
+    sectionDescriptions[""];
   const [stationsOpen, setStationsOpen] = useState(
-    currentPathOnly.startsWith("/app/admin/stations"),
+    currentPathOnly.startsWith(`${base}/stations`),
   );
   const [currentSubTab, setCurrentSubTab] = useState<"list" | "map">(() =>
     new URLSearchParams(location.search).get("tab") === "map" ? "map" : "list",
@@ -68,14 +102,13 @@ export function AdminShell() {
   const section =
     sections.find((item) => item.path === currentPathOnly) ||
     sections.find(
-      (item) =>
-        item.path !== "/app/admin" && currentPathOnly.startsWith(item.path),
+      (item) => item.path !== base && currentPathOnly.startsWith(item.path),
     ) ||
     sections[0];
 
   useEffect(() => {
-    setStationsOpen(currentPathOnly.startsWith("/app/admin/stations"));
-  }, [currentPathOnly]);
+    setStationsOpen(currentPathOnly.startsWith(`${base}/stations`));
+  }, [currentPathOnly, base]);
 
   useEffect(() => {
     setCurrentSubTab(
@@ -90,8 +123,12 @@ export function AdminShell() {
   }, [sidebarCollapsed]);
 
   useEffect(() => {
-    document.title = `${section.label} · Administration uSwap`;
-  }, [section.label]);
+    document.title = `${section.label} · ${
+      session?.user.role === "SUPER_ADMIN"
+        ? "Super administration uSwap"
+        : "Administration uSwap"
+    }`;
+  }, [section.label, session?.user.role]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -126,7 +163,7 @@ export function AdminShell() {
         <div className="admin-sidebar-header">
           <a
             className="brand"
-            {...link("/app/admin")}
+            {...link(base)}
             aria-label="uSwap, accueil administrateur"
           >
             <BrandSignature />
@@ -141,10 +178,10 @@ export function AdminShell() {
           {sections
             .filter((item) => !item.path.endsWith("compte"))
             .map(({ path: target, label, Icon }) => {
-              const isStations = target === "/app/admin/stations";
+              const isStations = target === `${base}/stations`;
               const isCurrent = currentPathOnly === target;
               const stationsActive = currentPathOnly.startsWith(
-                "/app/admin/stations",
+                `${base}/stations`,
               );
 
               return (
@@ -157,7 +194,7 @@ export function AdminShell() {
                         onClick={() => {
                           setStationsOpen(true);
                           setCurrentSubTab("list");
-                          navigate("/app/admin/stations?tab=list");
+                          navigate(`${base}/stations?tab=list`);
                         }}
                       >
                         <Icon size={19} />
@@ -169,10 +206,10 @@ export function AdminShell() {
                       </button>
                     ) : (
                       <a
-                        {...link(target)}
-                        onClick={(e) => {
+                        href={target}
+                        onClick={(event: MouseEvent<HTMLAnchorElement>) => {
                           setStationsOpen(false);
-                          go(e, target);
+                          go(event, target);
                         }}
                         aria-current={isCurrent ? "page" : undefined}
                       >
@@ -186,7 +223,7 @@ export function AdminShell() {
                   {isStations && stationsOpen && (
                     <div className="admin-station-subnav">
                       <a
-                        {...link("/app/admin/stations?tab=list", "list")}
+                        {...link(`${base}/stations?tab=list`, "list")}
                         aria-current={
                           currentSubTab === "list" && stationsActive
                             ? "page"
@@ -196,7 +233,7 @@ export function AdminShell() {
                         Mes stations
                       </a>
                       <a
-                        {...link("/app/admin/stations?tab=map", "map")}
+                        {...link(`${base}/stations?tab=map`, "map")}
                         aria-current={
                           currentSubTab === "map" && stationsActive
                             ? "page"
@@ -216,7 +253,7 @@ export function AdminShell() {
       <div className="admin-body">
         <AppTopbar
           title={section.label}
-          description={sectionDescriptions[section.path]}
+          description={sectionDescriptionsFor(section.path)}
           headingRef={title}
           actions={
             <>
@@ -225,7 +262,7 @@ export function AdminShell() {
                 user={session.user}
                 busy={busy}
                 onLogout={disconnect}
-                settingsPath="/app/admin/compte"
+                settingsPath={`${base}/compte`}
               />
             </>
           }

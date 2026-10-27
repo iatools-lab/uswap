@@ -65,6 +65,11 @@ const AdminLeaveManagementPage = lazy(() =>
     default: m.LeaveManagementPage,
   })),
 );
+const DataCleanupPage = lazy(() =>
+  import("../pages/admin/DataCleanupPage").then((m) => ({
+    default: m.DataCleanupPage,
+  })),
+);
 
 const OperationsPage = lazy(() =>
   import("../pages/role/OperationsPage").then((m) => ({
@@ -121,6 +126,32 @@ function RoleCatchAll({ role }: { role: Role }) {
   return <Navigate to={rolePaths[role]} replace />;
 }
 
+/**
+ * Routes de l'espace de pilotage, partagées par l'administrateur et le super
+ * administrateur : mêmes pages, même CSS, préfixe d'URL différent. Le super
+ * administrateur obtient en plus l'écran de nettoyage des données de test.
+ */
+function PilotRoutes({ superAdmin }: { superAdmin: boolean }) {
+  return (
+    <>
+      <Route index element={page(<AdminHomePage />)} />
+      <Route path="utilisateurs" element={page(<UsersPage />)} />
+      <Route path="utilisateurs/nouveau" element={page(<UsersPage />)} />
+      <Route path="utilisateurs/import" element={page(<UserImportPage />)} />
+      <Route path="utilisateurs/:id" element={page(<UserDetailPage />)} />
+      <Route path="stations" element={page(<StationsPage />)} />
+      <Route path="plannings" element={page(<AdminPlannerPage />)} />
+      <Route path="audit" element={page(<AuditLogPage />)} />
+      <Route path="conges" element={page(<AdminLeaveManagementPage role="ADMIN" />)} />
+      <Route path="parametres" element={page(<GlobalSettingsPage />)} />
+      {superAdmin && (
+        <Route path="nettoyage" element={page(<DataCleanupPage />)} />
+      )}
+      <Route path="compte" element={page(<AccountPage />)} />
+    </>
+  );
+}
+
 export function AppRoutes() {
   return (
     <Routes>
@@ -139,21 +170,21 @@ export function AppRoutes() {
         path={rolePaths.ADMIN}
         element={<RequireAuth role="ADMIN">{page(<AdminShell />)}</RequireAuth>}
       >
-        <Route index element={page(<AdminHomePage />)} />
-        <Route path="utilisateurs" element={page(<UsersPage />)} />
-        <Route path="utilisateurs/nouveau" element={page(<UsersPage />)} />
-        <Route path="utilisateurs/import" element={page(<UserImportPage />)} />
-        <Route path="utilisateurs/:id" element={page(<UserDetailPage />)} />
-        <Route path="stations" element={page(<StationsPage />)} />
-        <Route path="plannings" element={page(<AdminPlannerPage />)} />
-        <Route path="audit" element={page(<AuditLogPage />)} />
-        <Route
-          path="conges"
-          element={page(<AdminLeaveManagementPage role="ADMIN" />)}
-        />
-        <Route path="parametres" element={page(<GlobalSettingsPage />)} />
-        <Route path="compte" element={page(<AccountPage />)} />
+        {PilotRoutes({ superAdmin: false })}
         <Route path="*" element={<Navigate to={rolePaths.ADMIN} replace />} />
+      </Route>
+
+      <Route
+        path={rolePaths.SUPER_ADMIN}
+        element={
+          <RequireAuth role="SUPER_ADMIN">{page(<AdminShell />)}</RequireAuth>
+        }
+      >
+        {PilotRoutes({ superAdmin: true })}
+        <Route
+          path="*"
+          element={<Navigate to={rolePaths.SUPER_ADMIN} replace />}
+        />
       </Route>
 
       {ROLE_SPACES.map((role) => (

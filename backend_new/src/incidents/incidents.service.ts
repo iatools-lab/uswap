@@ -101,7 +101,7 @@ export class IncidentsService {
         meanResolutionHours: meanHours,
       },
       stations:
-        user.role === 'SUPERVISOR' || user.role === 'ADMIN'
+        user.role !== 'SWAPPER'
           ? (
               await this.prisma.station.findMany({
                 where: { isActive: true },

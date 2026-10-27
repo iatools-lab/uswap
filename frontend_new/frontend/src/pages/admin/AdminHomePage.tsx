@@ -5,6 +5,7 @@ import { LeaveRequestInbox } from "../../features/leaves/LeaveRequestInbox";
 import { ScheduledReports } from "../../features/reports/ScheduledReports";
 import { greetingFor } from "../../utils/greeting";
 import { interceptNav } from "../../app/spaNav";
+import { useAppPath } from "../../app/appBase";
 import { useSession } from "../../app/session";
 import { api, ApiError } from "../../api/auth-api";
 import { KpiCard } from "../../ui/KpiCard";
@@ -403,6 +404,8 @@ function AttendanceDonut({ data }: { data: Record<string, number> }) {
 
 export function AdminHomePage() {
   const { session, onAccessLost } = useSession();
+  // Espace courant : /app/admin ou /app/super-admin (même dashboard).
+  const path = useAppPath();
   const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [dismissOnboarding, setDismissOnboarding] = useState(false);
@@ -614,7 +617,7 @@ export function AdminHomePage() {
       id: 1,
       title: "Stations configurées",
       completed: stations.length > 0,
-      action: () => navigate("/app/admin/stations?tab=list"),
+      action: () => navigate(path("/app/admin/stations?tab=list")),
       icon: <MapPin size={15} />,
     },
     {
@@ -628,14 +631,14 @@ export function AdminHomePage() {
       id: 3,
       title: "Accès validés",
       completed: counts.pending === 0 && counts.all > 0,
-      action: () => navigate("/app/admin/utilisateurs?status=pending"),
+      action: () => navigate(path("/app/admin/utilisateurs?status=pending")),
       icon: <UserRound size={15} />,
     },
     {
       id: 4,
       title: "Planning publié",
       completed: Boolean(planning),
-      action: () => navigate("/app/admin/plannings"),
+      action: () => navigate(path("/app/admin/plannings")),
       icon: <Clock3 size={15} />,
     },
   ];
@@ -652,10 +655,10 @@ export function AdminHomePage() {
   if (!session) return null;
 
   function go(event: MouseEvent<HTMLAnchorElement>, target: string) {
-    interceptNav(event, navigate, target);
+    interceptNav(event, navigate, path(target));
   }
   const link = (target: string) => ({
-    href: target,
+    href: path(target),
     onClick: (event: MouseEvent<HTMLAnchorElement>) => go(event, target),
   });
 

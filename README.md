@@ -200,7 +200,8 @@ VITE_API_URL=http://127.0.0.1:3000
 
 ## Comptes de démonstration
 
-Mot de passe commun : **`Uswap2026!Demo`**
+Mot de passe commun : la valeur de `DEMO_PASSWORD` dans `backend_new/.env`
+(jamais inscrite dans le dépôt ; voir `backend_new/.env.example`).
 (surchargeable via `DEMO_PASSWORD` avant de lancer le seed).
 
 | Rôle | E-mail |

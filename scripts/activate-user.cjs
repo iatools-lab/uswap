@@ -1,12 +1,12 @@
-/**
- * Active manuellement un compte en attente, sans dépendre de l'e-mail.
+﻿/**
+ * Active manuellement un compte en attente, sans dÃ©pendre de l'e-mail.
  *
  * Usage :
  *   node scripts/activate-user.cjs <email> [motDePasse]
  *
- * Sans mot de passe, le mot de passe de démonstration est appliqué
- * (DEMO_PASSWORD ou "Uswap2026!Demo"). À utiliser lorsque le service e-mail
- * n'est pas configuré et que l'invitation n'a pas pu être délivrée.
+ * Sans mot de passe, le mot de passe de dÃ©monstration est appliquÃ©
+ * (DEMO_PASSWORD ou process.env.DEMO_PASSWORD ?? ''). Ã€ utiliser lorsque le service e-mail
+ * n'est pas configurÃ© et que l'invitation n'a pas pu Ãªtre dÃ©livrÃ©e.
  */
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
@@ -15,7 +15,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   const email = (process.argv[2] || '').trim().toLowerCase();
-  const password = process.argv[3] || process.env.DEMO_PASSWORD || 'Uswap2026!Demo';
+  const password = process.argv[3] || process.env.DEMO_PASSWORD || process.env.DEMO_PASSWORD ?? '';
 
   if (!email) {
     console.error('Usage : node scripts/activate-user.cjs <email> [motDePasse]');
@@ -29,7 +29,7 @@ async function main() {
   }
 
   if (user.isActive) {
-    console.log(`Le compte ${email} est déjà actif.`);
+    console.log(`Le compte ${email} est dÃ©jÃ  actif.`);
     process.exit(0);
   }
 

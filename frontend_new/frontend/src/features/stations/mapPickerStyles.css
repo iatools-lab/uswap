@@ -1,0 +1,79 @@
+/* Sélecteur de carte des stations : repère net, périmètre visible, cadrage. */
+
+.map-picker-canvas {
+  width: 100%;
+  height: 340px;
+  min-height: 340px;
+  border: 1px solid var(--border, #dfe5ef);
+  border-radius: 14px;
+  background: #eef2f7;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.stations-map-canvas {
+  width: 100%;
+  height: 420px;
+  min-height: 420px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #eef2f7;
+  z-index: 0;
+}
+
+/* Repère : pastille pleine + pointe, lisible sur tous les fonds de plan. */
+.uswap-station-pin {
+  position: relative;
+  background: none;
+  border: 0;
+}
+
+.uswap-station-pin__dot {
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e1473d;
+  border: 3px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(15, 30, 54, 0.45);
+}
+
+.uswap-station-pin__tail {
+  position: absolute;
+  left: 10px;
+  top: 20px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 14px solid #e1473d;
+  filter: drop-shadow(0 2px 2px rgba(15, 30, 54, 0.35));
+}
+
+/* Les contrôles Leaflet gardent un fond blanc lisible sur la carte. */
+.leaflet-container {
+  font-family: inherit;
+  background: #eef2f7;
+}
+
+.leaflet-control-attribution {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.map-picker-coords {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #33415c;
+}
+
+.map-picker-coords strong {
+  font-variant-numeric: tabular-nums;
+  color: #001a70;
+}

@@ -12,7 +12,14 @@
  * Usage :  cd backend_new && node _scripts/check-e2e.mjs
  */
 const BASE = process.env.API_BASE ?? 'http://localhost:3000';
-const PASSWORD = process.env.SHAPE_PASSWORD ?? 'Uswap2026!Demo';
+// Aucun mot de passe en clair : fournir SHAPE_PASSWORD (ou DEMO_PASSWORD).
+const PASSWORD = process.env.SHAPE_PASSWORD ?? process.env.DEMO_PASSWORD ?? '';
+if (!PASSWORD) {
+  console.error(
+    'SHAPE_PASSWORD (ou DEMO_PASSWORD) est requis pour lancer cette recette.',
+  );
+  process.exit(1);
+}
 
 let pass = 0;
 let fail = 0;

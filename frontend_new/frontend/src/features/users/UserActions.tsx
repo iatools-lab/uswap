@@ -3,6 +3,7 @@ import { useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DotsThreeIcon, PencilSimpleIcon, PowerIcon } from "../../ui/icons";
 import { api } from "../../api/auth-api";
+import { useAppPath } from "../../app/appBase";
 
 export function UserActions({
   user,
@@ -11,6 +12,7 @@ export function UserActions({
   user: { id: string; fullName: string; disabledAt?: string | null };
   onChanged: () => void;
 }) {
+  const path = useAppPath();
   const id = useId();
   const panel = useRef<HTMLDivElement>(null);
   const [confirm, setConfirm] = useState(false),
@@ -29,13 +31,27 @@ export function UserActions({
         throw new Error(
           "Le statut a changé. Fermez ce menu puis rouvrez la liste.",
         );
-      await api(
+      const enable = !!current.disabledAt;
+      const response = await api<{ message?: string }>(
         "/users/" + user.id + "/status",
-        { enabled: !!current.disabledAt, updatedAt: current.updatedAt },
+        { enabled: enable, updatedAt: current.updatedAt },
         "PATCH",
       );
+      // Relecture : le message de succès n'apparaît que si la base a vraiment
+      // changé d'état (c'était le symptôme « réactivé » alors que le compte
+      // restait bloqué).
+      const saved = await api<{ disabledAt: string | null }>(
+        "/users/" + user.id,
+      );
+      if (!!saved.disabledAt === enable)
+        throw new Error(
+          "La mise à jour n'a pas été enregistrée. Rechargez la page et réessayez.",
+        );
       panel.current?.hidePopover();
-      notify(user.disabledAt ? "Compte réactivé." : "Compte désactivé.");
+      notify(
+        response.message ??
+          (enable ? "Compte réactivé." : "Compte désactivé."),
+      );
       onChanged();
     } catch (e) {
       setError((e as Error).message);
@@ -96,7 +112,7 @@ export function UserActions({
             </>
           ) : (
             <>
-              <a href={"/app/admin/utilisateurs/" + user.id}>
+              <a href={path("/app/admin/utilisateurs/" + user.id)}>
                 <PencilSimpleIcon size={18} />
                 Modifier
               </a>

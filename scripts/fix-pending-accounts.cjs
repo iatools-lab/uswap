@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Traite les comptes en attente :
  *  - active les comptes humains legitimes ;
  *  - supprime les comptes de test jetables (nom generique, aucun historique).
@@ -13,7 +13,7 @@ const bcrypt = require('bcrypt');
 
 const prisma = new PrismaClient();
 const APPLY = process.argv.includes('--apply');
-const PASSWORD = process.env.DEMO_PASSWORD || 'Uswap2026!Demo';
+const PASSWORD = process.env.DEMO_PASSWORD || process.env.DEMO_PASSWORD ?? '';
 
 /** Comptes de test crees automatiquement, sans valeur fonctionnelle. */
 const isDisposable = (user) =>
@@ -123,7 +123,7 @@ async function dependenciesOf(userId) {
 
   for (const { user } of toDelete) {
     await prisma.user.delete({ where: { id: user.id } }).catch((error) => {
-      console.log(`  ignoré ${user.email}: ${error.message.slice(0, 80)}`);
+      console.log(`  ignorÃ© ${user.email}: ${error.message.slice(0, 80)}`);
     });
   }
 

@@ -11,6 +11,7 @@ import {
 } from "../../ui/icons";
 import { periodDuration } from "./duration";
 import { formatDateRange } from "../../utils/french";
+import { formatDate, formatTime } from "../../utils/datetime";
 import "./planning-list.css";
 
 export type PlanningListItem = {
@@ -294,15 +295,11 @@ export function PlanningList({
                       <span>
                         <small>Prochain service</small>
                         <strong>
-                          {new Date(nextShift.startTime || "").toLocaleString(
-                            "fr-FR",
-                            {
-                              day: "2-digit",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            },
-                          )}
+                          {formatDate(nextShift.startTime, null, {
+                            day: "2-digit",
+                            month: "short",
+                          })}{" "}
+                          {formatTime(nextShift.startTime)}
                           {nextShift.templateVersion?.label
                             ? ` · ${nextShift.templateVersion.label}`
                             : ""}

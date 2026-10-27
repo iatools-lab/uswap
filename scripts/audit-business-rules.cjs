@@ -1,4 +1,4 @@
-// Temporary business-rules audit — deleted after the run.
+﻿// Temporary business-rules audit â€” deleted after the run.
 // Drives the real Nest app over HTTP and asserts the 11 business rules.
 require('dotenv').config();
 
@@ -9,7 +9,7 @@ const { PrismaClient } = require('@prisma/client');
 
 const PORT = 3125;
 const BASE = `http://127.0.0.1:${PORT}`;
-const PASSWORD = 'Uswap2026!Demo';
+const PASSWORD = process.env.DEMO_PASSWORD ?? '';
 
 let pass = 0;
 let fail = 0;
@@ -79,7 +79,7 @@ async function login(email) {
   const RUN_SEED = 100 + (Date.now() % 5000);
 
   const station = await prisma.station.findFirst({
-    where: { name: 'Bonabéri' },
+    where: { name: 'BonabÃ©ri' },
     select: { id: true, minRestHours: true, weeklyHoursLimit: true },
   });
   const swappers = await prisma.user.findMany({
@@ -222,7 +222,7 @@ async function login(email) {
   console.log('\nRULE 5 - weekly limit = station parameter');
   // ---------------------------------------------------------------
   const weeklyStation = await prisma.station.findFirst({
-    where: { name: 'Yaoundé Centre' },
+    where: { name: 'YaoundÃ© Centre' },
     select: { id: true, weeklyHoursLimit: true },
   });
 
@@ -231,7 +231,7 @@ async function login(email) {
   // every seeded week is now at or under its station ceiling, and a swapper
   // already at 48h/48h cannot take another 8h shift.
   const strictStation = await prisma.station.findFirst({
-    where: { name: 'Bonabéri' },
+    where: { name: 'BonabÃ©ri' },
     select: { id: true, weeklyHoursLimit: true },
   });
 

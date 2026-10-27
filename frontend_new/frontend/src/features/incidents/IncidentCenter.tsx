@@ -71,10 +71,13 @@ const nextStatuses: Record<IncidentStatus, IncidentStatus[]> = {
   RESOLVED: ["RESOLVED", "IN_PROGRESS", "CLOSED"],
   CLOSED: ["CLOSED"],
 };
+// Heure de la station, pas celle du poste : un incident signale a 14:00 doit
+// s'afficher a 14:00 pour tout le monde.
 const date = (value: string) =>
   new Intl.DateTimeFormat("fr-FR", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "Africa/Douala",
   }).format(new Date(value));
 
 export function IncidentCenter({

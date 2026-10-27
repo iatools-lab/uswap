@@ -11,6 +11,7 @@ import {
   IconArrowsExchange,
   IconBell,
   IconBolt,
+  IconTrash,
   IconBuilding,
   IconCalendar,
   IconCalendarCheck,
@@ -185,6 +186,8 @@ const X = makeIcon(IconX, "X");
 const XCircle = makeIcon(IconCircleX, "XCircle");
 const Zap = makeIcon(IconBolt, "Zap");
 const FloppyDisk = makeIcon(IconDeviceFloppy, "FloppyDisk");
+// Nettoyage des donnees : icone reservee a l'espace super administrateur.
+const Broom = makeIcon(IconTrash, "Broom");
 
 export {
   Activity,
@@ -238,6 +241,7 @@ export {
   EyeOff,
   FileSpreadsheet,
   FloppyDisk as FloppyDiskIcon,
+  Broom as BroomIcon,
   Gauge as GaugeIcon,
   Gear,
   Gear as GearIcon,
@@ -284,6 +288,7 @@ export {
   Users,
   UsersThree as UsersThreeIcon,
   Warning,
+  Warning as WarningIcon,
   WarningCircle as WarningCircleIcon,
   WarningDiamond as WarningDiamondIcon,
   WifiSlash as WifiSlashIcon,

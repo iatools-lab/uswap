@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, AttendanceStatus, PlanningStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConstraintsService } from '../planning/constraints.service';
@@ -22,6 +22,15 @@ const EARTH_RADIUS_M = 6_371_000;
 /** Tolerance apres la fin de service pour enregistrer le depart. */
 const CHECKOUT_GRACE_MS = 5 * 60_000;
 
+/**
+ * Avance tolerée sur la prise de service.
+ *
+ * Le telephone de l'agent et l'horloge du serveur ne sont jamais parfaitement
+ * alignes : sans cette marge, un pointage engage a l'heure pile pouvait etre
+ * refuse pour quelques secondes d'avance d'horloge ("hors creneau").
+ */
+const CHECKIN_EARLY_MS = 10 * 60_000;
+
 export interface PunchInput {
   shiftId: string;
   kind: string;
@@ -32,6 +41,8 @@ export interface PunchInput {
 
 @Injectable()
 export class AttendanceService {
+  private readonly logger = new Logger(AttendanceService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
@@ -307,7 +318,7 @@ export class AttendanceService {
     });
 
     if (kind === 'CHECKIN') {
-      if (now < start || now > end) {
+      if (now < start - CHECKIN_EARLY_MS || now > end) {
         throw new ConflictDomain(
           'OUTSIDE_SHIFT_WINDOW',
           'La prise de service est possible uniquement pendant le créneau prévu.',
@@ -321,6 +332,15 @@ export class AttendanceService {
           409,
         );
       }
+      if (existing?.checkedOutAt) {
+        throw new ConflictDomain(
+          'ALREADY_CHECKED_OUT',
+          'Ce service est déjà clôturé. Le superviseur peut corriger le pointage.',
+          409,
+        );
+      }
+      // Un service declare absent automatiquement reste pointable tant que le
+      // creneau est ouvert : l'agent peut arriver en retard apres l'alerte.
       const late = now > start + tolerance * 60_000;
       const record = await this.prisma.attendance.upsert({
         where: { shiftId: occurrence.id },
@@ -336,6 +356,7 @@ export class AttendanceService {
           status: late ? AttendanceStatus.LATE : AttendanceStatus.PRESENT,
           checkedInAt: new Date(now),
           isLate: late,
+          justified: false,
         },
       });
 
@@ -343,21 +364,31 @@ export class AttendanceService {
       await this.prisma.absence.deleteMany({
         where: {
           shiftId: occurrence.id,
-          origin: 'AUTOMATIC_ABSENCE',
           status: 'OPEN',
+          origin: { in: ['AUTOMATIC_ABSENCE', 'DECLARATION'] },
         },
       });
       await this.prisma.automatedAbsence.deleteMany({
         where: { shiftId: occurrence.id },
       });
 
-      await this.notifications.notifyStaff([user.id], {
-        kind: NotificationKind.CHECKIN,
-        title: 'Prise de service enregistrée',
-        body: `${user.fullName} · ${occurrence.shiftLabel ?? 'Service'} (${late ? 'en retard' : "à l'heure"}).`,
-        targetId: occurrence.id,
-        targetUrl: '/pointages',
-      });
+      // Notifications best-effort : une panne SMTP ne doit jamais annuler un
+      // pointage deja enregistre en base.
+      await this.notifications
+        .notifyStaff([user.id], {
+          kind: NotificationKind.CHECKIN,
+          title: 'Prise de service enregistrée',
+          body: `${user.fullName} · ${occurrence.shiftLabel ?? 'Service'} (${late ? 'en retard' : "à l'heure"}).`,
+          targetId: occurrence.id,
+          targetUrl: '/pointages',
+        })
+        .catch((error: unknown) =>
+          this.logger.warn(
+            `Notification de prise de service non envoyee : ${
+              error instanceof Error ? error.message : error
+            }`,
+          ),
+        );
       await this.audit.record({
         actorId: user.id,
         action: late ? 'CHECKIN_LATE' : 'CHECKIN',
@@ -408,13 +439,21 @@ export class AttendanceService {
       },
     });
 
-    await this.notifications.notifyStaff([user.id], {
-      kind: NotificationKind.CHECKOUT,
-      title: 'Fin de service enregistrée',
-      body: `${user.fullName} · ${occurrence.shiftLabel ?? 'Service'}.`,
-      targetId: occurrence.id,
-      targetUrl: '/pointages',
-    });
+    await this.notifications
+      .notifyStaff([user.id], {
+        kind: NotificationKind.CHECKOUT,
+        title: 'Fin de service enregistrée',
+        body: `${user.fullName} · ${occurrence.shiftLabel ?? 'Service'}.`,
+        targetId: occurrence.id,
+        targetUrl: '/pointages',
+      })
+      .catch((error: unknown) =>
+        this.logger.warn(
+          `Notification de fin de service non envoyee : ${
+            error instanceof Error ? error.message : error
+          }`,
+        ),
+      );
     await this.audit.record({
       actorId: user.id,
       action: 'CHECKOUT',
@@ -802,16 +841,24 @@ export class AttendanceService {
       return correction;
     });
 
-    await this.notifications.notifyStaff([swapperId], {
-      kind: NotificationKind.CORRECTION,
-      title: payload.isJustified
-        ? 'Absence requalifiée en justifiée'
-        : 'Pointage corrigé',
-      body: `${occurrence.shiftLabel ?? 'Service'} : ${reason}`,
-      targetId: shiftId,
-      targetUrl: '/pointages',
-      critical: true,
-    });
+    await this.notifications
+      .notifyStaff([swapperId], {
+        kind: NotificationKind.CORRECTION,
+        title: payload.isJustified
+          ? 'Absence requalifiée en justifiée'
+          : 'Pointage corrigé',
+        body: `${occurrence.shiftLabel ?? 'Service'} : ${reason}`,
+        targetId: shiftId,
+        targetUrl: '/pointages',
+        critical: true,
+      })
+      .catch((error: unknown) =>
+        this.logger.warn(
+          `Notification de correction non envoyee : ${
+            error instanceof Error ? error.message : error
+          }`,
+        ),
+      );
     await this.audit.record({
       actorId: user.id,
       action: 'ATTENDANCE_CORRECTED',

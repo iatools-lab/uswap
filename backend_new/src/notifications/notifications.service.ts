@@ -27,6 +27,13 @@ export interface NotifyOptions {
 
 export interface AppNotification extends Notification {}
 
+/** Piece jointe d'un e-mail transactionnel (rapports programmes). */
+export interface MailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 /**
  * Point d'entree unique de toutes les notifications.
  *
@@ -61,18 +68,50 @@ export class NotificationsService implements OnModuleInit {
   onModuleInit(): void {
     const driver = this.config.get('mailDriver', { infer: true });
     if (driver === 'smtp') {
+      const user = this.config.get('smtpUser', { infer: true });
+      const pass = this.config.get('smtpPassword', { infer: true });
+      const host = this.config.get('smtpHost', { infer: true });
+      if (!host) {
+        // Un SMTP sans hote bascule silencieusement en mode console : les
+        // invitations et notifications ne partent jamais. On le dit une fois,
+        // en clair, au lieu de laisser l'exploitant chercher.
+        this.logger.error(
+          'MAIL_DRIVER=smtp mais SMTP_HOST est vide : aucun e-mail ne sera envoye.',
+        );
+      } else if (!user || !pass) {
+        this.logger.error(
+          'MAIL_DRIVER=smtp sans SMTP_USER / SMTP_PASS : Gmail refusera la connexion.',
+        );
+      }
       this.transporter = nodemailer.createTransport({
-        host: this.config.get('smtpHost', { infer: true }),
+        host,
         port: this.config.get('smtpPort', { infer: true }),
         secure: this.config.get('smtpSecure', { infer: true }),
-        auth: this.config.get('smtpUser', { infer: true })
-          ? {
-              user: this.config.get('smtpUser', { infer: true }),
-              pass: this.config.get('smtpPassword', { infer: true }),
-            }
-          : undefined,
+        requireTLS: this.config.get('smtpRequireTls', { infer: true }),
+        auth: user ? { user, pass } : undefined,
+        // Delais courts : un SMTP lent ne doit pas immobiliser un worker
+        // pendant 90 s. Un lot de notifications part en parallele, un echec
+        // apres 20 s est journalise puis abandonne (une nouvelle tentative
+        // est faite par l'appelant si necessaire).
+        connectionTimeout: 8_000,
+        greetingTimeout: 8_000,
+        socketTimeout: 20_000,
+        pool: true,
+        maxConnections: 3,
+        maxMessages: 50,
       });
-      this.logger.log('Canal e-mail configure en SMTP.');
+      this.transporter
+        .verify()
+        .then(() =>
+          this.logger.log(`Canal e-mail SMTP operationnel (${host}).`),
+        )
+        .catch((error: unknown) =>
+          this.logger.error(
+            `SMTP injoignable (${host}) : ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          ),
+        );
       return;
     }
     if (driver === 'json') {
@@ -196,6 +235,15 @@ export class NotificationsService implements OnModuleInit {
   /* Emission                                                          */
   /* ---------------------------------------------------------------- */
 
+  /**
+   * Cree la notification interne puis lance sa distribution.
+   *
+   * La distribution (SMTP compris) est **asynchrone** : un envoi Gmail prenait
+   * jusqu'a 90 s par destinataire, ce qui bloquait la requete HTTP d'un
+   * incident, d'une demande de conge ou d'un pointage. La promesse retournee
+   * par `distribute` est volontairement non attendue : le journal
+   * `NotificationDelivery`/`EmailLog` est ecrit dans tous les cas.
+   */
   async notify(options: NotifyOptions): Promise<AppNotification> {
     const notification = await this.prisma.notification.create({
       data: {
@@ -208,6 +256,22 @@ export class NotificationsService implements OnModuleInit {
       },
     });
 
+    void this.distribute(options, notification.id).catch((error: unknown) =>
+      this.logger.warn(
+        `Distribution de la notification ${notification.id} en echec : ${
+          error instanceof Error ? error.message : error
+        }`,
+      ),
+    );
+
+    return notification;
+  }
+
+  /** Envoi e-mail / push selon les preferences, journalise par canal. */
+  private async distribute(
+    options: NotifyOptions,
+    notificationId: string,
+  ): Promise<void> {
     const preference = await this.ensurePreferences(options.userId);
     const user = await this.prisma.user.findUnique({
       where: { id: options.userId },
@@ -220,7 +284,7 @@ export class NotificationsService implements OnModuleInit {
     const quiet = this.inQuietHours(preference) && !options.critical;
 
     // Canal interne : toujours ecrit, meme si l'e-mail et le push sont coupes.
-    await this.recordDelivery(notification.id, options.userId, 'INTERNAL', {
+    await this.recordDelivery(notificationId, options.userId, 'INTERNAL', {
       status: preference.internalEnabled ? 'SENT' : 'SKIPPED',
       sentAt: preference.internalEnabled ? new Date() : null,
       error: preference.internalEnabled
@@ -228,19 +292,26 @@ export class NotificationsService implements OnModuleInit {
         : 'Canal interne desactive par l’utilisateur.',
     });
 
-    if (user?.isActive && user.email) {
-      const mailAllowed =
-        preference.emailEnabled && categoryPrefs.email && !quiet;
+    // Un compte desactive ne recoit plus rien par messagerie, mais conserve sa
+    // notification interne. Le test porte sur `isActive` ET `disabledAt`.
+    const recipientActive = await this.isRecipientActive(options.userId);
+    if (recipientActive && user?.email) {
+      // Une notification critique (acces, securite, suppression de donnees)
+      // ne doit jamais etre filtree par un reglage fin : seul l'interrupteur
+      // global de l'e-mail peut la retenir.
+      const mailAllowed = options.critical
+        ? preference.emailEnabled
+        : preference.emailEnabled && categoryPrefs.email && !quiet;
       if (mailAllowed) {
         await this.sendToChannel(
-          notification.id,
+          notificationId,
           options.userId,
           'EMAIL',
           user.email,
           options,
         );
       } else {
-        await this.recordDelivery(notification.id, options.userId, 'EMAIL', {
+        await this.recordDelivery(notificationId, options.userId, 'EMAIL', {
           status: 'SKIPPED',
           error: this.skipReason(preference, categoryPrefs.email, quiet),
         });
@@ -250,14 +321,14 @@ export class NotificationsService implements OnModuleInit {
         preference.pushEnabled && categoryPrefs.push && !quiet;
       if (pushAllowed) {
         await this.sendToChannel(
-          notification.id,
+          notificationId,
           options.userId,
           'PUSH',
           user.email,
           options,
         );
       } else {
-        await this.recordDelivery(notification.id, options.userId, 'PUSH', {
+        await this.recordDelivery(notificationId, options.userId, 'PUSH', {
           status: 'SKIPPED',
           error: this.skipReason(preference, categoryPrefs.push, quiet),
         });
@@ -265,7 +336,6 @@ export class NotificationsService implements OnModuleInit {
     }
 
     await this.enforceRetention(options.userId, preference.retentionDays);
-    return notification;
   }
 
   /**
@@ -297,8 +367,13 @@ export class NotificationsService implements OnModuleInit {
       where: { role: 'SUPERVISOR', isActive: true, disabledAt: null },
       select: { id: true },
     });
+    // Le super administrateur recoit aussi ce que recoit l'administrateur.
     const admins = await this.prisma.user.findMany({
-      where: { role: 'ADMIN', isActive: true, disabledAt: null },
+      where: {
+        role: { in: ['SUPER_ADMIN', 'ADMIN'] },
+        isActive: true,
+        disabledAt: null,
+      },
       select: { id: true },
     });
     return this.notifyMany(
@@ -309,7 +384,11 @@ export class NotificationsService implements OnModuleInit {
 
   async notifyAdmins(options: Omit<NotifyOptions, 'userId'>): Promise<number> {
     const admins = await this.prisma.user.findMany({
-      where: { role: 'ADMIN', isActive: true, disabledAt: null },
+      where: {
+        role: { in: ['SUPER_ADMIN', 'ADMIN'] },
+        isActive: true,
+        disabledAt: null,
+      },
       select: { id: true },
     });
     return this.notifyMany(
@@ -330,16 +409,23 @@ export class NotificationsService implements OnModuleInit {
     to: string,
     template: MailTemplate,
     variables: Record<string, string>,
+    attachments: MailAttachment[] = [],
   ): Promise<void> {
     const { subject, html, text } = renderTemplate(template, variables);
     // `deliver` cree et met a jour la ligne EmailLog (PENDING -> SENT/FAILED).
     // Ne PAS en creer une seconde ici : elle resterait bloquee en PENDING et
     // ferait croire a un envoi en attente qui n'arrivera jamais.
     try {
-      await this.deliver(to, subject, html, text, template);
+      await this.deliver(to, subject, html, text, template, attachments);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Echec d’envoi.';
       this.logger.error(`E-mail ${template} vers ${to} non envoye : ${message}`);
+      // Le mot de passe oublie ne doit pas dependre du SMTP : le lien est
+      // ecrit dans ce message pour que l'exploitant teste meme si le
+      // fournisseur refuse le message.
+      if (template === 'PASSWORD_RESET' || template === 'INVITATION') {
+        this.logger.log(`[LIEN ${template}] ${to} → ${variables.url}`);
+      }
       throw error;
     }
   }
@@ -445,6 +531,15 @@ export class NotificationsService implements OnModuleInit {
     });
   }
 
+  /** Le destinataire peut-il encore recevoir des messages ? */
+  private async isRecipientActive(userId: string): Promise<boolean> {
+    const row = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true, disabledAt: true },
+    });
+    return Boolean(row?.isActive && !row.disabledAt);
+  }
+
   private pushConfigured(): boolean {
     return Boolean(
       this.config.get('enableWebPush', { infer: true }) &&
@@ -519,15 +614,25 @@ export class NotificationsService implements OnModuleInit {
     html: string,
     text: string,
     template = 'NOTIFICATION',
+    attachments: MailAttachment[] = [],
   ): Promise<void> {
     const log = await this.prisma.emailLog.create({
       data: { to, subject, template, status: 'PENDING' },
     });
     try {
-      await this.transmit(to, subject, html, text);
+      const accepted = await this.transmit(to, subject, html, text, attachments);
+      // `SENT` ne doit signifier qu'une chose : le serveur SMTP a accepté le
+      // message. En mode console/json, rien n'est livré au destinataire : le
+      // journal le dit, au lieu de laisser croire à un envoi réussi.
       await this.prisma.emailLog.update({
         where: { id: log.id },
-        data: { status: 'SENT', sentAt: new Date() },
+        data: accepted
+          ? { status: 'SENT', sentAt: new Date() }
+          : {
+              status: 'SKIPPED',
+              error:
+                'Canal e-mail non configuré pour l’envoi réel (MAIL_DRIVER ≠ smtp).',
+            },
       });
     } catch (error) {
       await this.prisma.emailLog.update({
@@ -546,29 +651,87 @@ export class NotificationsService implements OnModuleInit {
     subject: string,
     html: string,
     text: string,
-  ): Promise<void> {
+    attachments: MailAttachment[] = [],
+  ): Promise<boolean> {
     const driver = this.config.get('mailDriver', { infer: true });
     const from = this.config.get('mailFrom', { infer: true });
 
     if (driver === 'smtp' && this.transporter) {
-      await this.transporter.sendMail({ from, to, subject, html, text });
-      return;
+      const payload = {
+        from,
+        to,
+        subject,
+        html,
+        text,
+        ...(attachments.length
+          ? {
+              attachments: attachments.map((attachment) => ({
+                filename: attachment.filename,
+                content: attachment.content,
+                contentType:
+                  attachment.contentType ?? mimeForFilename(attachment.filename),
+              })),
+            }
+          : {}),
+      };
+      // Deux tentatives : un incident reseau ponctuel (reset de connexion
+      // SMTP, coupure Wi-Fi) ne doit pas faire perdre le lien de
+      // reinitialisation ni le rapport du jour.
+      try {
+        await this.transporter.sendMail(payload);
+      } catch (first) {
+        this.logger.warn(
+          `SMTP : premier envoi vers ${to} en echec (${
+            first instanceof Error ? first.message : first
+          }), nouvelle tentative.`,
+        );
+        await this.transporter.sendMail(payload);
+      }
+      // `sendMail` ne resout qu'apres acceptation par le serveur SMTP.
+      return true;
+    }
+
+    if (driver === 'smtp') {
+      // Ne JAMAIS pretendre a un envoi quand le transport n'existe pas :
+      // c'est ce silence qui faisait croire que les e-mails partaient.
+      throw new Error(
+        'Canal e-mail SMTP indisponible : verifiez SMTP_HOST, SMTP_USER et SMTP_PASS dans backend_new/.env.',
+      );
     }
 
     if (driver === 'json') {
+      // Mode fichier (recette) : le contenu est ecrit a cote du message pour
+      // pouvoir verifier que la piece jointe existe et n'est pas vide.
+      const stamp = Date.now();
       const file = path.join(
         this.mailDir,
-        `${Date.now()}-${to.replace(/[^a-z0-9]/gi, '_')}.json`,
+        `${stamp}-${to.replace(/[^a-z0-9]/gi, '_')}.json`,
       );
+      const saved = attachments.map((attachment, index) => {
+        const name = path.join(this.mailDir, `${stamp}-${index}-${attachment.filename}`);
+        fs.writeFileSync(name, attachment.content);
+        // Le type MIME est conserve dans la trace : sans lui, on ne pourrait
+        // pas verifier que le fichier recu est bien celui annonce.
+        return {
+          filename: attachment.filename,
+          contentType: attachment.contentType ?? mimeForFilename(attachment.filename),
+          bytes: attachment.content.length,
+          file: name,
+        };
+      });
       fs.writeFileSync(
         file,
-        JSON.stringify({ to, from, subject, html, text }, null, 2),
+        JSON.stringify({ to, from, subject, html, text, attachments: saved }, null, 2),
         'utf8',
       );
-      return;
+      // Écrit sur disque uniquement : le destinataire n'a rien reçu.
+      return false;
     }
 
-    this.logger.log(`[MAIL] ${to} · ${subject}\n${text}`);
+    this.logger.log(
+      `[MAIL] ${to} · ${subject}${attachments.length ? ` · pieces jointes : ${attachments.map((a) => a.filename).join(', ')}` : ''}\n${text}`,
+    );
+    return false;
   }
 
   private async recordDelivery(
@@ -647,8 +810,9 @@ export class NotificationsService implements OnModuleInit {
       OPERATIONS: { email: true, push: true },
       LEAVE: { email: true, push: true },
       INCIDENT: { email: role !== 'SWAPPER', push: true },
-      ACCESS: { email: role === 'ADMIN', push: false },
-      REPORT: { email: role === 'ADMIN', push: false },
+      // Roles de pilotage : alertes d'acces et rapports par e-mail.
+      ACCESS: { email: role !== 'SWAPPER', push: false },
+      REPORT: { email: role !== 'SWAPPER', push: false },
     };
   }
 
@@ -752,6 +916,20 @@ export class NotificationsService implements OnModuleInit {
 
 /** Type utilitaire partage par les services qui composent une notification. */
 export type NotificationCreateInput = Prisma.NotificationCreateInput;
+
+/**
+ * Type MIME d'une piece jointe deduit de son extension.
+ * L'appelant peut le preciser ; a defaut, c'est ce type qui est transmis au
+ * SMTP (et trace dans le canal `json`).
+ */
+export function mimeForFilename(filename: string): string {
+  const extension = path.extname(filename).toLowerCase();
+  if (extension === '.csv') return 'text/csv; charset=utf-8';
+  if (extension === '.xlsx')
+    return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  if (extension === '.pdf') return 'application/pdf';
+  return 'application/octet-stream';
+}
 
 /**
  * Extension metier : notifications de planification.

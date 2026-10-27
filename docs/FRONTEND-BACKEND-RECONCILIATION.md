@@ -1,39 +1,39 @@
-# Réconciliation frontend ↔ backend — rapport final
+﻿# RÃ©conciliation frontend â†” backend â€” rapport final
 
-_Ce document couvre le travail mené après `603617f` : alignement complet du contrat
-d'API, notifications, tableau de bord, correction du build frontend, et contrôle
-métier final._
-
----
-
-## 1. Le problème de départ
-
-Le frontend (celui de Dylane) et le backend avaient divergé. Le frontend était en
-avance : ses écrans appelaient des routes que le backend n'exposait pas, et il
-utilisait des noms légèrement différents de ceux du backend.
-
-Symptôme le plus visible : **l'écran d'opérations ne se chargeait pour aucun rôle
-autre que `SWAPPER`**, car `GET /workspace` n'existait pas — il renvoyait `404`.
-
-La règle appliquée : **le backend s'aligne sur le frontend**, jamais l'inverse.
-Aucun écran de Dylane n'a été réécrit pour « corriger » le backend.
+_Ce document couvre le travail menÃ© aprÃ¨s `603617f` : alignement complet du contrat
+d'API, notifications, tableau de bord, correction du build frontend, et contrÃ´le
+mÃ©tier final._
 
 ---
 
-## 2. Méthode
+## 1. Le problÃ¨me de dÃ©part
 
-Chaque affirmation de ce rapport a été vérifiée en exécutant l'application, pas en
+Le frontend (celui de Dylane) et le backend avaient divergÃ©. Le frontend Ã©tait en
+avance : ses Ã©crans appelaient des routes que le backend n'exposait pas, et il
+utilisait des noms lÃ©gÃ¨rement diffÃ©rents de ceux du backend.
+
+SymptÃ´me le plus visible : **l'Ã©cran d'opÃ©rations ne se chargeait pour aucun rÃ´le
+autre que `SWAPPER`**, car `GET /workspace` n'existait pas â€” il renvoyait `404`.
+
+La rÃ¨gle appliquÃ©e : **le backend s'aligne sur le frontend**, jamais l'inverse.
+Aucun Ã©cran de Dylane n'a Ã©tÃ© rÃ©Ã©crit pour Â« corriger Â» le backend.
+
+---
+
+## 2. MÃ©thode
+
+Chaque affirmation de ce rapport a Ã©tÃ© vÃ©rifiÃ©e en exÃ©cutant l'application, pas en
 lisant le code :
 
-1. **Audit de contrat** — extraction de _tous_ les appels API du frontend, puis
-   confrontation à la carte Swagger réelle du backend (route par route, méthode
-   par méthode).
-2. **Tests HTTP réels** — l'application NestJS est démarrée sur un port réel et
-   pilotée avec `fetch`. Aucun mock.
-3. **Contrôle métier** — les 11 règles du cahier des charges sont testées une par
-   une contre l'API vivante, avec vérification en base.
+1. **Audit de contrat** â€” extraction de _tous_ les appels API du frontend, puis
+   confrontation Ã  la carte Swagger rÃ©elle du backend (route par route, mÃ©thode
+   par mÃ©thode).
+2. **Tests HTTP rÃ©els** â€” l'application NestJS est dÃ©marrÃ©e sur un port rÃ©el et
+   pilotÃ©e avec `fetch`. Aucun mock.
+3. **ContrÃ´le mÃ©tier** â€” les 11 rÃ¨gles du cahier des charges sont testÃ©es une par
+   une contre l'API vivante, avec vÃ©rification en base.
 
-Deux scripts permanents permettent de rejouer ces vérifications :
+Deux scripts permanents permettent de rejouer ces vÃ©rifications :
 
 ```powershell
 node scripts/audit-contract.cjs        # contrat frontend <-> backend
@@ -42,34 +42,34 @@ node scripts/audit-business-rules.cjs  # les 11 regles metier
 
 ---
 
-## 3. Audit de contrat : 3 routes absentes, 6 désalignements
+## 3. Audit de contrat : 3 routes absentes, 6 dÃ©salignements
 
-### 3.1 Routes réellement absentes (créées)
+### 3.1 Routes rÃ©ellement absentes (crÃ©Ã©es)
 
-| Route                           | Consommateur                          | Rôle                                       |
+| Route                           | Consommateur                          | RÃ´le                                       |
 | ------------------------------- | ------------------------------------- | ------------------------------------------ |
-| `GET /workspace`                | `OperationsPage`, `AttendanceMonitor` | Charge l'écran d'opérations, tous rôles    |
+| `GET /workspace`                | `OperationsPage`, `AttendanceMonitor` | Charge l'Ã©cran d'opÃ©rations, tous rÃ´les    |
 | `POST /corrections/attachments` | `CorrectionDialog`                    | Upload d'un justificatif (PDF/image, 5 Mo) |
 | `PATCH /corrections/shifts/:id` | `CorrectionDialog`                    | Correction d'un pointage                   |
 | `GET /corrections/shifts/:id`   | `CorrectionHistory`                   | Historique des corrections                 |
 
-### 3.2 Désalignements de nommage (alias ajoutés)
+### 3.2 DÃ©salignements de nommage (alias ajoutÃ©s)
 
-La fonctionnalité existait, le nom différait. Plutôt que de modifier le frontend,
-des alias ont été ajoutés côté backend :
+La fonctionnalitÃ© existait, le nom diffÃ©rait. PlutÃ´t que de modifier le frontend,
+des alias ont Ã©tÃ© ajoutÃ©s cÃ´tÃ© backend :
 
 | Appel du frontend                   | Route backend existante                       | Traitement                                                                  |
 | ----------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------- |
-| `GET /auth/me`                      | `GET /auth/session` (sémantique différente)   | **Nouvelle route** : renvoie `{ user }`, appelée par le veilleur de session |
+| `GET /auth/me`                      | `GET /auth/session` (sÃ©mantique diffÃ©rente)   | **Nouvelle route** : renvoie `{ user }`, appelÃ©e par le veilleur de session |
 | `POST /auth/activate-account`       | `POST /auth/activate`                         | Alias                                                                       |
-| `POST /auth/invitations/:id/resend` | `POST /users/:id/resend-invitation`           | Route équivalente ajoutée                                                   |
-| `PATCH /users/:id/status`           | `PATCH /users/:id/deactivate` + `/reactivate` | Alias unifié (`{ enabled }`)                                                |
+| `POST /auth/invitations/:id/resend` | `POST /users/:id/resend-invitation`           | Route Ã©quivalente ajoutÃ©e                                                   |
+| `PATCH /users/:id/status`           | `PATCH /users/:id/deactivate` + `/reactivate` | Alias unifiÃ© (`{ enabled }`)                                                |
 | `POST /users/:id/activate`          | `POST /users/:id/resend-invitation`           | Alias                                                                       |
 | `GET /users/imports/template`       | `GET /users/import/template`                  | Alias (`s` final)                                                           |
 | `PATCH /stations/:id/status`        | `PATCH /stations/:id/active`                  | Alias (`{ isActive \| enabled }`)                                           |
-| `GET /attendance/mine`              | existait déjà                                 | —                                                                           |
+| `GET /attendance/mine`              | existait dÃ©jÃ                                  | â€”                                                                           |
 
-### 3.3 Résultat
+### 3.3 RÃ©sultat
 
 ```
 backend routes total: 64
@@ -77,7 +77,7 @@ calls checked:        48
 missing:              0
 ```
 
-**48/48 appels du frontend sont désormais servis.**
+**48/48 appels du frontend sont dÃ©sormais servis.**
 
 ---
 
@@ -85,8 +85,8 @@ missing:              0
 
 Le plus critique, et le plus discret.
 
-`session.tsx` appelle `GET /auth/me` à **chaque changement de visibilité de
-l'onglet** (lignes 195-204). La réponse est utilisée pour rafraîchir le rôle en
+`session.tsx` appelle `GET /auth/me` Ã  **chaque changement de visibilitÃ© de
+l'onglet** (lignes 195-204). La rÃ©ponse est utilisÃ©e pour rafraÃ®chir le rÃ´le en
 cache et **rediriger l'utilisateur** :
 
 ```ts
@@ -98,17 +98,17 @@ api<{ user: User }>('/auth/me')
   .catch(() => clear()); // echec => session effacee
 ```
 
-Sans cette route, l'appel échouait en `404`, donc `catch` → `clear()` →
-**déconnexion silencieuse de l'utilisateur** dès qu'il revenait sur l'onglet.
+Sans cette route, l'appel Ã©chouait en `404`, donc `catch` â†’ `clear()` â†’
+**dÃ©connexion silencieuse de l'utilisateur** dÃ¨s qu'il revenait sur l'onglet.
 
 La route renvoie maintenant `{ user }` et refuse un compte inactif.
 
 ---
 
-## 5. Bug bloquant : création d'utilisateur impossible
+## 5. Bug bloquant : crÃ©ation d'utilisateur impossible
 
-`UserCreateModal` poste `accountStatus` à `/auth/register`. Or `RegisterDto` ne
-déclarait pas ce champ, et `main.ts` active `forbidNonWhitelisted` :
+`UserCreateModal` poste `accountStatus` Ã  `/auth/register`. Or `RegisterDto` ne
+dÃ©clarait pas ce champ, et `main.ts` active `forbidNonWhitelisted` :
 
 ```ts
 new ValidationPipe({
@@ -118,20 +118,20 @@ new ValidationPipe({
 });
 ```
 
-Conséquence : **toute création d'utilisateur depuis l'interface était rejetée en
-`400`** avant même d'atteindre le service.
+ConsÃ©quence : **toute crÃ©ation d'utilisateur depuis l'interface Ã©tait rejetÃ©e en
+`400`** avant mÃªme d'atteindre le service.
 
-Correction : le champ `accountStatus` (`ACTIVE | PENDING`) est accepté et fait
-autorité. `PENDING` conserve le flux d'invitation, `ACTIVE` crée un compte
-immédiatement connectable. `sendInvite` reste supporté pour compatibilité.
+Correction : le champ `accountStatus` (`ACTIVE | PENDING`) est acceptÃ© et fait
+autoritÃ©. `PENDING` conserve le flux d'invitation, `ACTIVE` crÃ©e un compte
+immÃ©diatement connectable. `sendInvite` reste supportÃ© pour compatibilitÃ©.
 
 ---
 
-## 6. Notifications (étape E)
+## 6. Notifications (Ã©tape E)
 
-### Modèle
+### ModÃ¨le
 
-Nouveau modèle `Notification` + migration `add_notifications` :
+Nouveau modÃ¨le `Notification` + migration `add_notifications` :
 
 ```
 kind : REPLACEMENT_REQUESTED | REPLACEMENT_ASSIGNED | SHIFT_CHANGED
@@ -140,101 +140,101 @@ kind : REPLACEMENT_REQUESTED | REPLACEMENT_ASSIGNED | SHIFT_CHANGED
 
 ### Routes
 
-| Route                             | Rôle                          |
+| Route                             | RÃ´le                          |
 | --------------------------------- | ----------------------------- |
-| `GET /notifications`              | 50 max, plus récentes d'abord |
+| `GET /notifications`              | 50 max, plus rÃ©centes d'abord |
 | `GET /notifications/unread-count` | Badge de la cloche            |
 | `PATCH /notifications/:id/read`   | Marquer une notification lue  |
 | `PATCH /notifications/read-all`   | Tout marquer comme lu         |
 
-Toutes les routes sont filtrées sur `req.user.id` : **un utilisateur ne peut lire
+Toutes les routes sont filtrÃ©es sur `req.user.id` : **un utilisateur ne peut lire
 ni marquer que ses propres notifications**.
 
-### Branchement sur les événements réels
+### Branchement sur les Ã©vÃ©nements rÃ©els
 
-Les notifications ne sont pas décoratives : elles partent des vrais événements
-métier, aux deux seuls points de passage existants.
+Les notifications ne sont pas dÃ©coratives : elles partent des vrais Ã©vÃ©nements
+mÃ©tier, aux deux seuls points de passage existants.
 
-**`openReplacementRequest()`** — goulet commun aux deux origines :
+**`openReplacementRequest()`** â€” goulet commun aux deux origines :
 
-| `source`            | Déclencheur                                  | Destinataires                  |
+| `source`            | DÃ©clencheur                                  | Destinataires                  |
 | ------------------- | -------------------------------------------- | ------------------------------ |
-| `DECLARATION`       | Le swappeur signale un empêchement           | Superviseurs + chef de station |
-| `AUTOMATIC_ABSENCE` | Le cron détecte qu'un swapper n'a pas scanné | Superviseurs + chef de station |
-| `AD_HOC`            | Le superviseur couvre un shift à la main     | —                              |
+| `DECLARATION`       | Le swappeur signale un empÃªchement           | Superviseurs + chef de station |
+| `AUTOMATIC_ABSENCE` | Le cron dÃ©tecte qu'un swapper n'a pas scannÃ© | Superviseurs + chef de station |
+| `AD_HOC`            | Le superviseur couvre un shift Ã  la main     | â€”                              |
 
-Comme c'est le **même** point de passage, supervision est prévenue exactement une
+Comme c'est le **mÃªme** point de passage, supervision est prÃ©venue exactement une
 fois, quelle que soit l'origine.
 
-**`assignReplacement()`** — trois notifications :
+**`assignReplacement()`** â€” trois notifications :
 
-- le **remplaçant** reçoit `REPLACEMENT_ASSIGNED` (le message le plus important) ;
-- l'**ancien titulaire** reçoit `SHIFT_CHANGED` (il est déchargé) ;
-- la **supervision** reçoit la confirmation.
+- le **remplaÃ§ant** reÃ§oit `REPLACEMENT_ASSIGNED` (le message le plus important) ;
+- l'**ancien titulaire** reÃ§oit `SHIFT_CHANGED` (il est dÃ©chargÃ©) ;
+- la **supervision** reÃ§oit la confirmation.
 
-### Deux décisions d'ingénierie
+### Deux dÃ©cisions d'ingÃ©nierie
 
-**Les notifications partent après le commit de la transaction.** Une notification
-émise depuis l'intérieur d'une transaction annoncerait un changement qui pourrait
-être annulé. Elles sont donc émises une fois le `$transaction` résolu.
+**Les notifications partent aprÃ¨s le commit de la transaction.** Une notification
+Ã©mise depuis l'intÃ©rieur d'une transaction annoncerait un changement qui pourrait
+Ãªtre annulÃ©. Elles sont donc Ã©mises une fois le `$transaction` rÃ©solu.
 
 **`notify()` et `notifyRoles()` avalent leurs erreurs.** Une notification est un
-effet de bord : elle ne doit jamais faire échouer l'action métier qui l'a
-déclenchée. Une panne d'écriture de notification ne doit pas empêcher un
-remplacement d'être affecté.
+effet de bord : elle ne doit jamais faire Ã©chouer l'action mÃ©tier qui l'a
+dÃ©clenchÃ©e. Une panne d'Ã©criture de notification ne doit pas empÃªcher un
+remplacement d'Ãªtre affectÃ©.
 
 ---
 
-## 7. Tableau de bord (étape F)
+## 7. Tableau de bord (Ã©tape F)
 
 ### `GET /dashboard/stats`
 
-Renvoie exactement les indicateurs demandés :
+Renvoie exactement les indicateurs demandÃ©s :
 
-| Indicateur        | Détail                                           |
+| Indicateur        | DÃ©tail                                           |
 | ----------------- | ------------------------------------------------ |
-| Shifts du jour    | total + répartition                              |
-| Présents          | pointage dans la tolérance                       |
-| En retard         | pointage au-delà de `latenessToleranceMinutes`   |
+| Shifts du jour    | total + rÃ©partition                              |
+| PrÃ©sents          | pointage dans la tolÃ©rance                       |
+| En retard         | pointage au-delÃ  de `latenessToleranceMinutes`   |
 | Absents           | sans pointage valide                             |
-| Terminés          | pointage clôturé                                 |
+| TerminÃ©s          | pointage clÃ´turÃ©                                 |
 | Demandes ouvertes | `ReplacementRequest` OPEN/ASSIGNED               |
-| Heures hebdo      | consommées vs `weeklyHoursLimit` de la station   |
+| Heures hebdo      | consommÃ©es vs `weeklyHoursLimit` de la station   |
 | Effectifs         | swappeurs actifs / total (supervision seulement) |
 | Timeline          | liste chronologique des shifts                   |
 
-### Périmètre
+### PÃ©rimÃ¨tre
 
-Le calcul réutilise `OperationsService.resolveAccessibleStationIds()`, donc **la
-même règle de portée que partout ailleurs** :
+Le calcul rÃ©utilise `OperationsService.resolveAccessibleStationIds()`, donc **la
+mÃªme rÃ¨gle de portÃ©e que partout ailleurs** :
 
-| Rôle            | Périmètre                                  |
+| RÃ´le            | PÃ©rimÃ¨tre                                  |
 | --------------- | ------------------------------------------ |
 | `ADMIN`         | Toutes les stations                        |
 | `SUPERVISOR`    | Station principale + `UserStationScope`    |
 | `STATION_CHIEF` | Sa station uniquement                      |
 | `SWAPPER`       | Ses propres shifts ; pas de bloc effectifs |
 
-Le calcul du statut « aujourd'hui » se fait en **heure locale de Douala (UTC+1)**,
-pas en UTC brut — sinon une journée opérationnelle serait décalée d'une heure à
+Le calcul du statut Â« aujourd'hui Â» se fait en **heure locale de Douala (UTC+1)**,
+pas en UTC brut â€” sinon une journÃ©e opÃ©rationnelle serait dÃ©calÃ©e d'une heure Ã 
 cheval sur deux jours UTC.
 
-### Écran
+### Ã‰cran
 
-Nouvel écran `DashboardPage` accessible à `<espace>/tableau-de-bord` pour **tous
-les rôles**, avec liens dans `RoleShell` et `AdminShell`, filtres par statut et
+Nouvel Ã©cran `DashboardPage` accessible Ã  `<espace>/tableau-de-bord` pour **tous
+les rÃ´les**, avec liens dans `RoleShell` et `AdminShell`, filtres par statut et
 pourcentage de couverture.
 
 ---
 
-## 8. Réparation du build frontend
+## 8. RÃ©paration du build frontend
 
-Le frontend **ne compilait pas**, indépendamment de ce travail. Trois causes
-distinctes, toutes pré-existantes.
+Le frontend **ne compilait pas**, indÃ©pendamment de ce travail. Trois causes
+distinctes, toutes prÃ©-existantes.
 
 ### 8.1 Corruption des template literals
 
-Le commit `7286c29` a été enregistré avec des **backticks arrachés** des template
+Le commit `7286c29` a Ã©tÃ© enregistrÃ© avec des **backticks arrachÃ©s** des template
 literals. Exemple dans `Planner.tsx` :
 
 ```ts
@@ -246,21 +246,21 @@ return `Le ${two(startDay)}/${two(startMonth)}/${startYear}`;
 
 Mesure objective : **52 backticks dans `HEAD`, 20 dans l'arbre de travail**.
 
-`Planner.tsx` a donc été **restauré depuis `HEAD`** (source fiable), plutôt que
-rapiécé ligne à ligne.
+`Planner.tsx` a donc Ã©tÃ© **restaurÃ© depuis `HEAD`** (source fiable), plutÃ´t que
+rapiÃ©cÃ© ligne Ã  ligne.
 
 ### 8.2 `Modal.tsx` corrompu
 
 L'arbre de travail contenait une version de `Modal.tsx` ayant perdu son slot
-`footer` et ses backticks. `HEAD` était correct : **restauré depuis `HEAD`**.
+`footer` et ses backticks. `HEAD` Ã©tait correct : **restaurÃ© depuis `HEAD`**.
 
 ### 8.3 `day-roster.css` manquant
 
-`Planner.tsx` importe `./day-roster.css`. Le fichier **a existé** (commits
-`9fc77cc`, `28b4c46`, `fd7dc74`) puis a été supprimé sans que l'import le soit.
-Vite échouait donc au bundling.
+`Planner.tsx` importe `./day-roster.css`. Le fichier **a existÃ©** (commits
+`9fc77cc`, `28b4c46`, `fd7dc74`) puis a Ã©tÃ© supprimÃ© sans que l'import le soit.
+Vite Ã©chouait donc au bundling.
 
-Récupéré depuis l'historique git :
+RÃ©cupÃ©rÃ© depuis l'historique git :
 
 ```powershell
 git show 9fc77cc:src/features/planner/day-roster.css > frontend/src/features/planner/day-roster.css
@@ -268,90 +268,90 @@ git show 9fc77cc:src/features/planner/day-roster.css > frontend/src/features/pla
 
 ### 8.4 Corrections de typage (minimales)
 
-| Fichier                | Problème                              | Correction                                      |
+| Fichier                | ProblÃ¨me                              | Correction                                      |
 | ---------------------- | ------------------------------------- | ----------------------------------------------- |
-| `api/auth-api.ts`      | `method` limité à `PATCH \| DELETE`   | Élargi à `POST \| PUT \| PATCH \| DELETE`       |
-| `api/mock/types.ts`    | `MockCtx.method` sans `PUT`           | Aligné                                          |
-| `ui/Modal.tsx`         | `size` limité à `md \| lg`            | Élargi à `sm \| md \| lg \| xl`                 |
-| `ui/modal.css`         | `.modal-panel--sm` absent             | Ajouté (420 px)                                 |
-| `AdminPlannerPage.tsx` | `import { Planner }`                  | `import Planner` (export par défaut)            |
+| `api/auth-api.ts`      | `method` limitÃ© Ã  `PATCH \| DELETE`   | Ã‰largi Ã  `POST \| PUT \| PATCH \| DELETE`       |
+| `api/mock/types.ts`    | `MockCtx.method` sans `PUT`           | AlignÃ©                                          |
+| `ui/Modal.tsx`         | `size` limitÃ© Ã  `md \| lg`            | Ã‰largi Ã  `sm \| md \| lg \| xl`                 |
+| `ui/modal.css`         | `.modal-panel--sm` absent             | AjoutÃ© (420 px)                                 |
+| `AdminPlannerPage.tsx` | `import { Planner }`                  | `import Planner` (export par dÃ©faut)            |
 | `RolePlannerPage.tsx`  | idem                                  | idem                                            |
-| `Planner.tsx`          | `exportToExcel` appelé en positionnel | Converti en objet `{ data, filename, columns }` |
+| `Planner.tsx`          | `exportToExcel` appelÃ© en positionnel | Converti en objet `{ data, filename, columns }` |
 
-### 8.5 Résultat
+### 8.5 RÃ©sultat
 
 ```
 Backend  : nest build      -> exit 0
-Frontend : tsc --noEmit    -> 0 erreur (première fois)
+Frontend : tsc --noEmit    -> 0 erreur (premiÃ¨re fois)
 Frontend : npm run build   -> exit 0 (built in 21.57s)
 ```
 
 ---
 
-## 9. Contrôle métier final (étape G)
+## 9. ContrÃ´le mÃ©tier final (Ã©tape G)
 
-Les 11 règles du cahier des charges, testées contre l'API vivante.
+Les 11 rÃ¨gles du cahier des charges, testÃ©es contre l'API vivante.
 
-| #   | Règle                                 | Vérification                                                   | Résultat |
+| #   | RÃ¨gle                                 | VÃ©rification                                                   | RÃ©sultat |
 | --- | ------------------------------------- | -------------------------------------------------------------- | -------- |
-| 1   | Shift = exactement 8 h                | 7 h refusé, 9 h refusé, 8 h accepté                            | ✅       |
-| 2   | Pas de chevauchement                  | Shift qui chevauche refusé                                     | ✅       |
-| 3   | Un seul créneau par jour              | 2ᵉ shift le même jour refusé                                   | ✅       |
-| 4   | Repos minimum = paramètre station     | 6 h de repos refusé (`minRestHours=8`)                         | ✅       |
-| 5   | Limite hebdo = paramètre station      | Swapper à 48 h/48 h ne peut plus prendre 8 h                   | ✅       |
-| 6   | Congé approuvé bloque le shift        | Shift pendant congé refusé                                     | ✅       |
-| 7   | START + END obligatoires              | QR END généré, check-out sans check-in refusé                  | ✅       |
-| 8   | END sans START → ABSENT               | Statut basculé en `ABSENT` en base                             | ✅       |
-| 9   | Aucun scan → ABSENT                   | Le cron marque les `EXPECTED` dépassés                         | ✅       |
-| 10  | Empêchement ≠ justification d'absence | `ReplacementRequest` créée, **aucune** écriture d'`Attendance` | ✅       |
-| 11  | Historique dans `ShiftChange`         | `type=REPLACEMENT`, les deux swappers + auteur                 | ✅       |
+| 1   | Shift = exactement 8 h                | 7 h refusÃ©, 9 h refusÃ©, 8 h acceptÃ©                            | âœ…       |
+| 2   | Pas de chevauchement                  | Shift qui chevauche refusÃ©                                     | âœ…       |
+| 3   | Un seul crÃ©neau par jour              | 2áµ‰ shift le mÃªme jour refusÃ©                                   | âœ…       |
+| 4   | Repos minimum = paramÃ¨tre station     | 6 h de repos refusÃ© (`minRestHours=8`)                         | âœ…       |
+| 5   | Limite hebdo = paramÃ¨tre station      | Swapper Ã  48 h/48 h ne peut plus prendre 8 h                   | âœ…       |
+| 6   | CongÃ© approuvÃ© bloque le shift        | Shift pendant congÃ© refusÃ©                                     | âœ…       |
+| 7   | START + END obligatoires              | QR END gÃ©nÃ©rÃ©, check-out sans check-in refusÃ©                  | âœ…       |
+| 8   | END sans START â†’ ABSENT               | Statut basculÃ© en `ABSENT` en base                             | âœ…       |
+| 9   | Aucun scan â†’ ABSENT                   | Le cron marque les `EXPECTED` dÃ©passÃ©s                         | âœ…       |
+| 10  | EmpÃªchement â‰  justification d'absence | `ReplacementRequest` crÃ©Ã©e, **aucune** Ã©criture d'`Attendance` | âœ…       |
+| 11  | Historique dans `ShiftChange`         | `type=REPLACEMENT`, les deux swappers + auteur                 | âœ…       |
 
-**Point d'architecture** : les règles ne peuvent pas diverger entre le planning et
-le remplacement, car les deux passent par **le même moteur** —
+**Point d'architecture** : les rÃ¨gles ne peuvent pas diverger entre le planning et
+le remplacement, car les deux passent par **le mÃªme moteur** â€”
 `SchedulingEngineService.validateShift()`. La liste des candidats au remplacement
-est calculée par ce moteur, et `assignReplacement()` **revalide au moment
-d'affecter**, car la disponibilité peut avoir changé entre l'affichage et le clic.
+est calculÃ©e par ce moteur, et `assignReplacement()` **revalide au moment
+d'affecter**, car la disponibilitÃ© peut avoir changÃ© entre l'affichage et le clic.
 
-### Améliorations apportées
+### AmÃ©liorations apportÃ©es
 
-**`AD_HOC`** — un superviseur peut remplacer sur un shift qui n'est jamais passé
-par la file (couverture improvisée). Auparavant l'opération réussissait mais ne
-laissait **aucune trace** dans la file. Désormais une `ReplacementRequest`
-`source=AD_HOC` est créée, donc l'historique est complet.
+**`AD_HOC`** â€” un superviseur peut remplacer sur un shift qui n'est jamais passÃ©
+par la file (couverture improvisÃ©e). Auparavant l'opÃ©ration rÃ©ussissait mais ne
+laissait **aucune trace** dans la file. DÃ©sormais une `ReplacementRequest`
+`source=AD_HOC` est crÃ©Ã©e, donc l'historique est complet.
 
-**Seed conforme aux règles** — le seed créait 7 shifts de 8 h par semaine sur une
-station limitée à 48 h, soit 56 h : **le seed violait ses propres règles**. Il
+**Seed conforme aux rÃ¨gles** â€” le seed crÃ©ait 7 shifts de 8 h par semaine sur une
+station limitÃ©e Ã  48 h, soit 56 h : **le seed violait ses propres rÃ¨gles**. Il
 respecte maintenant la limite hebdomadaire (`48h/48h`, `40h/48h`, `40h/72h`).
-C'est ce qui faisait échouer certains tests métier — le moteur, lui, avait raison.
+C'est ce qui faisait Ã©chouer certains tests mÃ©tier â€” le moteur, lui, avait raison.
 
-**`/shifts/mine` aligné sur `/workspace`** — le premier renvoyait tous les shifts
-(brouillons, orphelins), le second seulement ceux d'un planning publié. Un
-swappeur voyait donc des shifts sur lesquels la déclaration d'empêchement
-échouait en `400`. Les deux appliquent la même règle.
+**`/shifts/mine` alignÃ© sur `/workspace`** â€” le premier renvoyait tous les shifts
+(brouillons, orphelins), le second seulement ceux d'un planning publiÃ©. Un
+swappeur voyait donc des shifts sur lesquels la dÃ©claration d'empÃªchement
+Ã©chouait en `400`. Les deux appliquent la mÃªme rÃ¨gle.
 
 ---
 
 ## 10. Ce qui n'est pas couvert
 
-- **Notifications temps réel** : la cloche interroge l'API toutes les 30 secondes
-  (`NotificationBell.tsx`). Pas de WebSocket ni de SSE. Suffisant pour une démo,
-  à revoir si le volume augmente.
+- **Notifications temps rÃ©el** : la cloche interroge l'API toutes les 30 secondes
+  (`NotificationBell.tsx`). Pas de WebSocket ni de SSE. Suffisant pour une dÃ©mo,
+  Ã  revoir si le volume augmente.
 - **Envoi d'e-mail** : sans `RESEND_API_KEY`, les invitations ne partent pas. L'API
-  ne échoue pas : elle renvoie `invitationSent: false`.
-- **Géolocalisation du pointage** : `latitude`/`longitude` sont enregistrées mais
-  **comparées à aucune coordonnée de station**. Le pointage QR peut être fait à
+  ne Ã©choue pas : elle renvoie `invitationSent: false`.
+- **GÃ©olocalisation du pointage** : `latitude`/`longitude` sont enregistrÃ©es mais
+  **comparÃ©es Ã  aucune coordonnÃ©e de station**. Le pointage QR peut Ãªtre fait Ã 
   distance.
 - **Rate limiting** : absent sur `login` / `forgot-password`. Les tentatives sont
-  journalisées (`LoginAttempt`) mais jamais exploitées.
-- **Sécurité des secrets** : les `.env` sont sur disque et ont pu être commités
-  par le passé. Faire tourner le mot de passe PostgreSQL, `JWT_SECRET` et les mots
-  de passe de démo avant toute mise en ligne.
-- **Tests automatisés** : les deux scripts d'audit couvrent le contrat et les
-  règles métier, mais il n'y a pas de suite Jest sur l'auth ou le moteur.
+  journalisÃ©es (`LoginAttempt`) mais jamais exploitÃ©es.
+- **SÃ©curitÃ© des secrets** : les `.env` sont sur disque et ont pu Ãªtre commitÃ©s
+  par le passÃ©. Faire tourner le mot de passe PostgreSQL, `JWT_SECRET` et les mots
+  de passe de dÃ©mo avant toute mise en ligne.
+- **Tests automatisÃ©s** : les deux scripts d'audit couvrent le contrat et les
+  rÃ¨gles mÃ©tier, mais il n'y a pas de suite Jest sur l'auth ou le moteur.
 
 ---
 
-## 11. Démarrage
+## 11. DÃ©marrage
 
 ```powershell
 $env:Path += ";C:\Program Files\nodejs;C:\Program Files\Git\cmd"
@@ -368,11 +368,11 @@ cd frontend; npm install; npm run dev   # terminal 2
 
 Ouvrir **`http://127.0.0.1:5173`** (pas `localhost` : voir la note CORS).
 
-### Comptes de démonstration
+### Comptes de dÃ©monstration
 
-Mot de passe unique : `Uswap2026!Demo`
+Mot de passe unique : la valeur de `DEMO_PASSWORD` (backend_new/.env)
 
-| Rôle            | E-mail                    |
+| RÃ´le            | E-mail                    |
 | --------------- | ------------------------- |
 | `ADMIN`         | `admin@upowa.org`         |
 | `SUPERVISOR`    | `superviseur@upowa.org`   |
@@ -382,10 +382,10 @@ Mot de passe unique : `Uswap2026!Demo`
 | `SWAPPER`       | `paul.mbarga@upowa.org`   |
 | `SWAPPER`       | `sylvie.eyenga@upowa.org` |
 
-Le seed place le planning sur la **semaine suivante**, afin que la démo dispose
-toujours de shifts à venir quel que soit le jour où elle est lancée.
+Le seed place le planning sur la **semaine suivante**, afin que la dÃ©mo dispose
+toujours de shifts Ã  venir quel que soit le jour oÃ¹ elle est lancÃ©e.
 
-### Vérifications reproductibles
+### VÃ©rifications reproductibles
 
 ```powershell
 npm run build                          # backend

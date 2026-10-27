@@ -9,7 +9,7 @@
  *
  * Usage :  npm run seed
  */
-import { PrismaClient, Role, LeaveType, AttendanceStatus } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import 'dotenv/config';
 
@@ -20,7 +20,35 @@ const TIMEZONE = 'Africa/Douala';
 /** Douala est à UTC+1 toute l'année (pas d'heure d'été). */
 const DOUALA_OFFSET_HOURS = 1;
 
-const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'Uswap2026!Demo';
+/**
+ * Mot de passe commun des comptes de demonstration.
+ *
+ * Aucune valeur par defaut n'est codee ici : un mot de passe en clair dans un
+ * fichier versionne est une fuite. Il est lu depuis `backend_new/.env` (ou
+ * l'environnement), qui n'est jamais commite.
+ */
+/** Refuse de semer des comptes avec un mot de passe absent. */
+function requireEnv(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(
+      `${name} n'est pas defini : copiez backend_new/.env.example en .env ` +
+        'et renseignez-le avant de lancer le seed.',
+    );
+  }
+  return value;
+}
+
+const DEMO_PASSWORD = requireEnv('DEMO_PASSWORD');
+/**
+ * Mot de passe du compte de plateforme de demonstration.
+ * A lire dans SUPERADMIN_PASSWORD ; a defaut, celui des comptes de demo.
+ */
+const SUPERADMIN_PASSWORD =
+  process.env.SUPERADMIN_PASSWORD?.trim() || DEMO_PASSWORD;
+/** Adresse du super administrateur de demonstration (surchargeable). */
+const SUPERADMIN_EMAIL =
+  process.env.SUPERADMIN_EMAIL?.trim() || 'superadmin@gmail.com';
 
 type StationKey = 'douala' | 'yaounde';
 
@@ -67,6 +95,21 @@ const USERS: {
     email: 'admin@upowa.org',
     fullName: 'Administrateur Uswap',
     role: Role.ADMIN,
+  },
+  // Compte de plateforme : seul role autorise a nettoyer les donnees de test.
+  // Identique au compte administrateur de demonstration (meme mot de passe).
+  {
+    email: 'superadmin@upowa.org',
+    fullName: 'Super administrateur Uswap',
+    role: Role.SUPER_ADMIN,
+  },
+  // Compte de plateforme de demonstration, sur une adresse hors domaine
+  // fictif : il n'est pas desactive par le nettoyage des comptes de demo
+  // (qui cible @upowa.org / @example.* / @uswap.local).
+  {
+    email: SUPERADMIN_EMAIL,
+    fullName: 'Super administrateur Uswap',
+    role: Role.SUPER_ADMIN,
   },
   {
     email: 'superviseur@upowa.org',
@@ -256,6 +299,10 @@ async function seedUsers(
     const stationId = user.stationKey
       ? stations.get(user.stationKey)?.id
       : undefined;
+    const hash =
+      user.email === SUPERADMIN_EMAIL
+        ? await bcrypt.hash(SUPERADMIN_PASSWORD, BCRYPT_ROUNDS)
+        : passwordHash;
 
     const record = await prisma.user.upsert({
       where: { email: user.email },
@@ -264,7 +311,8 @@ async function seedUsers(
         role: user.role,
         isActive: true,
         disabledAt: null,
-        passwordHash,
+        lockedUntil: null,
+        passwordHash: hash,
         invitationStatus: 'ACTIVATED',
         invitationSentAt: null,
         invitationExpiresAt: null,
@@ -273,7 +321,7 @@ async function seedUsers(
       },
       create: {
         email: user.email,
-        passwordHash,
+        passwordHash: hash,
         fullName: user.fullName,
         role: user.role,
         isActive: true,
@@ -445,6 +493,10 @@ async function seedPlanning(
     },
   });
 
+  // La publication passe AUSSI les postes en PUBLISHED, comme le fait
+  // `PlanningService.publish`. Avant, le planning etait marque publie mais
+  // chaque poste restait PLANNED : l'agent ne voyait aucun service, et toute
+  // prise de service etait refusee ("ce shift publie ne vous est pas affecte").
   const rotationKeys = ['douala:Matin', 'douala:Après-midi', 'douala:Nuit'];
 
   for (let day = 0; day < 7; day += 1) {
@@ -476,7 +528,7 @@ async function seedPlanning(
         breakEnd: template.breakEnd,
         breakMinutes: 30,
         requiredStaff: 1,
-        status: 'PLANNED',
+        status: 'PUBLISHED',
         swapperId: swapper?.id ?? null,
         startTime: startAt,
         endTime: endAt,
@@ -491,13 +543,8 @@ async function seedPlanning(
           assignedById: admin?.id ?? null,
         },
       });
-      await prisma.attendance.create({
-        data: {
-          shiftId: occurrence.id,
-          swapperId: swapper.id,
-          status: AttendanceStatus.EXPECTED,
-        },
-      });
+      // Pas de ligne Attendance ici : une ligne EXPECTED ferait croire a un
+      // pointage existant. L'agent la cree lui-meme en prenant son service.
     }
   }
 
@@ -540,6 +587,110 @@ async function seedGlobalSettings() {
   console.log('  settings  réglages globaux prêts');
 }
 
+/**
+ * Planning du JOUR, publié et en cours, pour que la démonstration de prise et
+ * de fin de service soit immédiatement possible (sans attendre lundi prochain
+ * ni composer un planning à la main).
+ *
+ * Le crédneau est calé sur l'heure courante : il court de maintenant − 5 min
+ * à maintenant + 3 h. Le jour même, un service de 6 h à 14 h empêchait de
+ * tester le pointage en dehors de ces heures, ce qui rendait l'écran
+ * "Pointage" inutilisable pendant la démonstration.
+ */
+async function seedTodayShift(
+  stations: Map<StationKey, { id: string; name: string }>,
+  users: Map<string, { id: string; fullName: string }>,
+) {
+  const admin = users.get('admin@upowa.org');
+  const now = new Date();
+  const startAt = new Date(now.getTime() - 5 * 60_000);
+  const endAt = new Date(now.getTime() + 3 * 3_600_000);
+  const day = stationDay(startAt);
+
+  // Idempotence : un planning du jour de démonstration existe déjà ?
+  const existing = await prisma.occurrence.findFirst({
+    where: { label: 'Service démonstration jour', day },
+  });
+  if (existing) {
+    console.log('  today     service du jour déjà présent');
+    return;
+  }
+
+  // TOUS les agents recoivent un service en cours : chacun doit pouvoir
+  // demontrer la prise et la fin de service avec son propre compte.
+  const swappers = [
+    { email: 'awa.nkolo@upowa.org', stationKey: 'douala' as StationKey },
+    { email: 'jean.dupont@upowa.org', stationKey: 'douala' as StationKey },
+    { email: 'paul.mbarga@upowa.org', stationKey: 'douala' as StationKey },
+    { email: 'sylvie.eyenga@upowa.org', stationKey: 'yaounde' as StationKey },
+  ]
+    .map((row) => ({
+      user: users.get(row.email),
+      station: stations.get(row.stationKey),
+    }))
+    .filter(
+      (row): row is { user: { id: string; fullName: string }; station: { id: string; name: string } } =>
+        Boolean(row.user && row.station),
+    );
+  if (!swappers.length) return;
+
+  const planning = await prisma.planning.upsert({
+    where: { id: `seed-today-${day}` },
+    update: {
+      status: 'PUBLISHED',
+      publishedAt: now,
+      publishedById: admin?.id ?? null,
+    },
+    create: {
+      id: `seed-today-${day}`,
+      name: `Planning du jour — ${day}`,
+      stationIds: [...new Set(swappers.map((row) => row.station.id))],
+      periodStart: new Date(`${day}T00:00:00.000Z`),
+      periodEnd: addDays(new Date(`${day}T00:00:00.000Z`), 1),
+      status: 'PUBLISHED',
+      publishedAt: now,
+      publishedById: admin?.id ?? null,
+      createdById: admin?.id ?? null,
+    },
+  });
+
+  for (const row of swappers) {
+    const occurrence = await prisma.occurrence.create({
+      data: {
+        planningId: planning.id,
+        stationId: row.station.id,
+        label: 'Service démonstration jour',
+        shiftLabel: 'Service du jour',
+        day,
+        breakMinutes: 0,
+        requiredStaff: 1,
+        status: 'PUBLISHED',
+        swapperId: row.user.id,
+        startTime: startAt,
+        endTime: endAt,
+      },
+    });
+    await prisma.occurrenceAssignment.create({
+      data: {
+        occurrenceId: occurrence.id,
+        userId: row.user.id,
+        assignedById: admin?.id ?? null,
+      },
+    });
+  }
+
+  console.log(
+    `  today     service en cours pour ${swappers.length} agent(s) (${startAt.toISOString()} → ${endAt.toISOString()})`,
+  );
+}
+
+/** Jour local (Africa/Douala, UTC+1) d'un instant, au format AAAA-MM-JJ. */
+function stationDay(at: Date): string {
+  return new Date(at.getTime() + DOUALA_OFFSET_HOURS * 3_600_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
 async function main() {
   console.log('Seed uSwap (backend_new) — jeu de démonstration\n');
 
@@ -549,9 +700,13 @@ async function main() {
   await seedLeaveBalances(users);
   await seedGlobalSettings();
   await seedPlanning(stations, users, templates);
+  await seedTodayShift(stations, users);
 
   console.log('\nSeed terminé.');
   console.log(`Mot de passe commun : ${DEMO_PASSWORD}`);
+  console.log(
+    `Super administrateur de demonstration : ${SUPERADMIN_EMAIL} (mot de passe : SUPERADMIN_PASSWORD ou DEMO_PASSWORD)`,
+  );
 }
 
 main()

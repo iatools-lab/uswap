@@ -1,263 +1,263 @@
-# uSwap — Fonctionnement du projet, sprint 1 à sprint 5
+﻿# uSwap â€” Fonctionnement du projet, sprint 1 Ã  sprint 5
 
-Ce document décrit **ce que fait le produit**, **ce qui a été livré à chaque
-sprint**, et **le rôle de chaque API** du backend. Il s'adresse à toute personne
-qui reprend le code : développeur, relecteur ou nouvel arrivant.
+Ce document dÃ©crit **ce que fait le produit**, **ce qui a Ã©tÃ© livrÃ© Ã  chaque
+sprint**, et **le rÃ´le de chaque API** du backend. Il s'adresse Ã  toute personne
+qui reprend le code : dÃ©veloppeur, relecteur ou nouvel arrivant.
 
-- **Version documentée** : `uswap-v5.2.0` (sprint 5 intégré)
+- **Version documentÃ©e** : `uswap-v5.2.0` (sprint 5 intÃ©grÃ©)
 - **Backend** : NestJS 11 + Prisma 6 + PostgreSQL
 - **Frontend** : React 19 + Vite + TypeScript
-- **Rôles applicatifs** : `ADMIN`, `SUPERVISOR`, `STATION_CHIEF`, `SWAPPER`
+- **RÃ´les applicatifs** : `ADMIN`, `SUPERVISOR`, `STATION_CHIEF`, `SWAPPER`
 
 ---
 
 ## 1. Le produit en une page
 
-uSwap planifie et suit les équipes de *swapping* réparties sur plusieurs
-stations. Le cycle de vie d'une journée de travail est le suivant :
+uSwap planifie et suit les Ã©quipes de *swapping* rÃ©parties sur plusieurs
+stations. Le cycle de vie d'une journÃ©e de travail est le suivant :
 
 ```
-Planning (brouillon)  ->  Génération des créneaux  ->  Publication
-      ->  Le swappeur pointe (QR)  ->  Le chef suit les présences
+Planning (brouillon)  ->  GÃ©nÃ©ration des crÃ©neaux  ->  Publication
+      ->  Le swappeur pointe (QR)  ->  Le chef suit les prÃ©sences
       ->  Une absence ouvre une demande de remplacement
-      ->  Le superviseur arbitre, les rapports agrègent le tout
+      ->  Le superviseur arbitre, les rapports agrÃ¨gent le tout
 ```
 
-Autour de ce flux gravitent : les **congés** (avec synchronisation vers un
-système RH externe), les **incidents**, les **notifications**, les **réglages
+Autour de ce flux gravitent : les **congÃ©s** (avec synchronisation vers un
+systÃ¨me RH externe), les **incidents**, les **notifications**, les **rÃ©glages
 globaux** et l'**administration des comptes**.
 
-### Modèle de données en un coup d'œil
+### ModÃ¨le de donnÃ©es en un coup d'Å“il
 
-| Entité | Rôle |
+| EntitÃ© | RÃ´le |
 |---|---|
-| `User` | Compte, rôle, station de rattachement |
-| `Station` | Site d'exploitation, paramètres de pointage et de repos |
-| `ShiftTemplate` / `ShiftTemplateVersion` | Modèles de créneaux horaires + historique |
-| `Planning` / `PlanningStation` | Fenêtre de planification et stations couvertes |
-| `Shift` | Créneau affecté à un swapper sur une station |
+| `User` | Compte, rÃ´le, station de rattachement |
+| `Station` | Site d'exploitation, paramÃ¨tres de pointage et de repos |
+| `ShiftTemplate` / `ShiftTemplateVersion` | ModÃ¨les de crÃ©neaux horaires + historique |
+| `Planning` / `PlanningStation` | FenÃªtre de planification et stations couvertes |
+| `Shift` | CrÃ©neau affectÃ© Ã  un swapper sur une station |
 | `Attendance` / `AttendanceQr` | Pointage et jetons QR de prise/fin de service |
-| `LeaveRequest` / `LeaveBalance` / `LeaveSyncOperation` | Congés, soldes, synchronisation |
+| `LeaveRequest` / `LeaveBalance` / `LeaveSyncOperation` | CongÃ©s, soldes, synchronisation |
 | `ReplacementRequest` / `ShiftChange` | Remplacements et journal des mouvements |
-| `Incident` / `IncidentAction` | Incidents et leur traçabilité |
-| `Notification` / `NotificationPreference` | Notifications et préférences |
-| `GlobalSetting` / `GlobalSettingRevision` | Réglages réseau et historique |
-| `ScheduledReport` | Rapports récurrents |
+| `Incident` / `IncidentAction` | Incidents et leur traÃ§abilitÃ© |
+| `Notification` / `NotificationPreference` | Notifications et prÃ©fÃ©rences |
+| `GlobalSetting` / `GlobalSettingRevision` | RÃ©glages rÃ©seau et historique |
+| `ScheduledReport` | Rapports rÃ©currents |
 | `UserAuditLog` | Journal des modifications de comptes |
 
 ---
 
 ## 2. Sprint par sprint
 
-### Sprint 1 — Socle : comptes, authentification, stations
+### Sprint 1 â€” Socle : comptes, authentification, stations
 
 **Objectif** : disposer d'une base fiable pour authentifier et structurer
 l'organisation.
 
-**Livré**
+**LivrÃ©**
 - Authentification JWT (access token court + refresh token rotatif).
-- Cycle d'invitation : un compte est créé **inactif**, l'utilisateur reçoit un
+- Cycle d'invitation : un compte est crÃ©Ã© **inactif**, l'utilisateur reÃ§oit un
   lien, choisit son mot de passe, le compte devient actif.
-- Réinitialisation de mot de passe par jeton à durée limitée.
-- Gestion des rôles et du périmètre par station.
-- CRUD des stations avec leurs paramètres (tolérance de retard, repos minimal,
+- RÃ©initialisation de mot de passe par jeton Ã  durÃ©e limitÃ©e.
+- Gestion des rÃ´les et du pÃ©rimÃ¨tre par station.
+- CRUD des stations avec leurs paramÃ¨tres (tolÃ©rance de retard, repos minimal,
   limite hebdomadaire, temps de vie des QR).
-- Modèles de créneaux (`ShiftTemplate`) rattachés à une station.
+- ModÃ¨les de crÃ©neaux (`ShiftTemplate`) rattachÃ©s Ã  une station.
 
 **APIs**
 
-| Méthode | Route | Rôle |
+| MÃ©thode | Route | RÃ´le |
 |---|---|---|
 | POST | `/auth/login` | Authentifie, renvoie la session et pose le cookie de refresh |
-| POST | `/auth/refresh` | Renouvelle la session à partir du cookie HttpOnly |
-| POST | `/auth/logout` | Révoque les jetons et efface le cookie |
-| GET | `/auth/me` | Profil de l'utilisateur connecté (utilisé par le chien de garde de session) |
-| GET | `/auth/session` | Temps restant avant expiration du jeton d'accès |
-| POST | `/auth/register` | Crée un compte (administrateur) |
-| POST | `/auth/activate-account` (alias `/auth/activate`) | Active un compte invité et définit le mot de passe |
-| POST | `/auth/forgot-password` | Déclenche l'envoi d'un lien de réinitialisation |
+| POST | `/auth/refresh` | Renouvelle la session Ã  partir du cookie HttpOnly |
+| POST | `/auth/logout` | RÃ©voque les jetons et efface le cookie |
+| GET | `/auth/me` | Profil de l'utilisateur connectÃ© (utilisÃ© par le chien de garde de session) |
+| GET | `/auth/session` | Temps restant avant expiration du jeton d'accÃ¨s |
+| POST | `/auth/register` | CrÃ©e un compte (administrateur) |
+| POST | `/auth/activate-account` (alias `/auth/activate`) | Active un compte invitÃ© et dÃ©finit le mot de passe |
+| POST | `/auth/forgot-password` | DÃ©clenche l'envoi d'un lien de rÃ©initialisation |
 | POST | `/auth/reset-password` | Applique le nouveau mot de passe |
 | POST | `/auth/invitations/:id/resend` | Renvoie une invitation |
-| GET | `/users` | Liste paginée des comptes (ou tableau simple si `page`/`limit` sont omis) |
+| GET | `/users` | Liste paginÃ©e des comptes (ou tableau simple si `page`/`limit` sont omis) |
 | GET | `/users/:id` | Fiche d'un compte |
-| PATCH | `/users/:id` | Modifie un compte (traçé dans `UserAuditLog`) |
-| PATCH | `/users/:id/status` | Active ou désactive un compte |
+| PATCH | `/users/:id` | Modifie un compte (traÃ§Ã© dans `UserAuditLog`) |
+| PATCH | `/users/:id/status` | Active ou dÃ©sactive un compte |
 | PATCH | `/users/:id/deactivate` / `/reactivate` | Variantes explicites |
 | POST | `/users/:id/activate` | Renvoie l'invitation d'un compte en attente |
-| GET | `/users/profiles` | Annuaire public des comptes actifs (écran de connexion) |
+| GET | `/users/profiles` | Annuaire public des comptes actifs (Ã©cran de connexion) |
 | GET | `/stations` | Liste des stations |
-| GET | `/stations/:id` | Détail d'une station |
-| POST | `/stations` | Crée une station |
+| GET | `/stations/:id` | DÃ©tail d'une station |
+| POST | `/stations` | CrÃ©e une station |
 | PATCH | `/stations/:id` | Modifie une station |
 | PATCH | `/stations/:id/active` / `/status` / `/activate` / `/deactivate` | Cycle de vie |
-| GET | `/stations/:id/shift-templates` | Modèles de créneaux d'une station |
-| POST | `/stations/:id/shift-templates` | Crée un modèle |
-| PATCH | `/stations/:id/shift-templates/:templateId` | Modifie un modèle |
+| GET | `/stations/:id/shift-templates` | ModÃ¨les de crÃ©neaux d'une station |
+| POST | `/stations/:id/shift-templates` | CrÃ©e un modÃ¨le |
+| PATCH | `/stations/:id/shift-templates/:templateId` | Modifie un modÃ¨le |
 | GET | `/stations/:id/shift-templates/:templateId/history` | Historique des versions |
 
 ---
 
-### Sprint 2 — Planification et publication
+### Sprint 2 â€” Planification et publication
 
-**Objectif** : produire un planning de créneaux et le rendre visible aux équipes.
+**Objectif** : produire un planning de crÃ©neaux et le rendre visible aux Ã©quipes.
 
-**Livré**
-- Création d'un planning sur une fenêtre de dates.
-- Génération automatique des créneaux à partir des modèles, jour par jour,
+**LivrÃ©**
+- CrÃ©ation d'un planning sur une fenÃªtre de dates.
+- GÃ©nÃ©ration automatique des crÃ©neaux Ã  partir des modÃ¨les, jour par jour,
   en respectant les contraintes de la station.
-- Publication du planning : les swappers reçoivent une notification et
-  retrouvent leurs créneaux dans leur espace.
-- Boîte de réception des publications, avec suivi de lecture.
+- Publication du planning : les swappers reÃ§oivent une notification et
+  retrouvent leurs crÃ©neaux dans leur espace.
+- BoÃ®te de rÃ©ception des publications, avec suivi de lecture.
 
 **APIs**
 
-| Méthode | Route | Rôle |
+| MÃ©thode | Route | RÃ´le |
 |---|---|---|
-| POST | `/plannings` | Crée un planning (brouillon) |
+| POST | `/plannings` | CrÃ©e un planning (brouillon) |
 | GET | `/plannings` | Liste des plannings |
-| GET | `/plannings/:id` | Détail, avec les créneaux exposés sous `occurrences` + `revision` |
-| POST | `/plannings/:id/generate` | Génère les créneaux à partir des modèles |
-| PATCH | `/plannings/:id/publish` | Publie et notifie les équipes |
+| GET | `/plannings/:id` | DÃ©tail, avec les crÃ©neaux exposÃ©s sous `occurrences` + `revision` |
+| POST | `/plannings/:id/generate` | GÃ©nÃ¨re les crÃ©neaux Ã  partir des modÃ¨les |
+| PATCH | `/plannings/:id/publish` | Publie et notifie les Ã©quipes |
 | GET | `/plannings/notices` | Publications non lues de l'utilisateur |
 | PATCH | `/plannings/notices/:id/read` | Marque une publication comme lue |
-| POST | `/shifts/validate` | Contrôle de contraintes avant affectation |
-| GET | `/workspace` | Espace personnel : créneaux à venir de l'appelant |
+| POST | `/shifts/validate` | ContrÃ´le de contraintes avant affectation |
+| GET | `/workspace` | Espace personnel : crÃ©neaux Ã  venir de l'appelant |
 
 ---
 
-### Sprint 3 — Pointage et suivi des présences
+### Sprint 3 â€” Pointage et suivi des prÃ©sences
 
-**Objectif** : tracer l'arrivée et le départ, détecter retards et absences.
+**Objectif** : tracer l'arrivÃ©e et le dÃ©part, dÃ©tecter retards et absences.
 
-**Livré**
-- Génération de QR par le chef de station (`CHECKIN` / `CHECKOUT`), avec
-  fenêtre de validité et temps de vie paramétrés par station.
-- Pointage par le swapper, calcul automatique du retard selon la tolérance.
-- Détection automatique des absences en fin de créneau, qui ouvre une demande
+**LivrÃ©**
+- GÃ©nÃ©ration de QR par le chef de station (`CHECKIN` / `CHECKOUT`), avec
+  fenÃªtre de validitÃ© et temps de vie paramÃ©trÃ©s par station.
+- Pointage par le swapper, calcul automatique du retard selon la tolÃ©rance.
+- DÃ©tection automatique des absences en fin de crÃ©neau, qui ouvre une demande
   de remplacement.
-- Correction de pointage par un superviseur, avec motif et pièce justificative.
+- Correction de pointage par un superviseur, avec motif et piÃ¨ce justificative.
 - Historique personnel des pointages.
 
 **APIs**
 
-| Méthode | Route | Rôle |
+| MÃ©thode | Route | RÃ´le |
 |---|---|---|
-| POST | `/attendance/qr` | Génère un QR de pointage pour un créneau |
-| POST | `/attendance` | Enregistre le pointage à partir du jeton QR |
-| GET | `/attendance/history` | Historique de pointage du swapper connecté |
+| POST | `/attendance/qr` | GÃ©nÃ¨re un QR de pointage pour un crÃ©neau |
+| POST | `/attendance` | Enregistre le pointage Ã  partir du jeton QR |
+| GET | `/attendance/history` | Historique de pointage du swapper connectÃ© |
 | GET | `/attendance/monitor` | Tableau de suivi du jour (superviseur, chef de station) |
-| GET | `/attendance/:id` | Détail d'un pointage |
+| GET | `/attendance/:id` | DÃ©tail d'un pointage |
 | PATCH | `/attendance/:id/correct` | Correction par un superviseur |
-| GET | `/corrections/shifts/:id` | Corrections d'un créneau |
-| POST | `/corrections/attachments` | Pièce justificative d'une correction |
+| GET | `/corrections/shifts/:id` | Corrections d'un crÃ©neau |
+| POST | `/corrections/attachments` | PiÃ¨ce justificative d'une correction |
 
 ---
 
-### Sprint 4 — Congés, remplacements et incidents
+### Sprint 4 â€” CongÃ©s, remplacements et incidents
 
-**Objectif** : gérer les absences planifiées, couvrir les postes découverts et
+**Objectif** : gÃ©rer les absences planifiÃ©es, couvrir les postes dÃ©couverts et
 tracer les incidents d'exploitation.
 
-**Livré**
-- Espace congés du swapper : solde, demandes, édition, annulation.
-- **Idempotence** : chaque écriture porte une clé de synchronisation ; rejouer
-  une requête hors ligne ne crée jamais de doublon.
-- Synchronisation vers un système RH externe, avec statut visible
-  (`SYNCED`, `QUEUED`, `FAILED`) et possibilité de relancer.
-- Demandes de remplacement : ouverture, candidats, affectation, résolution.
+**LivrÃ©**
+- Espace congÃ©s du swapper : solde, demandes, Ã©dition, annulation.
+- **Idempotence** : chaque Ã©criture porte une clÃ© de synchronisation ; rejouer
+  une requÃªte hors ligne ne crÃ©e jamais de doublon.
+- Synchronisation vers un systÃ¨me RH externe, avec statut visible
+  (`SYNCED`, `QUEUED`, `FAILED`) et possibilitÃ© de relancer.
+- Demandes de remplacement : ouverture, candidats, affectation, rÃ©solution.
 - Journal des mouvements d'affectation (`ShiftChange`).
-- **Incidents** : déclaration par le chef de station, qualification et
-  résolution par le superviseur, avec un état strictement contrôlé côté serveur.
+- **Incidents** : dÃ©claration par le chef de station, qualification et
+  rÃ©solution par le superviseur, avec un Ã©tat strictement contrÃ´lÃ© cÃ´tÃ© serveur.
 
 **APIs**
 
-| Méthode | Route | Rôle |
+| MÃ©thode | Route | RÃ´le |
 |---|---|---|
-| GET | `/leaves/workspace` | Solde + demandes + état d'intégration du swapper |
-| POST | `/leaves` | Crée une demande (idempotente via `idempotencyKey`) |
+| GET | `/leaves/workspace` | Solde + demandes + Ã©tat d'intÃ©gration du swapper |
+| POST | `/leaves` | CrÃ©e une demande (idempotente via `idempotencyKey`) |
 | PATCH | `/leaves/:id` | Modifie une demande encore en attente |
 | POST | `/leaves/:id/cancel` | Annule une demande en attente |
-| POST | `/leaves/sync/:operationId/retry` | Relance une synchronisation échouée |
-| GET | `/leave-requests/mine` | Alias historique de l'espace congés |
+| POST | `/leaves/sync/:operationId/retry` | Relance une synchronisation Ã©chouÃ©e |
+| GET | `/leave-requests/mine` | Alias historique de l'espace congÃ©s |
 | GET | `/operations/changes` | Journal des mouvements d'affectation |
 | GET | `/operations/replacements/pending` | Remplacements en attente |
-| GET | `/operations/shifts/:id/candidates` | Candidats pour un créneau |
-| POST | `/operations/absences` | Déclare une absence |
-| POST | `/operations/shifts/:id/replacement` | Affecte un remplaçant |
-| GET | `/incidents` | Liste + indicateurs (incidents ouverts, critiques, délai moyen) |
-| POST | `/incidents` | Déclare un incident (chef de station) |
-| PATCH | `/incidents/:id` | Fait évoluer un incident (superviseur) |
+| GET | `/operations/shifts/:id/candidates` | Candidats pour un crÃ©neau |
+| POST | `/operations/absences` | DÃ©clare une absence |
+| POST | `/operations/shifts/:id/replacement` | Affecte un remplaÃ§ant |
+| GET | `/incidents` | Liste + indicateurs (incidents ouverts, critiques, dÃ©lai moyen) |
+| POST | `/incidents` | DÃ©clare un incident (chef de station) |
+| PATCH | `/incidents/:id` | Fait Ã©voluer un incident (superviseur) |
 
-> **Machine à états des incidents** (imposée côté serveur) :
-> `REPORTED → TO_REVIEW → ACKNOWLEDGED → IN_PROGRESS → RESOLVED → CLOSED`.
-> Toute transition non autorisée est rejetée en `409`.
+> **Machine Ã  Ã©tats des incidents** (imposÃ©e cÃ´tÃ© serveur) :
+> `REPORTED â†’ TO_REVIEW â†’ ACKNOWLEDGED â†’ IN_PROGRESS â†’ RESOLVED â†’ CLOSED`.
+> Toute transition non autorisÃ©e est rejetÃ©e en `409`.
 
 ---
 
-### Sprint 5 — Pilotage, rapports et administration
+### Sprint 5 â€” Pilotage, rapports et administration
 
-**Objectif** : donner aux responsables une vision consolidée et les moyens
+**Objectif** : donner aux responsables une vision consolidÃ©e et les moyens
 d'administrer la plateforme.
 
-**Livré**
-- **Écran de planification avancé** : prévisualisation d'une génération,
-  affectation automatique équilibrée, édition d'un créneau, duplication,
+**LivrÃ©**
+- **Ã‰cran de planification avancÃ©** : prÃ©visualisation d'une gÃ©nÃ©ration,
+  affectation automatique Ã©quilibrÃ©e, Ã©dition d'un crÃ©neau, duplication,
   validation des contraintes, validation globale puis publication.
-- **Tableau de bord opérationnel** : couverture, taux de présence, retards,
+- **Tableau de bord opÃ©rationnel** : couverture, taux de prÃ©sence, retards,
   absences, heures par swapper, mouvements, postes vacants.
-- **Réglages globaux** du réseau, avec numéro de révision et historique.
-- **Rapports programmés** (quotidien, hebdomadaire, mensuel).
-- **Préférences de notification** par utilisateur (in-app, e-mail, push, digest,
-  plage de silence, rétention).
-- **Suivi d'intégration** de la synchronisation des congés.
+- **RÃ©glages globaux** du rÃ©seau, avec numÃ©ro de rÃ©vision et historique.
+- **Rapports programmÃ©s** (quotidien, hebdomadaire, mensuel).
+- **PrÃ©fÃ©rences de notification** par utilisateur (in-app, e-mail, push, digest,
+  plage de silence, rÃ©tention).
+- **Suivi d'intÃ©gration** de la synchronisation des congÃ©s.
 - **Export Excel** des utilisateurs.
-- **Import** d'utilisateurs en deux temps : aperçu puis confirmation.
+- **Import** d'utilisateurs en deux temps : aperÃ§u puis confirmation.
 
 **APIs**
 
-| Méthode | Route | Rôle |
+| MÃ©thode | Route | RÃ´le |
 |---|---|---|
-| POST | `/plannings/:id/preview` | Simulation : créneaux qui seraient créés, doublons, hors période |
-| PATCH | `/plannings/:id/validate` | Contrôle global avant publication (erreurs + avertissements) |
-| POST | `/plannings/:id/auto-assign` | Rééquilibre les affectations entre swappers |
-| POST | `/plannings/:id/occurrences/:occurrenceId/validate` | Contraintes pour un candidat donné |
-| PATCH | `/plannings/:id/occurrences/:occurrenceId` | Réaffecte ou échange un créneau |
-| POST | `/plannings/:id/occurrences/:occurrenceId/duplicate` | Duplique un créneau |
-| PATCH | `/plannings/:id/occurrences/:occurrenceId/remove` | Retire un créneau |
-| GET | `/reports/dashboard` | Tableau de bord opérationnel sur une période |
+| POST | `/plannings/:id/preview` | Simulation : crÃ©neaux qui seraient crÃ©Ã©s, doublons, hors pÃ©riode |
+| PATCH | `/plannings/:id/validate` | ContrÃ´le global avant publication (erreurs + avertissements) |
+| POST | `/plannings/:id/auto-assign` | RÃ©Ã©quilibre les affectations entre swappers |
+| POST | `/plannings/:id/occurrences/:occurrenceId/validate` | Contraintes pour un candidat donnÃ© |
+| PATCH | `/plannings/:id/occurrences/:occurrenceId` | RÃ©affecte ou Ã©change un crÃ©neau |
+| POST | `/plannings/:id/occurrences/:occurrenceId/duplicate` | Duplique un crÃ©neau |
+| PATCH | `/plannings/:id/occurrences/:occurrenceId/remove` | Retire un crÃ©neau |
+| GET | `/reports/dashboard` | Tableau de bord opÃ©rationnel sur une pÃ©riode |
 | GET | `/dashboard/stats` | Indicateurs de la page d'accueil |
-| GET | `/admin/settings` | Réglages globaux + historique des révisions |
-| PATCH | `/admin/settings` | Met à jour les réglages (incrémente la révision) |
-| GET | `/admin/reports/schedules` | Rapports programmés |
+| GET | `/admin/settings` | RÃ©glages globaux + historique des rÃ©visions |
+| PATCH | `/admin/settings` | Met Ã  jour les rÃ©glages (incrÃ©mente la rÃ©vision) |
+| GET | `/admin/reports/schedules` | Rapports programmÃ©s |
 | POST | `/admin/reports/schedules` | Programme un rapport |
 | PATCH | `/admin/reports/schedules/:id` | Active ou suspend un rapport |
-| GET | `/admin/integrations/leaves` | État de la synchronisation des congés |
-| GET | `/users/export` | Données d'export Excel des comptes |
-| GET | `/users/import/template` (alias `/users/imports/template`) | Modèle CSV d'import |
+| GET | `/admin/integrations/leaves` | Ã‰tat de la synchronisation des congÃ©s |
+| GET | `/users/export` | DonnÃ©es d'export Excel des comptes |
+| GET | `/users/import/template` (alias `/users/imports/template`) | ModÃ¨le CSV d'import |
 | POST | `/users/import/preview` (alias `/users/imports/preview`) | Analyse du fichier |
 | POST | `/users/import/confirm` (alias `/users/imports/:id/confirm`) | Confirme l'import |
 | GET | `/notifications` | Notifications de l'utilisateur |
 | GET | `/notifications/unread-count` | Compteur de non-lues |
 | PATCH | `/notifications/:id/read` | Marque une notification comme lue |
 | PATCH | `/notifications/read-all` | Marque tout comme lu |
-| GET | `/notifications/preferences` | Préférences de notification |
-| PATCH | `/notifications/preferences` | Met à jour les préférences |
+| GET | `/notifications/preferences` | PrÃ©fÃ©rences de notification |
+| PATCH | `/notifications/preferences` | Met Ã  jour les prÃ©fÃ©rences |
 
 ---
 
-## 3. Sécurité et permissions
+## 3. SÃ©curitÃ© et permissions
 
-Chaque route est protégée par `JwtAuthGuard` et, quand le rôle compte, par
-`RolesGuard`. Les contrôles appliqués :
+Chaque route est protÃ©gÃ©e par `JwtAuthGuard` et, quand le rÃ´le compte, par
+`RolesGuard`. Les contrÃ´les appliquÃ©s :
 
-| Contrôle | Mise en œuvre |
+| ContrÃ´le | Mise en Å“uvre |
 |---|---|
-| Identité | Jeton JWT signé, durée de vie courte |
-| Session | Refresh token à usage unique, tourné à chaque renouvellement, conservé dans un cookie **HttpOnly** |
-| Cloisonnement | Un chef de station ne voit que sa station ; un swapper ne voit que ses données |
-| Transitions métier | Machine à états des incidents validée côté serveur, pas côté client |
-| Validation d'entrée | `ValidationPipe` globale en `whitelist` + `forbidNonWhitelisted` |
-| Traçabilité | `UserAuditLog` pour les comptes, `IncidentAction` pour les incidents, `GlobalSettingRevision` pour les réglages |
+| IdentitÃ© | Jeton JWT signÃ©, durÃ©e de vie courte |
+| Session | Refresh token Ã  usage unique, tournÃ© Ã  chaque renouvellement, conservÃ© dans un cookie **HttpOnly** |
+| Cloisonnement | Un chef de station ne voit que sa station ; un swapper ne voit que ses donnÃ©es |
+| Transitions mÃ©tier | Machine Ã  Ã©tats des incidents validÃ©e cÃ´tÃ© serveur, pas cÃ´tÃ© client |
+| Validation d'entrÃ©e | `ValidationPipe` globale en `whitelist` + `forbidNonWhitelisted` |
+| TraÃ§abilitÃ© | `UserAuditLog` pour les comptes, `IncidentAction` pour les incidents, `GlobalSettingRevision` pour les rÃ©glages |
 
 ---
 
@@ -278,7 +278,7 @@ FRONTEND_URL="http://127.0.0.1:5173"
 RESEND_API_KEY=""
 MAIL_FROM="Uswap <onboarding@resend.dev>"
 
-# Intégration RH externe des congés (optionnel).
+# IntÃ©gration RH externe des congÃ©s (optionnel).
 LEAVE_API_URL=""
 ```
 
@@ -291,19 +291,19 @@ VITE_API_URL=/api
 
 > Le proxy Vite (`frontend/vite.config.ts`) redirige `/api` vers
 > `http://localhost:3000`. Sans ce proxy, le cookie `SameSite=Lax` n'est pas
-> transmis sur une requête cross-site et la session est perdue à chaque
+> transmis sur une requÃªte cross-site et la session est perdue Ã  chaque
 > renouvellement de jeton.
 
 ---
 
-## 5. Démarrage
+## 5. DÃ©marrage
 
 ```bash
 # 1. Backend
 npm install
 npx prisma migrate deploy
 npx prisma generate
-npm run seed            # jeu de démonstration
+npm run seed            # jeu de dÃ©monstration
 npm run start:dev       # http://localhost:3000  (Swagger : /api-docs)
 
 # 2. Frontend
@@ -312,58 +312,58 @@ npm install
 npm run dev             # http://127.0.0.1:5173
 ```
 
-### Comptes de démonstration
+### Comptes de dÃ©monstration
 
-Le mot de passe est commun : `Uswap2026!Demo` (surchargeable via
+Le mot de passe est commun : la valeur de `DEMO_PASSWORD` (backend_new/.env) (surchargeable via
 `DEMO_PASSWORD` avant le seed).
 
-| Rôle | E-mail |
+| RÃ´le | E-mail |
 |---|---|
 | Administrateur | `admin@upowa.org` |
 | Superviseur | `superviseur@upowa.org` |
 | Chef de station | `chef@upowa.org` |
 | Swappeur | voir `npm run seed`, ou tout compte `SWAPPER` actif |
 
-> Les comptes swappers du seed sont créés **inactifs** (invitation). Pour en
+> Les comptes swappers du seed sont crÃ©Ã©s **inactifs** (invitation). Pour en
 > activer un sans service e-mail :
 > `node scripts/activate-user.cjs <email> [motDePasse]`
 
 ---
 
-## 6. Vérifications
+## 6. VÃ©rifications
 
-| Commande | Ce qu'elle contrôle |
+| Commande | Ce qu'elle contrÃ´le |
 |---|---|
 | `npx tsc --noEmit -p tsconfig.build.json` | Typage du backend |
 | `npm run build` | Compilation du backend |
 | `cd frontend && npm run build` | Typage et build du frontend |
 | `npx jest` | Tests unitaires du backend |
 | `node scripts/audit-contract.cjs` | Chaque appel du frontend a bien une route serveur |
-| `node scripts/test-e2e.mjs` | 70 vérifications fonctionnelles sur les 10 domaines du sprint 5 |
+| `node scripts/test-e2e.mjs` | 70 vÃ©rifications fonctionnelles sur les 10 domaines du sprint 5 |
 
 ---
 
-## 7. Dépannage
+## 7. DÃ©pannage
 
-**Un compte créé ne reçoit aucun e-mail.**
-`RESEND_API_KEY` n'est pas configurée. Le compte existe en base, inactif. Depuis
-la version 5.2, la réponse de création contient `activationUrl` : transmettez ce
-lien à l'utilisateur. Vous pouvez aussi activer le compte directement :
+**Un compte crÃ©Ã© ne reÃ§oit aucun e-mail.**
+`RESEND_API_KEY` n'est pas configurÃ©e. Le compte existe en base, inactif. Depuis
+la version 5.2, la rÃ©ponse de crÃ©ation contient `activationUrl` : transmettez ce
+lien Ã  l'utilisateur. Vous pouvez aussi activer le compte directement :
 `node scripts/activate-user.cjs <email> [motDePasse]`.
 
-**Le mot de passe est refusé alors que je viens de le définir.**
-Utilisez l'une des deux adresses complètes (`localhost` **ou** `127.0.0.1`) de
-façon constante : ce sont deux origines distinctes pour le navigateur, donc deux
+**Le mot de passe est refusÃ© alors que je viens de le dÃ©finir.**
+Utilisez l'une des deux adresses complÃ¨tes (`localhost` **ou** `127.0.0.1`) de
+faÃ§on constante : ce sont deux origines distinctes pour le navigateur, donc deux
 stockages de session distincts.
 
-**L'API répond mais toutes les requêtes échouent en CORS.**
-`CORS_ORIGIN` doit contenir l'origine exacte du frontend, schéma et port
-compris, et le serveur doit être redémarré après modification.
+**L'API rÃ©pond mais toutes les requÃªtes Ã©chouent en CORS.**
+`CORS_ORIGIN` doit contenir l'origine exacte du frontend, schÃ©ma et port
+compris, et le serveur doit Ãªtre redÃ©marrÃ© aprÃ¨s modification.
 
-**La session se perd à chaque changement de page.**
-Vérifiez que `VITE_API_URL` vaut bien `/api` et que le proxy Vite est actif.
+**La session se perd Ã  chaque changement de page.**
+VÃ©rifiez que `VITE_API_URL` vaut bien `/api` et que le proxy Vite est actif.
 
 **Un compte est introuvable dans `GET /users`.**
-La route renvoie un tableau lorsqu'aucune pagination n'est demandée, et un
-objet `{ data, total, page, ... }` lorsqu'elle l'est. Les sélecteurs du frontend
-utilisent la première forme.
+La route renvoie un tableau lorsqu'aucune pagination n'est demandÃ©e, et un
+objet `{ data, total, page, ... }` lorsqu'elle l'est. Les sÃ©lecteurs du frontend
+utilisent la premiÃ¨re forme.

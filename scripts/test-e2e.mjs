@@ -1,5 +1,5 @@
-/**
- * Suite de tests fonctionnels uSwap 5.2 — connexion frontend sprint 5 <-> backend.
+﻿/**
+ * Suite de tests fonctionnels uSwap 5.2 â€” connexion frontend sprint 5 <-> backend.
  *
  * Les appels passent par le proxy Vite (http://127.0.0.1:5173/api), c'est-a-dire
  * exactement le chemin utilise par le navigateur, cookies de session compris.
@@ -7,7 +7,7 @@
  * Usage : node scripts/test-e2e.mjs
  */
 const BASE = process.env.API_URL || 'http://127.0.0.1:5173/api';
-const PASSWORD = 'Uswap2026!Demo';
+const PASSWORD = process.env.DEMO_PASSWORD ?? '';
 
 let ok = 0;
 let failed = 0;
@@ -19,7 +19,7 @@ function check(name, condition, detail = '') {
     console.log(`  OK    ${name}${detail ? `  (${detail})` : ''}`);
   } else {
     failed += 1;
-    failures.push(`${name}${detail ? ` — ${detail}` : ''}`);
+    failures.push(`${name}${detail ? ` â€” ${detail}` : ''}`);
     console.log(`  FAIL  ${name}${detail ? `  (${detail})` : ''}`);
   }
 }
@@ -71,7 +71,7 @@ const isArr = Array.isArray;
 const okStatus = (s) => s >= 200 && s < 300;
 
 async function main() {
-  console.log('=== uSwap 5.2 — tests fonctionnels de bout en bout ===');
+  console.log('=== uSwap 5.2 â€” tests fonctionnels de bout en bout ===');
   console.log(`Base : ${BASE}\n`);
 
   // ---------------------------------------------------------------
@@ -98,7 +98,7 @@ async function main() {
   check('GET /auth/session', session.status === 200, `status ${session.status}`);
 
   // ---------------------------------------------------------------
-  section('2. ROUTES SPRINT 5 — ADMIN');
+  section('2. ROUTES SPRINT 5 â€” ADMIN');
   // ---------------------------------------------------------------
   const adminRoutes = [
     ['GET /admin/settings', '/admin/settings'],
@@ -131,7 +131,7 @@ async function main() {
     typeof prefs.payload?.inApp === 'boolean' && typeof prefs.payload?.retentionDays === 'number');
 
   // ---------------------------------------------------------------
-  section('3. ECRITURE — REGLAGES ET PREFERENCES');
+  section('3. ECRITURE â€” REGLAGES ET PREFERENCES');
   // ---------------------------------------------------------------
   const patchSettings = await admin.call('/admin/settings', {
     method: 'PATCH',
@@ -241,7 +241,7 @@ async function main() {
   }
 
   // ---------------------------------------------------------------
-  section('6. INCIDENT — FLUX COMPLET');
+  section('6. INCIDENT â€” FLUX COMPLET');
   // ---------------------------------------------------------------
   const chiefMe = await chief.call('/auth/me');
   const stationId = chiefMe.payload?.user?.stationId;
@@ -289,7 +289,7 @@ async function main() {
     `${board.payload?.metrics?.total} incident(s)`);
 
   // ---------------------------------------------------------------
-  section('7. PLANNER — FLUX COMPLET');
+  section('7. PLANNER â€” FLUX COMPLET');
   // ---------------------------------------------------------------
   const start = new Date(Date.now() + 40 * 86400000);
   const end = new Date(Date.now() + 44 * 86400000);
@@ -410,7 +410,7 @@ async function main() {
   check('PATCH /stations/:id/activate', okStatus(reactivated.status), `status ${reactivated.status}`);
 
   // ---------------------------------------------------------------
-  section('9. SECURITE — ACCES REFUSE');
+  section('9. SECURITE â€” ACCES REFUSE');
   // ---------------------------------------------------------------
   const forbidden = await swapper.call('/admin/settings');
   check('/admin/settings refuse au SWAPPER (403)', forbidden.status === 403, `status ${forbidden.status}`);

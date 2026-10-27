@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../../api/auth-api";
 import { useSession } from "../../app/session";
+import { useAppPath } from "../../app/appBase";
 import { UserDetail } from "../../features/users/UserDetail";
 import { LoaderCircle, RefreshCw } from "../../ui/icons";
 
@@ -9,6 +10,7 @@ export function UserDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { onAccessLost } = useSession();
+  const path = useAppPath();
   const [stations, setStations] = useState<{ id: string; name: string }[]>([]);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -68,7 +70,7 @@ export function UserDetailPage() {
       key={id}
       id={id}
       stations={stations}
-      onBack={() => navigate("/app/admin/utilisateurs")}
+      onBack={() => navigate(path("/app/admin/utilisateurs"))}
       onChanged={() => {}}
     />
   );

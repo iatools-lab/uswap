@@ -20,7 +20,14 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
-import { IsEmail, IsIn, IsOptional, IsString, Length } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsIn,
+  IsOptional,
+  IsString,
+  Length,
+} from 'class-validator';
 import type { Response } from 'express';
 import { UsersService } from './users.service';
 import { UserImportService } from './user-import.service';
@@ -40,7 +47,7 @@ class CreateUserDto {
   @IsEmail()
   email!: string;
 
-  @IsIn(['ADMIN', 'SUPERVISOR', 'SWAPPER'])
+  @IsIn(['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'SWAPPER'])
   role!: string;
 
   @IsOptional()
@@ -74,7 +81,7 @@ class UpdateUserDto {
   email?: string;
 
   @IsOptional()
-  @IsIn(['ADMIN', 'SUPERVISOR', 'SWAPPER'])
+  @IsIn(['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'SWAPPER'])
   role?: string;
 
   @IsOptional()
@@ -95,6 +102,8 @@ class UpdateUserDto {
 }
 
 class StatusDto {
+  /** `true` = activer / réactiver, `false` = désactiver. */
+  @IsBoolean()
   enabled!: boolean;
 
   @IsOptional()
@@ -217,8 +226,10 @@ export class UsersController {
     return this.users.detail(id, actor);
   }
 
+  // Le superviseur cree les comptes comme l'administrateur ; le service
+  // applique ensuite qui peut attribuer quel role.
   @Post()
-  @Roles(Role.ADMIN)
+  @Roles(Role.SUPERVISOR, Role.ADMIN)
   @ApiOperation({ summary: 'Crée un compte (invitation ou accès immédiat)' })
   create(
     @Body() body: CreateUserDto,
@@ -228,7 +239,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @Roles(Role.ADMIN)
+  @Roles(Role.SUPERVISOR, Role.ADMIN)
   @ApiOperation({ summary: 'Met à jour une fiche de compte' })
   update(
     @Param('id') id: string,
@@ -238,19 +249,26 @@ export class UsersController {
     return this.users.update(id, body as Record<string, unknown>, actor);
   }
 
+  /**
+   * Le corps est recu **non type** : `UsersService.setStatus` applique
+   * `readEnabled`, qui accepte les formes courantes (`true`, `"false"`, `0`…) et
+   * refuse tout le reste par un 400. Un DTO `@IsBoolean()` en amont
+   * transformerait un rejet légitime en simple erreur de validation, sans
+   * message métier — et surtout sans garantie sur le comportement.
+   */
   @Patch(':id/status')
-  @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Active ou désactive un compte' })
+  @Roles(Role.SUPERVISOR, Role.ADMIN)
+  @ApiOperation({ summary: 'Active, désactive ou réactive un compte' })
   status(
     @Param('id') id: string,
-    @Body() body: StatusDto,
+    @Body() body: { enabled?: unknown; updatedAt?: string },
     @CurrentUser() actor: AuthenticatedUser,
   ) {
-    return this.users.setStatus(id, body.enabled === true, actor, body.updatedAt);
+    return this.users.setStatus(id, body?.enabled, actor, body?.updatedAt);
   }
 
   @Post(':id/activate')
-  @Roles(Role.ADMIN)
+  @Roles(Role.SUPERVISOR, Role.ADMIN)
   @HttpCode(200)
   @ApiOperation({ summary: 'Active un compte en attente' })
   activate(@Param('id') id: string, @CurrentUser() actor: AuthenticatedUser) {
@@ -258,7 +276,7 @@ export class UsersController {
   }
 
   @Post('invitations/:id/resend')
-  @Roles(Role.ADMIN)
+  @Roles(Role.SUPERVISOR, Role.ADMIN)
   @HttpCode(200)
   @ApiOperation({ summary: 'Renvoie une invitation' })
   resend(

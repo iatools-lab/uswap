@@ -17,10 +17,51 @@ import {
   ForbiddenDomain,
   NotFoundDomain,
 } from '../common/errors/domain-errors';
-import type { AuthenticatedUser } from '../common/guards/roles.guard';
+import {
+  roleSatisfies,
+  type AuthenticatedUser,
+} from '../common/guards/roles.guard';
 import { NotificationKind } from '../notifications/categories';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Roles principaux de la plateforme. */
+const ROLE_NAMES: Role[] = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'SWAPPER'];
+
+/**
+ * Qui peut attribuer quel role ?
+ *
+ * - **Super administrateur** : tous les roles, y compris le sien.
+ * - **Administrateur** : administrateurs, superviseurs et agents — jamais de
+ *   super administrateur.
+ * - **Superviseur** : tous les roles (il gere les comptes), y compris le
+ *   super administrateur, avec les memes controles que l'administrateur sur
+ *   les comptes de niveau superieur.
+ */
+function canAssignRole(actorRole: Role, target: Role): boolean {
+  if (actorRole === 'SUPER_ADMIN') return true;
+  if (actorRole === 'ADMIN') return target !== 'SUPER_ADMIN';
+  if (actorRole === 'SUPERVISOR') return true;
+  return false;
+}
+
+/** Valeur de statut acceptee par l'API (`StatusDto.enabled`). */
+function readEnabled(raw: unknown): boolean | null {
+  if (typeof raw === 'boolean') return raw;
+  // Le DTO de statut n'est pas type : un client peut envoyer
+  // `{"enabled": "false"}` ou `{"enabled": 0}`. On refuse uniquement ce qui
+  // n'est pas interpretable — jamais transformer un "false" en activation.
+  if (typeof raw === 'string') {
+    const value = raw.trim().toLowerCase();
+    if (['true', '1', 'on', 'enabled', 'active'].includes(value)) return true;
+    if (['false', '0', 'off', 'disabled', 'inactive'].includes(value))
+      return false;
+  }
+  if (typeof raw === 'number') return raw !== 0;
+  // Toute autre valeur (« peut-être », objet, tableau…) est refusee : une
+  // activation ne doit jamais découler d'une saisie mal formée.
+  return null;
+}
 
 export interface MemberFilters {
   q?: string;
@@ -49,15 +90,20 @@ export class UsersService {
   /** Liste simple utilisee par les listes deroulantes (affectation, filtres). */
   async list(options: { role?: string } = {}) {
     const roleMap: Record<string, Role> = {
+      SUPER_ADMIN: 'SUPER_ADMIN',
+      SUPERADMIN: 'SUPER_ADMIN',
       ADMIN: 'ADMIN',
       SUPERVISOR: 'SUPERVISOR',
       SWAPPER: 'SWAPPER',
     };
-    const role = options.role
-      ? (roleMap[options.role.toUpperCase()] ?? undefined)
-      : undefined;
+    // Plusieurs roles peuvent etre demandes (« SUPER_ADMIN,ADMIN ») : les
+    // listes deroulantes de pilotage melangent l'encadrement et les agents.
+    const roles = (options.role ?? '')
+      .split(',')
+      .map((value) => roleMap[value.trim().toUpperCase()])
+      .filter((value): value is Role => Boolean(value));
     const users = await this.prisma.user.findMany({
-      where: role ? { role } : {},
+      where: roles.length ? { role: { in: roles } } : {},
       orderBy: { fullName: 'asc' },
     });
     const ctx = await this.scope.serializeContext();
@@ -141,10 +187,11 @@ export class UsersService {
       },
     });
     if (!user) throw this.notFound();
+    // Roles de pilotage : on interroge la hierarchie plutot qu'une liste
+    // fermee, sinon un nouveau role (SUPER_ADMIN) se retrouve enferme dans une
+    // interface ou il ne peut plus ouvrir aucune fiche.
     const allowed =
-      viewer.role === 'ADMIN' ||
-      viewer.role === 'SUPERVISOR' ||
-      viewer.id === user.id;
+      roleSatisfies(viewer.role, ['SUPERVISOR']) || viewer.id === user.id;
     if (!allowed) {
       throw new ForbiddenDomain(
         'ACCESS_DENIED',
@@ -193,11 +240,17 @@ export class UsersService {
         400,
       );
     }
-    if (!['ADMIN', 'SUPERVISOR', 'SWAPPER'].includes(role)) {
+    if (!ROLE_NAMES.includes(role)) {
       throw new ConflictDomain(
         ErrorCode.VALIDATION,
         'Choisissez un rôle valide.',
         400,
+      );
+    }
+    if (!canAssignRole(actor.role, role)) {
+      throw new ForbiddenDomain(
+        'ROLE_NOT_ALLOWED',
+        'Vous ne pouvez pas attribuer ce rôle.',
       );
     }
     if (role !== 'SWAPPER' && stationId) {
@@ -285,13 +338,24 @@ export class UsersService {
     await this.notifications.ensurePreferences(created.id);
 
     if (!active) {
-      await this.auth.sendInvitation(created.id);
+      // L'invitation est best-effort : un SMTP indisponible ne doit pas faire
+      // echouer la creation du compte. Le statut `invitationStatus` et le
+      // journal e-mail disent si le lien est reellement parti.
+      const invitation = await this.auth
+        .sendInvitation(created.id)
+        .catch(() => ({ invitationStatus: 'FAILED' as const }));
       // Le suivi d'invitation figure au centre de notifications admin.
       await this.notifications.notify({
         userId: actor.id,
         kind: NotificationKind.ACCESS_PENDING,
-        title: 'Invitation envoyée',
-        body: `${fullName} recevra un lien pour activer son accès.`,
+        title:
+          invitation.invitationStatus === 'FAILED'
+            ? 'Invitation non envoyée'
+            : 'Invitation envoyée',
+        body:
+          invitation.invitationStatus === 'FAILED'
+            ? `Le compte de ${fullName} est créé, mais l'e-mail n'a pas pu partir. Renvoyez l'invitation depuis sa fiche.`
+            : `${fullName} recevra un lien pour activer son accès.`,
         targetId: created.id,
         targetUrl: `/app/admin/utilisateurs/${created.id}`,
       });
@@ -340,12 +404,28 @@ export class UsersService {
       }
     }
 
-    const role = ((this.text(input.role).toUpperCase() || target.role) as Role);
-    if (!['ADMIN', 'SUPERVISOR', 'SWAPPER'].includes(role)) {
+    const role = (this.text(input.role).toUpperCase() as Role) || target.role;
+    if (!ROLE_NAMES.includes(role)) {
       throw new ConflictDomain(
         ErrorCode.VALIDATION,
         'Choisissez un rôle valide.',
         400,
+      );
+    }
+    if (role !== target.role && !canAssignRole(actor.role, role)) {
+      throw new ForbiddenDomain(
+        'ROLE_NOT_ALLOWED',
+        'Vous ne pouvez pas attribuer ce rôle.',
+      );
+    }
+    if (
+      target.role !== 'SWAPPER' &&
+      role === 'SWAPPER' &&
+      actor.id === target.id
+    ) {
+      throw new ForbiddenDomain(
+        'ROLE_NOT_ALLOWED',
+        'Vous ne pouvez pas retirer vos propres droits.',
       );
     }
     const stationId = this.text(input.stationId) || null;
@@ -409,13 +489,31 @@ export class UsersService {
     return { ...serializeDetail(updated, ctx), author: actor.id };
   }
 
-  /** Active / desactive un compte. La desactivation ferme toutes ses sessions. */
+  /**
+   * Active / desactive un compte. La desactivation ferme toutes ses sessions.
+   *
+   * La reactivation remet le compte en service **sans exiger de mot de passe** :
+   * le mot de passe conserve avant la desactivation reste valable. Le message
+   * de confirmation renvoye au client precise ce qui s'est passe, afin que
+   * l'interface ne laisse pas croire a un nouvel envoi de lien.
+   */
   async setStatus(
     id: string,
-    enabled: boolean,
+    rawEnabled: unknown,
     actor: AuthenticatedUser,
     expectedUpdatedAt?: string,
   ) {
+    // Un statut non interpretable est refuse tel quel : il ne doit jamais
+    // devenir « true » par accident (cela reactiverait un compte sans que
+    // l'administrateur l'ait demande).
+    const enabled = readEnabled(rawEnabled);
+    if (enabled === null) {
+      throw new ConflictDomain(
+        ErrorCode.VALIDATION,
+        'Indiquez le statut souhaité : true (activer) ou false (désactiver).',
+        400,
+      );
+    }
     const target = await this.prisma.user.findUnique({ where: { id } });
     if (!target) throw this.notFound();
     if (expectedUpdatedAt && expectedUpdatedAt !== target.updatedAt.toISOString()) {
@@ -424,17 +522,29 @@ export class UsersService {
         'Le statut a changé entre-temps. Fermez ce menu puis rouvrez la liste.',
       );
     }
+    if (!enabled && actor.id === target.id) {
+      throw new ForbiddenDomain(
+        'SELF_DISABLE',
+        'Vous ne pouvez pas désactiver votre propre compte.',
+      );
+    }
 
     const before = {
       isActive: target.isActive,
       disabledAt: target.disabledAt ? target.disabledAt.toISOString() : null,
     };
+    // `disabledAt` est le seul marqueur fiable de la desactivation : un compte
+    // reactive doit avoir `isActive: true` ET `disabledAt: null`, sinon le
+    // garde d'acces (middleware de session) refuse de nouveau la connexion.
+    const nextDisabledAt = enabled ? null : new Date();
     await this.prisma.user.update({
       where: { id },
       data: {
         isActive: enabled,
-        disabledAt: enabled ? null : new Date(),
-        ...(enabled ? { invitationStatus: 'ACTIVATED' as const } : {}),
+        disabledAt: nextDisabledAt,
+        ...(enabled
+          ? { invitationStatus: 'ACTIVATED' as const, invitationExpiresAt: null }
+          : {}),
         auditEntries: {
           create: {
             action: enabled ? 'REACTIVATED' : 'DISABLED',
@@ -442,7 +552,7 @@ export class UsersService {
             before: JSON.stringify(before),
             after: JSON.stringify({
               isActive: enabled,
-              disabledAt: enabled ? null : new Date().toISOString(),
+              disabledAt: nextDisabledAt ? nextDisabledAt.toISOString() : null,
             }),
           },
         },
@@ -459,15 +569,38 @@ export class UsersService {
         body: 'Votre accès a été désactivé. Contactez votre administrateur.',
         critical: true,
       });
+      return {
+        ok: true,
+        enabled: false,
+        message:
+          'Compte désactivé. Les sessions ouvertes ont été fermées ; son historique est conservé.',
+      };
     }
-    return { ok: true };
+
+    // Le compte etait deja actif mais sans invitation exploitable : on n'ecrit
+    // rien de plus, la reactivation est idempotente.
+    await this.notifications.notify({
+      userId: id,
+      kind: 'ACCESS_GRANTED',
+      title: 'Accès rétabli',
+      body: 'Votre accès uSwap a été réactivé. Vous pouvez vous connecter avec votre mot de passe habituel.',
+      critical: true,
+    });
+    return {
+      ok: true,
+      enabled: true,
+      message: target.isActive
+        ? 'Compte déjà actif : rien à modifier.'
+        : 'Compte réactivé. Le collaborateur se connecte avec son mot de passe habituel (ou demande un nouveau lien depuis « Mot de passe oublié »).',
+      invitationStatus: 'ACTIVATED',
+    };
   }
 
   /** Active un compte en attente et (re)envoie l'invitation. */
   async activate(id: string, actor: AuthenticatedUser) {
     const target = await this.prisma.user.findUnique({ where: { id } });
     if (!target) throw this.notFound();
-    if (target.isActive) {
+    if (target.isActive && !target.disabledAt) {
       throw new ConflictDomain(
         'ALREADY_ACTIVE',
         'Ce compte est déjà activé.',
@@ -477,6 +610,9 @@ export class UsersService {
       isActive: target.isActive,
       invitationStatus: target.invitationStatus,
     };
+    // Un compte reactive reste utilisable avec son mot de passe existant :
+    // imposer un nouvel envoi de lien n'a de sens que si aucun mot de passe
+    // exploitable n'existe (compte jamais active).
     await this.prisma.user.update({
       where: { id },
       data: {

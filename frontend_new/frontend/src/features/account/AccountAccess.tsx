@@ -38,6 +38,28 @@ export function AccountAccess({
   const heading = useRef<HTMLHeadingElement>(null);
   const validLength = password.length >= 8;
   const tooLong = new TextEncoder().encode(password).length > 72;
+
+  // Le lien est verifie des l'arrivee : un jeton expire ou deja utilise doit
+  // etre signale avant la saisie, pas apres validation du formulaire.
+  useEffect(() => {
+    if (mode === "forgot" || invalidLink) return;
+    let active = true;
+    api<{ ok: boolean }>(
+      mode === "activate"
+        ? "/auth/verify-activation-token"
+        : "/auth/verify-reset-token",
+      { token: initialToken },
+    ).catch((error: unknown) => {
+      if (!active) return;
+      if (error instanceof ApiError && [400, 409, 410].includes(error.status)) {
+        setInvalidLink(true);
+      }
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const mismatch = submitted && confirmation !== password;
   const passwordError = submitted && (!validLength || tooLong);
   useEffect(() => {

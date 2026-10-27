@@ -56,7 +56,7 @@ export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
   @Get('reports/dashboard')
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @Roles(Role.SUPERVISOR, Role.ADMIN)
   @ApiOperation({ summary: 'Indicateurs consolidés de la période' })
   dashboard(
     @CurrentUser() user: AuthenticatedUser,
@@ -76,7 +76,7 @@ export class ReportsController {
   }
 
   @Get('reports/export')
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @Roles(Role.SUPERVISOR, Role.ADMIN)
   @ApiOperation({ summary: 'Export XLSX/CSV du rapport de période' })
   async export(
     @CurrentUser() user: AuthenticatedUser,
@@ -148,5 +148,31 @@ export class ReportsController {
   @ApiOperation({ summary: 'Active ou suspend un rapport programmé' })
   toggle(@Param('id') id: string, @Body() body: { isActive?: boolean }) {
     return this.reports.toggleScheduled(id, body.isActive === true);
+  }
+
+  @Post('admin/reports/schedules/:id/send')
+  @Roles(Role.ADMIN)
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Envoie immédiatement un rapport programmé à ses destinataires',
+  })
+  sendNow(@Param('id') id: string) {
+    return this.reports.sendNow(id);
+  }
+
+  /**
+   * Exécution immédiate des envois arrivés à échéance.
+   *
+   * Réservée au super administrateur : la tâche horaire l'appelle déjà toute
+   * seule, mais un exploitant doit pouvoir vérifier « maintenant » qu'un
+   * rapport part bien avec sa pièce jointe, sans attendre la prochaine heure.
+   * Seuls les rapports réellement dus sont exécutés.
+   */
+  @Post('admin/reports/run-due')
+  @Roles(Role.SUPER_ADMIN)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Exécute immédiatement les rapports dus' })
+  runDue() {
+    return this.reports.runDueReports();
   }
 }

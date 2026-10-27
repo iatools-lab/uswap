@@ -289,6 +289,21 @@ const swapperEmail = (_fullName: string, index: number) =>
     : `swappeur${pad2(index + 1)}@${FICTITIOUS_DOMAIN}`;
 
 const users: MockUser[] = [
+  // Compte de plateforme du mode démo : même écran que l'administrateur, plus
+  // le nettoyage des données de test.
+  user(
+    "us-super-admin",
+    "Super administrateur uSwap",
+    `superadmin@${FICTITIOUS_DOMAIN}`,
+    "SUPER_ADMIN",
+    null,
+    {
+      isActive: true,
+      disabledAt: null,
+      password: ADMIN_PASSWORD,
+      invitationStatus: "ACTIVATED",
+    },
+  ),
   user(
     "us-admin",
     "Administrateur uSwap",

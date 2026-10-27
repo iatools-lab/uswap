@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { notify } from "../../ui/Toast";
 import {
   ShiftTemplates,
@@ -10,24 +10,34 @@ import { exportToExcel } from "../../utils/excelExport";
 import { StepperModal, type StepItem } from "../../ui/StepperModal";
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
-import { loadLeaflet } from "./leafletLoader";
+import {
+  DEFAULT_LAT,
+  DEFAULT_LNG,
+  MAP_ATTRIBUTION,
+  MAP_TILE_OPTIONS,
+  MAP_TILE_URL,
+  MapLocationPicker,
+  loadLeaflet,
+  stationMarkerIcon,
+  zoomForRadius,
+} from "./mapPicker";
+import "./mapPickerStyles.css";
 import {
   Building2,
-  MapPin,
-  LoaderCircle,
-  Search,
   Clock3,
-  UserRound,
   DownloadSimple,
+  LoaderCircle,
+  MapPin,
+  Search,
+  UserRound,
 } from "../../ui/icons";
 import {
-  PlusIcon,
   CaretDownIcon,
+  ListIcon,
   PencilSimpleIcon,
   PhoneIcon,
-  ListIcon,
+  PlusIcon,
   SquaresFourIcon,
-  CrosshairIcon,
 } from "../../ui/icons";
 import "./station-manager.css";
 
@@ -96,294 +106,8 @@ const blankSharedShift = {
   stationIds: [] as string[],
 };
 
-const DEFAULT_LAT = 4.051056;
-const DEFAULT_LNG = 9.708533;
-const MAP_TILE_URL =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}";
-const MAP_TILE_OPTIONS = { tileSize: 256, zoomOffset: 0 };
-const MAP_ATTRIBUTION =
-  'Tiles &copy; <a href="https://www.esri.com/">Esri</a> — sources Esri, HERE, Garmin et contributeurs OpenStreetMap';
-
-function uswapMapMarker(L: any) {
-  return L.divIcon({
-    className: "uswap-map-marker",
-    html: '<span aria-hidden="true"></span>',
-    iconSize: [28, 32],
-    iconAnchor: [14, 30],
-    popupAnchor: [0, -28],
-  });
-}
-
 /* ============================================================
-   Sélecteur GPS Bidirectionnel & Suggestions optimisées (Cameroun)
-   ============================================================ */
-function MapLocationPicker({
-  address,
-  latitude,
-  longitude,
-  onSelectLocation,
-  onSelectAddress,
-}: {
-  address: string;
-  latitude: number | string;
-  longitude: number | string;
-  onSelectLocation: (lat: number, lng: number) => void;
-  onSelectAddress: (addr: string, lat: number, lng: number) => void;
-}) {
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
-
-  const [searchQuery, setSearchQuery] = useState(address);
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [mapError, setMapError] = useState("");
-
-  const currentLat = Number(latitude) || DEFAULT_LAT;
-  const currentLng = Number(longitude) || DEFAULT_LNG;
-
-  useEffect(() => {
-    setSearchQuery(address);
-  }, [address]);
-
-  useEffect(() => {
-    let disposed = false;
-    let disposeMap: (() => void) | undefined;
-    const startMap = (L: any) => {
-      if (!L || !mapContainerRef.current || mapInstanceRef.current) return;
-
-      if ((mapContainerRef.current as any)._leaflet_id) {
-        (mapContainerRef.current as any)._leaflet_id = null;
-        mapContainerRef.current.innerHTML = "";
-      }
-
-      const map = L.map(mapContainerRef.current).setView(
-        [currentLat, currentLng],
-        15,
-      );
-      mapInstanceRef.current = map;
-
-      L.tileLayer(MAP_TILE_URL, {
-        ...MAP_TILE_OPTIONS,
-        maxZoom: 19,
-        attribution: MAP_ATTRIBUTION,
-      }).addTo(map);
-
-      const marker = L.marker([currentLat, currentLng], {
-        draggable: true,
-        icon: uswapMapMarker(L),
-      }).addTo(map);
-      markerRef.current = marker;
-
-      const timer1 = setTimeout(() => map.invalidateSize(), 150);
-      const timer2 = setTimeout(() => map.invalidateSize(), 500);
-
-      marker.on("dragend", async (e: any) => {
-        const coords = e.target.getLatLng();
-        onSelectLocation(coords.lat, coords.lng);
-        await reverseGeocode(coords.lat, coords.lng);
-      });
-
-      map.on("click", async (e: any) => {
-        const { lat, lng } = e.latlng;
-        marker.setLatLng([lat, lng]);
-        onSelectLocation(lat, lng);
-        await reverseGeocode(lat, lng);
-      });
-
-      return () => {
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-        map.remove();
-      };
-    };
-    void loadLeaflet()
-      .then((L) => {
-        if (!disposed) disposeMap = startMap(L);
-      })
-      .catch((error: Error) => {
-        if (!disposed) setMapError(error.message);
-      });
-
-    return () => {
-      disposed = true;
-      disposeMap?.();
-      mapInstanceRef.current = null;
-      markerRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (markerRef.current && mapInstanceRef.current) {
-      const currentPos = markerRef.current.getLatLng();
-      if (currentPos.lat !== currentLat || currentPos.lng !== currentLng) {
-        markerRef.current.setLatLng([currentLat, currentLng]);
-        mapInstanceRef.current.setView(
-          [currentLat, currentLng],
-          mapInstanceRef.current.getZoom(),
-        );
-        mapInstanceRef.current.invalidateSize();
-      }
-    }
-  }, [currentLat, currentLng]);
-
-  function formatDetailedAddress(feature: any) {
-    if (!feature) return "";
-    const text = feature?.text || "";
-    const placeName = feature?.place_name || "";
-    const context = feature?.context || [];
-
-    if (placeName && placeName.includes(",")) {
-      return placeName;
-    }
-
-    const parts = [text];
-    context.forEach((ctx: any) => {
-      if (ctx?.text && !parts.includes(ctx.text)) {
-        parts.push(ctx.text);
-      }
-    });
-
-    return parts.length > 1 ? parts.join(", ") : placeName || text;
-  }
-
-  async function reverseGeocode(lat: number, lng: number) {
-    try {
-      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=fr`;
-      const res = await fetch(url);
-      const data = await res.json();
-      const feature = data?.display_name
-        ? {
-            place_name: data.display_name,
-            text: data.name || data.display_name,
-          }
-        : null;
-      if (feature) {
-        const detailedName = formatDetailedAddress(feature);
-        setSearchQuery(detailedName);
-        onSelectAddress(detailedName, lat, lng);
-      }
-    } catch (e) {
-      console.error("Erreur de géocodage inversé", e);
-    }
-  }
-
-  async function handleSearchInput(value: string) {
-    setSearchQuery(value);
-    onSelectAddress(value, currentLat, currentLng);
-
-    if (!value || value.trim().length < 2) {
-      setSuggestions([]);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      const queryText = encodeURIComponent(value);
-      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${queryText}&countrycodes=cm&limit=10&addressdetails=1&accept-language=fr`;
-      const res = await fetch(url);
-      const data = await res.json();
-      const features = Array.isArray(data)
-        ? data.map((item: any) => ({
-            text: item.name || item.display_name,
-            place_name: item.display_name,
-            center: [Number(item.lon), Number(item.lat)],
-          }))
-        : [];
-      setSuggestions(features);
-    } catch (e) {
-      console.error("Erreur de recherche de stations", e);
-    } finally {
-      setIsSearching(false);
-    }
-  }
-
-  function selectSuggestion(feature: any) {
-    if (!feature?.center) return;
-    const [lng, lat] = feature.center;
-    const detailedName = formatDetailedAddress(feature);
-
-    setSearchQuery(detailedName);
-    setSuggestions([]);
-
-    if (markerRef.current && mapInstanceRef.current) {
-      markerRef.current.setLatLng([lat, lng]);
-      mapInstanceRef.current.setView([lat, lng], 17);
-      mapInstanceRef.current.invalidateSize();
-    }
-
-    onSelectAddress(detailedName, lat, lng);
-  }
-
-  return (
-    <div className="map-picker-wrapper">
-      <div className="stepper-field-group map-picker-field">
-        <label>NOM DE LA STATION / EMPLACEMENT OU ADRESSE *</label>
-        <div className="map-picker-input-wrap">
-          <input
-            required
-            maxLength={250}
-            placeholder="Tapez le nom d'une station (ex: Tradex, Total, Bonamoussadi)..."
-            value={searchQuery}
-            onChange={(e) => handleSearchInput(e.target.value)}
-          />
-          {isSearching && (
-            <span className="map-picker-spinner">
-              <LoaderCircle className="spin" size={16} />
-            </span>
-          )}
-        </div>
-
-        {suggestions?.length > 0 && (
-          <div className="map-picker-suggestions">
-            {suggestions.map((item, idx) => {
-              const displayName = formatDetailedAddress(item);
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  className="map-picker-suggestion"
-                  onClick={() => selectSuggestion(item)}
-                >
-                  <MapPin size={14} />
-                  <span>{displayName}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="map-picker-caption">
-        <span>POSITIONNER OU DÉPLACER LE MARQUEUR *</span>
-        <span className="map-picker-hint">
-          <CrosshairIcon size={14} /> Glissez pour actualiser l'adresse
-        </span>
-      </div>
-
-      <div ref={mapContainerRef} className="map-picker-canvas" />
-      {mapError && (
-        <p className="error-message" role="status">
-          {mapError}
-        </p>
-      )}
-
-      <div className="map-picker-coords">
-        <div className="map-picker-coords-label">
-          <MapPin size={16} />
-          <span>Coordonnées GPS capturées :</span>
-        </div>
-        <strong>
-          {latitude !== "" ? Number(latitude).toFixed(6) : "—"},{" "}
-          {longitude !== "" ? Number(longitude).toFixed(6) : "—"}
-        </strong>
-      </div>
-    </div>
-  );
-}
-
-/* ============================================================
-   Vue Carte Globale des Stations
+   Carte globale des stations
    ============================================================ */
 function StationsMapView({
   stations,
@@ -411,7 +135,7 @@ function StationsMapView({
 
       mapInstance = L.map(mapRef.current).setView(
         [DEFAULT_LAT, DEFAULT_LNG],
-        7,
+        13,
       );
 
       L.tileLayer(MAP_TILE_URL, {
@@ -433,7 +157,15 @@ function StationsMapView({
           bounds.extend([lat, lng]);
 
           const marker = L.marker([lat, lng], {
-            icon: uswapMapMarker(L),
+            icon: stationMarkerIcon(L),
+          }).addTo(mapInstance);
+          // Périmètre de pointage : on voit immédiatement la zone autorisée.
+          L.circle([lat, lng], {
+            radius: Number(s.geofenceRadiusMeters) || 150,
+            color: "#2d6cdf",
+            weight: 1.5,
+            fillColor: "#2d6cdf",
+            fillOpacity: 0.1,
           }).addTo(mapInstance);
 
           marker.bindPopup(`
@@ -456,7 +188,13 @@ function StationsMapView({
           });
         });
 
-        mapInstance.fitBounds(bounds, { padding: [40, 40] });
+        // Cadrage serré : avec une seule station, `fitBounds` sur un point
+        // unique dézoomait très loin (grandes zones vides).
+        if (validStations.length === 1) {
+          mapInstance.setView(bounds.getCenter(), 16);
+        } else {
+          mapInstance.fitBounds(bounds, { padding: [48, 48], maxZoom: 16 });
+        }
       }
 
       setTimeout(() => {
@@ -641,6 +379,28 @@ export function StationManager({
     setBusy(true);
     setError("");
     try {
+      // Garde-fou : une adresse saisie sans point de repère enregistrait les
+      // coordonnées par défaut (toutes les stations au même endroit). On exige
+      // un emplacement réel avant l'enregistrement.
+      const latitude = form.latitude !== "" ? Number(form.latitude) : null;
+      const longitude = form.longitude !== "" ? Number(form.longitude) : null;
+      if (
+        latitude === null ||
+        longitude === null ||
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude)
+      ) {
+        setError(
+          "Placez le repère sur la carte (ou saisissez une adresse reconnue) : l’emplacement GPS est obligatoire.",
+        );
+        setBusy(false);
+        return;
+      }
+      if (!form.address.trim()) {
+        setError("Renseignez l’adresse de la station.");
+        setBusy(false);
+        return;
+      }
       const payload = {
         name: form.name.trim(),
         address: form.address.trim() || null,
@@ -862,7 +622,12 @@ export function StationManager({
         {
           id: "location",
           label: "Localisation",
-          isValid: () => !!form?.name?.trim() && !!form?.timezone?.trim(),
+          isValid: () =>
+            !!form?.name?.trim() &&
+            !!form?.timezone?.trim() &&
+            !!form?.address?.trim() &&
+            form?.latitude !== "" &&
+            form?.longitude !== "",
           content: (
             <div className="stepper-form-layout">
               <div className="stepper-field-group">
@@ -899,8 +664,9 @@ export function StationManager({
 
               <MapLocationPicker
                 address={String(form?.address || "")}
-                latitude={form?.latitude ?? DEFAULT_LAT}
-                longitude={form?.longitude ?? DEFAULT_LNG}
+                latitude={form?.latitude ?? ""}
+                longitude={form?.longitude ?? ""}
+                geofenceRadiusMeters={Number(form?.geofenceRadiusMeters) || 150}
                 onSelectLocation={(lat, lng) => {
                   set("latitude", lat);
                   set("longitude", lng);
@@ -909,6 +675,27 @@ export function StationManager({
                   set("address", addr);
                   set("latitude", lat);
                   set("longitude", lng);
+                  // La ville suit l'adresse reconnue (ex. « Douala, Cameroun »),
+                  // sans écraser une saisie manuelle volontaire.
+                  const known = [
+                    "Douala",
+                    "Yaoundé",
+                    "Yaounde",
+                    "Bafoussam",
+                    "Bamenda",
+                    "Garoua",
+                    "Kribi",
+                    "Limbe",
+                    "Limbé",
+                    "Buea",
+                    "Kumba",
+                    "Ngaoundéré",
+                    "Ngaoundere",
+                    "Bafang",
+                    "Ebolowa",
+                    "Bertoua",
+                  ].find((city) => addr.includes(city));
+                  if (known) set("city", known);
                 }}
               />
             </div>

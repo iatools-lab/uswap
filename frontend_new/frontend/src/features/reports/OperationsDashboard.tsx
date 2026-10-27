@@ -11,6 +11,7 @@ import { api, download } from "../../api/auth-api";
 import { Select } from "../../ui/Select";
 import { Modal } from "../../ui/Modal";
 import { KpiCard } from "../../ui/KpiCard";
+import { formatDateTime } from "../../utils/datetime";
 import "./reports.css";
 
 type Dashboard = {
@@ -408,7 +409,7 @@ export function OperationsDashboard({
                 {data.changes.map((row, index) => (
                   <article key={`${row.date}-${index}`}>
                     <strong>{row.station}</strong>
-                    <span>{new Date(row.date).toLocaleString("fr-FR")}</span>
+                    <span>{formatDateTime(row.date)}</span>
                     <span>
                       {row.from || "Poste vacant"} → {row.to || "Poste vacant"}
                     </span>
@@ -425,7 +426,7 @@ export function OperationsDashboard({
                     </span>
                     <span>
                       {labels[row.status] || row.status} ·{" "}
-                      {new Date(row.startTime).toLocaleString("fr-FR")}
+                      {formatDateTime(row.startTime)}
                     </span>
                   </article>
                 ))}

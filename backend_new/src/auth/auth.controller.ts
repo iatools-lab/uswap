@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Logger,
   Post,
   Req,
   Res,
@@ -46,6 +47,12 @@ class ForgotPasswordDto {
   email!: string;
 }
 
+class VerifyTokenDto {
+  @IsString()
+  @Length(64, 64, { message: 'Ce lien est incomplet ou a expiré.' })
+  token!: string;
+}
+
 class TokenPasswordDto {
   @IsString()
   @Length(64, 64, { message: 'Ce lien est incomplet ou a expiré.' })
@@ -65,6 +72,8 @@ class TokenPasswordDto {
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger('AuthController');
+
   constructor(
     private readonly auth: AuthService,
     private readonly passwords: PasswordsService,
@@ -185,6 +194,42 @@ export class AuthController {
     return { ok: true };
   }
 
+  /**
+   * Verifie un lien recu par e-mail SANS le consommer.
+   *
+   * L'ecran `/auth/reset-password?token=...` doit afficher « lien expire ou
+   * invalide » avant la saisie du nouveau mot de passe ; sans cette route, le
+   * seul moyen de le savoir etait d'envoyer le formulaire et de lire l'erreur.
+   */
+  @Public()
+  @Post('verify-reset-token')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Valide un lien de reinitialisation (sans le consommer)' })
+  async verifyResetToken(@Body() body: VerifyTokenDto) {
+    const record = await this.auth.findAccessToken(body.token, 'PASSWORD_RESET');
+    return {
+      ok: true,
+      email: record.user.email,
+      fullName: record.user.fullName,
+      expiresAt: record.expiresAt.toISOString(),
+    };
+  }
+
+  /** Meme verification pour un lien d'activation de compte. */
+  @Public()
+  @Post('verify-activation-token')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Valide un lien d’activation (sans le consommer)' })
+  async verifyActivationToken(@Body() body: VerifyTokenDto) {
+    const record = await this.auth.findAccessToken(body.token, 'ACTIVATION');
+    return {
+      ok: true,
+      email: record.user.email,
+      fullName: record.user.fullName,
+      expiresAt: record.expiresAt.toISOString(),
+    };
+  }
+
   @Public()
   @Get('session')
   @ApiCookieAuth()
@@ -227,7 +272,7 @@ export class AuthController {
    * expose donc la même logique ici, avec les mêmes règles de rôle.
    */
   @Post('register')
-  @Roles(Role.ADMIN)
+  @Roles(Role.SUPERVISOR, Role.ADMIN)
   @HttpCode(201)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Crée un compte (alias de POST /users)' })
@@ -257,8 +302,14 @@ export class AuthController {
     const email = body.email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email } });
     // Meme reponse dans tous les cas : aucune fuite d'information.
-    if (user && !user.disabledAt) {
-      await this.auth.sendPasswordReset(user).catch(() => undefined);
+    if (user && !user.disabledAt && user.isActive) {
+      await this.auth.sendPasswordReset(user).catch((error: unknown) =>
+        this.logger.warn(
+          `Reinitialisation non envoyee a ${user.email} : ${
+            error instanceof Error ? error.message : error
+          }`,
+        ),
+      );
     }
     return { ok: true };
   }
@@ -310,6 +361,11 @@ export class AuthController {
     const record = await this.auth.findAccessToken(raw, purpose);
     const passwordHash = await this.passwords.hash(password);
 
+    // La transaction ne doit contenir QUE des ecritures serialisees. Une
+    // promesse `prisma.x.create()` simplement construite (mais non attendue)
+    // commencait sa requete hors transaction : Prisma la reprenait comme un
+    // verrou consultatif (P2024, « Timed out fetching a new connection »), et
+    // le reset de mot de passe renvoyait 409.
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: record.userId },

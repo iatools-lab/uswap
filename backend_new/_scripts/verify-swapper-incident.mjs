@@ -1,9 +1,9 @@
-/**
- * Vérifie qu'un SWAPPER peut déclarer un incident via POST /incidents.
+﻿/**
+ * VÃ©rifie qu'un SWAPPER peut dÃ©clarer un incident via POST /incidents.
  * Usage : cd backend_new && node _scripts/verify-swapper-incident.mjs
  */
 const BASE = process.env.API_BASE ?? 'http://localhost:3000';
-const PASSWORD = process.env.SHAPE_PASSWORD ?? 'Uswap2026!Demo';
+const PASSWORD = process.env.SHAPE_PASSWORD ?? process.env.DEMO_PASSWORD ?? '';
 
 async function api(path, token, init = {}) {
   const res = await fetch(BASE + path, {
@@ -42,8 +42,8 @@ const create = await api('/incidents', login, {
   body: JSON.stringify({
     stationId: swapper?.stationId,
     affectedSwapperId: swapper?.id,
-    title: 'Vérification API incident',
-    description: 'Signalement automatique pour valider la route connectée.',
+    title: 'VÃ©rification API incident',
+    description: 'Signalement automatique pour valider la route connectÃ©e.',
     category: 'OTHER',
     severity: 'LOW',
     occurredAt: new Date().toISOString(),

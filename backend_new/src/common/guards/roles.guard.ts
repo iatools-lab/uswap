@@ -20,6 +20,38 @@ export const Public = () => SetMetadata(PUBLIC_KEY, true);
 /** Restreint une route a certains roles. */
 export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
 
+/**
+ * Hierarchie des roles : un role couvre toutes les routes de ceux qui le
+ * suivent. Le super administrateur herite donc de l'administrateur, qui
+ * herite du superviseur lui-meme dote de ses routes d'agent.
+ *
+ * Les decorateurs `@Roles(...)` existants n'ont pas besoin d'etre reecrits :
+ * la couverture est appliquee ici, au seul point de controle.
+ */
+export const ROLE_RANK: Record<Role, number> = {
+  SUPER_ADMIN: 4,
+  ADMIN: 3,
+  SUPERVISOR: 2,
+  SWAPPER: 1,
+};
+
+/**
+ * Le role detenu couvre-t-il l'un des roles exiges ?
+ *
+ * Seuls les roles de pilotage heritent (super administrateur > administrateur
+ * > superviseur). Un agent reste strictement limite a ses propres routes :
+ * l'heritage ne doit jamais elargir les donnees auxquelles il accede.
+ */
+export function roleSatisfies(
+  held: Role | string,
+  required: Array<Role | string>,
+): boolean {
+  if (required.includes(held)) return true;
+  if (held === 'SWAPPER') return false;
+  const rank = ROLE_RANK[held as Role] ?? 0;
+  return required.some((role) => (ROLE_RANK[role as Role] ?? 0) <= rank);
+}
+
 /** Utilisateur authentifie, expose par le guard d'acces. */
 export interface AuthenticatedUser {
   id: string;
@@ -83,7 +115,7 @@ export class RolesGuard implements CanActivate {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    if (!required.includes(user.role)) {
+    if (!roleSatisfies(user.role as Role, required)) {
       throw new DomainException(
         ErrorCode.ROLE_NOT_ALLOWED,
         'Vous ne disposez pas des droits nécessaires pour cette action.',

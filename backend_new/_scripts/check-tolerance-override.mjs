@@ -1,5 +1,5 @@
-/**
- * Integration — tolerance de retard propre au creneau (tag uswap-frontend-s6.2.0).
+﻿/**
+ * Integration â€” tolerance de retard propre au creneau (tag uswap-frontend-s6.2.0).
  *
  * Verifie le contrat de bout en bout :
  *   1. une occurrence accepte `latenessToleranceOverrideMinutes` (0..240) ;
@@ -11,7 +11,7 @@
  * Usage :  cd backend_new && node _scripts/check-tolerance-override.mjs
  */
 const BASE = process.env.API_BASE ?? 'http://localhost:3000';
-const PASSWORD = process.env.SHAPE_PASSWORD ?? 'Uswap2026!Demo';
+const PASSWORD = process.env.SHAPE_PASSWORD ?? process.env.DEMO_PASSWORD ?? '';
 
 let pass = 0;
 let fail = 0;
@@ -161,7 +161,7 @@ async function main() {
   const swappers = (await api('/users?role=SWAPPER', admin)).body ?? [];
   const candidate = Array.isArray(swappers) ? swappers.find((u) => u.isActive) : null;
   if (!candidate) {
-    console.log('  (aucun swappeur actif — etape de pointage ignoree)');
+    console.log('  (aucun swappeur actif â€” etape de pointage ignoree)');
   } else {
     const latest = await api(`/plannings/${planId}`, admin);
     const assign = await api(`/plannings/${planId}/occurrences/${occurrence.id}`, admin, {

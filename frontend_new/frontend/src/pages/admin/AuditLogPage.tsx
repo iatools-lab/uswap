@@ -32,10 +32,13 @@ const categoryNames: Record<AuditCategory, string> = {
   SETTINGS: "Réglages",
 };
 
+// Journal d'audit : horodatage dans l'heure d'exploitation (Africa/Douala),
+// identique pour tous les postes quel que soit leur fuseau.
 const formatDateTime = (value: string) =>
   new Intl.DateTimeFormat("fr-FR", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "Africa/Douala",
   }).format(new Date(value));
 
 export function AuditLogPage() {

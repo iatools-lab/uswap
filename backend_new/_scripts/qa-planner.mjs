@@ -1,4 +1,4 @@
-export default async function run(page, ui) {
+﻿export default async function run(page, ui) {
   const steps = [];
 
   // 1. Remplir le formulaire de connexion
@@ -13,7 +13,7 @@ export default async function run(page, ui) {
 
   if (count >= 2) {
     await inputs.nth(0).fill('admin@upowa.org');
-    await inputs.nth(1).fill('Uswap2026!Demo');
+    await inputs.nth(1).fill(process.env.DEMO_PASSWORD ?? '');
   }
 
   // Cliquer sur "Se connecter"

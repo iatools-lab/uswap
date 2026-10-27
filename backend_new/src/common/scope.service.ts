@@ -1,7 +1,10 @@
 import { Global, Injectable, Module } from '@nestjs/common';
-import type { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthenticatedUser } from './guards/roles.guard';
+
+/** Roles de pilotage : ils couvrent tout le reseau. */
+const isStaff = (role: string): boolean =>
+  role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'SUPERVISOR';
 
 /**
  * Perimetre de visibilite.
@@ -12,6 +15,8 @@ import type { AuthenticatedUser } from './guards/roles.guard';
  * - **Superviseur** : les stations qu'il couvre, ou l'ensemble du reseau
  *   lorsqu'il n'est rattache a aucune station (superviseur global).
  * - **Administrateur** : tout le reseau.
+ * - **Super administrateur** : tout le reseau, plus les operations de
+ *   plateforme (maintenance, nettoyage des donnees de test).
  */
 @Injectable()
 export class ScopeService {
@@ -19,7 +24,7 @@ export class ScopeService {
 
   /** Stations visibles par l'utilisateur ; `null` = aucune restriction. */
   async stationIdsFor(user: AuthenticatedUser): Promise<string[] | null> {
-    if (user.role === 'ADMIN' || user.role === 'SUPERVISOR') return null;
+    if (isStaff(user.role)) return null;
     if (user.role === 'SWAPPER') return null; // filtre par swapperId
     return null;
   }
@@ -44,7 +49,7 @@ export class ScopeService {
 
   /** L'utilisateur peut-il modifier les plannings ? (admin et superviseur) */
   canManagePlannings(user: AuthenticatedUser): boolean {
-    return user.role === 'ADMIN' || user.role === 'SUPERVISOR';
+    return isStaff(user.role);
   }
 
   /**
@@ -52,7 +57,7 @@ export class ScopeService {
    * le reseau ; un agent uniquement sa station de rattachement.
    */
   canActOnStation(user: AuthenticatedUser, stationId: string): boolean {
-    if (user.role === 'ADMIN' || user.role === 'SUPERVISOR') return true;
+    if (isStaff(user.role)) return true;
     return user.stationId === stationId;
   }
 

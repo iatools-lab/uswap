@@ -4,6 +4,7 @@ import { Eye, EyeOff, LoaderCircle, Mail, X } from "../ui/icons";
 import { useSession } from "../app/session";
 import {
   fetchProfiles,
+  forgetSession,
   mockPeople,
   roles,
   usingMock,
@@ -65,11 +66,17 @@ export function LoginPage() {
       return;
     }
     setSubmitting(true);
+    // Une ancienne session locale (utilisateur memorise sans cookie valide)
+    // ne doit jamais empecher une nouvelle connexion : on la remplace.
+    forgetSession();
     try {
-      await signIn(identifier.trim(), password);
+      await signIn(identifier.trim().toLowerCase(), password);
       setPassword("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Connexion impossible.");
+      // L'erreur de connexion est portee par le champ, pas par le provider :
+      // sans ce `setError` local, rien ne s'affichait apres un echec.
+      const message = err instanceof Error ? err.message : "Connexion impossible.";
+      setError(message);
     } finally {
       setSubmitting(false);
     }

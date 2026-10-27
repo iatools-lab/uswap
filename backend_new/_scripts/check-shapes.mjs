@@ -1,15 +1,15 @@
-/**
- * Vérification des FORMES de réponse (pas seulement des routes).
+﻿/**
+ * VÃ©rification des FORMES de rÃ©ponse (pas seulement des routes).
  *
- * Pour chaque écran clé, on vérifie que les champs réellement lus par le
- * frontend existent dans la réponse du backend. Un champ renommé (ex.
- * `checkInAt` -> `checkedInAt`) casse l'écran sans changer le code HTTP.
+ * Pour chaque Ã©cran clÃ©, on vÃ©rifie que les champs rÃ©ellement lus par le
+ * frontend existent dans la rÃ©ponse du backend. Un champ renommÃ© (ex.
+ * `checkInAt` -> `checkedInAt`) casse l'Ã©cran sans changer le code HTTP.
  *
  * Usage :  cd backend_new && node _scripts/check-shapes.mjs
  */
 const BASE = process.env.API_BASE ?? 'http://localhost:3000';
 const EMAIL = process.env.SHAPE_EMAIL ?? 'admin@upowa.org';
-const PASSWORD = process.env.SHAPE_PASSWORD ?? 'Uswap2026!Demo';
+const PASSWORD = process.env.SHAPE_PASSWORD ?? process.env.DEMO_PASSWORD ?? '';
 
 let failures = 0;
 
@@ -39,7 +39,7 @@ async function api(path, token, init = {}) {
 }
 
 async function main() {
-  console.log('Connexion…');
+  console.log('Connexionâ€¦');
   const login = await api('/auth/login', null, {
     method: 'POST',
     body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
@@ -52,9 +52,9 @@ async function main() {
 
   console.log('\n=== /auth/me ===');
   const me = await api('/auth/me', token);
-  check('user présent', me.body?.user, JSON.stringify(me.body));
+  check('user prÃ©sent', me.body?.user, JSON.stringify(me.body));
   check('user.role', me.body?.user?.role, '');
-  check('user.stationId (clé présente)', 'stationId' in (me.body?.user ?? {}));
+  check('user.stationId (clÃ© prÃ©sente)', 'stationId' in (me.body?.user ?? {}));
 
   console.log('\n=== /stations ===');
   const stations = await api('/stations', token);
@@ -71,7 +71,7 @@ async function main() {
   const user = Array.isArray(users.body) ? users.body[0] : null;
   check('liste non vide', Array.isArray(users.body) && users.body.length > 0);
   check('user.fullName', user?.fullName, '');
-  check('user.isActive (clé présente)', 'isActive' in (user ?? {}));
+  check('user.isActive (clÃ© prÃ©sente)', 'isActive' in (user ?? {}));
 
   console.log('\n=== /dashboard/stats ===');
   const stats = await api('/dashboard/stats', token);
@@ -97,7 +97,7 @@ async function main() {
   check('planning.status', planning?.status, '');
   check('planning.revision', typeof planning?.revision === 'number');
 
-  console.log('\n=== /plannings/:id (détail) ===');
+  console.log('\n=== /plannings/:id (dÃ©tail) ===');
   if (planning?.id) {
     const detail = await api(`/plannings/${planning.id}`, token);
     check('detail.id', detail.body?.id, '');
@@ -117,7 +117,7 @@ async function main() {
   if (swapperLogin.status === 200 || swapperLogin.status === 201) {
     const swToken = swapperLogin.body.accessToken;
     const lw = await api('/leaves/workspace', swToken);
-    check('balance présent', lw.body?.balance !== undefined || lw.body?.remainingDays !== undefined,
+    check('balance prÃ©sent', lw.body?.balance !== undefined || lw.body?.remainingDays !== undefined,
       JSON.stringify(Object.keys(lw.body ?? {})));
     const ws = await api('/workspace', swToken);
     check('workspace.shifts tableau', Array.isArray(ws.body?.shifts));
@@ -126,7 +126,7 @@ async function main() {
   }
 
   console.log('');
-  console.log(failures === 0 ? 'TOUTES LES FORMES SONT CONFORMES' : `${failures} écart(s) de forme`);
+  console.log(failures === 0 ? 'TOUTES LES FORMES SONT CONFORMES' : `${failures} Ã©cart(s) de forme`);
   process.exit(failures ? 1 : 0);
 }
 

@@ -7,6 +7,7 @@ import {
   ShieldCheckIcon,
 } from "../../ui/icons";
 import { api } from "../../api/auth-api";
+import { formatDateTime } from "../../utils/datetime";
 import { notify } from "../../ui/Toast";
 import "../../styles/global-settings.css";
 
@@ -188,7 +189,7 @@ export function GlobalSettingsPage() {
           <strong>Historique des modifications</strong>
           <span>
             {history.length
-              ? `Dernière mise à jour le ${new Date(history[0].createdAt).toLocaleString("fr-FR")}`
+              ? `Dernière mise à jour le ${formatDateTime(history[0].createdAt)}`
               : "Aucune modification enregistrée"}
           </span>
         </div>
@@ -203,7 +204,7 @@ export function GlobalSettingsPage() {
           {history.map((item) => (
             <div key={item.id}>
               <span>Révision {item.revision}</span>
-              <time>{new Date(item.createdAt).toLocaleString("fr-FR")}</time>
+              <time>{formatDateTime(item.createdAt)}</time>
               <small>Administrateur</small>
             </div>
           ))}

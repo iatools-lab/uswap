@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { AttendanceStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { stationDayKey } from '../common/utils/datetime';
@@ -55,6 +56,7 @@ export class AutomationService {
         station: true,
         assignments: { include: { user: { select: { id: true, fullName: true } } } },
         attendance: true,
+        absences: { where: { status: 'OPEN' }, select: { origin: true } },
       },
     });
 
@@ -70,62 +72,110 @@ export class AutomationService {
       if (now < start + toleranceMs) continue;
 
       const record = occurrence.attendance;
-      const missedCheckin = !record;
-      const missedCheckout =
-        now > end && Boolean(record?.checkedInAt) && !record?.checkedOutAt;
-      if (!missedCheckin && !missedCheckout) continue;
-
-      const already = await this.prisma.automatedAbsence.findUnique({
-        where: { shiftId: occurrence.id },
-      });
-      if (already) {
+      const hasAutoAbsence = occurrence.absences.some(
+        (absence) => absence.origin === 'AUTOMATIC_ABSENCE',
+      );
+      // Un pointage prime sur une absence automatique : si l'agent a fini par
+      // prendre son service, l'absence n'a plus lieu d'etre (et le marqueur
+      // doit disparaitre, sinon elle ne serait jamais levee).
+      const checkedIn = Boolean(record?.checkedInAt);
+      if (checkedIn) {
+        if (hasAutoAbsence || record?.status === AttendanceStatus.ABSENT) {
+          await this.prisma.$transaction([
+            this.prisma.absence.deleteMany({
+              where: {
+                shiftId: occurrence.id,
+                origin: 'AUTOMATIC_ABSENCE',
+                status: 'OPEN',
+              },
+            }),
+            this.prisma.automatedAbsence.deleteMany({
+              where: { shiftId: occurrence.id },
+            }),
+            this.prisma.attendance.update({
+              where: { shiftId: occurrence.id },
+              data: {
+                status: record?.isLate
+                  ? AttendanceStatus.LATE
+                  : AttendanceStatus.PRESENT,
+                justified: false,
+              },
+            }),
+          ]);
+        }
         skipped += 1;
         continue;
       }
 
-      const reason = missedCheckout
-        ? 'Absence automatique : prise de service enregistrée sans pointage de fin.'
-        : 'Absence automatique : aucun pointage après le délai de tolérance.';
-
-      for (const assignment of occurrence.assignments) {
-        await this.prisma.$transaction(async (tx) => {
-          await tx.automatedAbsence.create({
-            data: { shiftId: occurrence.id, reason },
-          });
-          if (missedCheckout && record) {
-            await tx.attendance.update({
-              where: { shiftId: occurrence.id },
-              data: { status: 'ABSENT', justified: false },
-            });
-          }
-          const existing = await tx.absence.findFirst({
-            where: { shiftId: occurrence.id, status: 'OPEN' },
-          });
-          if (!existing) {
-            await tx.absence.create({
-              data: {
-                shiftId: occurrence.id,
-                swapperId: assignment.userId,
-                reason,
-                origin: 'AUTOMATIC_ABSENCE',
-                status: 'OPEN',
-                reportedAt: new Date(
-                  missedCheckout ? end : start + toleranceMs,
-                ),
-              },
-            });
-          }
+      if (!record) {
+        const already = await this.prisma.automatedAbsence.findUnique({
+          where: { shiftId: occurrence.id },
         });
+        if (already) {
+          skipped += 1;
+          continue;
+        }
 
-        await this.notifications.notifyStaff([assignment.userId], {
-          kind: NotificationKind.AUTOMATIC_ABSENCE,
-          title: 'Absence automatique',
-          body: missedCheckout
-            ? `${assignment.user.fullName} n'a pas enregistré sa fin de service à ${occurrence.station.name} (${occurrence.shiftLabel ?? 'service'}).`
-            : `${assignment.user.fullName} n'a pointé à ${occurrence.station.name} (${occurrence.shiftLabel ?? 'service'}).`,
-          targetId: occurrence.id,
-          targetUrl: `/remplacements?replacement=${occurrence.id}`,
-          critical: true,
+        const reason =
+          'Absence automatique : aucun pointage après le délai de tolérance.';
+
+        for (const assignment of occurrence.assignments) {
+          await this.prisma.$transaction(async (tx) => {
+            await tx.automatedAbsence.create({
+              data: { shiftId: occurrence.id, reason },
+            });
+            const existing = await tx.absence.findFirst({
+              where: { shiftId: occurrence.id, status: 'OPEN' },
+            });
+            if (!existing) {
+              await tx.absence.create({
+                data: {
+                  shiftId: occurrence.id,
+                  swapperId: assignment.userId,
+                  reason,
+                  origin: 'AUTOMATIC_ABSENCE',
+                  status: 'OPEN',
+                  reportedAt: new Date(start + toleranceMs),
+                },
+              });
+            }
+          });
+
+          await this.notifications
+            .notifyStaff([assignment.userId], {
+              kind: NotificationKind.AUTOMATIC_ABSENCE,
+              title: 'Absence automatique',
+              body: `${assignment.user.fullName} n'a pointé à ${occurrence.station.name} (${occurrence.shiftLabel ?? 'service'}).`,
+              targetId: occurrence.id,
+              targetUrl: `/remplacements?replacement=${occurrence.id}`,
+              critical: true,
+            })
+            .catch((error: unknown) =>
+              this.logger.warn(
+                `Notification d'absence non envoyee : ${
+                  error instanceof Error ? error.message : error
+                }`,
+              ),
+            );
+          created += 1;
+        }
+        continue;
+      }
+
+      // Prise de service sans fin de service, une fois le creneau termine:
+      // trace informative, sans bloquer un futur pointage de sortie.
+      if (now > end && !record.checkedOutAt) {
+        const reason =
+          'Absence automatique : prise de service enregistrée sans pointage de fin.';
+        const already = await this.prisma.automatedAbsence.findUnique({
+          where: { shiftId: occurrence.id },
+        });
+        if (already) {
+          skipped += 1;
+          continue;
+        }
+        await this.prisma.automatedAbsence.create({
+          data: { shiftId: occurrence.id, reason },
         });
         created += 1;
       }

@@ -6,7 +6,7 @@ corrections sont **côté backend et encodage** ; le **visuel du frontend n'a pa
 
 ---
 
-## 1. Accents cassés (« publiÃ© », « â€” »…)
+## 1. Accents cassés (« publié », « ” »…)
 
 **Cause** — Une partie des fichiers avait été ré-encodée : le contenu UTF-8 a
 été relu comme du Windows-1252 puis réécrit en UTF-8, doublant les accents.

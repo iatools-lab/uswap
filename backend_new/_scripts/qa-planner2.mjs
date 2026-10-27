@@ -1,10 +1,10 @@
-export default async function run(page, ui) {
+﻿export default async function run(page, ui) {
   const result = {};
 
   // Se connecter
   const inputs = page.locator('input');
   await inputs.nth(0).fill('admin@upowa.org');
-  await inputs.nth(1).fill('Uswap2026!Demo');
+  await inputs.nth(1).fill(process.env.DEMO_PASSWORD ?? '');
   await page.getByRole('button', { name: /se connecter/i }).first().click();
   await page.waitForTimeout(3000);
 
@@ -12,7 +12,7 @@ export default async function run(page, ui) {
   await page.goto('http://127.0.0.1:5173/app/admin/plannings');
   await page.waitForTimeout(4000);
 
-  // Inspecter le DOM profondément
+  // Inspecter le DOM profondÃ©ment
   result.url = page.url();
   result.rootHTML = await page.evaluate(() => {
     const root = document.getElementById('root') || document.body;
