@@ -439,7 +439,7 @@ export class LeavesService {
    * File des demandes en attente pour les administrateurs, ou liste complete
    * pour un superviseur restreint a son perimetre.
    */
-  async management(actor: AuthenticatedUser) {
+  async management(_actor: AuthenticatedUser) {
     const leaves = await this.prisma.leave.findMany({
       where: { status: { in: ['PENDING', 'APPROVED', 'REJECTED'] } },
       orderBy: { startTime: 'desc' },

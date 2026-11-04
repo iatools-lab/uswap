@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   HttpCode,
   Param,
   Patch,
@@ -21,7 +20,6 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import {
-  IsBoolean,
   IsEmail,
   IsIn,
   IsOptional,
@@ -106,15 +104,7 @@ class UpdateUserDto {
   updatedAt?: string;
 }
 
-class StatusDto {
-  /** `true` = activer / réactiver, `false` = désactiver. */
-  @IsBoolean()
-  enabled!: boolean;
 
-  @IsOptional()
-  @IsString()
-  updatedAt?: string;
-}
 
 @ApiTags('users')
 @ApiBearerAuth()

@@ -129,10 +129,16 @@ export class LeavesController {
     return this.leaves.management(user);
   }
 
-  // Le frontend appelle `/leaves/pending` (`api/role-routes.ts` l'étend en
-  // `/agent/leaves/pending`, `/superadmin/leaves/pending`…). Le chemin
-  // historique `admin/leaves/pending` n'était appelé par aucun écran : il est
-  // retiré, une seule forme = une seule URL à auditer.
+  // Le frontend appelle `/leaves/pending` (`LeaveRequestInbox.tsx`), que
+  // `scopedPath` préfixe en `/pilot/leaves/pending`, `/supervision/leaves/pending`,
+  // `/superadmin/leaves/pending` : une seule forme, servie par le préfixe métier
+  // du contrôleur (`@PilotRoute('leaves')`…). Une variante `admin/leaves/pending`
+  // ne servirait aucun appel et l'espace la doublerait
+  // (`/supervision/leaves/admin/leaves/pending`).
+  //
+  // Déclarée APRÈS `leaves/:id`, un routeur l'interpréterait comme `id =
+  // « pending »` ; Nest choisit le handler le plus proche, mais l'ordre coûte
+  // un caractère : la forme à un segment reste ici pour la lisibilité.
   @Get('pending')
   @Roles(Role.ADMIN, Role.SUPERVISOR, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Demandes en attente de décision' })

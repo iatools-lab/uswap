@@ -315,8 +315,8 @@ export class IncidentsService {
     const before = incident.status;
     const actionType = this.actionTypeFor(before, nextStatus);
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const next = await tx.incident.update({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.incident.update({
         where: { id },
         data: {
           status: nextStatus,
@@ -342,7 +342,6 @@ export class IncidentsService {
           comment: comment || 'Statut mis à jour.',
         },
       });
-      return next;
     });
 
     const full = await this.prisma.incident.findUniqueOrThrow({

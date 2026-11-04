@@ -375,7 +375,6 @@ export class OperationsService {
       throw new NotFoundDomain(ErrorCode.NOT_FOUND, 'Affectation introuvable.');
     }
 
-    const currentIds = new Set(occurrence.assignments.map((a) => a.userId));
     const swappers = await this.prisma.user.findMany({
       where: { role: 'SWAPPER', isActive: true, disabledAt: null },
       orderBy: { fullName: 'asc' },

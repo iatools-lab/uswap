@@ -1,17 +1,10 @@
-import {
-  Injectable,
-  NestMiddleware,
-  HttpStatus,
-} from '@nestjs/common';
+import { Injectable, NestMiddleware, HttpStatus } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import type { NextFunction, Request, Response } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DomainException, ErrorCode } from '../errors/domain-errors';
-import {
-  AuthenticatedUser,
-  PUBLIC_KEY,
-} from '../guards/roles.guard';
+import { AuthenticatedUser } from '../guards/roles.guard';
 import { Reflector } from '@nestjs/core';
 import { AppConfig } from '../../config/configuration';
 

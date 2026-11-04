@@ -56,10 +56,23 @@ class ScheduledReportDto {
 
 @ApiTags('reports')
 @ApiBearerAuth()
-// `/superadmin/reports` est requis : le frontend préfixe chaque appel par
-// l'espace du rôle connecté (`api/role-routes.ts`). Sans cette déclaration, le
-// tableau de bord du super administrateur appelait `/superadmin/reports/dashboard`
-// et recevait 404.
+/*
+ * Trois formes par route, et non deux. Le frontend préfixe chaque appel par
+ * l'espace du rôle (`api/role-routes.ts`) :
+ *
+ *   `/reports/dashboard`        -> `/superadmin/reports/dashboard` (tableau de bord)
+ *   `/admin/reports/schedules`  -> `/superadmin/admin/reports/schedules` (écran
+ *                                  de rapports programmés)
+ *
+ * La seconde forme est un chemin MÉTIER (`/admin/...` n'y est pas un espace) :
+ * la réduire à `reports/schedules` produisait des 404 dans l'espace. Les trois
+ * sont donc déclarées ; `registerFlatSuperAdminRoutes` (main.ts) réexpose la
+ * variante `/admin/...` sous `/superadmin` via son alias `admin/...`.
+ *
+ * `/superadmin/reports` est requis : sans cette déclaration, le tableau de bord
+ * du super administrateur appelait `/superadmin/reports/dashboard` et
+ * recevait 404.
+ */
 @Controller()
 @SuperAdminRoute('reports')
 @SupervisionRoute('reports')
@@ -67,7 +80,7 @@ class ScheduledReportDto {
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
-  @Get(['dashboard', 'reports/dashboard'])
+  @Get(['dashboard', 'reports/dashboard', 'admin/reports/dashboard'])
   @Roles(Role.SUPERVISOR, Role.ADMIN)
   @ApiOperation({ summary: 'Indicateurs consolidés de la période' })
   dashboard(
@@ -87,7 +100,7 @@ export class ReportsController {
     });
   }
 
-  @Get(['export', 'reports/export'])
+  @Get(['export', 'reports/export', 'admin/reports/export'])
   @Roles(Role.SUPERVISOR, Role.ADMIN)
   @ApiOperation({ summary: 'Export XLSX/CSV du rapport de période' })
   async export(
@@ -116,7 +129,7 @@ export class ReportsController {
     response.end(result.buffer);
   }
 
-  @Get(['schedules', 'reports/schedules'])
+  @Get(['schedules', 'reports/schedules', 'admin/reports/schedules'])
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Rapports programmés' })
   async scheduled() {
@@ -126,7 +139,7 @@ export class ReportsController {
     );
   }
 
-  @Post(['schedules', 'reports/schedules'])
+  @Post(['schedules', 'reports/schedules', 'admin/reports/schedules'])
   @Roles(Role.ADMIN)
   @HttpCode(201)
   @ApiOperation({ summary: 'Programme un envoi automatique de rapport' })
@@ -137,7 +150,7 @@ export class ReportsController {
     return this.reports.createScheduled(user, body);
   }
 
-  @Post(['schedules/preview', 'reports/schedules/preview'])
+  @Post(['schedules/preview', 'reports/schedules/preview', 'admin/reports/schedules/preview'])
   @Roles(Role.ADMIN)
   @HttpCode(200)
   @ApiOperation({ summary: 'Aperçu du rapport avant programmation' })
@@ -148,21 +161,21 @@ export class ReportsController {
     return this.reports.preview(user, body);
   }
 
-  @Get(['schedules/:id/runs', 'reports/schedules/:id/runs'])
+  @Get(['schedules/:id/runs', 'reports/schedules/:id/runs', 'admin/reports/schedules/:id/runs'])
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Historique d’exécution d’un rapport' })
   runs(@Param('id') id: string) {
     return this.reports.runs(id);
   }
 
-  @Patch(['schedules/:id', 'reports/schedules/:id'])
+  @Patch(['schedules/:id', 'reports/schedules/:id', 'admin/reports/schedules/:id'])
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Active ou suspend un rapport programmé' })
   toggle(@Param('id') id: string, @Body() body: { isActive?: boolean }) {
     return this.reports.toggleScheduled(id, body.isActive === true);
   }
 
-  @Post(['schedules/:id/send', 'reports/schedules/:id/send'])
+  @Post(['schedules/:id/send', 'reports/schedules/:id/send', 'admin/reports/schedules/:id/send'])
   @Roles(Role.ADMIN)
   @HttpCode(200)
   @ApiOperation({

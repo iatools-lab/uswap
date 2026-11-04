@@ -110,7 +110,7 @@ function registerFlatSuperAdminRoutes(app: INestApplication): boolean {
         RequestMethod | undefined;
       const rawPath = Reflect.getMetadata(PATH_METADATA, proc) as
         string | string[] | undefined;
-      if (requestMethod === undefined || !rawPath) continue;
+      if (requestMethod === undefined) continue;
       /*
        * SÉLECTION, pas duplication.
        *
@@ -119,9 +119,9 @@ function registerFlatSuperAdminRoutes(app: INestApplication): boolean {
        * d'un espace. Sous `/superadmin`, on n'en réexpose QU'UN — les ajouter
        * tous produisait des URL mortes (`/superadmin/admin/reports/...`).
        */
-      const allPaths = (Array.isArray(rawPath) ? rawPath : [rawPath]).map((p) =>
-        p.replace(/^\/+/, ''),
-      );
+      const allPaths = (
+        rawPath === undefined ? [] : Array.isArray(rawPath) ? rawPath : [rawPath]
+      ).map((p) => p.replace(/^\/+/, ''));
       const owner = [...controllers.values()].find((wrapper) => {
         // `metatype` n'est pas typé par Nest : on passe par `unknown` pour
         // accéder au prototype sans casser la compilation (`strict`).
@@ -168,14 +168,28 @@ function registerFlatSuperAdminRoutes(app: INestApplication): boolean {
        */
       const targets = new Set<string>(allPaths);
       /*
-       * Les métadonnées brutes du handler contiennent TOUTES les formes
-       * déclarées (`@Get(['pending','admin/leaves/pending'])`), alors que
-       * `allPaths` a été réduit plus haut. On les ajoute donc ici, sinon les
-       * alias de compatibilité ne sont jamais réexposés (404).
+       * Un handler à plat déclare `''` alors que ses méthodes portent déjà le
+       * préfixe historique (`admin/settings`, `super-admin/cleanup`). La forme
+       * `''` signifie « racine du contrôleur » : elle n'est valable que sur
+       * `/pilot/admin`, jamais sous `/superadmin`, où elle produisait
+       * `/superadmin/admin` (page racine inexistante). On la retire donc.
        */
-      const declared = Reflect.getOwnMetadata(PATH_METADATA, proc);
-      for (const p of Array.isArray(declared) ? declared : [declared]) {
-        if (typeof p === 'string') targets.add(p.replace(/^\/+/, ''));
+      targets.delete('');
+      /*
+       * Les formes de compatibilité (`admin/...`, `super-admin/...`) ne sont
+       * réexposées que pour les contrôleurs À PLAT (AdminController,
+       * DataCleanupController) : leurs méthodes portent déjà leur préfixe
+       * historique et `allPaths` y vaut `[]`. Pour un contrôleur de module
+       * (`@Controller('users')`), les ajouter produisait des URL mortes et
+       * redondantes (`/pilot/reports/reports/dashboard`,
+       * `/superadmin/admin/reports/...`). On ne complète donc QUE les listes
+       * vides : un handler qui déclare un chemin n'est jamais dupliqué.
+       */
+      if (targets.size === 0) {
+        const declared = Reflect.getOwnMetadata(PATH_METADATA, proc);
+        for (const p of Array.isArray(declared) ? declared : [declared]) {
+          if (typeof p === 'string') targets.add(p.replace(/^\/+/, ''));
+        }
       }
       const verb = factory
         .get(server as never, requestMethod)
@@ -274,7 +288,14 @@ async function bootstrap() {
 
   const port = config.get('port', { infer: true });
   // `listen` sur une application déjà initialisée réutilise la même instance.
-  await app.listen(port);
+  /*
+   * Écoute explicite sur toutes les interfaces (`0.0.0.0`). Sans cette valeur,
+   * Node résout `localhost` et peut s'attacher à `::1` seulement : un client
+   * qui vise `127.0.0.1` reçoit alors ECONNREFUSED, alors que le serveur est
+   * démarré (constaté le 2026-11-04 ; même piège que le proxy Vite côté
+   * frontend). En conteneur, `0.0.0.0` est de toute façon requis.
+   */
+  await app.listen(port, '0.0.0.0');
   logger.log(`API uSwap disponible sur http://localhost:${port} (docs: /docs)`);
 }
 

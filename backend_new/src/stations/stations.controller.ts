@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { StationsService, type StationPayload, type TemplatePayload } from './stations.service';
-import { Roles, type AuthenticatedUser, CurrentUser } from '../common/guards/roles.guard';
+import { Roles } from '../common/guards/roles.guard';
 import { Role } from '../common/enums';
 import {
   PilotRoute,

@@ -24,7 +24,6 @@ export function buildMatrix(input: {
     const byDay: CoverageMatrix['perStation'][number]['days'] = {};
     let required = 0;
     let assigned = 0;
-    let shifts = 0;
     for (const day of days) {
       byDay[day] = { required: 0, assigned: 0, shifts: 0 };
     }
@@ -37,7 +36,6 @@ export function buildMatrix(input: {
       byDay[occurrence.day] = bucket;
       required += occurrence.requiredStaff;
       assigned += occurrence.assignedUserIds.length;
-      shifts += 1;
       const missing = occurrence.requiredStaff - occurrence.assignedUserIds.length;
       if (missing > 0) {
         gaps.push({

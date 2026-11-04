@@ -158,8 +158,15 @@ export class AttendanceService {
     };
   }
 
-  /** Postes supervises : pointages du jour, pour l'ecran de suivi en direct. */
-  async shiftsForSupervision(user: AuthenticatedUser) {
+  /**
+   * Postes supervises : pointages du jour, pour l'ecran de suivi en direct.
+   *
+   * Le perimetre vient de la session et non de l'argument : le garde d'espace
+   * a deja verifie le role, et la station est portee par chaque occurrence.
+   * Le parametre reste dans la signature (contrat entre le controleur et le
+   * service) : il est donc nomme `_user` plutot que supprime.
+   */
+  async shiftsForSupervision(_user: AuthenticatedUser) {
     const occurrences = await this.prisma.occurrence.findMany({
       where: {
         status: 'PUBLISHED',
@@ -554,7 +561,7 @@ export class AttendanceService {
   }
 
   /** Suivi du jour : toutes les personnes attendues, avec leur statut. */
-  async monitor(user: AuthenticatedUser) {
+  async monitor(_user: AuthenticatedUser) {
     const today = stationDayKey(Date.now());
     const bounds = {
       start: new Date(stationIso(today, '00:00')),
