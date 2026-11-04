@@ -9,12 +9,26 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { StationsService, type StationPayload, type TemplatePayload } from './stations.service';
-import { Roles, type AuthenticatedUser, CurrentUser } from '../common/guards/roles.guard';
+import { Roles } from '../common/guards/roles.guard';
 import { Role } from '../common/enums';
+import {
+  PilotRoute,
+  SuperAdminRoute,
+  SupervisionRoute,
+} from '../common/routing/role-route';
 
 @ApiTags('stations')
 @ApiBearerAuth()
+// Stations (dont les coordonnées affichées sur la carte) : lecture ouverte au
+// pilotage et à la supervision, écriture réservée à l'administrateur.
+//   /stations                  historique (compatibilité)
+//   /pilot/stations            administrateur, super administrateur
+//   /superadmin/stations       super administrateur (espace de pilotage)
+//   /supervision/stations      superviseur (lecture)
 @Controller('stations')
+@PilotRoute('stations', 'stations')
+@SuperAdminRoute('stations')
+@SupervisionRoute('stations')
 export class StationsController {
   constructor(private readonly stations: StationsService) {}
 

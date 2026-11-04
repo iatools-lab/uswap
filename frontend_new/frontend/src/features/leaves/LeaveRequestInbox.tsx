@@ -37,7 +37,7 @@ export function LeaveRequestInbox() {
 
   const load = useCallback(() => {
     setError("");
-    api<LeaveReviewItem[]>("/admin/leaves/pending")
+    api<LeaveReviewItem[]>("/leaves/pending")
       .then(setRequests)
       .catch((cause) => setError((cause as Error).message));
   }, []);

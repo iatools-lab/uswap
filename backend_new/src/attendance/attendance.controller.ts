@@ -18,6 +18,11 @@ import {
   type AuthenticatedUser,
 } from '../common/guards/roles.guard';
 import { Role } from '../common/enums';
+import {
+  AgentRoute,
+  SuperAdminRoute,
+  SupervisionRoute,
+} from '../common/routing/role-route';
 
 class PunchDto {
   @IsString()
@@ -50,7 +55,14 @@ class CorrectionDto {
 
 @ApiTags('attendance')
 @ApiBearerAuth()
+// Pointage : les routes sont ouvertes à tous les rôles (`@Roles` par méthode),
+// donc chaque contrôleur existe dans les trois espaces opérationnels. Le
+// garde d'accès (`RoleRouteAccessGuard`) et `@Roles` restent la seule
+// autorité : un agent n'obtient pas la vue superviseur via `/agent/...`.
 @Controller()
+@SupervisionRoute('attendance', 'attendance')
+@AgentRoute('attendance')
+@SuperAdminRoute('attendance')
 export class AttendanceController {
   constructor(
     private readonly attendance: AttendanceService,
@@ -84,7 +96,15 @@ export class AttendanceController {
     });
   }
 
-  @Get('workspace')
+  /**
+   * Postes de l'agent connecté (vue d'accueil).
+   *
+   * Le contrôleur est à plat avec l'ancienne base `attendance` : la route est
+   * servie sous `/attendance/workspace` et sous chaque espace
+   * (`/agent/attendance/workspace`…). Le frontend appelle `/workspace`
+   * (déclaré dans `SHARED_PREFIXES`) : cette forme est exposée à la racine.
+   */
+  @Get(['workspace', 'attendance/workspace'])
   @ApiOperation({ summary: 'Postes de l’agent connecté (accueil / pointage)' })
   workspace(@CurrentUser() user: AuthenticatedUser) {
     return this.attendance.workspace(user);
@@ -97,7 +117,10 @@ export class AttendanceController {
     return this.attendance.shiftsForSupervision(user);
   }
 
-  @Post('attendance')
+  // Routes RELATIVES : le préfixe d'espace est ajouté par `@AgentRoute` etc.
+  // (`/agent/attendance`). Écrire `attendance` ici produisait
+  // `/agent/attendance/attendance`, que le frontend n'appelle jamais.
+  @Post(['', 'attendance'])
   @Roles(Role.SWAPPER)
   @HttpCode(200)
   @ApiOperation({ summary: 'Prise ou fin de service avec contrôle GPS' })
@@ -105,7 +128,7 @@ export class AttendanceController {
     return this.attendance.punch(user, body);
   }
 
-  @Get('attendance')
+  @Get(['', 'attendance'])
   @Roles(Role.ADMIN, Role.SUPERVISOR)
   @ApiOperation({ summary: 'Pointages publiés (vue superviseur)' })
   records(
@@ -115,14 +138,16 @@ export class AttendanceController {
     return this.attendance.records(user, { stationId });
   }
 
-  @Get('attendance/monitor')
+  @Get(['monitor', 'attendance/monitor'])
   @Roles(Role.SUPERVISOR, Role.ADMIN)
   @ApiOperation({ summary: 'Suivi du jour : présents, retards, absents' })
   monitor(@CurrentUser() user: AuthenticatedUser) {
     return this.attendance.monitor(user);
   }
 
-  @Get('attendance/history')
+  // Base du contrôleur = `attendance` : `history` seul donne
+  // `/agent/attendance/history` (ancien chemin complet conservé).
+  @Get(['history', 'attendance/history'])
   @ApiOperation({ summary: 'Relevé des pointages passés' })
   history(
     @CurrentUser() user: AuthenticatedUser,

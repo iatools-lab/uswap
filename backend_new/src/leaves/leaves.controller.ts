@@ -12,10 +12,17 @@ import { IsOptional, IsString } from 'class-validator';
 import { LeavesService } from './leaves.service';
 import {
   CurrentUser,
+  Public,
   Roles,
   type AuthenticatedUser,
 } from '../common/guards/roles.guard';
 import { Role } from '../common/enums';
+import {
+  AgentRoute,
+  PilotRoute,
+  SuperAdminRoute,
+  SupervisionRoute,
+} from '../common/routing/role-route';
 
 class LeaveRequestDto {
   @IsString()
@@ -46,33 +53,47 @@ class DecisionDto {
 
 @ApiTags('leaves')
 @ApiBearerAuth()
+// Congés : le parcours de l'agent et la file de décision partagent le même
+// contrôleur, d'où la déclaration dans les trois espaces opérationnels. La
+// séparation réelle est faite par `@Roles` méthode par méthode.
 @Controller()
+@SupervisionRoute('leaves')
+@AgentRoute('leaves')
+@PilotRoute('leaves')
+@SuperAdminRoute('leaves')
 export class LeavesController {
   constructor(private readonly leaves: LeavesService) {}
 
-  @Get('leaves/workspace')
-  @Roles(Role.SWAPPER)
+  // Base du contrôleur = `leaves` : `workspace` seul donne
+  // `/agent/leaves/workspace`. L'ancien chemin complet reste déclaré.
+  @Get(['workspace', 'leaves/workspace'])
+  @Roles(Role.SWAPPER, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Solde, demandes et état de l’intégration RH' })
   workspace(@CurrentUser() user: AuthenticatedUser) {
     return this.leaves.workspace(user);
   }
 
-  @Get('leaves/balance')
-  @Roles(Role.SWAPPER)
+  @Get(['balance', 'leaves/balance'])
+  @Roles(Role.SWAPPER, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Solde de congés annuel' })
   balance(@CurrentUser() user: AuthenticatedUser) {
     return this.leaves.balance(user);
   }
 
-  @Post('leaves')
+  // `''` (c.-à-d. `/agent/leaves` exactement) + l'ancien chemin complet : le
+  // frontend poste sur `/leaves`, que `api()` préfixe en `/agent/leaves`.
+  @Post(['', 'leaves'])
   @Roles(Role.SWAPPER)
   @HttpCode(201)
   @ApiOperation({ summary: 'Nouvelle demande de congé' })
-  submit(@CurrentUser() user: AuthenticatedUser, @Body() body: LeaveRequestDto) {
+  submit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: LeaveRequestDto,
+  ) {
     return this.leaves.submit(user, body);
   }
 
-  @Patch('leaves/:id')
+  @Patch([':id', 'leaves/:id'])
   @Roles(Role.SWAPPER)
   @ApiOperation({ summary: 'Modifie une demande encore en attente' })
   update(
@@ -83,22 +104,43 @@ export class LeavesController {
     return this.leaves.update(user, id, body);
   }
 
-  @Patch('leaves/:id/cancel')
+  @Patch([':id/cancel', 'leaves/:id/cancel'])
   @Roles(Role.SWAPPER)
   @ApiOperation({ summary: 'Annule une demande en attente' })
   cancel(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.leaves.cancel(user, id);
   }
 
-  @Get('leaves/management')
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  /**
+   * Deux chemins pour le même suivi :
+   *  - `leaves/management` : historique, appelé par le frontend ;
+   *  - `management` : forme attendue dans l'espace (`/superadmin/management`).
+   * Le doublon de segment (`/superadmin/leaves/leaves/management`) rendait la
+   * route incohérente avec le préfixe d'espace ; l'ancien chemin est conservé
+   * pour ne pas casser les clients existants.
+   */
+  // Base du contrôleur = `leaves` : `management` suffit pour donner
+  // `/pilot/leaves/management`. Le chemin complet reste accepté pour les
+  // clients historiques.
+  @Get(['management', 'leaves/management'])
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Suivi des congés (périmètre du rôle)' })
   management(@CurrentUser() user: AuthenticatedUser) {
     return this.leaves.management(user);
   }
 
-  @Get('admin/leaves/pending')
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  // Le frontend appelle `/leaves/pending` (`LeaveRequestInbox.tsx`), que
+  // `scopedPath` préfixe en `/pilot/leaves/pending`, `/supervision/leaves/pending`,
+  // `/superadmin/leaves/pending` : une seule forme, servie par le préfixe métier
+  // du contrôleur (`@PilotRoute('leaves')`…). Une variante `admin/leaves/pending`
+  // ne servirait aucun appel et l'espace la doublerait
+  // (`/supervision/leaves/admin/leaves/pending`).
+  //
+  // Déclarée APRÈS `leaves/:id`, un routeur l'interpréterait comme `id =
+  // « pending »` ; Nest choisit le handler le plus proche, mais l'ordre coûte
+  // un caractère : la forme à un segment reste ici pour la lisibilité.
+  @Get('pending')
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Demandes en attente de décision' })
   pending(@CurrentUser() user: AuthenticatedUser) {
     return this.leaves.pending(user);
@@ -142,11 +184,17 @@ export class LeavesController {
   }
 
   @Post('integrations/leaves/webhook')
+  @Public()
   @HttpCode(200)
   @ApiOperation({ summary: 'Webhook entrant du système RH (RM-15)' })
   webhook(
     @Body()
-    body: { idempotencyKey?: string; externalId?: string; status?: string },
+    body: {
+      idempotencyKey?: string;
+      externalId?: string;
+      status?: string;
+      secret?: string;
+    },
   ) {
     return this.leaves.syncWebhook(body);
   }

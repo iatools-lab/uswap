@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   HttpCode,
   Param,
   Patch,
@@ -21,7 +20,6 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import {
-  IsBoolean,
   IsEmail,
   IsIn,
   IsOptional,
@@ -36,6 +34,11 @@ import {
   Roles,
   type AuthenticatedUser,
 } from '../common/guards/roles.guard';
+import {
+  PilotRoute,
+  SuperAdminRoute,
+  SupervisionRoute,
+} from '../common/routing/role-route';
 import { Role } from '../common/enums';
 import { parseIntOrDefault } from '../common/security/session';
 
@@ -101,19 +104,27 @@ class UpdateUserDto {
   updatedAt?: string;
 }
 
-class StatusDto {
-  /** `true` = activer / réactiver, `false` = désactiver. */
-  @IsBoolean()
-  enabled!: boolean;
 
-  @IsOptional()
-  @IsString()
-  updatedAt?: string;
-}
 
 @ApiTags('users')
 @ApiBearerAuth()
-@Controller('users')
+// Gestion des comptes : elle appartient aux espaces de pilotage.
+//   /admin/users        historique (compatibilité)
+//   /superadmin/users   super administrateur (son espace propre, sans délégation)
+//   /pilot/users        administrateur et super administrateur
+//   /supervision/users  superviseur (il gère les comptes de son périmètre)
+//   /agent/users        lecture de sa propre fiche / de son équipe
+//
+// `/superadmin/users` est OBLIGATOIRE : le frontend préfixe chaque appel par
+// l'espace du rôle connecté (`api/role-routes.ts`), donc un super administrateur
+// appelait `/superadmin/users/page` — route qui n'existait pas et répondait 404.
+@Controller()
+@SuperAdminRoute('users')
+@PilotRoute('users', 'users')
+@SupervisionRoute('users')
+// Agent : pas `/agent/users` (l'annuaire complet n'est pas une donnée d'agent),
+// mais `/agent/users/self` — le profil dont l'agent a besoin (sélecteurs,
+// filtres par collègue dans ses plannings). Voir `self` ci-dessous.
 export class UsersController {
   constructor(
     private readonly users: UsersService,
@@ -121,13 +132,30 @@ export class UsersController {
   ) {}
 
   @Get()
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Liste des comptes (filtre par rôle)' })
   @ApiQuery({ name: 'role', required: false })
   list(@Query('role') role?: string) {
     return this.users.list({ role });
   }
 
+  /**
+   * Profil du compte connecté, dans l'espace de l'agent.
+   *
+   * C'est la seule information d'annuaire dont un swappeur a besoin : son
+   * propre nom, sa station, son rôle. Elle remplace l'accès à `/agent/users`,
+   * qui exposait la liste COMPLÈTE des comptes (e-mails, téléphones) à tous les
+   * agents — y compris aux comptes les moins privilégiés.
+   */
+  @Get('self')
+  @Roles(Role.SWAPPER, Role.SUPERVISOR, Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Profil du compte connecté' })
+  async self(@CurrentUser() user: AuthenticatedUser) {
+    return this.users.findSelf(user.id);
+  }
+
   @Get('page')
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Liste paginée avec compteurs par statut' })
   page(
     @Query('q') q?: string,
@@ -193,7 +221,12 @@ export class UsersController {
   @ApiOperation({ summary: 'Analyse un fichier d’import sans rien créer' })
   preview(
     @UploadedFile()
-    file: { originalname: string; buffer: Buffer; size: number; mimetype: string },
+    file: {
+      originalname: string;
+      buffer: Buffer;
+      size: number;
+      mimetype: string;
+    },
     @CurrentUser() actor: AuthenticatedUser,
   ) {
     return this.imports.preview(file, actor);
@@ -219,10 +252,7 @@ export class UsersController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Fiche détaillée d’un compte' })
-  detail(
-    @Param('id') id: string,
-    @CurrentUser() actor: AuthenticatedUser,
-  ) {
+  detail(@Param('id') id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.users.detail(id, actor);
   }
 
@@ -231,10 +261,7 @@ export class UsersController {
   @Post()
   @Roles(Role.SUPERVISOR, Role.ADMIN)
   @ApiOperation({ summary: 'Crée un compte (invitation ou accès immédiat)' })
-  create(
-    @Body() body: CreateUserDto,
-    @CurrentUser() actor: AuthenticatedUser,
-  ) {
+  create(@Body() body: CreateUserDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.users.create(body, actor);
   }
 
@@ -279,10 +306,7 @@ export class UsersController {
   @Roles(Role.SUPERVISOR, Role.ADMIN)
   @HttpCode(200)
   @ApiOperation({ summary: 'Renvoie une invitation' })
-  resend(
-    @Param('id') id: string,
-    @CurrentUser() actor: AuthenticatedUser,
-  ) {
+  resend(@Param('id') id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.users.resendInvitation(id, actor);
   }
 }

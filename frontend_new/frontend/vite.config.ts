@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { defineConfig } from "vite";
 
 /**
@@ -20,7 +21,28 @@ const apiProxy = {
   },
 };
 
-export default defineConfig({
+let commit = "";
+try {
+  commit = execSync("git rev-parse --short HEAD", {
+    stdio: ["ignore", "pipe", "ignore"],
+  })
+    .toString()
+    .trim();
+} catch {
+  // Build hors depot (contexte Docker limité) : la date suffit.
+}
+const buildId = `${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}${commit ? `-${commit}` : ""}`;
+
+export default defineConfig(({ mode }) => ({
+  // Tests unitaires (Vitest) : la maquette locale et `localStorage` sont
+  // utilisés par la couche API, qui a donc besoin d'un DOM simulé.
+  test: {
+    environment: "jsdom",
+  },
+  define: {
+    // Version affichee dans Compte -> Profil (src/app/buildInfo.ts).
+    __BUILD_ID__: JSON.stringify(buildId),
+  },
   server: {
     host: "127.0.0.1",
     /**
@@ -38,7 +60,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks(id) {
+        manualChunks(id: string) {
           if (id.includes("node_modules/xlsx")) return "xlsx";
           if (id.includes("node_modules/@phosphor-icons")) return "icons";
           if (id.includes("node_modules/@fontsource")) return "fonts";
@@ -54,4 +76,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

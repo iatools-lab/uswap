@@ -46,7 +46,10 @@ export interface SerializeContext {
 /* ------------------------------------------------------------------ */
 
 export function serializeUser(
-  user: Pick<User, 'id' | 'email' | 'fullName' | 'role' | 'stationId'>,
+  user: Pick<
+    User,
+    'id' | 'email' | 'fullName' | 'role' | 'stationId' | 'phoneNumber'
+  >,
   ctx: SerializeContext,
 ) {
   return {
@@ -58,6 +61,10 @@ export function serializeUser(
     stationName: user.stationId
       ? (ctx.stationNames.get(user.stationId) ?? null)
       : null,
+    // Requis par l'écran de notifications : le canal SMS n'a de sens que si
+    // le compte possède un numéro. Il s'agit du numéro du titulaire lui-même,
+    // pas d'une donnée d'autrui.
+    phoneNumber: user.phoneNumber ?? null,
   };
 }
 
@@ -466,7 +473,7 @@ export function serializeIncident(
     status: incident.status,
     title: incident.title,
     description: incident.description,
-    attachmentIds: json<string[]>(incident.attachmentIds as never, []),
+    attachmentIds: json<string[]>(incident.attachmentIds, []),
     occurredAt: incident.occurredAt.toISOString(),
     createdAt: incident.createdAt.toISOString(),
     updatedAt: incident.updatedAt.toISOString(),
@@ -530,13 +537,14 @@ export function serializePreferences(preference: NotificationPreference) {
     inApp: preference.internalEnabled,
     email: preference.emailEnabled,
     push: preference.pushEnabled,
+    sms: preference.smsEnabled,
     digest: preference.digestEnabled,
     quietHoursEnabled: preference.quietHoursEnabled,
     quietHoursStart: preference.quietHoursStart,
     quietHoursEnd: preference.quietHoursEnd,
     retentionDays: preference.retentionDays,
     updatedAt: preference.updatedAt.toISOString(),
-    categories: json<Record<string, { email: boolean; push: boolean }>>(
+    categories: json<Record<string, { email: boolean; push: boolean; sms: boolean }>>(
       preference.categories,
       {},
     ),

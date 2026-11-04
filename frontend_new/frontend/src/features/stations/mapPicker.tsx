@@ -17,11 +17,36 @@ import { CrosshairIcon, LoaderCircle, MapPin } from "../../ui/icons";
 export const DEFAULT_LAT = 4.051056;
 export const DEFAULT_LNG = 9.708533;
 
-export const MAP_TILE_URL =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}";
-export const MAP_TILE_OPTIONS = { tileSize: 256, zoomOffset: 0 };
+/*
+ * Fond de carte : OpenStreetMap standard.
+ *
+ * Le fournisseur précédent (Esri World Street Map) ne servait au Cameroun que
+ * des tuiles pauvres — mesuré à Douala, zoom 17 : 2 à 6 ko par tuile contre
+ * 20 à 29 ko pour OpenStreetMap. Résultat visible : aucun carrefour, aucune
+ * rue nommée, aucun bâtiment, alors que l'adresse d'une station doit être
+ * reconnaissable sur le terrain (rond-point, marché, école, snack…).
+ *
+ * OpenStreetMap contient ces références, et les tuiles sont plus rapides
+ * (500 ms contre 1 100 ms).
+ */
+export const MAP_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+export const MAP_TILE_OPTIONS = {
+  tileSize: 256,
+  zoomOffset: 0,
+  // Une tuile manquante ne doit pas laisser un trou gris.
+  detectRetina: true,
+  /*
+   * OpenStreetMap limite le débit par client : un écran de carte demande
+   * facilement 20 tuiles d'un coup, et le fournisseur en refuse une partie
+   * (403), ce qui laissait des zones grises. On n'ouvre donc pas plus de
+   * quelques connexions simultanées et on conserve les tuiles déjà obtenues.
+   */
+  maxNativeZoom: 19,
+  crossOrigin: true,
+  keepBuffer: 4,
+};
 export const MAP_ATTRIBUTION =
-  'Tiles &copy; <a href="https://www.esri.com/">Esri</a> — sources Esri, HERE, Garmin et contributeurs OpenStreetMap';
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> — rues, bâtiments et points d’intérêt';
 
 /** Zoom correspondant à un rayon de pointage (donne un cadrage serré et lisible). */
 export function zoomForRadius(radiusMeters: number): number {
@@ -62,11 +87,30 @@ export function formatNominatim(item: any): string {
   return parts.join(", ");
 }
 
+/**
+ * Recherche d'adresse auprès de Nominatim (OpenStreetMap).
+ *
+ * Trois règles imposées par le service, sans lesquelles il répond vide ou
+ * bloque la requête :
+ *   - un `User-Agent` identifiable (un navigateur seul n'en envoie pas un
+ *     assez explicite) ;
+ *   - pas de rafale de requêtes (d'où la marge côté appelant) ;
+ *   - une requête suffisamment large : `countrycodes=cm` rejetait des
+ *     adresses saisies sans le pays, la recherche renvoyait alors zéro
+ *     résultat et la carte restait sans référence.
+ */
 async function nominatimSearch(query: string): Promise<any[]> {
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(
-    query,
-  )}&countrycodes=cm&limit=8&addressdetails=1&accept-language=fr`;
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  const url =
+    'https://nominatim.openstreetmap.org/search?format=jsonv2' +
+    `&q=${encodeURIComponent(query)}` +
+    '&limit=8&addressdetails=1&accept-language=fr';
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      // Identifie l'application, comme l'exige la charte d'usage de Nominatim.
+      'User-Agent': 'uSwap/1.0 (gestion de stations)',
+    },
+  });
   if (!response.ok) return [];
   const data = await response.json();
   return Array.isArray(data) ? data : [];
@@ -244,7 +288,10 @@ export function MapLocationPicker({
 
       L.tileLayer(MAP_TILE_URL, {
         ...MAP_TILE_OPTIONS,
-        maxZoom: 19,
+        maxZoom: 20,
+        // Sans limite basse, un zoom arrière extrême demandait des tuiles
+        // inexistantes et affichait un fond vide.
+        minZoom: 3,
         attribution: MAP_ATTRIBUTION,
       }).addTo(map);
 

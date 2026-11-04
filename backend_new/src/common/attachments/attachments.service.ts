@@ -73,7 +73,7 @@ export class AttachmentsService {
     }
 
     // Le contenu est conserve hors base : la ligne ne porte que les metadonnees.
-    const storageKey = `${ownerId}/${Date.now()}-${file.originalname.replace(/[^\w.\-]/g, '_')}`;
+    const storageKey = `${ownerId}/${Date.now()}-${file.originalname.replace(/[^\w.-]/g, '_')}`;
 
     const created = await this.prisma.attachment.create({
       data: {

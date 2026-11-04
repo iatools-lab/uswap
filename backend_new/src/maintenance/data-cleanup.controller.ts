@@ -1,10 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsArray, IsBoolean, IsOptional, IsString } from 'class-validator';
 import { DataCleanupService } from './data-cleanup.service';
@@ -14,6 +8,7 @@ import {
   type AuthenticatedUser,
 } from '../common/guards/roles.guard';
 import { Role } from '../common/enums';
+import { SuperAdminRoute } from '../common/routing/role-route';
 
 class CleanupDto {
   /** Cible unique (compatibilite) ou liste de cibles. */
@@ -42,7 +37,10 @@ class CleanupDto {
  */
 @ApiTags('maintenance')
 @ApiBearerAuth()
-@Controller('super-admin/cleanup')
+// Espace du super administrateur. Le chemin historique `/super-admin/cleanup`
+// reste servi (clients existants) ; l'espace l'expose sous `/superadmin/...`.
+@Controller('super-admin')
+@SuperAdminRoute('cleanup', 'super-admin/cleanup')
 export class DataCleanupController {
   constructor(private readonly cleanup: DataCleanupService) {}
 

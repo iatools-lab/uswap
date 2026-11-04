@@ -1,5 +1,20 @@
 -- Role SUPER_ADMIN : vue et pouvoirs plus larges que l'administrateur.
 --
+-- IMPORTANT — pourquoi la transaction est désactivée.
+--
+-- Prisma exécute par defaut chaque migration dans une transaction. La règle
+-- PostgreSQL (cf. documentation ALTER TYPE) est qu'une valeur ajoutée à un
+-- type énuméré ne peut pas être UTILISÉE avant que la transaction qui l'a
+-- ajoutée soit validée : une migration qui ferait l'ADD puis un INSERT/UPDATE
+-- avec cette valeur échouerait. En outre, sur les versions antérieures à 12,
+-- l'ADD VALUE est purement et simplement refusé dans un bloc de transaction.
+--
+-- Le projet cible PostgreSQL 16 (deploy/compose.yaml) mais rien ne garantit la
+-- version du serveur de l'établissement. Désactiver la transaction rend la
+-- migration valable sur toutes les versions. Elle ne contient qu'une seule
+-- instruction : l'absence de transaction n'introduit aucun état partiel.
+-- prisma:disable-transaction
+--
 -- `ALTER TYPE ... ADD VALUE` est strictement additif et ne touche aucune
 -- donnee. Il n'est pas reversible (`DROP VALUE` n'existe pas) : revenir a
 -- l'image precedente serait donc sans effet sur les valeurs deja stockees,

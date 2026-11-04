@@ -80,7 +80,7 @@ export function ScheduledReports() {
   useEffect(() => {
     let active = true;
     Promise.all([
-      api<Report[]>("/admin/reports/schedules"),
+      api<Report[]>("/reports/schedules"),
       api<Station[]>("/stations"),
     ])
       .then(([reports, stationRows]) => {
@@ -96,14 +96,14 @@ export function ScheduledReports() {
   }, [revision]);
   async function toggle(item: Report) {
     await api(
-      `/admin/reports/schedules/${item.id}`,
+      `/reports/schedules/${item.id}`,
       { isActive: !item.isActive },
       "PATCH",
     );
     setRevision((v) => v + 1);
   }
   async function showRuns(item: Report) {
-    const rows = await api<Run[]>(`/admin/reports/schedules/${item.id}/runs`);
+    const rows = await api<Run[]>(`/reports/schedules/${item.id}/runs`);
     setRuns({ report: item, rows });
   }
   // Envoi immediat : permet de verifier tout de suite que le destinataire
@@ -111,7 +111,7 @@ export function ScheduledReports() {
   async function sendNow(item: Report) {
     try {
       const result = await api<{ ok: boolean; status: string; error?: string | null }>(
-        `/admin/reports/schedules/${item.id}/send`,
+        `/reports/schedules/${item.id}/send`,
         {},
         "POST",
       );
@@ -328,7 +328,7 @@ function ScheduleModal({
     setBusy(true);
     setError("");
     try {
-      await api("/admin/reports/schedules", payload());
+      await api("/reports/schedules", payload());
       onSaved();
     } catch (e) {
       setError((e as Error).message);
@@ -341,7 +341,7 @@ function ScheduleModal({
     setError("");
     try {
       onPreview(
-        await api<Preview>("/admin/reports/schedules/preview", {
+        await api<Preview>("/reports/schedules/preview", {
           scope,
           stationId: scope === "STATION" ? stationId : null,
           sections,

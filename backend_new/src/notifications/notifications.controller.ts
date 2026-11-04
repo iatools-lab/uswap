@@ -39,6 +39,10 @@ class UpdatePreferencesDto {
 
   @IsOptional()
   @IsBoolean()
+  sms?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   digest?: boolean;
 
   @IsOptional()
@@ -60,7 +64,7 @@ class UpdatePreferencesDto {
 
   @IsOptional()
   @IsObject()
-  categories?: Record<string, { email?: boolean; push?: boolean }>;
+  categories?: Record<string, { email?: boolean; push?: boolean; sms?: boolean }>;
 }
 
 @ApiTags('notifications')

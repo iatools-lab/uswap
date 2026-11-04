@@ -14,7 +14,6 @@ import {
 import {
   slotMinutes,
   stationOf,
-  userOf,
 } from '../common/validation/business-rules';
 import { serializePlanning, serializePlanningView } from '../common/serializers';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -411,7 +410,7 @@ export class PlanningService {
             periodEnd: created.periodEnd.toISOString(),
             stations: stationIds,
             assignments: assignments.length,
-          } as Prisma.InputJsonValue,
+          },
         },
       });
 
@@ -420,7 +419,7 @@ export class PlanningService {
           data: {
             key: payload.idempotencyKey,
             scope: 'planning.create',
-            response: { id: created.id } as Prisma.InputJsonValue,
+            response: { id: created.id },
             expiresAt: new Date(Date.now() + 86_400_000),
           },
         });
@@ -451,7 +450,7 @@ export class PlanningService {
    * postes vacants et qu'il en reste.
    */
   async publish(id: string, actor: AuthenticatedUser) {
-    const planning = await this.requirePlanning(id);
+    await this.requirePlanning(id);
     // Un planning sans aucun poste ne peut pas être publié : c'est la même
     // règle que `validatePlanning` (erreur EMPTY). On garde les deux chemins
     // cohérents pour que « Vérifier » et « Publier » ne se contredisent jamais.
@@ -501,7 +500,7 @@ export class PlanningService {
           revision: next.revision,
           action: 'PUBLISHED',
           actorId: actor.id,
-          snapshot: { publishedAt: next.publishedAt } as Prisma.InputJsonValue,
+          snapshot: { publishedAt: next.publishedAt },
         },
       });
       return next;
@@ -594,7 +593,7 @@ export class PlanningService {
           revision: planning.revision + 1,
           action: 'ASSIGNMENTS_CHANGED',
           actorId: actor.id,
-          snapshot: { occurrenceId, userIds: unique } as Prisma.InputJsonValue,
+          snapshot: { occurrenceId, userIds: unique },
         },
       });
       await tx.planning.update({
@@ -845,10 +844,6 @@ export class PlanningService {
     if (!stationId) throw this.invalid('Sélectionnez une station.');
 
     const candidates = await this.buildCandidates(planning, stationId, body);
-    const existing = await this.prisma.occurrence.findMany({
-      where: { planningId },
-      select: { id: true },
-    });
     const duplicates = await this.findDuplicates(planningId, candidates);
     const duplicateKeys = new Set(
       duplicates.map((d) => `${d.stationId}|${d.shiftTemplateId}|${d.startTime}`),
@@ -939,7 +934,7 @@ export class PlanningService {
           revision: planning.revision + 1,
           action: 'OCCURRENCES_GENERATED',
           actorId: actor.id,
-          snapshot: { stationId, added: toCreate.length } as Prisma.InputJsonValue,
+          snapshot: { stationId, added: toCreate.length },
         },
       });
     });
@@ -1368,7 +1363,7 @@ export class PlanningService {
           revision: planning.revision + 1,
           action: 'OCCURRENCE_UPDATED',
           actorId: actor.id,
-          snapshot: { occurrenceId } as Prisma.InputJsonValue,
+          snapshot: { occurrenceId },
         },
       });
     });
@@ -1380,7 +1375,7 @@ export class PlanningService {
   async duplicateOccurrence(
     planningId: string,
     occurrenceId: string,
-    actor: AuthenticatedUser,
+    _actor: AuthenticatedUser,
   ) {
     await this.requirePlanning(planningId);
     const source = await this.prisma.occurrence.findFirst({
@@ -1424,7 +1419,7 @@ export class PlanningService {
   async removeOccurrence(
     planningId: string,
     occurrenceId: string,
-    actor: AuthenticatedUser,
+    _actor: AuthenticatedUser,
   ) {
     await this.requirePlanning(planningId);
     const target = await this.prisma.occurrence.findFirst({
@@ -1646,8 +1641,6 @@ export class PlanningService {
     const timeZone = await this.stationTimeZone(stationId);
     const minutesOf = (date: Date) =>
       minutesOfDay(date.getTime(), timeZone);
-    const minutesOfTime = (time: string) =>
-      Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
 
     const conflicts: {
       userId: string;

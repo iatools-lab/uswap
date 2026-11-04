@@ -68,6 +68,40 @@ nano deploy/.env
 
 ## 8. Dépannage courant
 
+### Problème : « le déploiement a réussi mais rien n'a changé »
+Lancer le diagnostic en lecture seule, depuis la racine du dépôt :
+
+```bash
+bash deploy/check-live.sh
+```
+
+Il compare le bundle réellement servi (localhost **et** URL publique), les
+routes API et les migrations avec les sources du dépôt, et désigne la cause :
+sources absentes du contexte de build, sources non récupérées
+(`git log -1`), image construite depuis le cache (`build --no-cache` +
+`up -d --force-recreate`), cache du navigateur (service worker : F12 →
+Application → Service workers → *Unregister*, puis Ctrl+F5), ou un autre
+conteneur/reverse proxy qui sert une ancienne copie. L'option `--build`
+reconstruit et recrée les conteneurs.
+
+**Cas vécu sur `Sirh-Server` (2026-10-29)** : `/opt/uswap/frontend_new/frontend`
+ne contenait pas les sources. Le build « réussissait » avec
+`transferring context: 8.98kB` et des étapes `CACHED` : l'image produite ne
+contenait pas le code modifié. Vérifier et réparer :
+
+```bash
+ls frontend_new/frontend/src
+bash deploy/fix-missing-sources.sh
+bash deploy/fix-missing-sources.sh --apply
+```
+
+Un contexte de build sain pèse plusieurs Mo.
+
+La version réellement exécutée par le navigateur est affichée dans
+**Compte → Profil → Version déployée**.
+
+Voir `README_DOCKER.md`, section 11 bis, pour le détail.
+
 ## 9. Maintenance et sauvegardes
 
 ### Sauvegarder la base de données :

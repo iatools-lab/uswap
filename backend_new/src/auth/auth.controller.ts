@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   Logger,
+  Param,
   Post,
   Req,
   Res,
@@ -15,7 +16,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { IsEmail, IsString, Length } from 'class-validator';
+import { IsEmail, IsOptional, IsString, Length } from 'class-validator';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { PasswordsService, SessionsService } from './passwords.service';
@@ -32,6 +33,11 @@ import {
 } from '../common/guards/roles.guard';
 import { DomainException, ErrorCode } from '../common/errors/domain-errors';
 import { Role } from '../common/enums';
+import { ConfigService } from '@nestjs/config';
+import { AppConfig } from '../config/configuration';
+import { GoogleAuthService } from './google-auth.service';
+
+
 
 class LoginDto {
   @IsEmail({}, { message: 'Renseignez une adresse e-mail valide.' })
@@ -62,6 +68,48 @@ class TokenPasswordDto {
   password!: string;
 }
 
+/** Changement de mot de passe par le titulaire du compte. */
+class ChangePasswordDto {
+  /** Facultatif : le profil ne demande plus l'ancien mot de passe. */
+  @IsOptional()
+  @IsString()
+  currentPassword?: string;
+
+  @IsString()
+  @Length(8, 200, {
+    message: 'Le nouveau mot de passe doit faire au moins 8 caractères.',
+  })
+  newPassword!: string;
+}
+
+/** Vérification du mot de passe courant, sans modification. */
+class VerifyPasswordDto {
+  @IsString()
+  @Length(1, 200, { message: 'Indiquez votre mot de passe actuel.' })
+  password!: string;
+}
+
+/** Jeton d'identité fourni par Google Identity Services. */
+class GoogleLoginDto {
+  @IsString()
+  @Length(20, 5000, { message: 'Jeton Google invalide.' })
+  idToken!: string;
+}
+
+/** Segment d'URL de chaque rôle sur les routes de connexion. */
+const LOGIN_ROLES = ['superadmin', 'admin', 'supervisor', 'swapper'] as const;
+type LoginRoleSegment = (typeof LOGIN_ROLES)[number];
+
+/** Rôle attendu par chaque route de connexion. */
+const LOGIN_SEGMENT_ROLE: Record<LoginRoleSegment, Role> = {
+  superadmin: Role.SUPER_ADMIN,
+  admin: Role.ADMIN,
+  supervisor: Role.SUPERVISOR,
+  swapper: Role.SWAPPER,
+};
+
+
+
 /**
  * Authentification, session et parcours de securite.
  *
@@ -82,6 +130,8 @@ export class AuthController {
     private readonly prisma: PrismaService,
     private readonly scope: ScopeService,
     private readonly users: UsersService,
+    private readonly google: GoogleAuthService,
+    private readonly config: ConfigService<AppConfig, true>,
   ) {}
 
   @Public()
@@ -92,6 +142,54 @@ export class AuthController {
     @Body() body: LoginDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
+  ) {
+    // Route historique : conservée pour les clients existants. Le rôle n'y est
+    // pas imposé ; les applications utilisent `login/:role`.
+    return this.authenticate(body, request, response);
+  }
+
+  /**
+   * Connexion propre à un rôle.
+   *
+   *   POST /auth/login/superadmin | admin | supervisor | swapper
+   *
+   * Un compte dont le rôle ne correspond pas à la route est refusé (403)
+   * même si ses identifiants sont corrects : le frontend d'un rôle ne peut
+   * pas ouvrir une session destinée à un autre. Le message ne précise jamais
+   * le rôle réel du compte (pas de fuite d'information).
+   */
+  @Public()
+  @Post('login/:role')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Connexion par rôle (superadmin, admin, supervisor, swapper)' })
+  async loginAsRole(
+    @Param('role') role: string,
+    @Body() body: LoginDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const segment = role.trim().toLowerCase() as LoginRoleSegment;
+    if (!LOGIN_ROLES.includes(segment)) {
+      throw new DomainException(
+        ErrorCode.VALIDATION,
+        'Cette page de connexion n’existe pas.',
+        404,
+      );
+    }
+    return this.authenticate(body, request, response, LOGIN_SEGMENT_ROLE[segment]);
+  }
+
+  // L'inscription publique du super administrateur n'existe plus : le premier
+  // compte est créé lors du déploiement (voir `prisma/bootstrap.ts` et
+  // `deploy/README_DOCKER.md`). Toute création ultérieure passe par un super
+  // administrateur authentifié.
+
+  /** Societe de connexion commune a `/auth/login` et `/auth/login/:role`. */
+  private async authenticate(
+    body: LoginDto,
+    request: Request,
+    response: Response,
+    expectedRole?: Role,
   ) {
     const email = body.email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email } });
@@ -137,6 +235,16 @@ export class AuthController {
       throw new DomainException(
         ErrorCode.ACCESS_DENIED,
         "Ce compte n'est pas encore activé. Ouvrez le lien reçu par e-mail.",
+        403,
+      );
+    }
+
+    if (expectedRole && user.role !== expectedRole) {
+      // Meme statut qu'un refus de droit, message neutre : l'utilisateur ne
+      // doit pas apprendre le role réel du compte par cette route.
+      throw new DomainException(
+        ErrorCode.ROLE_NOT_ALLOWED,
+        'Ce compte ne peut pas se connecter depuis cette page.',
         403,
       );
     }
@@ -192,6 +300,132 @@ export class AuthController {
     if (token) await this.tokens.revoke(token);
     await this.clearCookie(response);
     return { ok: true };
+  }
+
+  /**
+   * Changement de mot de passe par le titulaire du compte.
+   *
+   * L'ancien mot de passe est EXIGÉ : un jeton d'accès volé ne suffit donc pas
+   * à verrouiller le propriétaire hors de son propre compte. Toutes les autres
+   * sessions sont révoquées (`tokenVersion`), comme lors d'une
+   * réinitialisation.
+   */
+  @Post('change-password')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Change le mot de passe du compte connecté' })
+  async changePassword(
+    @Body() body: ChangePasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.users.changeOwnPassword(user.id, body);
+    return { ok: true };
+  }
+
+  /**
+   * Vérifie le mot de passe du compte connecté, sans rien modifier.
+   *
+   * Permet à l'écran de profil d'exiger le mot de passe ACTUEL avant
+   * d'afficher le formulaire de changement : une session laissée ouverte ne
+   * suffit donc pas à prendre la main sur le compte.
+   */
+  @Post('verify-password')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Vérifie le mot de passe du compte connecté' })
+  async verifyPassword(
+    @Body() body: VerifyPasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.users.verifyOwnPassword(user.id, body.password);
+    return { ok: true };
+  }
+
+  /**
+   * Renvoie le mot de passe du compte connecté à son titulaire.
+   *
+   * Demande explicite du profil : le mot de passe est visible AVANT que
+   * l'utilisateur décide de le modifier ou non. Il n'est jamais exposé par les
+   * routes d'administration — seul le titulaire de la session y accède.
+   *
+   * La valeur stockée étant un condensat (non réversible), le service la
+   * déchiffre s'il détient une copie chiffrée ; sinon il renvoie le condensat
+   * masqué, avec l'indication que le mot de passe ne peut pas être affiché.
+   */
+  @Get('own-password')
+  @ApiOperation({ summary: 'Mot de passe du compte connecté (titulaire)' })
+  async ownPassword(@CurrentUser() user: AuthenticatedUser) {
+    const password = await this.users.revealOwnPassword(user.id);
+    return { password };
+  }
+
+  /**
+   * Connexion par Google (SSO) — réservée aux comptes professionnels uPowa.
+   *
+   * Le frontend transmet l'`id_token` fourni par Google Identity Services.
+   * Le jeton est vérifié auprès de Google, puis :
+   *   1. le domaine de l'adresse doit figurer dans `GOOGLE_ALLOWED_DOMAINS`
+   *      (`upowa.org`) — un Gmail personnel est refusé ;
+   *   2. le compte doit déjà exister localement et être actif.
+   *
+   * Aucun compte n'est créé automatiquement : un utilisateur Google inconnu
+   * reçoit un refus. Cela évite qu'une adresse valide ouvre un accès sans
+   * qu'un administrateur l'ait décidé.
+   */
+  @Public()
+  @Post('google')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Connexion Google (domaines uPowa uniquement)' })
+  async loginWithGoogle(
+    @Body() body: GoogleLoginDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    if (!this.google.enabled()) {
+      throw new DomainException(
+        ErrorCode.VALIDATION,
+        'La connexion Google n’est pas configurée sur ce serveur.',
+        400,
+      );
+    }
+
+    const identity = await this.google.verify(body.idToken ?? '');
+    if (!identity) {
+      throw new DomainException(
+        ErrorCode.INVALID_CREDENTIALS,
+        'Connexion Google refusée. Réessayez depuis votre compte professionnel.',
+        401,
+      );
+    }
+
+    // Domaine autorisé uniquement.
+    const domain = identity.email.split('@')[1] ?? '';
+    const allowed = this.config.get('googleAllowedDomains', { infer: true });
+    if (!allowed.includes(domain)) {
+      throw new DomainException(
+        ErrorCode.ROLE_NOT_ALLOWED,
+        `Seuls les comptes @${allowed.join(', @')} peuvent se connecter par Google.`,
+        403,
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { email: identity.email },
+    });
+    if (!user) {
+      throw new DomainException(
+        ErrorCode.INVALID_CREDENTIALS,
+        'Aucun compte uSwap n’est associé à cette adresse. Contactez votre administrateur.',
+        401,
+      );
+    }
+    if (user.disabledAt || !user.isActive) {
+      throw new DomainException(
+        ErrorCode.ACCOUNT_DISABLED,
+        'Ce compte est désactivé ou non activé.',
+        403,
+      );
+    }
+
+    return this.startSession(user.id, request, response);
   }
 
   /**

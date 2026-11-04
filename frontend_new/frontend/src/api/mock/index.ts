@@ -12,6 +12,7 @@ import { userRoutes } from "./handlers/users";
 import { FICTITIOUS_DOMAIN } from "./seed";
 import { currentUser } from "./shared";
 import { loadDb, replaceDb } from "./store";
+import { stripWorkspace } from "../role-routes";
 import { MockHttpError, type MockCtx, type MockRoute } from "./types";
 
 export { DEMO_PASSWORD, FICTITIOUS_DOMAIN } from "./seed";
@@ -46,7 +47,10 @@ export async function mockRequest<T>(
   const db = structuredClone(persisted);
   const now = Date.now();
   const [rawPath, search = ""] = url.split("?");
-  const path = rawPath.replace(/\/+$/, "") || "/";
+  // Les routes hors espace (`/auth/...`) gardent leur chemin ; les routes
+  // métier sont préfixées par l'espace du rôle (`/pilot/users`) : le préfixe
+  // est retiré ici, une seule fois, avant la recherche de route.
+  const path = stripWorkspace(rawPath).replace(/\/+$/, "") || "/";
   const absencesBefore = db.automatedAbsences.length;
   const pendingLeaveSyncBefore = db.leaveSyncOperations.filter((item) =>
     ["FAILED", "QUEUED"].includes(item.status),
@@ -63,16 +67,30 @@ export async function mockRequest<T>(
     now,
     user: currentUser(db),
   };
+
+
   for (const route of routes) {
     if (route.method !== method) continue;
+    // Position neuve à chaque essai : une expression avec `g` conserve son
+    // dernier index et ne correspondrait au chemin qu'une fois sur deux.
+    route.pattern.lastIndex = 0;
     const match = route.pattern.exec(path);
     if (!match) continue;
-    const result = await route.handler({ ...ctx, params: match.slice(1) });
+    // La session est relue À CHAQUE requête : une connexion (`login`) la vient
+    // de la poser, et les appels suivants doivent la voir.
+    const requestCtx = {
+      ...ctx,
+      now: Date.now(),
+      user: currentUser(db),
+    };
+    const userBefore = db.sessionEmail;
+    const result = await route.handler({ ...requestCtx, params: match.slice(1) });
     const pendingLeaveSyncAfter = db.leaveSyncOperations.filter((item) =>
       ["FAILED", "QUEUED"].includes(item.status),
     ).length;
     if (
       method !== "GET" ||
+      db.sessionEmail !== userBefore ||
       db.automatedAbsences.length !== absencesBefore ||
       pendingLeaveSyncAfter !== pendingLeaveSyncBefore
     )

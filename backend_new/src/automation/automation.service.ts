@@ -14,8 +14,9 @@ import { NotificationKind } from '../notifications/categories';
  * l'application.
  *
  * Trois responsabilites :
- * 1. **Absences automatiques** (US 2038) : un agent qui n'a pas pointe apres la
- *    tolerance, ou qui n'a pas enregistre sa fin de service, est classe absent.
+ * 1. **Absences automatiques** (US 2038) : une fois le service TERMINÉ, un agent
+ *    sans prise de service, ou sans fin de service, est classé absent ; le motif
+ *    précise lequel des deux pointages manque.
  * 2. **Rappels de pointage** : quelques minutes avant le service, l'agent
  *    concerne recoit une notification.
  * 3. **Purge** : suppression des notifications lues au-dela de la retention,
@@ -35,12 +36,27 @@ export class AutomationService {
   /* ---------------------------------------------------------------- */
 
   /**
-   * Traite chaque poste publie au plus une fois :
-   * - aucun pointage apres la tolerance de retard → absence ;
-   * - prise de service sans fin de service apres la fin du shift → absence.
+   * Constat d'absence automatique, UNE FOIS LE SERVICE TERMINÉ uniquement.
    *
-   * Le marqueur `AutomatedAbsence` empeche tout doublon, meme si la tache est
-   * executee plusieurs fois de suite.
+   * RÈGLE MÉTIER : on ne déclare jamais un absent avant l'heure de fin du
+   * shift. Un agent en retard peut encore prendre son service ; le classer
+   * absent pendant le créneau fausserait la feuille de présence.
+   *
+   * Une fois `endTime` dépassé, chaque agent affecté est examiné SÉPARÉMENT :
+   *  - prise de service ET fin de service → rien à signaler (PRESENT/LATE/
+   *    CLOSED selon le pointage réel) ;
+   *  - aucune prise de service → absent « ni prise de service ni fin de
+   *    service » ;
+   *  - prise de service sans fin → absent « fin de service non pointée ».
+   *
+   * Le motif est donc toujours explicite : le superviseur lit immédiatement
+   * quel pointage manque.
+   *
+   * Aucun doublon possible, même si la tâche est rejouée :
+   *  - `automatedAbsences` est unique par couple (créneau, agent) ;
+   *  - une absence PENDING / APPROVED / COVERED fait foi (décision humaine) ;
+   *  - une absence REJECTED n'est jamais recréée ;
+   *  - un pointage complet lève une absence automatique déjà posée.
    */
   async runAutomaticAbsences(): Promise<{ created: number; skipped: number }> {
     const now = Date.now();
@@ -49,14 +65,16 @@ export class AutomationService {
     const occurrences = await this.prisma.occurrence.findMany({
       where: {
         status: 'PUBLISHED',
-        endTime: { lt: new Date(now + 86_400_000) },
+        // Uniquement les services DÉJÀ TERMINÉS. Le filtre est fait en base :
+        // aucune absence ne peut être créée avant l'heure de fin.
+        endTime: { lt: new Date(now) },
         assignments: { some: {} },
       },
       include: {
         station: true,
         assignments: { include: { user: { select: { id: true, fullName: true } } } },
+        // Un pointage existe par agent et par créneau (clé unique `shiftId`).
         attendance: true,
-        absences: { where: { status: 'OPEN' }, select: { origin: true } },
       },
     });
 
@@ -64,119 +82,159 @@ export class AutomationService {
     let skipped = 0;
 
     for (const occurrence of occurrences) {
-      const toleranceMs =
-        (occurrence.latenessToleranceOverrideMinutes ??
-          occurrence.station.latenessToleranceMinutes) * 60_000;
-      const start = occurrence.startTime.getTime();
+      if (occurrence.assignments.length === 0) continue;
       const end = occurrence.endTime.getTime();
-      if (now < start + toleranceMs) continue;
 
-      const record = occurrence.attendance;
-      const hasAutoAbsence = occurrence.absences.some(
-        (absence) => absence.origin === 'AUTOMATIC_ABSENCE',
+      // Absences déjà connues sur ce créneau, avec leur agent : c'est ce qui
+      // permet de ne traiter que les agents réellement concernés.
+      const absences = await this.prisma.absence.findMany({
+        where: { shiftId: occurrence.id },
+        select: { origin: true, status: true, swapperId: true },
+      });
+      const decided = new Set(
+        absences
+          .filter((absence) =>
+            ['PENDING', 'APPROVED', 'COVERED', 'REJECTED'].includes(
+              absence.status,
+            ),
+          )
+          .map((absence) => absence.swapperId),
       );
-      // Un pointage prime sur une absence automatique : si l'agent a fini par
-      // prendre son service, l'absence n'a plus lieu d'etre (et le marqueur
-      // doit disparaitre, sinon elle ne serait jamais levee).
-      const checkedIn = Boolean(record?.checkedInAt);
-      if (checkedIn) {
-        if (hasAutoAbsence || record?.status === AttendanceStatus.ABSENT) {
-          await this.prisma.$transaction([
-            this.prisma.absence.deleteMany({
-              where: {
-                shiftId: occurrence.id,
-                origin: 'AUTOMATIC_ABSENCE',
-                status: 'OPEN',
-              },
-            }),
-            this.prisma.automatedAbsence.deleteMany({
-              where: { shiftId: occurrence.id },
-            }),
-            this.prisma.attendance.update({
-              where: { shiftId: occurrence.id },
-              data: {
-                status: record?.isLate
-                  ? AttendanceStatus.LATE
-                  : AttendanceStatus.PRESENT,
-                justified: false,
-              },
-            }),
-          ]);
-        }
-        skipped += 1;
-        continue;
-      }
 
-      if (!record) {
-        const already = await this.prisma.automatedAbsence.findUnique({
-          where: { shiftId: occurrence.id },
-        });
-        if (already) {
-          skipped += 1;
-          continue;
-        }
+      for (const assignment of occurrence.assignments) {
+        const swapperId = assignment.userId;
+        const record =
+          occurrence.attendance?.swapperId === swapperId
+            ? occurrence.attendance
+            : null;
 
-        const reason =
-          'Absence automatique : aucun pointage après le délai de tolérance.';
+        const checkedIn = Boolean(record?.checkedInAt);
+        const checkedOut = Boolean(record?.checkedOutAt);
+        const hasAutoAbsence = absences.some(
+          (absence) =>
+            absence.swapperId === swapperId &&
+            absence.origin === 'AUTOMATIC_ABSENCE' &&
+            absence.status === 'OPEN',
+        );
 
-        for (const assignment of occurrence.assignments) {
-          await this.prisma.$transaction(async (tx) => {
-            await tx.automatedAbsence.create({
-              data: { shiftId: occurrence.id, reason },
-            });
-            const existing = await tx.absence.findFirst({
-              where: { shiftId: occurrence.id, status: 'OPEN' },
-            });
-            if (!existing) {
-              await tx.absence.create({
-                data: {
+        // 1. Pointage complet : l'agent n'est pas absent. Une absence
+        //    automatique déjà posée (agent arrivé après coup, ou pointage de
+        //    sortie saisi plus tard) est levée.
+        if (checkedIn && checkedOut) {
+          if (hasAutoAbsence || record?.status === AttendanceStatus.ABSENT) {
+            await this.prisma.$transaction([
+              this.prisma.absence.deleteMany({
+                where: {
                   shiftId: occurrence.id,
-                  swapperId: assignment.userId,
-                  reason,
+                  swapperId,
                   origin: 'AUTOMATIC_ABSENCE',
                   status: 'OPEN',
-                  reportedAt: new Date(start + toleranceMs),
                 },
-              });
-            }
-          });
-
-          await this.notifications
-            .notifyStaff([assignment.userId], {
-              kind: NotificationKind.AUTOMATIC_ABSENCE,
-              title: 'Absence automatique',
-              body: `${assignment.user.fullName} n'a pointé à ${occurrence.station.name} (${occurrence.shiftLabel ?? 'service'}).`,
-              targetId: occurrence.id,
-              targetUrl: `/remplacements?replacement=${occurrence.id}`,
-              critical: true,
-            })
-            .catch((error: unknown) =>
-              this.logger.warn(
-                `Notification d'absence non envoyee : ${
-                  error instanceof Error ? error.message : error
-                }`,
-              ),
-            );
-          created += 1;
+              }),
+              this.prisma.automatedAbsence.deleteMany({
+                where: { shiftId: occurrence.id, swapperId },
+              }),
+              this.prisma.attendance.update({
+                where: { shiftId: occurrence.id },
+                data: {
+                  status: record?.isLate
+                    ? AttendanceStatus.LATE
+                    : AttendanceStatus.CLOSED,
+                  justified: false,
+                },
+              }),
+            ]);
+          }
+          skipped += 1;
+          continue;
         }
-        continue;
-      }
 
-      // Prise de service sans fin de service, une fois le creneau termine:
-      // trace informative, sans bloquer un futur pointage de sortie.
-      if (now > end && !record.checkedOutAt) {
-        const reason =
-          'Absence automatique : prise de service enregistrée sans pointage de fin.';
+        // 2. Une décision humaine fait toujours foi.
+        if (
+          decided.has(swapperId) ||
+          record?.status === AttendanceStatus.JUSTIFIED
+        ) {
+          skipped += 1;
+          continue;
+        }
+
+        // 3. Déjà traité automatiquement pour cet agent.
         const already = await this.prisma.automatedAbsence.findUnique({
-          where: { shiftId: occurrence.id },
+          where: {
+            shiftId_swapperId: { shiftId: occurrence.id, swapperId },
+          },
         });
         if (already) {
           skipped += 1;
           continue;
         }
-        await this.prisma.automatedAbsence.create({
-          data: { shiftId: occurrence.id, reason },
+
+        // Motif explicite : c'est ce que le superviseur doit lire dans la file
+        // de remplacements et dans le rapport d'assiduité.
+        const reason = checkedIn
+          ? 'Absence automatique : fin de service non pointée.'
+          : 'Absence automatique : ni prise de service ni fin de service pointées.';
+
+        await this.prisma.$transaction(async (tx) => {
+          await tx.automatedAbsence.create({
+            data: { shiftId: occurrence.id, swapperId, reason },
+          });
+          // Une absence OPEN n'est créée que si aucune autre (déclarée) ne
+          // couvre déjà ce créneau pour cet agent.
+          const existing = await tx.absence.findFirst({
+            where: {
+              shiftId: occurrence.id,
+              swapperId,
+              status: { in: ['OPEN', 'PENDING', 'APPROVED', 'COVERED'] },
+            },
+            select: { id: true },
+          });
+          if (!existing) {
+            await tx.absence.create({
+              data: {
+                shiftId: occurrence.id,
+                swapperId,
+                reason,
+                origin: 'AUTOMATIC_ABSENCE',
+                status: 'OPEN',
+                reportedAt: new Date(end),
+              },
+            });
+          }
+          if (record) {
+            await tx.attendance.update({
+              where: { shiftId: occurrence.id },
+              data: { status: AttendanceStatus.ABSENT, isLate: false },
+            });
+          } else {
+            await tx.attendance.create({
+              data: {
+                shiftId: occurrence.id,
+                swapperId,
+                status: AttendanceStatus.ABSENT,
+                isLate: false,
+                justified: false,
+              },
+            });
+          }
         });
+
+        await this.notifications
+          .notifyStaff([swapperId], {
+            kind: NotificationKind.AUTOMATIC_ABSENCE,
+            title: 'Absence constatée',
+            body: `${assignment.user.fullName} — ${occurrence.station.name} (${occurrence.shiftLabel ?? 'service'}) : ${reason}`,
+            targetId: occurrence.id,
+            targetUrl: `/remplacements?replacement=${occurrence.id}`,
+            critical: true,
+          })
+          .catch((error: unknown) =>
+            this.logger.warn(
+              `Notification d'absence non envoyee : ${
+                error instanceof Error ? error.message : error
+              }`,
+            ),
+          );
         created += 1;
       }
     }

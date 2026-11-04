@@ -128,6 +128,9 @@ export class ConstraintsService {
       include: { station: true },
     });
 
+    // Congés APPROUVÉS uniquement, comme avant. Les congés en attente ne sont
+    // pas pris en compte ici : la décision d'un supérieur est ce qui rend
+    // l'agent réellement indisponible.
     const approvedLeave = await this.prisma.leave.findFirst({
       where: {
         swapperId: input.swapperId,

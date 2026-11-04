@@ -23,6 +23,7 @@ import { AutomationModule } from './automation/automation.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 import { RolesGuard } from './common/guards/roles.guard';
+import { RoleRouteAccessGuard } from './common/guards/role-route.guard';
 import { SessionMiddleware } from './common/middleware/session.middleware';
 
 @Module({
@@ -57,6 +58,12 @@ import { SessionMiddleware } from './common/middleware/session.middleware';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    // Contrôle d'accès par espace de travail (/pilot, /supervision, /agent,
+    // /superadmin) : un rôle ne peut pas appeler l'espace d'un autre.
+    {
+      provide: APP_GUARD,
+      useClass: RoleRouteAccessGuard,
     },
   ],
 })

@@ -115,7 +115,7 @@ export class RolesGuard implements CanActivate {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    if (!roleSatisfies(user.role as Role, required)) {
+    if (!roleSatisfies(user.role, required)) {
       throw new DomainException(
         ErrorCode.ROLE_NOT_ALLOWED,
         'Vous ne disposez pas des droits nécessaires pour cette action.',

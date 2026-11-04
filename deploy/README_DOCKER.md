@@ -426,6 +426,84 @@ docker compose $T up -d --build                   # mise à jour après git pull
 - [ ] `.env` : permissions `600`, propriétaire root, hors Git.
 - [ ] Aucune erreur 5xx récurrente dans `logs backend` pendant 24 h.
 
+## 11 bis. « Le déploiement réussit mais rien ne change »
+
+Symptôme : `docker compose ps` est `healthy`, `migrate` est passé, et pourtant
+l'application en ligne affiche toujours l'ancienne version.
+
+Diagnostic en une commande (lecture seule) :
+
+```bash
+cd /opt/uswap   # ou /opt/uswap-github
+bash deploy/check-live.sh
+```
+
+> **Si `bash: deploy/check-live.sh: No such file or directory`** : le script
+> n'existe pas encore sur ce serveur (il n'a pas été poussé puis récupéré).
+> Deux options : `git pull` sur le serveur après `git push` du poste de
+> développement, ou créer le fichier directement avec `cat > deploy/check-live.sh`
+> puis coller son contenu. Un script qui exécute `docker compose` doit être à la
+> racine du dépôt (il y cherche `deploy/.env`).
+
+Il compare **ce que sert réellement le serveur** avec les sources du dépôt :
+présence des sources à l'endroit où le build les lit, dates de construction des
+images, bundle renvoyé par `127.0.0.1:${FRONTEND_HOST_PORT}`, présence des
+fonctionnalités livrées dans ce bundle, comparaison avec l'URL publique
+(`PUBLIC_APP_URL`), existence des routes `/api/me`, `/api/super-admin/cleanup`
+et `/api/reports/dashboard`, état des migrations. Chaque écart est signalé
+`[INCOHERENT]` avec la correction. L'option `--build` reconstruit ensuite les
+images sans cache et recrée les conteneurs.
+
+Les causes possibles, dans l'ordre de fréquence :
+
+0. **Le contexte de build ne contient pas les sources** (constat du
+   2026-10-29 sur `Sirh-Server`). `docker compose build frontend` affiche
+   `transferring context: 8.98kB` et toutes les étapes `CACHED` : BuildKit
+   réutilise une image précédente et fabrique un bundle sans rapport avec le
+   code. Repérer et réparer :
+
+   ```bash
+   ls frontend_new/frontend/src        # attendu : api/, app/, features/, pages/…
+   bash deploy/fix-missing-sources.sh          # constat + copie disponible
+   bash deploy/fix-missing-sources.sh --apply  # met les sources en place
+   ```
+
+   Un contexte sain pèse **plusieurs Mo** (1,6 Mo de sources) : c'est le
+   chiffre à vérifier dans la sortie du build.
+1. **Le serveur ne contient pas vos modifications.** `git log -1` sur le
+   serveur doit afficher votre commit. Les fichiers non commités sur le poste
+   de développement ne partent jamais avec un `git pull` (
+   `git status` côté serveur, puis `git pull` ou copie des sources §5.1).
+2. **Image reconstruite sans le nouveau code.** Même avec `--no-cache`, une
+   *étape* `COPY` peut être servie depuis le cache si le contexte est inchangé.
+   Après avoir corrigé les sources :
+   `docker compose $T build --no-cache --pull frontend backend` puis
+   `docker compose $T up -d --force-recreate frontend backend`.
+3. **Le conteneur a été recréé mais le navigateur garde l'ancien bundle**
+   (cas corrigé dans cette version) : le service worker servait `index.html`
+   et les anciens fichiers avec un long cache. Depuis ce correctif, la coquille
+   de la SPA n'est plus mise en cache par le service worker, la mise à jour du
+   service worker est vérifiée à chaque retour sur l'onglet et activée
+   immédiatement. Pour une **première** mise à jour, dans le navigateur :
+   F12 → *Application* → *Service workers* → **Unregister**, puis Ctrl+F5.
+4. **Un autre conteneur / reverse proxy sert l'application** (un projet
+   Compose resté sur les ports 8080/8443, un vhost Apache pointant vers une
+   autre copie). `docker ps` et `nginx -T | grep proxy_pass` le montrent ;
+   `check-live.sh` compare les numéros de bundle.
+
+**Preuve côté navigateur** : Compte → Profil → **Version déployée** (date +
+commit du build), ou dans la console :
+
+```js
+sessionStorage.getItem("uswap:build")
+```
+
+La même valeur doit apparaître dans le HTML servi par le serveur :
+
+```bash
+curl -s http://127.0.0.1:8080/ | grep -o '/assets/index-[^"]*\.js'
+```
+
 ## 12. Dépannage des erreurs de déploiement
 
 | Message observé | Cause réelle | Correction |
@@ -440,7 +518,9 @@ docker compose $T up -d --build                   # mise à jour après git pull
 | `P1001 Can't reach database server` | Backend démarré avant que `db` soit `healthy` | `docker compose … ps`, puis `up -d` (le `depends_on` attend le healthcheck) |
 | `port is already allocated` | Port 8080 ou 3000 déjà pris sur l'hôte | `FRONTEND_HOST_PORT` / `BACKEND_HOST_PORT` dans `deploy/.env` (`check-server.sh` le détecte) |
 | page servie mais `mode démo` | Image frontend construite sans `VITE_API_URL` | Reconstruire l'image (le Dockerfile refuse `VITE_API_URL` vide) |
+| déploiement `healthy` mais ancienne version affichée | sources non déployées, image en cache ou cache du navigateur | §11 bis : `bash deploy/check-live.sh` |
 | `permission denied` sur `uswap-uploads` | Le conteneur tourne avec `USER node` (UID 1000) | `docker compose … exec -u root backend chown -R node:node /app/var` |
+| `build` réussit mais `transferring context: 8.98kB` et étapes `CACHED` | le contexte de build ne contient pas les sources (`frontend_new/frontend/src` absent) | `bash deploy/fix-missing-sources.sh` puis `--apply` (§11 bis, cause 0) |
 
 Node.js **10.19.0** sur l'hôte (`node --version`) est sans importance :
 les images se construisent dans `node:22-bookworm-slim`. L'hôte n'exécute

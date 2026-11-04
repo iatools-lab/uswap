@@ -61,3 +61,16 @@ me--.jpeg
 .env
 .env.*
 !.env.example
+
+# Dossier de recette local (captures et scripts de test manuels)
+.qa/
+
+# Journaux et rapports de verification generes localement (non suivis)
+*.txt
+*.out.log
+*.err.log
+%~dp0*
+
+# Scripts jetables d'analyse ponctuelle
+*.tmp.mjs
+

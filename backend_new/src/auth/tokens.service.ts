@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   createHash,
@@ -158,15 +157,16 @@ export class TokensService {
         where: { id: userId },
         data: { lockedUntil: until },
       });
-      return { locked: true, retryAfterSeconds: Math.ceil(LOCK_DURATION_MS / 1000) };
+      return {
+        locked: true,
+        retryAfterSeconds: Math.ceil(LOCK_DURATION_MS / 1000),
+      };
     }
     return {
       locked: false,
       retryAfterSeconds: Math.max(
         0,
-        Math.ceil(
-          (ATTEMPT_WINDOW_MS - (now - now)) / 1000,
-        ),
+        Math.ceil((ATTEMPT_WINDOW_MS - (now - now)) / 1000),
       ),
     };
   }

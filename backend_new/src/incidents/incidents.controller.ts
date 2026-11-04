@@ -17,6 +17,11 @@ import {
   type AuthenticatedUser,
 } from '../common/guards/roles.guard';
 import { Role } from '../common/enums';
+import {
+  AgentRoute,
+  SuperAdminRoute,
+  SupervisionRoute,
+} from '../common/routing/role-route';
 
 class CreateIncidentDto {
   @IsString()
@@ -68,7 +73,14 @@ class UpdateIncidentDto {
 
 @ApiTags('incidents')
 @ApiBearerAuth()
+// Déclaration d'incident côté agent, suivi et décisions côté supervision.
+//   /incidents                historique (compatibilité)
+//   /supervision/incidents    superviseur, administrateur
+//   /agent/incidents          agent (déclaration + ses incidents)
 @Controller('incidents')
+@SuperAdminRoute('incidents')
+@SupervisionRoute('incidents')
+@AgentRoute('incidents')
 export class IncidentsController {
   constructor(private readonly incidents: IncidentsService) {}
 

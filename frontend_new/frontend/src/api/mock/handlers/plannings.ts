@@ -580,7 +580,11 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings$/,
     handler: (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
+      requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
       const startDate = asText(ctx.body.startDate);
       const name = asText(ctx.body.name);
       if (!name || name.length > 100)
@@ -616,7 +620,10 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/auto-assign$/,
     handler: (ctx) => {
+      // Ecran de planification partage avec l'ecran de pilotage du super
+      // administrateur (voir app/paths.ts).
       const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
         "ADMIN",
         "SUPERVISOR",
       ]);
@@ -673,7 +680,10 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/preview$/,
     handler: (ctx) => {
+      // Ecran de planification partage avec l'ecran de pilotage du super
+      // administrateur (voir app/paths.ts).
       const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
         "ADMIN",
         "SUPERVISOR",
       ]);
@@ -696,7 +706,10 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/generate$/,
     handler: (ctx) => {
+      // Ecran de planification partage avec l'ecran de pilotage du super
+      // administrateur (voir app/paths.ts).
       const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
         "ADMIN",
         "SUPERVISOR",
       ]);
@@ -763,7 +776,10 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/occurrences\/([^/]+)\/duplicate$/,
     handler: (ctx) => {
+      // Ecran de planification partage avec l'ecran de pilotage du super
+      // administrateur (voir app/paths.ts).
       const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
         "ADMIN",
         "SUPERVISOR",
       ]);
@@ -796,7 +812,10 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/occurrences\/([^/]+)\/remove$/,
     handler: (ctx) => {
+      // Ecran de planification partage avec l'ecran de pilotage du super
+      // administrateur (voir app/paths.ts).
       const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
         "ADMIN",
         "SUPERVISOR",
       ]);
@@ -847,7 +866,10 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/occurrences\/([^/]+)\/validate$/,
     handler: (ctx) => {
+      // Ecran de planification partage avec l'ecran de pilotage du super
+      // administrateur (voir app/paths.ts).
       const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
         "ADMIN",
         "SUPERVISOR",
       ]);
@@ -880,7 +902,10 @@ export const planningRoutes: MockRoute[] = [
     method: "PATCH",
     pattern: /^\/plannings\/([^/]+)\/occurrences\/([^/]+)$/,
     handler: (ctx) => {
+      // Ecran de planification partage avec l'ecran de pilotage du super
+      // administrateur (voir app/paths.ts).
       const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
         "ADMIN",
         "SUPERVISOR",
       ]);
@@ -1055,7 +1080,11 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/validate$/,
     handler: (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
+      requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
       const planning = ctx.db.plannings.find(
         (item) => item.id === ctx.params[0],
       );
@@ -1067,7 +1096,10 @@ export const planningRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/plannings\/([^/]+)\/publish$/,
     handler: (ctx) => {
+      // Ecran de planification partage avec l'ecran de pilotage du super
+      // administrateur (voir app/paths.ts).
       const actor = requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
         "ADMIN",
         "SUPERVISOR",
       ]);

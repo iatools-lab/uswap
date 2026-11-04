@@ -29,6 +29,12 @@ import {
   type AuthenticatedUser,
 } from '../common/guards/roles.guard';
 import { Role } from '../common/enums';
+import {
+  AgentRoute,
+  PilotRoute,
+  SuperAdminRoute,
+  SupervisionRoute,
+} from '../common/routing/role-route';
 
 /**
  * Planifications.
@@ -191,7 +197,18 @@ class OccurrenceUpdateBody {
 
 @ApiTags('plannings')
 @ApiBearerAuth()
+// Planning : lecture pour tous les rôles (l'agent voit ses postes sur le même
+// contrôleur), écriture réservée au pilotage et à la supervision (`@Roles`).
+//   /plannings                 historique (compatibilité)
+//   /pilot/plannings           administrateur, super administrateur
+//   /superadmin/plannings      super administrateur (espace de pilotage)
+//   /supervision/plannings     superviseur
+//   /agent/plannings           agent (ses postes et les avis)
 @Controller('plannings')
+@PilotRoute('plannings')
+@SuperAdminRoute('plannings')
+@SupervisionRoute('plannings')
+@AgentRoute('plannings')
 export class PlanningsController {
   constructor(
     private readonly planning: PlanningService,

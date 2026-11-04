@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AppConfig } from '../config/configuration';
 import { serializePreferences } from '../common/serializers';
 import { renderTemplate, type MailTemplate } from './templates';
+import { SmsService } from './sms.service';
 import type { NotificationCategory } from './categories';
 import { ALL_CATEGORIES, categoryForKind } from './categories';
 
@@ -25,7 +26,10 @@ export interface NotifyOptions {
   category?: NotificationCategory;
 }
 
-export interface AppNotification extends Notification {}
+// Alias de type, et non interface vide : `interface X extends Y {}` déclare
+// un type structurellement identique à `Y`, ce que le lint signale à juste
+// titre. L'alias garde le nom métier sans dupliquer la définition.
+export type AppNotification = Notification;
 
 /** Piece jointe d'un e-mail transactionnel (rapports programmes). */
 export interface MailAttachment {
@@ -56,11 +60,13 @@ export class NotificationsService implements OnModuleInit {
     'INTERNAL',
     'EMAIL',
     'PUSH',
+    'SMS',
   ];
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppConfig, true>,
+    private readonly sms: SmsService,
   ) {
     this.mailDir = path.resolve(process.cwd(), 'var/mail');
   }
@@ -167,6 +173,7 @@ export class NotificationsService implements OnModuleInit {
       inApp?: boolean;
       email?: boolean;
       push?: boolean;
+      sms?: boolean;
       digest?: boolean;
       quietHoursEnabled?: boolean;
       quietHoursStart?: string | null;
@@ -183,6 +190,7 @@ export class NotificationsService implements OnModuleInit {
         internalEnabled: patch.inApp ?? current.internalEnabled,
         emailEnabled: patch.email ?? current.emailEnabled,
         pushEnabled: patch.push ?? current.pushEnabled,
+        smsEnabled: patch.sms ?? current.smsEnabled,
         digestEnabled: patch.digest ?? current.digestEnabled,
         quietHoursEnabled:
           patch.quietHoursEnabled ?? current.quietHoursEnabled,
@@ -275,7 +283,14 @@ export class NotificationsService implements OnModuleInit {
     const preference = await this.ensurePreferences(options.userId);
     const user = await this.prisma.user.findUnique({
       where: { id: options.userId },
-      select: { id: true, email: true, fullName: true, isActive: true },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        isActive: true,
+        // Requis pour le canal SMS : sans lui, l'envoi était ignoré.
+        phoneNumber: true,
+      },
     });
 
     const category =
@@ -333,6 +348,36 @@ export class NotificationsService implements OnModuleInit {
           error: this.skipReason(preference, categoryPrefs.push, quiet),
         });
       }
+    }
+
+    /*
+     * SMS : canal additionnel. Il n'est déclenché que s'il est explicitement
+     * activé dans les préférences du compte (`sms`) et que le compte possède
+     * un numéro de téléphone. Un SMS coûte de l'argent : on ne le substitue
+     * jamais à un autre canal, on l'ajoute.
+     */
+    const smsAllowed =
+      recipientActive &&
+      preference.smsEnabled &&
+      categoryPrefs.sms &&
+      !quiet;
+    if (smsAllowed) {
+      // Le destinataire d'un SMS est le NUMÉRO, pas l'adresse e-mail : passer
+      // `user.email` envoyait le message à une chaîne invalide.
+      await this.sendToChannel(
+        notificationId,
+        options.userId,
+        'SMS',
+        user?.phoneNumber ?? '',
+        options,
+      );
+    } else {
+      await this.recordDelivery(notificationId, options.userId, 'SMS', {
+        status: 'SKIPPED',
+        error: !user?.phoneNumber
+          ? 'Aucun numéro de téléphone sur ce compte.'
+          : this.skipReason(preference, categoryPrefs.sms, quiet),
+      });
     }
 
     await this.enforceRetention(options.userId, preference.retentionDays);
@@ -521,6 +566,40 @@ export class NotificationsService implements OnModuleInit {
         recipient,
         sentAt: sent ? new Date() : null,
         error: sent ? null : 'Aucun abonnement push actif.',
+      });
+      return;
+    }
+
+    if (channel === 'SMS') {
+      /*
+       * Le numéro vient du compte (`phoneNumber`) : `recipient` est l'e-mail
+       * dans les autres canaux, il ne sert donc pas ici.
+       */
+      const account = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { phoneNumber: true },
+      });
+      const phone = account?.phoneNumber ?? '';
+      if (!phone) {
+        await this.recordDelivery(notificationId, userId, channel, {
+          status: 'SKIPPED',
+          error: 'Aucun numéro de téléphone renseigné sur le compte.',
+        });
+        return;
+      }
+
+      // Un SMS est facturé : on ne l'envoie que si un fournisseur est prêt.
+      // En mode `console` (recette) `send` réussit sans transmettre, ce qui
+      // permet de valider le parcours et l'historique de livraison.
+      const body = options.targetUrl
+        ? `${options.title}\n${options.body}\n${this.config.get('publicAppUrl', { infer: true })}${options.targetUrl}`
+        : `${options.title}\n${options.body}`;
+      const sent = await this.sms.send(phone, body);
+      await this.recordDelivery(notificationId, userId, channel, {
+        status: sent ? 'SENT' : 'FAILED',
+        recipient: phone,
+        sentAt: sent ? new Date() : null,
+        error: sent ? null : 'Envoi SMS refusé par le fournisseur.',
       });
       return;
     }
@@ -844,15 +923,29 @@ export class NotificationsService implements OnModuleInit {
   private readCategory(
     raw: string,
     category: NotificationCategory,
-  ): { email: boolean; push: boolean } {
-    let parsed: Record<string, { email?: boolean; push?: boolean }> = {};
+  ): { email: boolean; push: boolean; sms: boolean } {
+    let parsed: Record<
+      string,
+      { email?: boolean; push?: boolean; sms?: boolean }
+    > = {};
     try {
       parsed = JSON.parse(raw) as typeof parsed;
     } catch {
       parsed = {};
     }
     const entry = parsed[category];
-    return { email: entry?.email !== false, push: entry?.push !== false };
+    return {
+      email: entry?.email !== false,
+      push: entry?.push !== false,
+      /*
+       * Le SMS est OPT-IN, mais son activation se fait par le réglage GÉNÉRAL
+       * (`smsEnabled`) : exiger en plus une entrée par catégorie rendait le
+       * canal impossible à activer depuis l'interface (aucun écran ne permet
+       * de régler le SMS catégorie par catégorie). Une catégorie peut encore
+       * le refuser explicitement (`sms: false`).
+       */
+      sms: entry?.sms !== false,
+    };
   }
 
   /* ---------------------------------------------------------------- */

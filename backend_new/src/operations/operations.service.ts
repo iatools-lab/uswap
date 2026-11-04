@@ -138,13 +138,16 @@ export class OperationsService {
         attachmentId: payload.attachmentId,
         clientRef,
         origin: 'DECLARATION',
-        status: 'OPEN',
+        // L'agent DÉCLARE, un supérieur DÉCIDE : la demande part en attente.
+        // Elle rend néanmoins déjà le swappeur indisponible pour ce créneau
+        // (voir `hasOpenAbsence`), pour ne pas l'affecter entre-temps.
+        status: 'PENDING',
       },
     });
 
     await this.notifications.notifyStaff([user.id], {
       kind: NotificationKind.ABSENCE_DECLARED,
-      title: 'Absence déclarée',
+      title: 'Absence à valider',
       body: `${user.fullName} · ${occurrence.shiftLabel ?? 'Service'} : ${reason}`,
       targetId: occurrence.id,
       targetUrl: `/remplacements?replacement=${occurrence.id}`,
@@ -160,6 +163,100 @@ export class OperationsService {
     });
 
     return { id: created.id, replayed: false };
+  }
+
+  /**
+   * Décision d'un supérieur sur une absence déclarée.
+   *
+   * Seuls un superviseur, un administrateur ou un super administrateur
+   * décident (rôle filtré par `@Roles`). C'est cette décision qui pilote la
+   * disponibilité réellement vue lors de l'affectation.
+   */
+  async decideAbsence(
+    actor: AuthenticatedUser,
+    absenceId: string,
+    payload: { decision: 'APPROVED' | 'REJECTED'; reason?: string | null },
+  ) {
+    const absence = await this.prisma.absence.findUnique({
+      where: { id: absenceId },
+      include: {
+        occurrence: {
+          select: { id: true, shiftLabel: true, stationId: true },
+        },
+      },
+    });
+    if (!absence) {
+      throw new ConflictDomain('ABSENCE_NOT_FOUND', 'Absence introuvable.', 404);
+    }
+    if (absence.status !== 'PENDING') {
+      throw new ConflictDomain(
+        'ABSENCE_ALREADY_DECIDED',
+        'Cette absence a déjà été traitée.',
+        409,
+      );
+    }
+
+    const status = payload.decision === 'APPROVED' ? 'APPROVED' : 'REJECTED';
+    const updated = await this.prisma.absence.update({
+      where: { id: absenceId },
+      data: { status, coveredBy: payload.reason?.trim() || null },
+    });
+
+    await this.notifications.notify({
+      userId: absence.swapperId,
+      kind: NotificationKind.ABSENCE_DECLARED,
+      title: status === 'APPROVED' ? 'Absence approuvée' : 'Absence refusée',
+      body:
+        status === 'APPROVED'
+          ? `Votre absence du ${absence.occurrence.shiftLabel ?? 'service'} a été approuvée.`
+          : `Votre absence du ${absence.occurrence.shiftLabel ?? 'service'} a été refusée${payload.reason ? ` : ${payload.reason}` : '.'}`,
+      targetId: absence.shiftId,
+      critical: true,
+    });
+
+    await this.audit.record({
+      actorId: actor.id,
+      action: status === 'APPROVED' ? 'ABSENCE_APPROVED' : 'ABSENCE_REJECTED',
+      targetType: 'Absence',
+      targetId: absenceId,
+      stationId: absence.occurrence.stationId,
+      metadata: {
+        reason: payload.reason ?? null,
+        swapperId: absence.swapperId,
+      },
+    });
+
+    return { id: updated.id, status: updated.status };
+  }
+
+  /** Absences déclarées en attente de décision. */
+  async pendingAbsences() {
+    const rows = await this.prisma.absence.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { reportedAt: 'desc' },
+      include: {
+        swapper: { select: { id: true, fullName: true } },
+        occurrence: {
+          select: {
+            id: true,
+            shiftLabel: true,
+            startTime: true,
+            station: { select: { name: true } },
+          },
+        },
+      },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      reason: row.reason,
+      reportedAt: row.reportedAt.toISOString(),
+      swapperName: row.swapper?.fullName ?? 'Agent',
+      swapperId: row.swapperId,
+      shiftId: row.shiftId,
+      shiftLabel: row.occurrence?.shiftLabel ?? 'Service',
+      startTime: row.occurrence?.startTime?.toISOString() ?? null,
+      stationName: row.occurrence?.station?.name ?? null,
+    }));
   }
 
   /* ---------------------------------------------------------------- */
@@ -217,7 +314,7 @@ export class OperationsService {
       endTime: absence.occurrence.endTime.toISOString(),
       urgency: this.urgencyOf(absence.occurrence.startTime.toISOString()),
       hoursUntilStart: this.hoursUntil(absence.occurrence.startTime.toISOString()),
-      origin: absence.origin as string,
+      origin: absence.origin,
       reason: absence.reason,
       reportedAt: absence.reportedAt.toISOString(),
     }));
@@ -278,7 +375,6 @@ export class OperationsService {
       throw new NotFoundDomain(ErrorCode.NOT_FOUND, 'Affectation introuvable.');
     }
 
-    const currentIds = new Set(occurrence.assignments.map((a) => a.userId));
     const swappers = await this.prisma.user.findMany({
       where: { role: 'SWAPPER', isActive: true, disabledAt: null },
       orderBy: { fullName: 'asc' },
@@ -295,30 +391,54 @@ export class OperationsService {
     }
     const candidates: CandidateRow[] = [];
     for (const swapper of swappers) {
-      // L'agent deja affecte est toujours presente comme eligible : il ne se
-      // penalise pas lui-meme en se voyant attribuer son propre service.
-      if (currentIds.has(swapper.id)) {
-        candidates.push({
-          id: swapper.id,
-          fullName: swapper.fullName,
-          email: swapper.email,
-          homeStationName: swapper.station?.name ?? null,
-          eligible: true,
-          issues: [],
-        });
-        continue;
-      }
+      /*
+       * MÊME pour l'agent déjà affecté, l'absence doit être consultée.
+       *
+       * Avant, cet agent était renvoyé `eligible: true` / `issues: []` sans
+       * aucun contrôle : un swapper ayant déclaré (ou fait approuver) son
+       * absence restait donc présenté comme DISPONIBLE dans l'écran
+       * d'affectation, ce qui contredisait sa déclaration. C'était le défaut
+       * signalé : « le même swapper est toujours considéré comme disponible ».
+       */
       const report = await this.constraints.eligibleFor(occurrence, swapper.id);
+      /*
+       * L'absence est vérifiée PAR AGENT, pas pour le créneau en général :
+       * `hasOpenAbsence` ne regarde que le créneau, si bien qu'une absence
+       * déclarée par un collègue marquait aussi les autres. On interroge donc
+       * la table avec le couple (créneau, agent) et les statuts qui rendent
+       * réellement indisponible.
+       */
+      const ownAbsence = await this.prisma.absence.count({
+        where: {
+          shiftId: occurrence.id,
+          swapperId: swapper.id,
+          status: { in: ['PENDING', 'APPROVED', 'OPEN'] },
+        },
+      });
+      const absent = ownAbsence > 0;
+
+      const absenceIssue = {
+        code: 'ABSENT',
+        message:
+          'Absence déclarée ou approuvée sur ce créneau : cet agent n’est pas disponible.',
+      };
+
+      const issues = [...report.errors, ...report.warnings].map((issue) => ({
+        code: issue.code,
+        message: issue.message,
+      }));
+
+      if (absent) issues.unshift(absenceIssue);
+
       candidates.push({
         id: swapper.id,
         fullName: swapper.fullName,
         email: swapper.email,
         homeStationName: swapper.station?.name ?? null,
-        eligible: report.valid,
-        issues: [...report.errors, ...report.warnings].map((issue) => ({
-          code: issue.code,
-          message: issue.message,
-        })),
+        // Un agent absent n'est JAMAIS proposé comme disponible, même s'il
+        // occupe déjà le poste : c'est ce créneau qu'il ne peut pas assurer.
+        eligible: report.valid && !absent,
+        issues,
       });
     }
 
