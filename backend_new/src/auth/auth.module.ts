@@ -5,6 +5,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { PasswordsService, SessionsService } from './passwords.service';
 import { TokensService } from './tokens.service';
+import { GoogleAuthService } from './google-auth.service';
 import { AdminBootstrapService } from './admin-bootstrap.service';
 import { UsersModule } from '../users/users.module';
 import { AppConfig } from '../config/configuration';
@@ -31,6 +32,7 @@ import { AppConfig } from '../config/configuration';
     SessionsService,
     TokensService,
     AdminBootstrapService,
+    GoogleAuthService,
   ],
   exports: [
     AuthService,

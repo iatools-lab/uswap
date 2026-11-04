@@ -106,7 +106,10 @@ export function OperationsPage() {
     let active = true;
     setData(null);
     setFailure(false);
-    api<BackendWorkspace | OperationData>("/workspace")
+    // Chemin réel servi par le backend (`AttendanceController.workspace`).
+    // `/workspace` était déclaré comme route « partagée » côté frontend mais
+    // n'existe pas à la racine : chaque rôle recevait 404 sur son accueil.
+    api<BackendWorkspace | OperationData>("/attendance/workspace")
       .then((value) => {
         if (!active) return;
         // Les jeux mock sont déjà au format des composants V0. Le backend

@@ -44,6 +44,45 @@ const FIELD_LABELS: Record<string, string> = {
   passwordUpdated: 'mot de passe',
 };
 
+/**
+ * Libellés des champs rencontrés dans les métadonnées du journal applicatif
+ * (titre, catégorie, gravité…). Sans eux, l'écran afficherait des noms
+ * techniques anglo-saxons.
+ */
+const METADATA_LABELS: Record<string, string> = {
+  title: 'intitulé',
+  category: 'catégorie',
+  severity: 'gravité',
+  description: 'description',
+  reason: 'motif',
+  status: 'statut',
+  type: 'type',
+  stationId: 'station',
+  stationName: 'station',
+  shiftId: 'service',
+  shiftLabel: 'service',
+  swapperId: 'agent',
+  clientRef: 'référence',
+  fromStatus: 'statut précédent',
+  toStatus: 'nouveau statut',
+  comment: 'commentaire',
+  days: 'durée (jours)',
+};
+
+/**
+ * Champs jamais recopiés dans une description d'audit : un secret ou un
+ * condensat de mot de passe n'a rien à faire dans un journal lisible.
+ */
+const SENSITIVE_FIELDS = new Set([
+  'password',
+  'passwordHash',
+  'webhookSecret',
+  'token',
+  'accessToken',
+  'refreshToken',
+  'tokenHash',
+]);
+
 const STATUS_LABELS: Record<string, string> = {
   REPORTED: 'Signalé',
   TO_REVIEW: 'À analyser',
@@ -380,7 +419,13 @@ export class AdminService {
         targetUserId: null,
         stationId: entry.stationId,
         stationName: null,
-        description: entry.message ?? JSON.stringify(entry.metadata ?? {}),
+        /*
+         * Les événements du journal applicatif portent leurs détails dans
+         * `metadata`. Les afficher avec `JSON.stringify` produisait exactement
+         * ce que l'écran montrait : « {"title":"...","category":"..."} ».
+         * On rend désormais une phrase lisible, sans accolades ni guillemets.
+         */
+        description: entry.message ?? this.describeMetadata(entry.metadata),
         result: 'Enregistrée',
         createdAt: entry.createdAt,
       })),
@@ -531,6 +576,15 @@ export class AdminService {
     });
   }
 
+  /**
+   * Description lisible d'un changement : « champ : avant → après ».
+   *
+   * Auparavant, seuls les NOMS des champs modifiés étaient listés (« Champs
+   * concernés : Nom, Station »), ce qui n'apprenait rien sur la modification
+   * elle-même. Les valeurs sont désormais comparées et rendues, avec un
+   * libellé français par champ. Les champs sensibles (secret de webhook,
+   * mots de passe) sont exclus et jamais recopiés.
+   */
   private describeChange(
     before: string,
     after: string,
@@ -552,10 +606,89 @@ export class AdminService {
     } catch {
       afterJson = {};
     }
+
+    const keys = [
+      ...new Set([...Object.keys(beforeJson), ...Object.keys(afterJson)]),
+    ].filter((key) => !SENSITIVE_FIELDS.has(key));
+
+    /** Valeur affichable : null → « non renseigné », tableau → jointure. */
+    const show = (value: unknown): string => {
+      if (value === undefined || value === null || value === '') {
+        return 'non renseigné';
+      }
+      if (Array.isArray(value)) {
+        return value.length ? value.map((v) => String(v)).join(', ') : 'aucun';
+      }
+      if (typeof value === 'boolean') return value ? 'oui' : 'non';
+      if (typeof value === 'object') return JSON.stringify(value).slice(0, 80);
+      return String(value).slice(0, 120);
+    };
+
+    const parts: string[] = [];
+    for (const key of keys) {
+      const from = beforeJson[key];
+      const to = afterJson[key];
+      if (JSON.stringify(from) === JSON.stringify(to)) continue;
+      const name = FIELD_LABELS[key] ?? key;
+      if (from === undefined) parts.push(`${name} défini sur ${show(to)}`);
+      else if (to === undefined) parts.push(`${name} supprimé (était ${show(from)})`);
+      else parts.push(`${name} : ${show(from)} → ${show(to)}`);
+    }
+
+    if (parts.length) return parts.join(' ; ') + '.';
+
+    // Aucun détail exploitable : au moins nommer les champs repérés.
     const fields = changedFields(beforeJson, afterJson);
-    return fields.length
-      ? `${label} : ${fields.join(', ')}.`
-      : 'Action enregistrée.';
+    return fields.length ? `${label} : ${fields.join(', ')}.` : 'Action enregistrée.';
+  }
+
+  /**
+   * Transforme les détails d'un événement en phrase lisible.
+   *
+   *   { title: "Incident", severity: "MEDIUM" }
+   *     -> « Incident · Gravité : Moyenne »
+   *
+   * Jamais d'accolades, de guillemets ni de noms de champs techniques :
+   * l'écran d'audit doit se lire comme un journal, pas comme du JSON.
+   */
+  private describeMetadata(metadata: unknown): string {
+    if (!metadata || typeof metadata !== 'object') return 'Action enregistrée.';
+
+    const entries = Object.entries(metadata as Record<string, unknown>).filter(
+      ([key, value]) =>
+        !SENSITIVE_FIELDS.has(key) && value !== null && value !== undefined && value !== '',
+    );
+    if (entries.length === 0) return 'Action enregistrée.';
+
+    const severityLabels: Record<string, string> = {
+      LOW: 'Faible',
+      MEDIUM: 'Moyenne',
+      HIGH: 'Élevée',
+      CRITICAL: 'Critique',
+    };
+
+    const parts = entries.map(([key, value]) => {
+      const label = FIELD_LABELS[key] ?? METADATA_LABELS[key] ?? key;
+      let shown: string;
+      if (key === 'severity' && typeof value === 'string') {
+        shown = severityLabels[value] ?? value;
+      } else if (Array.isArray(value)) {
+        shown = value.map((v) => String(v)).join(', ');
+      } else if (typeof value === 'boolean') {
+        shown = value ? 'oui' : 'non';
+      } else if (typeof value === 'object') {
+        // Objet imbriqué : on n'affiche pas sa structure brute.
+        shown = 'détails enregistrés';
+      } else {
+        shown = String(value);
+      }
+      return `${label} : ${shown}`;
+    });
+
+    // Pas de point final si la phrase en a déjà un (motifs fournis par les
+    // utilisateurs, qui finissent souvent par un point).
+    const joined = parts.join(' · ');
+    return joined.endsWith('.') ? joined : `${joined}.`;
   }
 
   private categoryForAction(action: string): string {

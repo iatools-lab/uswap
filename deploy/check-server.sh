@@ -58,7 +58,7 @@ env_get() { # $1 = nom de variable
 
 echo "2. Contexte de construction du FRONTEND"
 frontend_ctx="${FRONTEND_BUILD_CONTEXT:-$(env_get FRONTEND_BUILD_CONTEXT)}"
-frontend_ctx="${frontend_ctx:-../frontend}"
+frontend_ctx="${frontend_ctx:-../frontend_new/frontend}"
 frontend_dir="$(cd deploy 2>/dev/null && cd "$frontend_ctx" 2>/dev/null && pwd)"
 if [ -z "${frontend_dir:-}" ]; then
   bad "contexte introuvable : $frontend_ctx (relatif a deploy/)"
@@ -71,6 +71,16 @@ else
   for d in src public deploy; do
     [ -d "$frontend_dir/$d" ] && pass "  $d/" || bad "  $d/ manquant dans $frontend_dir"
   done
+  # Un dossier src/ vide fait « réussir » le build avec un bundle étranger au
+  # code : c'est la panne du 2026-10-29. Vérifier des fichiers réels.
+  for f in src/main.tsx src/app/router.tsx; do
+    [ -f "$frontend_dir/$f" ] && pass "  $f" \
+      || bad "  $f manquant : le build produira une image sans les sources (deploy/fix-missing-sources.sh)"
+  done
+  fe_src_kb="$(du -sk "$frontend_dir/src" 2>/dev/null | awk '{print $1}')"
+  [ "${fe_src_kb:-0}" -gt 200 ] 2>/dev/null \
+    && pass "  sources : ${fe_src_kb} Ko" \
+    || bad "  sources tronquées (${fe_src_kb:-0} Ko) : copier frontend_new/frontend (deploy/fix-missing-sources.sh)"
   [ -f "$frontend_dir/deploy/nginx.conf" ] \
     && pass "  deploy/nginx.conf" \
     || bad "  deploy/nginx.conf manquant (copie par le Dockerfile)"

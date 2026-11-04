@@ -7,6 +7,7 @@ import type { AppConfig } from '../config/configuration';
 import {
   ConflictDomain,
   ErrorCode,
+  ForbiddenDomain,
   NotFoundDomain,
 } from '../common/errors/domain-errors';
 import {
@@ -15,6 +16,7 @@ import {
   serializeLeaveSyncOperation,
 } from '../common/serializers';
 import { dayCount, consumedDaysWithin } from '../common/utils/datetime';
+import { safeEqual } from '../common/utils/secret';
 import type { AuthenticatedUser } from '../common/guards/roles.guard';
 import { NotificationKind } from '../notifications/categories';
 
@@ -549,12 +551,36 @@ export class LeavesService {
     return serializeLeaveSyncOperation(updated);
   }
 
-  /** Webhook entrant : le systeme RH confirme la prise en compte. */
+  /** Webhook entrant : le systeme RH confirme la prise en compte.
+   *
+   * La route est PUBLIQUE (aucune session n'est possible depuis un système
+   * RH externe) : le secret partagé est donc ajouté ici, dans le service, pour
+   * qu'aucune autre route de congés ne puisse être appelée sans session. Sans
+   * cette vérification, n'importe qui pouvait marquer une synchronisation comme
+   * réussie — ou échouée — en devinant une clé d'idempotence.
+   */
   async syncWebhook(payload: {
     idempotencyKey?: string;
     externalId?: string;
     status?: string;
+    secret?: string;
   }) {
+    const expected = this.config.get('leaveSyncWebhookSecret', { infer: true });
+    if (!expected) {
+      throw new ConflictDomain(
+        'WEBHOOK_NOT_CONFIGURED',
+        'Webhook RH non configuré (LEAVE_SYNC_WEBHOOK_SECRET).',
+        503,
+      );
+    }
+    const provided = (payload.secret ?? '').trim();
+    if (!safeEqual(provided, expected)) {
+      this.logger.warn('Webhook RH refusé : secret invalide.');
+      throw new ForbiddenDomain(
+        'WEBHOOK_FORBIDDEN',
+        'Webhook refusé : secret invalide.',
+      );
+    }
     const operation = payload.idempotencyKey
       ? await this.prisma.leaveSyncOperation.findUnique({
           where: { idempotencyKey: payload.idempotencyKey },

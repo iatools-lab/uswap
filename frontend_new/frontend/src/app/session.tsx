@@ -17,6 +17,7 @@ import {
   normalizeUserRole,
   refresh,
   rolePaths,
+  type LoginSegment,
   type Session,
   type User,
 } from "../api/auth-api";
@@ -29,7 +30,11 @@ type SessionContextValue = {
   warning: boolean;
   error: string;
   setError: (value: string) => void;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (
+    email: string,
+    password: string,
+    segment?: LoginSegment | null,
+  ) => Promise<void>;
   disconnect: () => Promise<void>;
   extend: () => Promise<void>;
   onAccessLost: () => void;
@@ -286,16 +291,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function signIn(email: string, password: string) {
-    accept(await login(email, password));
+  // Mémorisé : `useState` accepte une valeur ou un initialiseur, jamais une
+  // fonction censée produire une valeur. Sans ce retournement de flèche, le
+  // provider prendrait `setError` lui-même pour un état.
+  const setMessage = useCallback((value: string) => setError(value), []);
+
+  async function signIn(
+    email: string,
+    password: string,
+    segment?: LoginSegment | null,
+  ) {
+    accept(await login(email, password, segment));
   }
 
-  function onAccessLost() {
+  // `useCallback` : les écrans gardent cette fonction dans les dépendances de
+  // leurs effets de chargement. Recréée à chaque rendu du provider (à chaque
+  // tick de minuterie, puisque `warning`/`deadline` en dépendent), elle
+  // relançait ces chargements en boucle ; combinée à leur traitement d'un 403,
+  // la session était effacée et l'utilisateur renvoyé à la connexion.
+  const onAccessLost = useCallback(() => {
     clear();
     setError(
       "Votre session ou vos droits ont changé. Veuillez vous reconnecter.",
     );
-  }
+  }, [clear]);
 
   return (
     <SessionContext.Provider
@@ -305,7 +324,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         busy,
         warning,
         error,
-        setError,
+        setError: setMessage,
         signIn,
         disconnect,
         extend,

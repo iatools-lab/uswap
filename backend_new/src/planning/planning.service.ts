@@ -411,7 +411,7 @@ export class PlanningService {
             periodEnd: created.periodEnd.toISOString(),
             stations: stationIds,
             assignments: assignments.length,
-          } as Prisma.InputJsonValue,
+          },
         },
       });
 
@@ -420,7 +420,7 @@ export class PlanningService {
           data: {
             key: payload.idempotencyKey,
             scope: 'planning.create',
-            response: { id: created.id } as Prisma.InputJsonValue,
+            response: { id: created.id },
             expiresAt: new Date(Date.now() + 86_400_000),
           },
         });
@@ -501,7 +501,7 @@ export class PlanningService {
           revision: next.revision,
           action: 'PUBLISHED',
           actorId: actor.id,
-          snapshot: { publishedAt: next.publishedAt } as Prisma.InputJsonValue,
+          snapshot: { publishedAt: next.publishedAt },
         },
       });
       return next;
@@ -594,7 +594,7 @@ export class PlanningService {
           revision: planning.revision + 1,
           action: 'ASSIGNMENTS_CHANGED',
           actorId: actor.id,
-          snapshot: { occurrenceId, userIds: unique } as Prisma.InputJsonValue,
+          snapshot: { occurrenceId, userIds: unique },
         },
       });
       await tx.planning.update({
@@ -939,7 +939,7 @@ export class PlanningService {
           revision: planning.revision + 1,
           action: 'OCCURRENCES_GENERATED',
           actorId: actor.id,
-          snapshot: { stationId, added: toCreate.length } as Prisma.InputJsonValue,
+          snapshot: { stationId, added: toCreate.length },
         },
       });
     });
@@ -1368,7 +1368,7 @@ export class PlanningService {
           revision: planning.revision + 1,
           action: 'OCCURRENCE_UPDATED',
           actorId: actor.id,
-          snapshot: { occurrenceId } as Prisma.InputJsonValue,
+          snapshot: { occurrenceId },
         },
       });
     });

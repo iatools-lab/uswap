@@ -94,6 +94,14 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:no-reply@uswap.example.org}
+      # Canal SMS des notifications (opt-in par utilisateur).
+      SMS_DRIVER: ${SMS_DRIVER:-console}
+      SMS_ENDPOINT: ${SMS_ENDPOINT:-}
+      SMS_TOKEN: ${SMS_TOKEN:-}
+      SMS_SENDER: ${SMS_SENDER:-uSwap}
+      # Connexion Google (SSO) : comptes professionnels uniquement.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_ALLOWED_DOMAINS: ${GOOGLE_ALLOWED_DOMAINS:-upowa.org}
       DISABLE_WEB_PUSH: ${DISABLE_WEB_PUSH:-true}
       UPLOAD_DIR: var/uploads
       # Reinitialise le mot de passe du compte ADMIN s'il est desactive
@@ -139,6 +147,10 @@ services:
         # Meme cle que cote backend (deploy/.env). Si elle differe, les
         # notifications push ne peuvent pas etre dechiffrees par le navigateur.
         VITE_VAPID_PUBLIC_KEY: ${VITE_VAPID_PUBLIC_KEY:-}
+        # Identifiant OAuth Google (valeur PUBLIQUE). Le MEME que GOOGLE_CLIENT_ID
+        # du backend : sans lui, le bouton « Se connecter avec Google » n'est
+        # pas affiche sur l'ecran de connexion.
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     image: uswap/frontend:${USWAP_TAG:-local}
     restart: unless-stopped
     # Sonde HTTP : le conteneur n'est "healthy" que si Nginx sert vraiment le

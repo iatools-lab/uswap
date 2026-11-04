@@ -440,11 +440,24 @@ export function AdminHomePage() {
     let active = true;
     setLoading(true);
     setLoadError("");
+    // Congés traités à part : leur file de décision est propre au rôle et ne
+    // doit jamais empêcher l'affichage des utilisateurs, des stations et du
+    // planning (un refus 403 vidait tout le tableau de bord).
+    const pendingLeavesRequest = api<LeaveRow[]>("/leaves/management").catch(
+      (errorData: unknown) => {
+        if (
+          errorData instanceof ApiError &&
+          [401, 403].includes(errorData.status)
+        )
+          return [] as LeaveRow[];
+        throw errorData;
+      },
+    );
     Promise.all([
       api<{ statusCounts: Record<string, number> }>("/users/page?limit=1"),
       api<Station[]>("/stations"),
       api<Planning[]>("/plannings"),
-      api<LeaveRow[]>("/leaves/management"),
+      pendingLeavesRequest,
     ])
       .then(([membersData, stationsData, planningRows, leaveRows]) => {
         if (!active) return;

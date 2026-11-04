@@ -49,6 +49,13 @@ enum AbsenceOrigin {
 }
 
 enum AbsenceStatus {
+  // Déclarée par l'agent, en attente de décision d'un supérieur.
+  PENDING
+  // Validée par un superviseur / administrateur : l'agent est réellement
+  // indisponible pour ce créneau et ne doit plus être proposé à l'affectation.
+  APPROVED
+  // Refusée : l'agent redevient disponible pour le créneau.
+  REJECTED
   OPEN
   COVERED
 }
@@ -154,6 +161,7 @@ enum NotificationChannel {
   INTERNAL
   EMAIL
   PUSH
+  SMS
 }
 
 enum NotificationDeliveryStatus {
@@ -771,6 +779,7 @@ model NotificationPreference {
   internalEnabled   Boolean  @default(true)
   emailEnabled      Boolean  @default(true)
   pushEnabled       Boolean  @default(false)
+  smsEnabled        Boolean  @default(false)
   digestEnabled     Boolean  @default(false)
   quietHoursEnabled Boolean  @default(false)
   quietHoursStart   String?
@@ -933,12 +942,18 @@ model OfflineOperation {
   @@map("offline_operations")
 }
 
-/// Marqueur d'automatisation : une absence automatique n'est creee qu'une fois.
+/// Marqueur d'automatisation : une absence automatique n'est creee qu'une fois
+/// PAR AGENT. La cle primaire est le couple (creneau, agent) : sur un service
+/// a deux agents, si l'un pointe et l'autre non, seul l'agent absent est
+/// marque — et la raison peut differer (fin de service non pointee pour l'un,
+/// aucune prise pour l'autre).
 model AutomatedAbsence {
-  shiftId    String   @id
+  shiftId    String
+  swapperId  String
   detectedAt DateTime @default(now())
   reason     String
 
+  @@id([shiftId, swapperId])
   @@map("automated_absences")
 }
 

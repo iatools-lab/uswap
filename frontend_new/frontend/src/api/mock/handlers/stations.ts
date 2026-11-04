@@ -209,7 +209,9 @@ export const stationRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/stations$/,
     handler: (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
+      // Les ecrans Stations et Plannings sont partages avec l'ecran de
+      // pilotage du super administrateur (voir app/paths.ts).
+      requireRole(requireUser(ctx.db, ctx.user), ["SUPER_ADMIN", "ADMIN"]);
       const payload = stationPayload(ctx.body);
       validateStationGeolocation(payload);
       if (!payload.name)
@@ -248,7 +250,7 @@ export const stationRoutes: MockRoute[] = [
     method: "PATCH",
     pattern: /^\/stations\/([^/]+)\/(activate|deactivate)$/,
     handler: (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
+      requireRole(requireUser(ctx.db, ctx.user), ["SUPER_ADMIN", "ADMIN"]);
       const station = stationOf(ctx.db, ctx.params[0]);
       const active = ctx.params[1] === "activate";
       if (!active) {
@@ -271,7 +273,7 @@ export const stationRoutes: MockRoute[] = [
     method: "PATCH",
     pattern: /^\/stations\/([^/]+)$/,
     handler: (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
+      requireRole(requireUser(ctx.db, ctx.user), ["SUPER_ADMIN", "ADMIN"]);
       const station = stationOf(ctx.db, ctx.params[0]);
       const payload = stationPayload(ctx.body, station);
       validateStationGeolocation(payload);
@@ -304,7 +306,11 @@ export const stationRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/stations\/([^/]+)\/shift-templates$/,
     handler: (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
+      requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
       const station = stationOf(ctx.db, ctx.params[0]);
       const payload = templatePayload(ctx.body);
       if (!payload.label || !payload.startTime || !payload.endTime)

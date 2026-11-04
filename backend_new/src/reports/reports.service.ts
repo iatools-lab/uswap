@@ -12,6 +12,7 @@ import { serializeScheduledReport, serializeReportRun } from '../common/serializ
 import { durationHours } from '../common/utils/datetime';
 import { weekKeyOf, stationDayKey } from '../common/utils/datetime';
 import type { AuthenticatedUser } from '../common/guards/roles.guard';
+import { Role } from '../common/enums';
 import { NotificationKind } from '../notifications/categories';
 
 const DAY_MS = 86_400_000;
@@ -54,6 +55,12 @@ export class ReportsService {
     const scopeStations = user.stationId ? [user.stationId] : null;
     const stationId = user.stationId ?? query.stationId ?? null;
 
+    //
+    // SWAPPER : son rapport est SON activité. Sans ce filtre, un agent voyait
+    // les pointages de toute la station dans son propre tableau de bord.
+    const swapperId =
+      user.role === Role.SWAPPER ? user.id : (query.swapperId ?? null);
+
     const plannings = await this.prisma.planning.findMany({
       where: {
         status: 'PUBLISHED',
@@ -77,13 +84,16 @@ export class ReportsService {
           include: { user: { select: { id: true, fullName: true } } },
         },
         attendance: true,
-        absences: { where: { status: 'OPEN' } },
+        absences: {
+          where: { status: { in: ['OPEN', 'PENDING', 'APPROVED'] } },
+          select: { swapperId: true },
+        },
       },
     });
 
-    const scoped = query.swapperId
+    const scoped = swapperId
       ? schedule.filter((occurrence) =>
-          occurrence.assignments.some((a) => a.userId === query.swapperId),
+          occurrence.assignments.some((a) => a.userId === swapperId),
         )
       : schedule;
 
@@ -98,14 +108,24 @@ export class ReportsService {
     };
     const details = scoped.flatMap((occurrence) =>
       occurrence.assignments.map((assignment) => {
-        const record = occurrence.attendance;
+        const record =
+          occurrence.attendance?.swapperId === assignment.userId
+            ? occurrence.attendance
+            : null;
         // Un service qui n'a pas encore commence n'est PAS un absent : il est
         // « a venir ». Un shift date fait sans pointage ni fin de service est
         // « non pointe » (donnee manquante), distinct d'une absence constatee.
+        //
+        // L'absence est celle DE CET AGENT : sans le filtre `swapperId`, une
+        // absence declaree sur le creneau marquait ABSENTS tous les agents
+        // affectes (constat d'un agent dont le service etait pourtant rendu).
+        const absent = occurrence.absences.some(
+          (absence) => absence.swapperId === assignment.userId,
+        );
         const finished = occurrence.endTime.getTime() <= Date.now();
         const value = record
           ? record.status
-          : occurrence.absences.length
+          : absent
             ? 'ABSENT'
             : finished
               ? 'MISSED'
@@ -211,11 +231,11 @@ export class ReportsService {
       where: {
         createdAt: { gte: new Date(from), lte: new Date(to) },
         ...(stationId ? { stationId } : {}),
-        ...(query.swapperId
+        ...(swapperId
           ? {
               OR: [
-                { outSwapperId: query.swapperId },
-                { inSwapperId: query.swapperId },
+                { outSwapperId: swapperId },
+                { inSwapperId: swapperId },
               ],
             }
           : {}),
@@ -228,7 +248,7 @@ export class ReportsService {
         status: 'APPROVED',
         startTime: { lte: new Date(to) },
         endTime: { gte: new Date(from) },
-        ...(query.swapperId ? { swapperId: query.swapperId } : {}),
+        ...(swapperId ? { swapperId } : {}),
       },
     });
 
@@ -607,7 +627,7 @@ export class ReportsService {
         sheets.find((sheet) => sheet.name === 'Pointages') ?? sheets[0];
       const csv = toCsv(primary.rows);
       return {
-        // BOM UTF-8 : sans lui, Excel affiche « publiÃ© » au lieu de « publié ».
+        // BOM UTF-8 : sans lui, Excel affiche « publié » au lieu de « publié ».
         buffer: Buffer.concat([Buffer.from('\uFEFF', 'utf8'), Buffer.from(csv, 'utf8')]),
         filename: `rapport-uswap-${from}-${to}.csv`,
         contentType: 'text/csv; charset=utf-8',

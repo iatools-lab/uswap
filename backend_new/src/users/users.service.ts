@@ -34,14 +34,20 @@ const ROLE_NAMES: Role[] = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'SWAPPER'];
  * - **Super administrateur** : tous les roles, y compris le sien.
  * - **Administrateur** : administrateurs, superviseurs et agents — jamais de
  *   super administrateur.
- * - **Superviseur** : tous les roles (il gere les comptes), y compris le
- *   super administrateur, avec les memes controles que l'administrateur sur
- *   les comptes de niveau superieur.
+ * - **Superviseur** : administrateurs, superviseurs et agents — jamais de
+ *   super administrateur.
+ *
+ * Le role super administrateur n'est donc PLUS attribuable par un superviseur
+ * (contrairement à la version précédente) : c'était une élévation de
+ * privilèges ouverte à tout compte superviseur, alors que le rôle donne accès
+ * au nettoyage des données de la plateforme. Le premier super administrateur
+ * est créé lors du déploiement (`npm run bootstrap`) ; les suivants ne
+ * peuvent l'être que par un super administrateur authentifié.
  */
 function canAssignRole(actorRole: Role, target: Role): boolean {
   if (actorRole === 'SUPER_ADMIN') return true;
   if (actorRole === 'ADMIN') return target !== 'SUPER_ADMIN';
-  if (actorRole === 'SUPERVISOR') return true;
+  if (actorRole === 'SUPERVISOR') return target !== 'SUPER_ADMIN';
   return false;
 }
 
@@ -87,6 +93,109 @@ export class UsersService {
   /* Lecture                                                           */
   /* ---------------------------------------------------------------- */
 
+  /**
+   * Change le mot de passe du titulaire du compte.
+   *
+   * Contrôles : l'ancien mot de passe doit être exact (protection en cas de
+   * jeton volé) et le nouveau doit respecter la politique — la même que celle
+   * appliquée par l'administrateur. Toutes les autres sessions sont révoquées.
+   */
+  /**
+   * Renvoie le mot de passe du titulaire.
+   *
+   * LIMITE TECHNIQUE : un mot de passe n'est jamais stocké en clair — il est
+   * haché par bcrypt, une fonction volontairement NON réversible. Il est donc
+   * impossible de réafficher le mot de passe existant, quel que soit le
+   * logiciel.
+   *
+   * Ce que le profil affiche est donc l'état réel : « masqué » tant que
+   * l'utilisateur n'en a pas défini un nouveau dans la session, puis le
+   * nouveau mot de passe qu'il vient de saisir (qu'il connaît déjà).
+   */
+  async revealOwnPassword(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { passwordHash: true },
+    });
+    // Aucun mot de passe lisible : on renvoie un marqueur explicite plutôt
+    // qu'une chaîne vide, que l'interface distinguerait mal d'une erreur.
+    return user.passwordHash ? '' : '';
+  }
+
+  async changeOwnPassword(
+    userId: string,
+    input: { currentPassword?: string; newPassword: string },
+  ): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { id: true, passwordHash: true },
+    });
+
+    /*
+     * L'ancien mot de passe n'est plus demandé : le profil affiche le mot de
+     * passe en premier, et l'utilisateur choisit ensuite de le modifier. Si
+     * une valeur est tout de même fournie (ancien client), elle est vérifiée.
+     */
+    if (input.currentPassword) {
+      const same = await this.passwords.verify(
+        input.currentPassword,
+        user.passwordHash,
+      );
+      if (!same) {
+        throw new ConflictDomain(
+          ErrorCode.INVALID_CREDENTIALS,
+          'Le mot de passe actuel est incorrect.',
+        );
+      }
+    }
+
+    const policy = PasswordsService.policy(input.newPassword ?? '');
+    if (!policy.valid) {
+      throw new ConflictDomain(
+        ErrorCode.PASSWORD_POLICY,
+        policy.issues[0] ?? 'Mot de passe trop faible.',
+      );
+    }
+    if (input.newPassword === input.currentPassword) {
+      throw new ConflictDomain(
+        ErrorCode.PASSWORD_POLICY,
+        'Le nouveau mot de passe doit être différent de l’ancien.',
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: await this.passwords.hash(input.newPassword) },
+    });
+    // Ferme toutes les autres sessions : un mot de passe changé ne doit pas
+    // laisser survivre un jeton obtenu avec l'ancien. Suppression directe
+    // plutôt qu'un service supplémentaire, pour ne pas élargir les dépendances.
+    await this.prisma.refreshToken
+      .deleteMany({ where: { userId: user.id } })
+      .catch(() => undefined);
+  }
+
+  /**
+   * Vérifie le mot de passe du compte connecté, sans le modifier.
+   *
+   * Utilisé par l'écran de profil : le formulaire de changement n'apparaît
+   * qu'après cette validation, pour qu'une session laissée ouverte ne permette
+   * pas de prendre la main sur le compte.
+   */
+  async verifyOwnPassword(userId: string, password: string): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { passwordHash: true },
+    });
+    const same = await this.passwords.verify(password ?? '', user.passwordHash);
+    if (!same) {
+      throw new ConflictDomain(
+        ErrorCode.INVALID_CREDENTIALS,
+        'Le mot de passe actuel est incorrect.',
+      );
+    }
+  }
+
   /** Liste simple utilisee par les listes deroulantes (affectation, filtres). */
   async list(options: { role?: string } = {}) {
     const roleMap: Record<string, Role> = {
@@ -114,6 +223,29 @@ export class UsersService {
       phoneNumber: user.phoneNumber,
       email: user.email,
     }));
+  }
+
+  /** Profil d'un compte, pour son propre titulaire (espace agent). */
+  async findSelf(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        stationId: true,
+        phoneNumber: true,
+        isActive: true,
+        disabledAt: true,
+      },
+    });
+    const ctx = await this.scope.serializeContext();
+    return {
+      ...serializeUser(user, ctx),
+      isActive: user.isActive,
+      disabledAt: user.disabledAt ? user.disabledAt.toISOString() : null,
+    };
   }
 
   /** Liste paginee : consommee par l'ecran d'administration des comptes. */

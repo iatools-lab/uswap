@@ -176,6 +176,41 @@ textarea:focus-visible {
   margin-top: 18px;
   color: var(--muted);
 }
+
+/* --- Connexion Google (SSO) : séparateur « ou » + bouton officiel --- */
+.google-signin {
+  margin-top: 18px;
+  text-align: center;
+}
+.google-signin__separator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: lowercase;
+}
+.google-signin__separator::before,
+.google-signin__separator::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #dfe3ec;
+}
+.google-signin__button {
+  display: flex;
+  justify-content: center;
+  min-height: 40px;
+}
+.google-signin__button[aria-busy="true"] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.google-signin .field-hint {
+  margin-top: 10px;
+  text-align: center;
+}
 .brand {
   font-family: Poppins, Arial, sans-serif;
 }
@@ -794,6 +829,64 @@ textarea:focus-visible {
 .settings-note {
   margin: 24px 0 0;
   font-size: 13px !important;
+}
+
+/* --- Profil : identifiant et changement de mot de passe ---------------- */
+.settings-fields code {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.settings-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--brand-primary, #001a70);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.settings-inline-actions {
+  display: inline-flex;
+  gap: 12px;
+  margin-left: 10px;
+}
+.settings-password-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid #e3e8ef;
+  border-radius: 7px;
+  background: #f8fafb;
+  max-width: 420px;
+}
+.settings-password-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.settings-password-form input {
+  font: inherit;
+  font-weight: 400;
+  padding: 9px 11px;
+  border: 1px solid #cfd6df;
+  border-radius: 6px;
+  background: #fff;
+}
+.settings-password-form input:focus {
+  outline: 2px solid var(--brand-primary, #001a70);
+  outline-offset: 1px;
+}
+.settings-error {
+  margin: 0;
+  color: #b42318;
+  font-size: 13px;
+}
+.settings-success {
+  margin: 0;
+  color: #067647;
+  font-size: 13px;
 }
 
 /* --- Users directory (search, filters, row actions, detail) --- */
@@ -2363,4 +2456,68 @@ textarea:focus-visible {
   .notification-matrix-row {
     grid-template-columns: minmax(150px, 1fr) 62px 62px;
   }
+}
+
+/* --- Validation des absences (supervision) ----------------------------- */
+.approval-panel {
+  display: grid;
+  gap: 18px;
+}
+.approval-panel__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.approval-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px;
+  border: 1px dashed #cfd6df;
+  border-radius: 7px;
+  color: #475467;
+  font-size: 14px;
+}
+.approval-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.approval-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 16px;
+  border: 1px solid #e3e8ef;
+  border-radius: 7px;
+  background: #fff;
+}
+.approval-row__main {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}
+.approval-row__shift {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #001a70;
+  font-weight: 600;
+}
+.approval-row__reason,
+.approval-row__meta {
+  color: #475467;
+}
+.approval-row__meta {
+  font-size: 12px;
+}
+.approval-row__actions {
+  display: flex;
+  gap: 10px;
 }

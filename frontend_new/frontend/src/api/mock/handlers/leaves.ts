@@ -401,7 +401,7 @@ export const leaveRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/admin\/leaves\/pending$/,
     handler: ({ db, user }) => {
-      requireRole(requireUser(db, user), ["ADMIN"]);
+      requireRole(requireUser(db, user), ["SUPER_ADMIN", "ADMIN"]);
       return db.leaves
         .filter((leave) => leave.status === "PENDING")
         .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
@@ -418,7 +418,11 @@ export const leaveRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/leaves\/management$/,
     handler: ({ db, user }) => {
-      const actor = requireRole(requireUser(db, user), ["ADMIN", "SUPERVISOR"]);
+      const actor = requireRole(requireUser(db, user), [
+        "SUPER_ADMIN",
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
       return managementRows(db, actor.id, actor.role as "ADMIN" | "SUPERVISOR");
     },
   },
@@ -448,7 +452,10 @@ export const leaveRoutes: MockRoute[] = [
     method: "PATCH",
     pattern: /^\/admin\/leaves\/([^/]+)\/decision$/,
     handler: ({ db, user, params, body, now }) => {
-      const actor = requireRole(requireUser(db, user), ["ADMIN"]);
+      const actor = requireRole(requireUser(db, user), [
+        "SUPER_ADMIN",
+        "ADMIN",
+      ]);
       const leave = db.leaves.find((item) => item.id === params[0]);
       const decision = asText(body.decision);
       const reason = asText(body.reason);

@@ -15,7 +15,10 @@ type Section = "profile" | "notifications" | "security";
 type Preferences = {
   inApp: boolean;
   email: boolean;
+  /** Conservé pour compatibilité avec l'API, mais plus exposé à l'écran. */
   push: boolean;
+  /** Canal SMS : opt-in, nécessite un numéro de téléphone sur le compte. */
+  sms: boolean;
   digest: boolean;
   quietHoursEnabled: boolean;
   quietHoursStart: string | null;
@@ -48,6 +51,64 @@ export function AccountSettings({ user }: { user: User }) {
       ? "notifications"
       : "profile",
   );
+
+  // Changement de mot de passe par le titulaire du compte.
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordDone, setPasswordDone] = useState(false);
+
+  /**
+   * Numéro de téléphone du compte.
+   *
+   * Le canal SMS ne peut fonctionner que si un numéro existe : l'écran
+   * l'affiche et désactive l'interrupteur sinon, plutôt que de laisser
+   * croire qu'un réglage suffit.
+   */
+  const [phoneNumber, setPhoneNumber] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    api<{ phoneNumber?: string }>("/me")
+      .then((me) => {
+        if (active) setPhoneNumber(me.phoneNumber ?? "");
+      })
+      .catch(() => {
+        if (active) setPhoneNumber("");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function changePassword() {
+    setPasswordError("");
+    setPasswordDone(false);
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Les deux mots de passe ne correspondent pas.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError("Le nouveau mot de passe doit faire au moins 8 caractères.");
+      return;
+    }
+    try {
+      await api("/auth/change-password", {
+        method: "POST",
+        body: { newPassword },
+      });
+      setPasswordDone(true);
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordOpen(false);
+    } catch (e) {
+      setPasswordError(
+        e instanceof Error ? e.message : "Modification impossible.",
+      );
+    }
+  }
+
   const initials = user.fullName
     .split(/\s+/)
     .filter(Boolean)
@@ -143,7 +204,89 @@ export function AccountSettings({ user }: { user: User }) {
               <dt>Station de rattachement</dt>
               <dd>{user.stationName || "Toutes les stations autorisées"}</dd>
             </div>
+            <div>
+              {/* Identifiant du compte : c'est ce qui permet de le distinguer
+                  sans ambiguïté (deux personnes peuvent avoir le même nom).
+                  La « version déployée » a été retirée : c'est une information
+                  de développement, sans intérêt pour l'utilisateur. */}
+              <dt>Identifiant</dt>
+              <dd>
+                <code data-testid="account-id">{user.id}</code>
+              </dd>
+            </div>
+            <div>
+              <dt>Mot de passe</dt>
+              <dd>
+                {/*
+                 * Aucun bouton « Afficher » : le mot de passe est stocké
+                 * haché (bcrypt), donc non réversible. Il est impossible de
+                 * le réafficher ; proposer un bouton laisserait croire le
+                 * contraire. Seule la modification est offerte.
+                 */}
+                <span data-testid="account-password">••••••••</span>
+                <span className="settings-inline-actions">
+                  <button
+                    type="button"
+                    className="settings-link"
+                    onClick={() => {
+                      setPasswordOpen((open) => !open);
+                      setNewPassword("");
+                      setConfirmPassword("");
+                      setPasswordError("");
+                    }}
+                    data-testid="change-password-toggle"
+                  >
+                    {passwordOpen ? "Annuler" : "Modifier le mot de passe"}
+                  </button>
+                </span>
+              </dd>
+            </div>
           </dl>
+          {passwordOpen && (
+            <form
+              className="settings-password-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void changePassword();
+              }}
+            >
+              <label>
+                Nouveau mot de passe
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  minLength={8}
+                  required
+                />
+              </label>
+              <label>
+                Confirmer le nouveau mot de passe
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  minLength={8}
+                  required
+                />
+              </label>
+              {passwordError && (
+                <p className="settings-error" role="alert">
+                  {passwordError}
+                </p>
+              )}
+              {passwordDone && (
+                <p className="settings-success" role="status">
+                  Mot de passe modifié.
+                </p>
+              )}
+              <button type="submit" className="admin-button primary-cta">
+                Enregistrer le nouveau mot de passe
+              </button>
+            </form>
+          )}
           <p className="settings-note">
             Une modification d’identité ou de rattachement doit être réalisée
             par un administrateur.
@@ -217,6 +360,22 @@ function NotificationPreferences() {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  // Numéro du compte : sans lui, le canal SMS est inutilisable.
+  const [phoneNumber, setPhoneNumber] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    api<{ phoneNumber?: string }>("/me")
+      .then((me) => {
+        if (active) setPhoneNumber(me.phoneNumber ?? "");
+      })
+      .catch(() => {
+        if (active) setPhoneNumber("");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -366,21 +525,29 @@ function NotificationPreferences() {
             onChange={(value) => patch("email", value)}
           />
         </div>
+        {/*
+         * Canal SMS : remplace le réglage « notifications push », retiré de
+         * l'application. Le SMS est OPT-IN et nécessite un numéro sur le
+         * compte ; sans numéro, aucune case à cocher n'a d'effet, on l'explique
+         * donc directement.
+         */}
         <div className="notification-channel-card">
           <span>
             <BellIcon size={20} />
           </span>
           <div>
-            <strong>Notifications push</strong>
+            <strong>SMS</strong>
             <small>
-              Alertes sur cet appareil. Le refus du navigateur ne bloque pas
-              uSwap.
+              {phoneNumber
+                ? `Messages texte envoyés au ${phoneNumber}.`
+                : "Aucun numéro de téléphone sur votre compte : demandez à un administrateur de l'ajouter."}
             </small>
           </div>
           <PreferenceSwitch
-            label="Notifications push"
-            checked={preferences.push}
-            onChange={(value) => void togglePush(value)}
+            label="Notifications par SMS"
+            checked={Boolean(preferences.sms)}
+            disabled={!phoneNumber}
+            onChange={(value) => patch("sms", value)}
           />
         </div>
       </div>

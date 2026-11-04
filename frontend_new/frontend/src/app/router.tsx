@@ -18,6 +18,7 @@ const AccountAccessPage = lazy(() =>
     default: m.AccountAccessPage,
   })),
 );
+
 const AccountPage = lazy(() =>
   import("../pages/AccountPage").then((m) => ({ default: m.AccountPage })),
 );
@@ -91,6 +92,11 @@ const SupervisorAttendancePage = lazy(() =>
     default: m.SupervisorAttendancePage,
   })),
 );
+const AbsenceValidationPage = lazy(() =>
+  import("../pages/role/AbsenceValidationPage").then((m) => ({
+    default: m.AbsenceValidationPage,
+  })),
+);
 const SupervisorLeaveManagementPage = lazy(() =>
   import("../pages/admin/LeaveManagementPage").then((m) => ({
     default: m.LeaveManagementPage,
@@ -155,7 +161,11 @@ function PilotRoutes({ superAdmin }: { superAdmin: boolean }) {
 export function AppRoutes() {
   return (
     <Routes>
+      {/* Espace de connexion en option : `/auth/login/superadmin`, `/admin`,
+          `/supervisor` ou `/swapper`. Sans suffixe, le serveur identifie le
+          rôle du compte. */}
       <Route path="/auth/login" element={<LoginPage />} />
+      <Route path="/auth/login/:space" element={<LoginPage />} />
       <Route
         path="/auth/forgot-password"
         element={<AccountRoute mode="forgot" />}
@@ -199,6 +209,12 @@ export function AppRoutes() {
             <Route
               path="pointages"
               element={page(<SupervisorAttendancePage />)}
+            />
+          )}
+          {role === "SUPERVISOR" && (
+            <Route
+              path="absences"
+              element={page(<AbsenceValidationPage />)}
             />
           )}
           {role === "SUPERVISOR" && (

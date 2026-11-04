@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   MapPin,
   UserRound,
+  WarningCircleIcon,
 } from "../ui/icons";
 import { SidebarToggle } from "./SidebarToggle";
 import { AppTopbar } from "./AppTopbar";
@@ -73,6 +74,10 @@ export function RoleShell() {
     interceptNav(event, navigate, `${homePath}/pointages`);
   }
 
+  function goAbsences(event: React.MouseEvent<HTMLAnchorElement>) {
+    interceptNav(event, navigate, `${homePath}/absences`);
+  }
+
   return (
     <div
       className={`admin-workspace role-workspace${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}
@@ -116,6 +121,18 @@ export function RoleShell() {
             >
               <Clock3 />
               <span>Pointages</span>
+            </a>
+          )}
+          {session.user.role === "SUPERVISOR" && (
+            <a
+              href={`${homePath}/absences`}
+              onClick={goAbsences}
+              aria-current={
+                location.pathname.endsWith("/absences") ? "page" : undefined
+              }
+            >
+              <WarningCircleIcon size={18} />
+              <span>Absences</span>
             </a>
           )}
           <a

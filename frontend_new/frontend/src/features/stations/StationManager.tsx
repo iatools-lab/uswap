@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { notify } from "../../ui/Toast";
 import {
   ShiftTemplates,
@@ -6,7 +6,12 @@ import {
   shiftDuration,
 } from "./ShiftTemplates";
 import { api, usingMock } from "../../api/auth-api";
-import { exportToExcel } from "../../utils/excelExport";
+import {
+  exportToCsv,
+  exportToExcel,
+  type ColumnConfig,
+  type ExportToExcelOptions,
+} from "../../utils/excelExport";
 import { StepperModal, type StepItem } from "../../ui/StepperModal";
 import { Modal } from "../../ui/Modal";
 import { Select } from "../../ui/Select";
@@ -86,7 +91,8 @@ const blankStationForm: typeof emptyForm = {
   latitude: "",
   longitude: "",
   location: "",
-  timezone: "",
+  // Le fuseau est imposé : le Cameroun n'en connaît qu'un.
+  timezone: "Africa/Douala",
   contactName: "",
   contactPhone: "",
   latenessToleranceMinutes: "" as unknown as number,
@@ -556,65 +562,107 @@ export function StationManager({
     return matchesQuery && matchesCity;
   });
 
+  /**
+   * Colonnes de l'export des stations.
+   *
+   * Mutualisées entre Excel et CSV : un même fichier transmis aux deux
+   * formats doit présenter exactement les mêmes colonnes, dans le même ordre.
+   * Les nombres restent numériques (`format: "number"`) pour que le total et le
+   * tri fonctionnent dans Excel, et chaque ligne porte ses paramètres de
+   * planning (tolérance, repos, limite hebdomadaire) : c'est l'indication de
+   * planning demandée dans le fichier de pointage.
+   */
+  const exportColumns: ColumnConfig<StationData>[] = [
+    {
+      header: "Nom de la station",
+      key: (s: StationData) => s?.name || "",
+      width: 25,
+    },
+    { header: "Ville", key: (s: StationData) => s?.city || "—", width: 15 },
+    {
+      header: "Adresse",
+      key: (s: StationData) => s?.address || s?.location || "—",
+      width: 30,
+    },
+    {
+      header: "Coordonnées GPS",
+      key: (s: StationData) =>
+        s?.latitude != null && s?.longitude != null
+          ? `${s.latitude}, ${s.longitude}`
+          : "—",
+      width: 25,
+    },
+    {
+      header: "Fuseau horaire",
+      key: (s: StationData) => s?.timezone || "Africa/Douala",
+      width: 18,
+    },
+    {
+      header: "Contact responsable",
+      key: (s: StationData) => s?.contactName || "—",
+      width: 22,
+    },
+    {
+      header: "Téléphone",
+      key: (s: StationData) => s?.contactPhone || "—",
+      width: 18,
+    },
+    {
+      header: "Tolérance retard (min)",
+      key: (s: StationData) => s?.latenessToleranceMinutes ?? 0,
+      width: 20,
+      format: "number",
+    },
+    {
+      header: "Rayon de pointage (m)",
+      key: (s: StationData) => s?.geofenceRadiusMeters ?? 0,
+      width: 18,
+      format: "number",
+    },
+    {
+      header: "Repos minimal (h)",
+      key: (s: StationData) => s?.minRestHours ?? 0,
+      width: 18,
+      format: "number",
+    },
+    {
+      header: "Limite hebdo (h)",
+      key: (s: StationData) => s?.weeklyHoursLimit ?? 0,
+      width: 18,
+      format: "number",
+    },
+    {
+      header: "Statut",
+      key: (s: StationData) => (s?.isActive ? "Active" : "Inactive"),
+      width: 12,
+    },
+  ];
+
+  const exportOptions = (): ExportToExcelOptions<StationData> => ({
+    data: filteredStations,
+    filename: `stations_uswap_${new Date().toISOString().slice(0, 10)}`,
+    sheetName: "Stations",
+    columns: exportColumns,
+    meta: [
+      ["Objet", "Liste des stations et paramètres de planning"],
+      [
+        "Périmètre",
+        cityFilter === "ALL" ? "Toutes les villes" : cityFilter,
+      ],
+      ["Stations exportées", String(filteredStations.length)],
+    ],
+  });
+
   function handleExportExcel() {
     if (!filteredStations.length) return;
-    exportToExcel<StationData>({
-      data: filteredStations,
-      filename: "stations_uswap",
-      sheetName: "Stations",
-      columns: [
-        {
-          header: "Nom de la station",
-          key: (s: StationData) => s?.name || "",
-          width: 25,
-        },
-        { header: "Ville", key: (s: StationData) => s?.city || "—", width: 15 },
-        {
-          header: "Adresse",
-          key: (s: StationData) => s?.address || s?.location || "—",
-          width: 30,
-        },
-        {
-          header: "Coordonnées GPS",
-          key: (s: StationData) =>
-            s?.latitude != null && s?.longitude != null
-              ? `${s.latitude}, ${s.longitude}`
-              : "—",
-          width: 25,
-        },
-        {
-          header: "Contact responsable",
-          key: (s: StationData) => s?.contactName || "—",
-          width: 22,
-        },
-        {
-          header: "Téléphone",
-          key: (s: StationData) => s?.contactPhone || "—",
-          width: 18,
-        },
-        {
-          header: "Tolérance retard (min)",
-          key: (s: StationData) => s?.latenessToleranceMinutes ?? 0,
-          width: 20,
-        },
-        {
-          header: "Repos minimal (h)",
-          key: (s: StationData) => s?.minRestHours ?? 0,
-          width: 18,
-        },
-        {
-          header: "Limite hebdo (h)",
-          key: (s: StationData) => s?.weeklyHoursLimit ?? 0,
-          width: 18,
-        },
-        {
-          header: "Statut",
-          key: (s: StationData) => (s?.isActive ? "Active" : "Inactive"),
-          width: 12,
-        },
-      ],
-    });
+    exportToExcel<StationData>(exportOptions());
     notify("Exportation du fichier Excel réussie.", "success");
+  }
+
+  function handleExportCsv() {
+    if (!filteredStations.length) return;
+    exportToCsv<StationData>(exportOptions());
+    notify("Exportation CSV réussie.", "success");
   }
 
   const stationSteps: StepItem[] = form
@@ -653,12 +701,21 @@ export function StationManager({
                 </div>
 
                 <div className="stepper-field-group">
+                  {/*
+                   * Fuseau horaire : TOUTES les stations uSwap sont au
+                   * Cameroun. Un champ libre laissait saisir n'importe quoi
+                   * (`Africa/Doual`, `GMT+1`…), ce qui faussait les horaires
+                   * de shift et le contrôle de ponctualité. Une liste à une
+                   * seule valeur rend l'erreur impossible.
+                   */}
                   <label>FUSEAU HORAIRE *</label>
-                  <input
+                  <select
                     required
-                    value={String(form?.timezone || "")}
+                    value={String(form?.timezone || "Africa/Douala")}
                     onChange={(e) => set("timezone", e.target.value)}
-                  />
+                  >
+                    <option value="Africa/Douala">Africa/Douala (Cameroun, UTC+1)</option>
+                  </select>
                 </div>
               </div>
 
@@ -1256,6 +1313,17 @@ export function StationManager({
               >
                 <DownloadSimple size={15} />
                 <span>Excel</span>
+              </button>
+
+              <button
+                type="button"
+                className="admin-button secondary small"
+                onClick={handleExportCsv}
+                disabled={!filteredStations?.length}
+                title="Même tableau au format CSV (UTF-8, point-virgule)"
+              >
+                <DownloadSimple size={15} />
+                <span>CSV</span>
               </button>
 
               <button

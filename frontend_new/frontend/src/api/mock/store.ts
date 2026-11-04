@@ -524,6 +524,11 @@ export function replaceDb(next: MockDb): void {
 
 /** Réinitialise la maquette (démonstration, recette). */
 export function resetDb(): MockDb {
+  // La marque « réparation d'accès administrateur déjà faite » ne doit pas
+  // survivre à une réinitialisation : sinon le compte administrateur resterait
+  // désactivé et la connexion de démonstration échouerait d'un passage à
+  // l'autre.
+  storage()?.removeItem(ADMIN_ACCESS_REPAIR_KEY);
   db = ensureConsumedLeaveHistory(
     restoreAdminAccess(retainTestPlanning(createSeed(Date.now()))),
   );

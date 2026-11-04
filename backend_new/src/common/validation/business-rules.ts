@@ -81,25 +81,32 @@ export async function attendanceStatusOf(
       where: { shiftId: occurrenceId },
     });
     if (record) {
-      return record.status as
-        | 'EXPECTED'
-        | 'PRESENT'
-        | 'LATE'
-        | 'CLOSED'
-        | 'ABSENT'
-        | 'JUSTIFIED';
+      return record.status;
     }
   }
   return 'EXPECTED';
 }
 
-/** Nombre total d'absences ouvertes d'un poste. */
+/**
+ * Le poste a-t-il une absence qui rend le swappeur indisponible ?
+ *
+ * Trois statuts comptent, pas un seul :
+ *  - `PENDING`  : l'agent a déclaré son absence, la décision est en cours ;
+ *  - `APPROVED` : un supérieur l'a validée ;
+ *  - `OPEN`     : constat historique (absence automatique ou ancienne donnée).
+ *
+ * Ne considérer que `OPEN` était la cause du défaut signalé : un agent
+ * fraîchement déclaré absent restait proposé à l'affectation.
+ */
 export async function hasOpenAbsence(
   db: PrismaLike,
   occurrenceId: string,
 ): Promise<boolean> {
   const count = await db.absence.count({
-    where: { shiftId: occurrenceId, status: 'OPEN' },
+    where: {
+      shiftId: occurrenceId,
+      status: { in: ['PENDING', 'APPROVED', 'OPEN'] },
+    },
   });
   return count > 0;
 }

@@ -33,10 +33,12 @@ COPY src ./src
 # peut entrer dans l'image.
 ARG VITE_API_URL=/api
 ARG VITE_VAPID_PUBLIC_KEY=
+# Valeur PUBLIQUE : identifiant OAuth Google. Vide = bouton SSO non affiche.
+ARG VITE_GOOGLE_CLIENT_ID=
 RUN test ! -e .env \
  && test -n "$VITE_API_URL" \
- && printf 'VITE_API_URL=%s\nVITE_VAPID_PUBLIC_KEY=%s\n' \
-      "$VITE_API_URL" "$VITE_VAPID_PUBLIC_KEY" > .env.production \
+ && printf 'VITE_API_URL=%s\nVITE_VAPID_PUBLIC_KEY=%s\nVITE_GOOGLE_CLIENT_ID=%s\n' \
+      "$VITE_API_URL" "$VITE_VAPID_PUBLIC_KEY" "$VITE_GOOGLE_CLIENT_ID" > .env.production \
  && npm run build
 
 FROM nginx:1.27-alpine AS runtime

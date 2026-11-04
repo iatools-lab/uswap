@@ -158,7 +158,7 @@ export const attendanceRoutes: MockRoute[] = [
     pattern: /^\/shifts\/validate$/,
     handler: (ctx) => {
       const user = requireUser(ctx.db, ctx.user);
-      requireRole(user, ["ADMIN", "SUPERVISOR"]);
+      requireRole(user, ["SUPER_ADMIN", "ADMIN", "SUPERVISOR"]);
       const startTime = asText(ctx.body.startTime);
       const endTime = asText(ctx.body.endTime);
       const stationId = asText(ctx.body.stationId);
@@ -425,7 +425,7 @@ export const attendanceRoutes: MockRoute[] = [
     pattern: /^\/attendance$/,
     handler: (ctx) => {
       const user = requireUser(ctx.db, ctx.user);
-      requireRole(user, ["ADMIN", "SUPERVISOR"]);
+      requireRole(user, ["SUPER_ADMIN", "ADMIN", "SUPERVISOR"]);
       const stationScope = scopeStationId(user);
       const published = publishedPlanningIds(ctx);
       return ctx.db.occurrences

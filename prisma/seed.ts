@@ -1,4 +1,4 @@
-﻿import { PrismaClient, Role, PlanningStatus } from '@prisma/client';
+import { PrismaClient, Role, PlanningStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import 'dotenv/config';
 
@@ -43,7 +43,7 @@ const STATIONS: {
 }[] = [
   {
     key: 'douala',
-    name: 'BonabÃ©ri',
+    name: 'Bonabéri',
     location: 'Douala, Cameroun',
     latitude: 4.0777,
     longitude: 9.6627,
@@ -52,8 +52,8 @@ const STATIONS: {
   },
   {
     key: 'yaounde',
-    name: 'YaoundÃ© Centre',
-    location: 'YaoundÃ©, Cameroun',
+    name: 'Yaoundé Centre',
+    location: 'Yaoundé, Cameroun',
     latitude: 3.848,
     longitude: 11.5021,
     minRestHours: 8,
@@ -75,7 +75,7 @@ const USERS: DemoUser[] = [
   },
   {
     email: 'chef@upowa.org',
-    fullName: 'Superviseur BonabÃ©ri',
+    fullName: 'Superviseur Bonabéri',
     role: Role.SUPERVISOR,
     stationKey: 'douala',
   },
@@ -228,7 +228,7 @@ async function seedStationScopes(
     },
   });
 
-  console.log('  scope     superviseur -> YaoundÃ© Centre');
+  console.log('  scope     superviseur -> Yaoundé Centre');
 }
 
 async function seedPlanning(
@@ -401,7 +401,7 @@ async function seedShifts(
 async function main() {
   console.log('');
   console.log('========================================');
-  console.log('  Uswap â€” demo seed');
+  console.log('  Uswap ” demo seed');
   console.log('========================================');
 
   console.log('\nStations');

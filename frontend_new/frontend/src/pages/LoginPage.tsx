@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Eye, EyeOff, LoaderCircle, Mail, X } from "../ui/icons";
 import { useSession } from "../app/session";
+import { GoogleSignIn } from "../features/auth/GoogleSignIn";
 import {
   fetchProfiles,
   forgetSession,
+  getLoginSegment,
+  LOGIN_SEGMENT,
   mockPeople,
   roles,
+  setLoginSegment,
   usingMock,
+  type LoginSegment,
   type User,
 } from "../api/auth-api";
 import { AuthLayout } from "./AuthLayout";
@@ -17,8 +22,37 @@ import { Select } from "../ui/Select";
 /** Format d'adresse e-mail attendu, partagé par la validation et les messages d'erreur. */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Espaces de connexion connus et libellé affiché.
+ *
+ * La valeur du segment est celle de l'API (`/auth/login/:role`) ; le libellé
+ * reprend la terminologie de l'application (`roles`).
+ */
+const LOGIN_SPACES: Record<string, LoginSegment> = {
+  superadmin: "superadmin",
+  admin: "admin",
+  supervisor: "supervisor",
+  swapper: "swapper",
+};
+
+const SEGMENT_LABELS: Record<LoginSegment, string> = {
+  superadmin: "Super administrateur",
+  admin: "Administrateur",
+  supervisor: "Superviseur",
+  swapper: "Swappeur",
+};
+
 export function LoginPage() {
   const { session, checking, busy, error, setError, signIn } = useSession();
+  const params = useParams<{ space?: string }>();
+  const navigate = useNavigate();
+  // Espace demandé par l'URL (`/auth/login/superadmin`) : facultatif.
+  const requested = params.space ? LOGIN_SPACES[params.space] : undefined;
+  // Espace retenu d'une visite à l'autre (page déjà ouverte) ; remis à zéro
+  // par `submit` dès que l'URL ne l'impose plus.
+  const [space, setSpace] = useState<LoginSegment | null>(
+    requested ?? getLoginSegment(),
+  );
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
@@ -27,6 +61,17 @@ export function LoginPage() {
   const [capsLock, setCapsLock] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [profiles, setProfiles] = useState<User[]>(usingMock ? mockPeople : []);
+
+  // L'URL fait foi : `/auth/login/admin` impose l'espace, `/auth/login`
+  // laisse le serveur reconnaître le rôle du compte.
+  useEffect(() => {
+    const next = params.space ? LOGIN_SPACES[params.space] : null;
+    setSpace(next);
+    setLoginSegment(next);
+    setError("");
+    // `setError` change à chaque rendu du provider : le comparer relancerait
+    // l'effet en boucle. Seul le segment d'URL compte.
+  }, [params.space, setError]);
 
   useEffect(() => {
     if (usingMock) return;
@@ -70,12 +115,12 @@ export function LoginPage() {
     // ne doit jamais empecher une nouvelle connexion : on la remplace.
     forgetSession();
     try {
-      await signIn(identifier.trim().toLowerCase(), password);
-      setPassword("");
+      await signIn(identifier.trim().toLowerCase(), password, space);
     } catch (err) {
       // L'erreur de connexion est portee par le champ, pas par le provider :
       // sans ce `setError` local, rien ne s'affichait apres un echec.
-      const message = err instanceof Error ? err.message : "Connexion impossible.";
+      const message =
+        err instanceof Error ? err.message : "Connexion impossible.";
       setError(message);
     } finally {
       setSubmitting(false);
@@ -91,7 +136,25 @@ export function LoginPage() {
       ) : (
         <>
           <h2 className="login-title">Connexion</h2>
-          <form onSubmit={submit} noValidate>
+          <form
+            onSubmit={(event) => {
+              void submit(event);
+            }}
+            noValidate
+          >
+            {/* Aucun sélecteur d'espace : le serveur reconnaît le rôle du
+                compte à la connexion (`/auth/login` sans suffixe) et le
+                frontend dirige ensuite vers l'espace correspondant. Proposer
+                un choix ici laissait croire qu'il fallait le connaître, et
+                un mauvais choix renvoyait un 403 trompeur. */}
+            {requested && (
+              <div className="field">
+                <span className="field-hint">
+                  Espace déduit du compte :
+                  {SEGMENT_LABELS[requested]}.
+                </span>
+              </div>
+            )}
             {profiles.length > 0 && (
               <div className="field">
                 <span className="field-label">Profil à ouvrir</span>
@@ -103,6 +166,12 @@ export function LoginPage() {
                   placeholder="Choisir un compte"
                   onChange={(value) => {
                     setIdentifier(String(value));
+                    // Le profil choisi correspond à un rôle connu : la
+                    // connexion passe alors par la route de cet espace.
+                    const person = profiles.find(
+                      (item) => item.email === String(value),
+                    );
+                    if (person) setSpace(LOGIN_SEGMENT[person.role]);
                     setError("");
                   }}
                   options={profiles.map((person) => ({
@@ -220,6 +289,7 @@ export function LoginPage() {
               )}
             </button>
           </form>
+          <GoogleSignIn />
           <div className="invite-note">
             Première connexion ?{" "}
             <button className="text-button" onClick={() => setHelp("invite")}>

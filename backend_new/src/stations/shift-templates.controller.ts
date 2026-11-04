@@ -7,6 +7,11 @@ import {
 import { StationsModule } from '../stations/stations.module';
 import { Roles } from '../common/guards/roles.guard';
 import { Role } from '../common/enums';
+import {
+  PilotRoute,
+  SuperAdminRoute,
+  SupervisionRoute,
+} from '../common/routing/role-route';
 
 /**
  * Alias racine des modèles de shift.
@@ -18,7 +23,12 @@ import { Role } from '../common/enums';
  */
 @ApiTags('stations')
 @ApiBearerAuth()
+// Même opération que `/stations/:id/shift-templates`, exposée au niveau racine
+// pour la parité du contrat : elle suit donc les espaces de `stations`.
 @Controller()
+@PilotRoute('shift-templates')
+@SuperAdminRoute('shift-templates')
+@SupervisionRoute('shift-templates')
 export class ShiftTemplatesController {
   constructor(private readonly stations: StationsService) {}
 

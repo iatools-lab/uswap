@@ -88,7 +88,16 @@ export const configuration = () => ({
   vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
   vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? '',
   vapidSubject: process.env.VAPID_SUBJECT ?? 'mailto:no-reply@uswap.local',
-  enableWebPush: bool(process.env.ENABLE_WEB_PUSH, false),
+  // Web Push est désactivé par défaut : le canal officiel est le SMS. Il ne
+  // s'active que sur décision explicite (ENABLE_WEB_PUSH=true). L'ancien nom
+  // `DISABLE_WEB_PUSH` reste accepté (déploiements existants) : « true » y
+  // signifie désactivé, d'où l'inversion.
+  enableWebPush: bool(
+    process.env.ENABLE_WEB_PUSH,
+    process.env.DISABLE_WEB_PUSH
+      ? process.env.DISABLE_WEB_PUSH !== 'true'
+      : false,
+  ),
 
   // Reglages metier par defaut (surcharges par /admin/settings en base)
   invitationValidityHours: num(process.env.INVITATION_VALIDITY_HOURS, 48),
@@ -98,6 +107,32 @@ export const configuration = () => ({
   ),
   notificationRetentionDays: num(process.env.NOTIFICATION_RETENTION_DAYS, 90),
   supportEmail: process.env.SUPPORT_EMAIL ?? 'support@uswap.local',
+
+  /*
+   * SMS (notifications par message texte).
+   *
+   * Fournisseur par défaut : un HTTP simple, compatible avec la plupart des
+   * agrégateurs africains (Orange SMS API, Twilio, Infobip…), et un mode
+   * `console` pour la recette. Aucune dépendance externe n'est ajoutée : le
+   * transport est un `fetch` POST vers l'URL configurée.
+   *   SMS_DRIVER = console | http
+   */
+  smsDriver: (process.env.SMS_DRIVER ?? 'console') as 'console' | 'http',
+  smsEndpoint: process.env.SMS_ENDPOINT ?? '',
+  smsToken: process.env.SMS_TOKEN ?? '',
+  smsSender: process.env.SMS_SENDER ?? 'uSwap',
+
+  /*
+   * Connexion Google (SSO).
+   *
+   * `GOOGLE_CLIENT_ID` : identifiant OAuth de l'application, créé dans la
+   * console Google Cloud. Sans lui, la connexion Google reste désactivée.
+   * `GOOGLE_ALLOWED_DOMAINS` : domaines autorisés, séparés par des virgules.
+   *   Par défaut `upowa.org` : seuls les comptes professionnels uPowa peuvent
+   *   se connecter par Google (un Gmail personnel est refusé).
+   */
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+  googleAllowedDomains: list(process.env.GOOGLE_ALLOWED_DOMAINS, ['upowa.org']),
 
   defaultToleranceMinutes: num(process.env.TOLERANCE_MINUTES, 5),
   defaultGeofenceRadiusMeters: num(process.env.GEOFENCE_RADIUS_METERS, 150),

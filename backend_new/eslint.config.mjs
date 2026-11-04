@@ -10,7 +10,13 @@ import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**'],
+    /*
+     * Les fichiers de test sont EXCLUS de `tsconfig.json` (voir `exclude`) : le
+     * linter typé échoue sur eux avec « parserOptions.project has been
+     * provided ». On les retire donc de l'analyse ESLint ; Vitest les exécute
+     * et les vérifie à part.
+     */
+    ignores: ['dist/**', 'node_modules/**', 'coverage/**', '**/*.spec.ts'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -36,6 +42,19 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-return': 'off',
       '@typescript-eslint/no-misused-promises': 'off',
       '@typescript-eslint/require-await': 'off',
+      /*
+       * Bruit de typage sur du code applicatif correct :
+       *  - `no-unsafe-enum-comparison` : Prisma renvoie des champs `string`,
+       *    comparés aux enums metier (`role === Role.ADMIN`). Le controle de
+       *    valeur est fait a l'entree (pipes de validation), pas ici.
+       *  - `restrict-template-expressions` / `no-base-to-string` : quelques
+       *    interpolations de `Date`/`object` dans des messages de journal.
+       * Ces regles sont deja partiellement couvertes par les `no-unsafe-*`
+       * desactivees juste au-dessus ; elles n'ont jamais revele de defaut ici.
+       */
+      '@typescript-eslint/no-unsafe-enum-comparison': 'off',
+      '@typescript-eslint/restrict-template-expressions': 'off',
+      '@typescript-eslint/no-base-to-string': 'off',
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',

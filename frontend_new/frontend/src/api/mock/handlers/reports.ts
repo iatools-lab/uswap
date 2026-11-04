@@ -17,7 +17,8 @@ export const reportRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/admin\/audit$/,
     handler: ({ db, user }) => {
-      requireRole(requireUser(db, user), ["ADMIN"]);
+      // Ecran partage avec le super administrateur (voir app/paths.ts).
+      requireRole(requireUser(db, user), ["SUPER_ADMIN", "ADMIN"]);
       const users = new Map(db.users.map((item) => [item.id, item]));
       const stations = new Map(db.stations.map((item) => [item.id, item]));
       const fieldNames: Record<string, string> = {
@@ -172,7 +173,7 @@ export const reportRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/admin\/settings$/,
     handler: ({ db, user }) => {
-      requireRole(requireUser(db, user), ["ADMIN"]);
+      requireRole(requireUser(db, user), ["SUPER_ADMIN", "ADMIN"]);
       return {
         settings: db.globalSettings,
         history: db.settingsHistory.slice(-8).reverse(),
@@ -183,7 +184,10 @@ export const reportRoutes: MockRoute[] = [
     method: "PATCH",
     pattern: /^\/admin\/settings$/,
     handler: ({ db, user, body, now }) => {
-      const actor = requireRole(requireUser(db, user), ["ADMIN"]);
+      const actor = requireRole(requireUser(db, user), [
+        "SUPER_ADMIN",
+        "ADMIN",
+      ]);
       const number = (key: string, min: number, max: number) => {
         const value = Number(body[key]);
         if (!Number.isFinite(value) || value < min || value > max)
@@ -230,7 +234,15 @@ export const reportRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/reports\/dashboard$/,
     handler: ({ db, user, query, now }) => {
-      const actor = requireRole(requireUser(db, user), ["ADMIN", "SUPERVISOR"]);
+      // Le super administrateur partage l'ecran de pilotage (et son tableau de
+      // bord) avec l'administrateur : sans lui, la page d'accueil repondait
+      // 403 et l'ecran deconnectait la session au lieu d'afficher les
+      // indicateurs.
+      const actor = requireRole(requireUser(db, user), [
+        "SUPER_ADMIN",
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
       const fromValue = text(query.get("from"));
       const toValue = text(query.get("to"));
       const from = Date.parse(

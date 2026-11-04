@@ -38,6 +38,12 @@ export interface TemplatePayload {
   revision?: number;
 }
 
+/**
+ * Fuseau horaire unique du réseau : toutes les stations sont au Cameroun.
+ * L'application ne gère pas d'heure d'été, le décalage est constant (UTC+1).
+ */
+export const STATION_TIMEZONE = 'Africa/Douala';
+
 @Injectable()
 export class StationsService {
   constructor(
@@ -404,10 +410,12 @@ export class StationsService {
       latitude: this.coordinate(data.latitude, current?.latitude),
       longitude: this.coordinate(data.longitude, current?.longitude),
       location: this.text(data.location) || null,
-      timezone:
-        this.text(data.timezone) ||
-        current?.timezone ||
-        'Africa/Douala',
+      /*
+       * Fuseau horaire IMPOSÉ. Toutes les stations uSwap sont au Cameroun
+       * (UTC+1, sans heure d'été). Accepter une valeur libre faussait les
+       * horaires de shift et donc le calcul de ponctualité.
+       */
+      timezone: STATION_TIMEZONE,
       contactName: this.text(data.contactName) || null,
       contactPhone: this.text(data.contactPhone) || null,
       latenessToleranceMinutes: this.number(

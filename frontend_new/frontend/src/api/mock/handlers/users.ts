@@ -117,7 +117,13 @@ export const userRoutes: MockRoute[] = [
     method: "GET",
     pattern: /^\/users\/export$/,
     handler: (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN", "SUPERVISOR"]);
+      // L'export de l'annuaire est ouvert a l'ecran de pilotage partage par
+      // l'administrateur et le super administrateur.
+      requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
+        "ADMIN",
+        "SUPERVISOR",
+      ]);
       const rows = filteredMembers(ctx.db.users, ctx.query);
       return {
         rows: rows.map((user) => ({
@@ -139,7 +145,7 @@ export const userRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/users\/imports\/preview$/,
     handler: async (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
+      requireRole(requireUser(ctx.db, ctx.user), ["SUPER_ADMIN", "ADMIN"]);
       if (!ctx.file)
         throw new MockHttpError(400, "Choisissez un fichier CSV ou XLSX.");
       if (ctx.file.size > 2 * 1024 * 1024)
@@ -292,7 +298,10 @@ export const userRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/users\/imports\/([^/]+)\/confirm$/,
     handler: (ctx) => {
-      const admin = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
+      const admin = requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
+        "ADMIN",
+      ]);
       const batch = ctx.db.importBatches.find(
         (item) => item.id === ctx.params[0],
       );
@@ -377,7 +386,10 @@ export const userRoutes: MockRoute[] = [
     method: "PATCH",
     pattern: /^\/users\/([^/]+)$/,
     handler: (ctx) => {
-      const admin = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
+      const admin = requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
+        "ADMIN",
+      ]);
       const target = ctx.db.users.find((item) => item.id === ctx.params[0]);
       if (!target) throw new MockHttpError(404, "Compte introuvable.");
       const expected = asText(ctx.body.updatedAt);
@@ -451,7 +463,10 @@ export const userRoutes: MockRoute[] = [
     method: "PATCH",
     pattern: /^\/users\/([^/]+)\/status$/,
     handler: (ctx) => {
-      const admin = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
+      const admin = requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
+        "ADMIN",
+      ]);
       const target = ctx.db.users.find((item) => item.id === ctx.params[0]);
       if (!target) throw new MockHttpError(404, "Compte introuvable.");
       const expected = asText(ctx.body.updatedAt);
@@ -486,7 +501,10 @@ export const userRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/users\/([^/]+)\/activate$/,
     handler: (ctx) => {
-      const admin = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
+      const admin = requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
+        "ADMIN",
+      ]);
       const target = ctx.db.users.find((item) => item.id === ctx.params[0]);
       if (!target) throw new MockHttpError(404, "Compte introuvable.");
       if (target.isActive)

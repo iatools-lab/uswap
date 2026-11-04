@@ -7,7 +7,20 @@ import {
   serializeUser,
   sessionFor,
 } from "../shared";
-import { MockHttpError, type MockRoute, type MockUser } from "../types";
+import {
+  MockHttpError,
+  type MockCtx,
+  type MockRoute,
+  type MockUser,
+} from "../types";
+
+/** Rôle attendu par chaque route de connexion (`/auth/login/:role`). */
+const LOGIN_SPACE_ROLE: Record<string, MockUser["role"]> = {
+  superadmin: "SUPER_ADMIN",
+  admin: "ADMIN",
+  supervisor: "SUPERVISOR",
+  swapper: "SWAPPER",
+};
 
 /** Jeton d'invitation attendu (64 caractères hexadécimaux, comme les vraies routes). */
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
@@ -15,34 +28,70 @@ const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 const asText = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
 
+/**
+ * Règles de connexion, identiques à celles du serveur :
+ * identifiants (401), espace (`403` si le rôle ne correspond pas), compte
+ * désactivé ou non activé (`403`).
+ */
+function loginBySpace(
+  ctx: { db: MockCtx["db"]; body: Record<string, unknown> },
+  email: string,
+  password: string,
+  space?: string,
+) {
+  const user = ctx.db.users.find((item) => item.email.toLowerCase() === email);
+  if (!user || user.password !== password)
+    throw new MockHttpError(401, "Identifiants invalides ou session expirée.");
+  if (space) {
+    const expected = LOGIN_SPACE_ROLE[space];
+    if (!expected)
+      throw new MockHttpError(404, "Cette page de connexion n'existe pas.");
+    if (user.role !== expected)
+      throw new MockHttpError(
+        403,
+        "Cet espace de connexion ne correspond pas à votre compte.",
+      );
+  }
+  if (user.disabledAt)
+    throw new MockHttpError(
+      403,
+      "Ce compte est désactivé. Contactez votre administrateur.",
+    );
+  if (!user.isActive)
+    throw new MockHttpError(
+      403,
+      "Ce compte n'est pas encore activé. Ouvrez le lien reçu par e-mail.",
+    );
+  ctx.db.sessionEmail = user.email;
+  return sessionFor(ctx.db, user);
+}
+
 export const authRoutes: MockRoute[] = [
   {
     method: "POST",
-    pattern: /^\/auth\/login$/,
+    // Espace inconnu (`/auth/login/autre`) : déclaré AVANT la route générique,
+    // qui ignorerait le segment non reconnu et laisserait passer la connexion.
+    pattern: /^\/auth\/login\/([a-z]+)$/,
+    handler: (ctx) => {
+      if (!LOGIN_SPACE_ROLE[ctx.params[0]])
+        throw new MockHttpError(404, "Cette page de connexion n'existe pas.");
+      const email = asText(ctx.body.email).toLowerCase();
+      const password =
+        typeof ctx.body.password === "string" ? ctx.body.password : "";
+      return loginBySpace(ctx, email, password, ctx.params[0]);
+    },
+  },
+  {
+    method: "POST",
+    // Connexion commune (`/auth/login`) et connexion par espace de travail
+    // (`/auth/login/superadmin|admin|supervisor|swapper`). Un compte dont le
+    // rôle ne correspond pas à l'espace appelé est refusé, comme côté serveur.
+    pattern: /^\/auth\/login(?:\/([a-z]+))?$/,
     handler: (ctx) => {
       const email = asText(ctx.body.email).toLowerCase();
       const password =
         typeof ctx.body.password === "string" ? ctx.body.password : "";
-      const user = ctx.db.users.find(
-        (item) => item.email.toLowerCase() === email,
-      );
-      if (!user || user.password !== password)
-        throw new MockHttpError(
-          401,
-          "Identifiants invalides ou session expirée.",
-        );
-      if (user.disabledAt)
-        throw new MockHttpError(
-          403,
-          "Ce compte est désactivé. Contactez votre administrateur.",
-        );
-      if (!user.isActive)
-        throw new MockHttpError(
-          403,
-          "Ce compte n'est pas encore activé. Ouvrez le lien reçu par e-mail.",
-        );
-      ctx.db.sessionEmail = user.email;
-      return sessionFor(ctx.db, user);
+      return loginBySpace(ctx, email, password, ctx.params[0]);
     },
   },
   {
@@ -102,7 +151,10 @@ export const authRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/auth\/register$/,
     handler: (ctx) => {
-      const admin = requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
+      const admin = requireRole(requireUser(ctx.db, ctx.user), [
+        "SUPER_ADMIN",
+        "ADMIN",
+      ]);
       const fullName = asText(ctx.body.fullName);
       const email = asText(ctx.body.email).toLowerCase();
       const role = asText(ctx.body.role).toUpperCase() as MockUser["role"];
@@ -189,7 +241,7 @@ export const authRoutes: MockRoute[] = [
     method: "POST",
     pattern: /^\/auth\/invitations\/([^/]+)\/resend$/,
     handler: (ctx) => {
-      requireRole(requireUser(ctx.db, ctx.user), ["ADMIN"]);
+      requireRole(requireUser(ctx.db, ctx.user), ["SUPER_ADMIN", "ADMIN"]);
       const target = ctx.db.users.find((item) => item.id === ctx.params[0]);
       if (!target) throw new MockHttpError(404, "Compte introuvable.");
       if (target.isActive)

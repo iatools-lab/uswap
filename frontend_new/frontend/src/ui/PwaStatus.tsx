@@ -16,9 +16,6 @@ export function PwaStatus() {
   const [install, setInstall] = useState<InstallEvent | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [queued, setQueued] = useState(0);
-  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(
-    null,
-  );
   const [updating, setUpdating] = useState(false);
   const updateRequested = useRef(false);
 
@@ -42,17 +39,32 @@ export function PwaStatus() {
     const controllerChanged = () => {
       if (updateRequested.current) window.location.reload();
     };
+    const verify = () => {
+      if (document.visibilityState !== "visible") return;
+      navigator.serviceWorker
+        .getRegistration()
+        .then((existing) => existing?.update())
+        .catch(() => {});
+    };
     if (
       "serviceWorker" in navigator &&
       (import.meta as unknown as { env: { PROD: boolean } }).env.PROD
     ) {
+      // Un service worker déjà installé peut continuer à servir l'ancienne
+      // coquille de l'application : on relance donc systématiquement la
+      // vérification de version, et une nouvelle version prend la main sans
+      // attendre que l'utilisateur clique.
+      verify();
       // L'application reste utilisable si l'installation du service worker échoue.
       navigator.serviceWorker
-        .register("/sw.js")
+        .register("/sw.js", { updateViaCache: "none" })
         .then((value) => {
           const offerWaitingWorker = () => {
-            if (value.waiting && navigator.serviceWorker.controller)
-              setWaitingWorker(value.waiting);
+            if (value.waiting && navigator.serviceWorker.controller) {
+              updateRequested.current = true;
+              setUpdating(true);
+              value.waiting.postMessage({ type: "SKIP_WAITING" });
+            }
           };
           offerWaitingWorker();
           value.addEventListener("updatefound", () => {
@@ -65,6 +77,7 @@ export function PwaStatus() {
           void value.update().catch(() => {});
         })
         .catch(() => {});
+      document.addEventListener("visibilitychange", () => verify());
       navigator.serviceWorker.addEventListener(
         "controllerchange",
         controllerChanged,
@@ -76,6 +89,7 @@ export function PwaStatus() {
       window.removeEventListener("offline", sync);
       window.removeEventListener("beforeinstallprompt", available);
       window.removeEventListener("appinstalled", installed);
+      document.removeEventListener("visibilitychange", verify);
       if ("serviceWorker" in navigator)
         navigator.serviceWorker.removeEventListener(
           "controllerchange",
@@ -106,31 +120,15 @@ export function PwaStatus() {
     );
   }
 
-  if (waitingWorker && !dismissed) {
+  // Le service worker en attente est activé immédiatement (voir `verify`),
+  // l'écran est donc simplement signalé pendant le rechargement.
+  if (updating) {
     return (
       <div className="pwa-status pwa-status--update" role="status">
         <span>
-          <strong>Une nouvelle version de uSwap est prête.</strong>
-          <small>Actualisez pour utiliser les dernières améliorations.</small>
+          <strong>Mise à jour de uSwap…</strong>
+          <small>La nouvelle version s’affiche dans un instant.</small>
         </span>
-        <button
-          type="button"
-          disabled={updating}
-          onClick={() => {
-            updateRequested.current = true;
-            setUpdating(true);
-            waitingWorker.postMessage({ type: "SKIP_WAITING" });
-          }}
-        >
-          {updating ? "Mise à jour…" : "Actualiser"}
-        </button>
-        <button
-          type="button"
-          aria-label="Fermer la notification de mise à jour"
-          onClick={() => setDismissed(true)}
-        >
-          Plus tard
-        </button>
       </div>
     );
   }
@@ -147,7 +145,7 @@ export function PwaStatus() {
   return (
     <div className="pwa-status">
       <span>uSwap sur votre écran d’accueil</span>
-      <button type="button" onClick={promptInstall}>
+      <button type="button" onClick={() => void promptInstall()}>
         Installer
       </button>
       <button
