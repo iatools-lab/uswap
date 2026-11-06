@@ -19,6 +19,54 @@ export const DEFAULT_LAT = 4.051056;
 export const DEFAULT_LNG = 9.708533;
 
 /**
+ * Clé Google Maps (Maps JavaScript API + Places), lue à l'exécution.
+ *
+ * Absente : la carte reste entièrement fonctionnelle avec OpenStreetMap et
+ * Nominatim. Présente : Google Maps devient le fond de référence, ce qui
+ * garantit que le repère, le périmètre et les adresses sont exactement ceux
+ * que l'agent voit dans l'application Google Maps.
+ */
+export function googleMapsApiKey(): string {
+  const env = (import.meta as unknown as { env?: Record<string, string> }).env;
+  return String(env?.VITE_GOOGLE_MAPS_API_KEY || "").trim();
+}
+
+/**
+ * Charge l'API Google Maps une seule fois.
+ *
+ * `libraries=places` donne l'autocomplétion d'adresses et `geometry` les
+ * calculs de distance ; `v=weekly` évite d'épingler une version obsolète.
+ */
+let googleMapsPromise: Promise<any> | null = null;
+
+export function loadGoogleMaps(apiKey: string): Promise<any> {
+  const existing = (window as any).google?.maps;
+  if (existing) return Promise.resolve(existing);
+  if (googleMapsPromise) return googleMapsPromise;
+
+  googleMapsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src =
+      "https://maps.googleapis.com/maps/api/js" +
+      `?key=${encodeURIComponent(apiKey)}` +
+      "&libraries=places,geometry&language=fr&region=CM&v=weekly";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      const maps = (window as any).google?.maps;
+      if (maps) resolve(maps);
+      else reject(new Error("Google Maps indisponible."));
+    };
+    script.onerror = () => {
+      googleMapsPromise = null;
+      reject(new Error("Impossible de charger Google Maps (clé ou réseau)."));
+    };
+    document.head.appendChild(script);
+  });
+  return googleMapsPromise;
+}
+
+/**
  * Analyse une coordonnée saisie à la main.
  *
  * Accepte les formats réellement utilisés sur le terrain :
@@ -318,6 +366,16 @@ export function MapLocationPicker({
   // référence pour départager les homonymes d'adresse, même quand le parent
   // n'a pas encore propagé les coordonnées.
   const lastPoint = useRef<{ lat: number; lng: number } | null>(null);
+  // Moteur cartographique réellement affiché : Google Maps si une clé est
+  // configurée, sinon OpenStreetMap (Leaflet).
+  const [engine, setEngine] = useState<"google" | "osm">(
+    googleMapsApiKey() ? "google" : "osm",
+  );
+  const googleMapRef = useRef<any>(null);
+  const googleMarkerRef = useRef<any>(null);
+  const googleCircleRef = useRef<any>(null);
+  const googleGeocoderRef = useRef<any>(null);
+  const googleAutocompleteRef = useRef<any>(null);
 
   const hasCoords =
     latitude !== "" &&
@@ -352,6 +410,18 @@ export function MapLocationPicker({
 
   function applyPosition(lat: number, lng: number, zoom?: number) {
     lastPoint.current = { lat, lng };
+
+    // Google Maps : mêmes coordonnées, même projection (WGS84 / Web Mercator).
+    const gMap = googleMapRef.current;
+    if (gMap) {
+      const position = { lat, lng };
+      googleMarkerRef.current?.setPosition(position);
+      googleCircleRef.current?.setCenter(position);
+      gMap.panTo(position);
+      if (zoom) gMap.setZoom(zoom);
+      return;
+    }
+
     const map = mapInstanceRef.current;
     const marker = markerRef.current;
     if (map && marker) {
@@ -359,6 +429,133 @@ export function MapLocationPicker({
       if (circleRef.current) circleRef.current.setLatLng([lat, lng]);
       map.setView([lat, lng], zoom ?? map.getZoom(), { animate: true });
       map.invalidateSize();
+    }
+  }
+
+  /**
+   * Géocodage via Google Maps quand il est disponible.
+   *
+   * C'est la seule façon de garantir que l'adresse et le point affichés sont
+   * exactement ceux de Google Maps : Nominatim et Google n'ont pas la même
+   * base d'adresses, et un même nom de quartier peut y désigner deux points
+   * distants de plusieurs centaines de mètres.
+   */
+  async function googleGeocode(
+    query: string,
+  ): Promise<{ lat: number; lng: number; label: string } | null> {
+    const geocoder = googleGeocoderRef.current;
+    if (!geocoder) return null;
+    try {
+      const response = await geocoder.geocode({
+        address: query,
+        componentRestrictions: { country: "CM" },
+        region: "CM",
+      });
+      const best = response?.results?.[0];
+      const location = best?.geometry?.location;
+      if (!location) return null;
+      return {
+        lat: location.lat(),
+        lng: location.lng(),
+        label: best.formatted_address || query,
+      };
+    } catch (error) {
+      console.warn("Géocodage Google Maps impossible", error);
+      return null;
+    }
+  }
+
+  /**
+   * Suggestions d'adresses via Google Places (autocomplétion).
+   *
+   * Les résultats sont triés par distance au point de référence : Google
+   * classe par pertinence mondiale, ce qui fait remonter des homonymes
+   * lointains (« Ndobo » existe dans plusieurs villes du Cameroun).
+   */
+  async function googlePlacesSuggestions(
+    query: string,
+    near: { lat: number; lng: number } | null,
+  ): Promise<Array<{ label: string; lat: number; lng: number }>> {
+    const places = (window as any).google?.maps?.places;
+    if (!places) return [];
+    try {
+      const service = new places.AutocompleteService();
+      const predictions: any[] = await new Promise((resolve) => {
+        service.getPlacePredictions(
+          {
+            input: query,
+            componentRestrictions: { country: "cm" },
+            language: "fr",
+            ...(near
+              ? {
+                  location: new (window as any).google.maps.LatLng(
+                    near.lat,
+                    near.lng,
+                  ),
+                  radius: 50_000,
+                }
+              : {}),
+          },
+          (results: any[] | null) => resolve(results || []),
+        );
+      });
+      if (!predictions.length) return [];
+
+      const geocoder = googleGeocoderRef.current;
+      const detailed = await Promise.all(
+        predictions.slice(0, 6).map(
+          (prediction) =>
+            new Promise<{ label: string; lat: number; lng: number } | null>(
+              (resolve) => {
+                if (!geocoder) return resolve(null);
+                geocoder.geocode(
+                  { placeId: prediction.place_id, language: "fr" },
+                  (response: any, status: string) => {
+                    const location =
+                      status === "OK"
+                        ? response?.[0]?.geometry?.location
+                        : null;
+                    if (!location) return resolve(null);
+                    resolve({
+                      label:
+                        response[0].formatted_address ||
+                        prediction.description,
+                      lat: location.lat(),
+                      lng: location.lng(),
+                    });
+                  },
+                );
+              },
+            ),
+        ),
+      );
+      const found = detailed.filter(
+        (item): item is { label: string; lat: number; lng: number } => !!item,
+      );
+      if (!near) return found;
+      return found.sort(
+        (a, b) =>
+          distanceMeters(near, a.lat, a.lng) -
+          distanceMeters(near, b.lat, b.lng),
+      );
+    } catch (error) {
+      console.warn("Suggestions Google Maps indisponibles", error);
+      return [];
+    }
+  }
+
+  /** Adresse lisible d'un point, via Google Maps si disponible. */
+  async function googleReverse(lat: number, lng: number): Promise<string> {
+    const geocoder = googleGeocoderRef.current;
+    if (!geocoder) return "";
+    try {
+      const response = await geocoder.geocode({
+        location: { lat, lng },
+        language: "fr",
+      });
+      return response?.results?.[0]?.formatted_address || "";
+    } catch {
+      return "";
     }
   }
 
@@ -382,6 +579,16 @@ export function MapLocationPicker({
         ? { lat: Number(latitude), lng: Number(longitude) }
         : (lastPoint.current ??
           (center ? { lat: center.lat, lng: center.lng } : null));
+
+      // Google Maps d'abord : c'est la référence demandée par le terrain.
+      const google = await googleGeocode(query);
+      if (google) {
+        onSelectAddress(google.label, google.lat, google.lng);
+        applyPosition(google.lat, google.lng, zoomForRadius(radius));
+        lastQuery.current = google.label.trim().toLowerCase();
+        setResolved("");
+        return true;
+      }
 
       let results = await nominatimSearchNear(query, near);
       if (!results.length) results = await nominatimSearch(query);
@@ -413,7 +620,10 @@ export function MapLocationPicker({
 
   async function reverseGeocode(lat: number, lng: number) {
     try {
-      const label = await nominatimReverse(lat, lng);
+      // Google Maps d'abord : l'adresse affichée doit être celle que l'agent
+      // retrouve en collant les coordonnées dans Google Maps.
+      const label =
+        (await googleReverse(lat, lng)) || (await nominatimReverse(lat, lng));
       if (!label) return;
       onSelectAddress(label, lat, lng);
       lastQuery.current = label.trim().toLowerCase();
@@ -433,7 +643,9 @@ export function MapLocationPicker({
   function applyManualCoords(lat: number, lng: number) {
     setCoordsError("");
     onSelectLocation(lat, lng);
-    applyPosition(lat, lng, Math.max(mapInstanceRef.current?.getZoom() ?? 0, 17));
+    const currentZoom =
+      googleMapRef.current?.getZoom?.() ?? mapInstanceRef.current?.getZoom?.() ?? 0;
+    applyPosition(lat, lng, Math.max(currentZoom, 17));
     void reverseGeocode(lat, lng);
   }
 
@@ -496,6 +708,14 @@ export function MapLocationPicker({
           ? { lat: Number(latitude), lng: Number(longitude) }
           : (lastPoint.current ??
             (center ? { lat: center.lat, lng: center.lng } : null));
+
+        // Google Places d'abord : mêmes suggestions que dans Google Maps.
+        const places = await googlePlacesSuggestions(value.trim(), near);
+        if (places.length) {
+          setSuggestions(places);
+          return;
+        }
+
         const results = await nominatimSearchNear(value.trim(), near);
         setSuggestions(
           results.map((item) => ({
@@ -527,7 +747,124 @@ export function MapLocationPicker({
     applyPosition(item.lat, item.lng, zoomForRadius(radius));
   }
 
+  /*
+   * Moteur cartographique.
+   *
+   * Google Maps est utilisé dès qu'une clé est configurée : c'est la seule
+   * façon de garantir que le repère, le périmètre et les adresses sont
+   * exactement ceux de Google Maps. Sans clé (ou si le chargement échoue), on
+   * retombe sur OpenStreetMap/Leaflet, qui reste pleinement fonctionnel.
+   */
   useEffect(() => {
+    const apiKey = googleMapsApiKey();
+    if (!apiKey) return;
+    let disposed = false;
+
+    void loadGoogleMaps(apiKey)
+      .then((maps) => {
+        if (disposed || !mapContainerRef.current) return;
+        if (mapInstanceRef.current) {
+          // Leaflet déjà monté : on le retire avant de basculer sur Google.
+          mapInstanceRef.current.remove();
+          mapInstanceRef.current = null;
+          markerRef.current = null;
+          circleRef.current = null;
+        }
+        mapContainerRef.current.innerHTML = "";
+
+        const map = new maps.Map(mapContainerRef.current, {
+          center: { lat: currentLat, lng: currentLng },
+          zoom: zoomForRadius(radius),
+          mapTypeControl: true,
+          streetViewControl: true,
+          fullscreenControl: true,
+          clickableIcons: true,
+          gestureHandling: "greedy",
+          language: "fr",
+          region: "CM",
+        });
+        googleMapRef.current = map;
+        googleGeocoderRef.current = new maps.Geocoder();
+
+        const marker = new maps.Marker({
+          position: { lat: currentLat, lng: currentLng },
+          map,
+          draggable: true,
+          title: "Emplacement de la station",
+        });
+        googleMarkerRef.current = marker;
+
+        // Périmètre de pointage : même rayon, mêmes mètres que côté Leaflet.
+        const circle = new maps.Circle({
+          center: { lat: currentLat, lng: currentLng },
+          radius,
+          map,
+          strokeColor: "#2d6cdf",
+          strokeWeight: 2,
+          fillColor: "#2d6cdf",
+          fillOpacity: 0.12,
+        });
+        googleCircleRef.current = circle;
+
+        marker.addListener("dragend", () => {
+          const position = marker.getPosition();
+          if (!position) return;
+          const lat = position.lat();
+          const lng = position.lng();
+          lastPoint.current = { lat, lng };
+          circle.setCenter(position);
+          onSelectLocation(lat, lng);
+          void reverseGeocode(lat, lng);
+        });
+
+        map.addListener("click", (event: any) => {
+          const lat = event.latLng.lat();
+          const lng = event.latLng.lng();
+          lastPoint.current = { lat, lng };
+          marker.setPosition({ lat, lng });
+          circle.setCenter({ lat, lng });
+          onSelectLocation(lat, lng);
+          void reverseGeocode(lat, lng);
+        });
+
+        setEngine("google");
+        setMapError("");
+
+        if (!hasCoords) {
+          marker.setVisible(false);
+          circle.setVisible(false);
+          if (address.trim().length >= 4) {
+            void resolveAddress(address).then((found) => {
+              if (found) return;
+              marker.setVisible(true);
+              circle.setVisible(true);
+            });
+          } else {
+            marker.setVisible(true);
+            circle.setVisible(true);
+          }
+        }
+      })
+      .catch((error: Error) => {
+        if (disposed) return;
+        // Clé invalide ou réseau bloqué : on garde OpenStreetMap.
+        console.warn("Google Maps indisponible, bascule sur OpenStreetMap", error);
+        setEngine("osm");
+      });
+
+    return () => {
+      disposed = true;
+      googleMapRef.current = null;
+      googleMarkerRef.current = null;
+      googleCircleRef.current = null;
+      googleGeocoderRef.current = null;
+    };
+    // Carte créée une seule fois : les mises à jour passent par les refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (engine === "google") return;
     let disposed = false;
     let disposeMap: (() => void) | undefined;
 
@@ -674,6 +1011,28 @@ export function MapLocationPicker({
    * doigt de l'agent et le repère semblait se déplacer tout seul.
    */
   useEffect(() => {
+    // Google Maps : mêmes règles, mêmes coordonnées.
+    const gMap = googleMapRef.current;
+    const gMarker = googleMarkerRef.current;
+    const gCircle = googleCircleRef.current;
+    if (gMap && gMarker) {
+      if (!hasCoords) {
+        gMarker.setVisible(false);
+        gCircle?.setVisible(false);
+        return;
+      }
+      const position = { lat: currentLat, lng: currentLng };
+      gMarker.setVisible(true);
+      gCircle?.setVisible(true);
+      gMarker.setPosition(position);
+      gCircle?.setCenter(position);
+      const bounds = gMap.getBounds();
+      if (!bounds || !bounds.contains(position)) {
+        gMap.panTo(position);
+      }
+      return;
+    }
+
     const map = mapInstanceRef.current;
     const marker = markerRef.current;
     if (!map || !marker) return;
@@ -695,6 +1054,7 @@ export function MapLocationPicker({
 
   useEffect(() => {
     circleRef.current?.setRadius(radius);
+    googleCircleRef.current?.setRadius(radius);
   }, [radius]);
 
   return (
@@ -834,6 +1194,13 @@ export function MapLocationPicker({
         <span className="map-picker-hint">
           <CrosshairIcon size={14} /> Cliquez ou glissez le repère pour ajuster
           l’emplacement
+        </span>
+        {/*
+         * Indique le fond réellement affiché : l'agent sait si les adresses
+         * proviennent de Google Maps (référence terrain) ou d'OpenStreetMap.
+         */}
+        <span className="map-picker-engine">
+          {engine === "google" ? "Fond Google Maps" : "Fond OpenStreetMap"}
         </span>
       </div>
 
