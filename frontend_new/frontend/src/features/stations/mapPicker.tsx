@@ -32,6 +32,27 @@ export function googleMapsApiKey(): string {
 }
 
 /**
+ * État de l'autorisation de géolocalisation, sans déclencher de demande.
+ *
+ * `denied` signifie que l'agent a déjà refusé (ou que le système bloque) :
+ * relancer `getCurrentPosition` échouerait immédiatement, sans que le
+ * navigateur ne redemande. Il faut donc l'inviter à l'activer explicitement.
+ * `unknown` = navigateur sans Permissions API : on laisse le relevé décider.
+ */
+export async function readGeolocationPermission(): Promise<
+  "granted" | "denied" | "prompt" | "unknown"
+> {
+  try {
+    const permissions = (navigator as any)?.permissions;
+    if (!permissions?.query) return "unknown";
+    const status = await permissions.query({ name: "geolocation" });
+    return status?.state ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
  * Charge l'API Google Maps une seule fois.
  *
  * `libraries=places` donne l'autocomplétion d'adresses et `geometry` les
@@ -688,6 +709,24 @@ export function MapLocationPicker({
       return;
     }
 
+    /*
+     * Étape 1 — la localisation est-elle activée sur l'appareil ?
+     *
+     * Si l'agent a refusé l'autorisation lors d'une visite précédente, le
+     * navigateur répond « refusé » instantanément, sans jamais demander. On
+     * vérifie donc l'état AVANT de lancer le relevé, pour afficher une consigne
+     * d'activation au lieu d'un échec silencieux.
+     */
+    const permission = await readGeolocationPermission();
+    if (permission === "denied") {
+      setLocateError(
+        "La localisation est désactivée pour ce site. Activez-la avant de continuer : " +
+          "appuyez sur l’icône de cadenas (ou de réglages) à gauche de l’adresse, " +
+          "puis autorisez « Position / Localisation », et réessayez.",
+      );
+      return;
+    }
+
     setLocating(true);
     try {
       const position = await new Promise<GeolocationPosition>(
@@ -720,16 +759,38 @@ export function MapLocationPicker({
       }
     } catch (error) {
       const positionError = error as GeolocationPositionError;
-      setLocateError(
-        positionError?.code === 1
-          ? "Localisation refusée. Autorisez l’accès à la position dans les réglages du navigateur, puis réessayez."
-          : positionError?.code === 3
-            ? "La localisation prend trop de temps. Sortez à découvert et réessayez."
-            : "Position introuvable. Vérifiez que la localisation du téléphone est activée.",
-      );
+      setLocateError(geolocationErrorMessage(positionError));
     } finally {
       setLocating(false);
     }
+  }
+
+  /**
+   * Message d'erreur de géolocalisation, avec la consigne d'activation.
+   *
+   * Code 1 = autorisation refusée (ou localisation coupée au niveau du
+   * système) : on explique comment l'activer, au lieu de constater l'échec.
+   * Code 2 = position indisponible (GPS coupé, mode avion, intérieur).
+   * Code 3 = délai dépassé.
+   */
+  function geolocationErrorMessage(error: GeolocationPositionError): string {
+    if (error?.code === 1) {
+      return (
+        "La localisation est désactivée. Activez-la avant de continuer : " +
+        "réglages du téléphone → Localisation, puis autorisez la position pour ce site " +
+        "(icône de cadenas à gauche de l’adresse), et réessayez."
+      );
+    }
+    if (error?.code === 2) {
+      return (
+        "Position indisponible : activez la localisation (GPS) du téléphone, " +
+        "sortez à découvert et réessayez."
+      );
+    }
+    if (error?.code === 3) {
+      return "La localisation prend trop de temps. Activez le GPS, sortez à découvert et réessayez.";
+    }
+    return "Position introuvable. Vérifiez que la localisation du téléphone est activée.";
   }
 
   function commitManualCoords() {
