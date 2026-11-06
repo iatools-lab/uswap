@@ -77,3 +77,102 @@
   font-variant-numeric: tabular-nums;
   color: #001a70;
 }
+
+/* Saisie manuelle des coordonnées GPS */
+.map-picker-gps {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.map-picker-gps-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.map-picker-gps-head > span:first-child {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.5px;
+}
+
+.map-picker-gps-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.map-picker-gps-grid input {
+  font-variant-numeric: tabular-nums;
+}
+
+.map-picker-error {
+  margin: 0;
+  font-size: 12px;
+  color: #b91c1c;
+}
+
+.map-picker-verify {
+  font-size: 12px;
+  font-weight: 600;
+  color: #001a70;
+  text-decoration: underline;
+}
+
+/* Relevé GPS sur le terrain (téléphone de l'agent). */
+.map-picker-locate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px; /* cible tactile confortable sur mobile */
+  padding: 10px 14px;
+  border: 1px solid #001a70;
+  border-radius: 10px;
+  background: #001a70;
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.map-picker-locate:hover:not(:disabled) {
+  background: #00248f;
+}
+
+.map-picker-locate:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.map-picker-locate-info {
+  margin: 0;
+  font-size: 12px;
+  color: #0f766e;
+}
+
+/* Moteur cartographique affiché (Google Maps ou OpenStreetMap). */
+.map-picker-engine {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  background: #eef2f7;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .map-picker-gps-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

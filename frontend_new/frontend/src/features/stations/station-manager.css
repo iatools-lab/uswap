@@ -71,6 +71,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.map-picker-suggestion-coords {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
 }
 
 .map-picker-caption {
@@ -99,8 +108,15 @@
   flex-shrink: 0;
 }
 
+/*
+ * Hauteur de la carte de création : 240 px ne laissaient voir qu'un pâté de
+ * maisons, sans le carrefour ni le marché qui servent de repère à l'agent.
+ * 340 px (comme mapPickerStyles.css) montrent la rue, les points d'intérêt
+ * voisins et le périmètre de pointage en entier.
+ */
 .map-picker-canvas {
-  height: 240px;
+  height: 340px;
+  min-height: 340px;
   width: 100%;
   border-radius: 10px;
   border: 1px solid #cbd5e1;

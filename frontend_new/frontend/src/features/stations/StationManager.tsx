@@ -19,6 +19,8 @@ import {
   DEFAULT_LAT,
   DEFAULT_LNG,
   MAP_ATTRIBUTION,
+  MAP_POI_ATTRIBUTION,
+  MAP_POI_TILE_URL,
   MAP_TILE_OPTIONS,
   MAP_TILE_URL,
   MapLocationPicker,
@@ -149,6 +151,21 @@ function StationsMapView({
         maxZoom: 18,
         attribution: MAP_ATTRIBUTION,
       }).addTo(mapInstance);
+
+      // Même couche de repères que le sélecteur de création : rues nommées,
+      // marchés, écoles, hôpitaux, hôtels, boutiques, entreprises…
+      const poiLayer = L.tileLayer(MAP_POI_TILE_URL, {
+        maxZoom: 18,
+        maxNativeZoom: 20,
+        detectRetina: true,
+        crossOrigin: true,
+        keepBuffer: 4,
+        attribution: MAP_POI_ATTRIBUTION,
+      });
+      poiLayer.on("tileerror", () => {
+        if (mapInstance?.hasLayer(poiLayer)) mapInstance.removeLayer(poiLayer);
+      });
+      poiLayer.addTo(mapInstance);
 
       const validStations = (stations || []).filter(
         (s) => s?.latitude != null && s?.longitude != null,
@@ -367,8 +384,14 @@ export function StationManager({
             ...station,
             address: station.address || "",
             city: station.city || "Douala",
-            latitude: station.latitude ?? DEFAULT_LAT,
-            longitude: station.longitude ?? DEFAULT_LNG,
+            /*
+             * Une station sans coordonnées doit rester SANS coordonnées :
+             * injecter le point par défaut (4.051056, 9.708533) plaçait le
+             * repère au centre de Douala, donc à un endroit faux, et
+             * l'enregistrement validait ce point inventé.
+             */
+            latitude: station.latitude ?? "",
+            longitude: station.longitude ?? "",
             location: station.location || "",
             contactName: station.contactName || "",
             contactPhone: station.contactPhone || "",
@@ -388,16 +411,24 @@ export function StationManager({
       // Garde-fou : une adresse saisie sans point de repère enregistrait les
       // coordonnées par défaut (toutes les stations au même endroit). On exige
       // un emplacement réel avant l'enregistrement.
-      const latitude = form.latitude !== "" ? Number(form.latitude) : null;
-      const longitude = form.longitude !== "" ? Number(form.longitude) : null;
+      const latitude =
+        form.latitude !== "" && form.latitude != null
+          ? Number(form.latitude)
+          : null;
+      const longitude =
+        form.longitude !== "" && form.longitude != null
+          ? Number(form.longitude)
+          : null;
       if (
         latitude === null ||
         longitude === null ||
         !Number.isFinite(latitude) ||
-        !Number.isFinite(longitude)
+        !Number.isFinite(longitude) ||
+        Math.abs(latitude) > 90 ||
+        Math.abs(longitude) > 180
       ) {
         setError(
-          "Placez le repère sur la carte (ou saisissez une adresse reconnue) : l’emplacement GPS est obligatoire.",
+          "Placez le repère sur la carte, saisissez une adresse reconnue ou entrez les coordonnées GPS : l’emplacement est obligatoire.",
         );
         setBusy(false);
         return;
@@ -411,8 +442,8 @@ export function StationManager({
         name: form.name.trim(),
         address: form.address.trim() || null,
         city: form.city.trim() || null,
-        latitude: form.latitude !== "" ? Number(form.latitude) : null,
-        longitude: form.longitude !== "" ? Number(form.longitude) : null,
+        latitude,
+        longitude,
         location: form.location.trim() || null,
         timezone: form.timezone,
         contactName: form.contactName.trim() || null,
@@ -675,7 +706,11 @@ export function StationManager({
             !!form?.timezone?.trim() &&
             !!form?.address?.trim() &&
             form?.latitude !== "" &&
-            form?.longitude !== "",
+            form?.latitude != null &&
+            form?.longitude !== "" &&
+            form?.longitude != null &&
+            Number.isFinite(Number(form?.latitude)) &&
+            Number.isFinite(Number(form?.longitude)),
           content: (
             <div className="stepper-form-layout">
               <div className="stepper-field-group">
@@ -948,8 +983,11 @@ export function StationManager({
                 <div className="summary-row">
                   <span>Coordonnées GPS :</span>
                   <strong>
-                    {form?.latitude !== "" && form?.longitude !== ""
-                      ? `${Number(form?.latitude || 0).toFixed(5)}, ${Number(form?.longitude || 0).toFixed(5)}`
+                    {form?.latitude !== "" &&
+                    form?.latitude != null &&
+                    form?.longitude !== "" &&
+                    form?.longitude != null
+                      ? `${Number(form.latitude).toFixed(6)}, ${Number(form.longitude).toFixed(6)}`
                       : "Non géolocalisée"}
                   </strong>
                 </div>

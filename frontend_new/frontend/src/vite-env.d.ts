@@ -14,6 +14,11 @@ interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
   /** Identifiant OAuth Google (console Google Cloud). Absent = SSO désactivé. */
   readonly VITE_GOOGLE_CLIENT_ID?: string;
+  /**
+   * Clé Google Maps (Maps JavaScript API + Places). Absente = la carte de
+   * création de station utilise OpenStreetMap, sans perte de fonctionnalité.
+   */
+  readonly VITE_GOOGLE_MAPS_API_KEY?: string;
 }
 
 interface ImportMeta {
