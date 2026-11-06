@@ -151,6 +151,9 @@ services:
         # du backend : sans lui, le bouton « Se connecter avec Google » n'est
         # pas affiche sur l'ecran de connexion.
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+        # Cle Google Maps (valeur PUBLIQUE, restreinte par referent HTTP).
+        # Sans elle, la carte de creation de station utilise OpenStreetMap.
+        VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
     image: uswap/frontend:${USWAP_TAG:-local}
     restart: unless-stopped
     # Sonde HTTP : le conteneur n'est "healthy" que si Nginx sert vraiment le

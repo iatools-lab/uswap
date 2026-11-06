@@ -35,10 +35,13 @@ ARG VITE_API_URL=/api
 ARG VITE_VAPID_PUBLIC_KEY=
 # Valeur PUBLIQUE : identifiant OAuth Google. Vide = bouton SSO non affiche.
 ARG VITE_GOOGLE_CLIENT_ID=
+# Valeur PUBLIQUE : cle Google Maps (Maps JavaScript API + Places).
+# Vide = la carte de creation de station utilise OpenStreetMap.
+ARG VITE_GOOGLE_MAPS_API_KEY=
 RUN test ! -e .env \
  && test -n "$VITE_API_URL" \
- && printf 'VITE_API_URL=%s\nVITE_VAPID_PUBLIC_KEY=%s\nVITE_GOOGLE_CLIENT_ID=%s\n' \
-      "$VITE_API_URL" "$VITE_VAPID_PUBLIC_KEY" "$VITE_GOOGLE_CLIENT_ID" > .env.production \
+ && printf 'VITE_API_URL=%s\nVITE_VAPID_PUBLIC_KEY=%s\nVITE_GOOGLE_CLIENT_ID=%s\nVITE_GOOGLE_MAPS_API_KEY=%s\n' \
+      "$VITE_API_URL" "$VITE_VAPID_PUBLIC_KEY" "$VITE_GOOGLE_CLIENT_ID" "$VITE_GOOGLE_MAPS_API_KEY" > .env.production \
  && npm run build
 
 FROM nginx:1.27-alpine AS runtime
