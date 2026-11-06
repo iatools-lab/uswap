@@ -77,3 +77,57 @@
   font-variant-numeric: tabular-nums;
   color: #001a70;
 }
+
+/* Saisie manuelle des coordonnées GPS */
+.map-picker-gps {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.map-picker-gps-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.map-picker-gps-head > span:first-child {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.5px;
+}
+
+.map-picker-gps-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.map-picker-gps-grid input {
+  font-variant-numeric: tabular-nums;
+}
+
+.map-picker-error {
+  margin: 0;
+  font-size: 12px;
+  color: #b91c1c;
+}
+
+.map-picker-verify {
+  font-size: 12px;
+  font-weight: 600;
+  color: #001a70;
+  text-decoration: underline;
+}
+
+@media (max-width: 560px) {
+  .map-picker-gps-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

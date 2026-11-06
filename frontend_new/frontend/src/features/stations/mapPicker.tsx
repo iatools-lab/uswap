@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { CrosshairIcon, LoaderCircle, MapPin } from "../../ui/icons";
+import "./mapPickerStyles.css";
 
 /**
  * Sélecteur d'emplacement d'une station.
@@ -17,6 +18,85 @@ import { CrosshairIcon, LoaderCircle, MapPin } from "../../ui/icons";
 export const DEFAULT_LAT = 4.051056;
 export const DEFAULT_LNG = 9.708533;
 
+/**
+ * Analyse une coordonnée saisie à la main.
+ *
+ * Accepte les formats réellement utilisés sur le terrain :
+ *   - décimal point ou virgule : `4.051056`, `4,051056` ;
+ *   - degrés/minutes/secondes : `4°03'03.8"N`, `9°42'30.7"E` ;
+ *   - degrés décimaux avec hémisphère : `4.051056 N`, `9.708533 E`.
+ * Renvoie `null` si la valeur n'est pas exploitable.
+ */
+export function parseCoordinate(
+  raw: string,
+  kind: "lat" | "lng",
+): number | null {
+  const text = String(raw ?? "").trim();
+  if (!text) return null;
+
+  const limit = kind === "lat" ? 90 : 180;
+  // L'hémisphère n'est cherché qu'en fin de saisie : « S » de « Sud » ou « E »
+  // de « Est » ne doivent pas être confondus avec un chiffre.
+  const hemisphere = /([NSEW])\s*$/i.exec(text)?.[1]?.toUpperCase();
+  const negative = hemisphere === "S" || hemisphere === "W" || /^-/.test(text);
+
+  const dms = /(\d+(?:[.,]\d+)?)\s*[°d]\s*(?:(\d+(?:[.,]\d+)?)\s*['′m])?\s*(?:(\d+(?:[.,]\d+)?)\s*(?:"|″|s)?)?/.exec(
+    text,
+  );
+  if (dms && /[°d'′"″]/.test(text)) {
+    const deg = Number(dms[1].replace(",", "."));
+    const min = Number((dms[2] || "0").replace(",", "."));
+    const sec = Number((dms[3] || "0").replace(",", "."));
+    if (![deg, min, sec].every(Number.isFinite)) return null;
+    const value = deg + min / 60 + sec / 3600;
+    if (value > limit) return null;
+    return negative ? -value : value;
+  }
+
+  // Saisie décimale : on ne garde que chiffres, signe et séparateur décimal.
+  // Une saisie sans aucun chiffre (« abc ») doit être refusée, pas lue comme 0.
+  const cleaned = text.replace(/[^0-9.,-]/g, "").replace(",", ".");
+  if (!/\d/.test(cleaned)) return null;
+  const plain = Number(cleaned);
+  if (!Number.isFinite(plain) || Math.abs(plain) > limit) return null;
+  // Le signe explicite (« -4.05 ») prime sur l'hémisphère.
+  if (plain < 0) return plain;
+  return negative ? -plain : plain;
+}
+
+/**
+ * Analyse une paire « lat, lng » collée d'un seul bloc (Google Maps, GPS).
+ * Google Maps copie `4.051056, 9.708533` ; certains appareils ajoutent des
+ * espaces ou des parenthèses. On accepte aussi l'ordre inversé quand la
+ * première valeur dépasse 90 (donc forcément une longitude).
+ */
+export function parseCoordinatePair(
+  raw: string,
+): { lat: number; lng: number } | null {
+  const numbers = String(raw ?? "")
+    .replace(/,/g, (match, offset, whole) =>
+      // Une virgule décimale est suivie d'un chiffre sans espace : on la garde.
+      /\d\s*$/.test(whole.slice(0, offset)) &&
+      /^\d{1,2}\s*$/.test(whole.slice(offset + 1, offset + 4))
+        ? "."
+        : " ",
+    )
+    .match(/-?\d+(?:\.\d+)?/g);
+  if (!numbers || numbers.length < 2) return null;
+  const first = Number(numbers[0]);
+  const second = Number(numbers[1]);
+  if (!Number.isFinite(first) || !Number.isFinite(second)) return null;
+  const firstIsLat = Math.abs(first) <= 90;
+  const secondIsLat = Math.abs(second) <= 90;
+  const firstIsLng = Math.abs(first) <= 180;
+  const secondIsLng = Math.abs(second) <= 180;
+  // Ordre normal (lat, lng) dès que la première valeur peut être une latitude.
+  if (firstIsLat && secondIsLng) return { lat: first, lng: second };
+  // Ordre inversé (lng, lat) : la première valeur dépasse forcément 90.
+  if (secondIsLat && firstIsLng) return { lat: second, lng: first };
+  return null;
+}
+
 /*
  * Fond de carte : OpenStreetMap standard.
  *
@@ -28,6 +108,10 @@ export const DEFAULT_LNG = 9.708533;
  *
  * OpenStreetMap contient ces références, et les tuiles sont plus rapides
  * (500 ms contre 1 100 ms).
+ *
+ * Projection : Web Mercator (EPSG:3857), exactement celle de Google Maps.
+ * Une même paire latitude/longitude tombe donc au même endroit sur les deux
+ * cartes ; aucun décalage n'est introduit côté Leaflet.
  */
 export const MAP_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 export const MAP_TILE_OPTIONS = {
@@ -47,6 +131,21 @@ export const MAP_TILE_OPTIONS = {
 };
 export const MAP_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> — rues, bâtiments et points d’intérêt';
+
+/**
+ * Couche de repères (rues nommées, marchés, écoles, hôpitaux, hôtels,
+ * boutiques, entreprises, carrefours, ronds-points…).
+ *
+ * Les tuiles raster OpenStreetMap n'affichent que les libellés majeurs : à
+ * l'échelle d'une station, l'agent ne reconnaît ni le marché voisin ni
+ * l'école d'en face. Cette couche vectorielle superpose les points d'intérêt
+ * et les noms de rues, sans changer la géométrie de la carte (donc sans
+ * décalage par rapport à Google Maps).
+ */
+export const MAP_POI_TILE_URL =
+  "https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png";
+export const MAP_POI_ATTRIBUTION =
+  '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 /** Zoom correspondant à un rayon de pointage (donne un cadrage serré et lisible). */
 export function zoomForRadius(radiusMeters: number): number {
@@ -156,9 +255,23 @@ export function MapLocationPicker({
   const [isSearching, setIsSearching] = useState(false);
   const [mapError, setMapError] = useState("");
   const [resolved, setResolved] = useState("");
+  // Saisie manuelle des coordonnées : l'agent qui possède déjà le point GPS
+  // (relevé terrain, Google Maps) doit pouvoir le coller tel quel.
+  const [latInput, setLatInput] = useState(
+    latitude === "" || latitude == null ? "" : String(latitude),
+  );
+  const [lngInput, setLngInput] = useState(
+    longitude === "" || longitude == null ? "" : String(longitude),
+  );
+  const [coordsError, setCoordsError] = useState("");
 
   const hasCoords =
-    latitude !== "" && longitude !== "" && Number.isFinite(Number(latitude));
+    latitude !== "" &&
+    latitude != null &&
+    longitude !== "" &&
+    longitude != null &&
+    Number.isFinite(Number(latitude)) &&
+    Number.isFinite(Number(longitude));
   const currentLat = hasCoords ? Number(latitude) : DEFAULT_LAT;
   const currentLng = hasCoords ? Number(longitude) : DEFAULT_LNG;
   const radius = Number(geofenceRadiusMeters) || 150;
@@ -167,6 +280,21 @@ export function MapLocationPicker({
     setSearchQuery(address);
     lastQuery.current = address.trim().toLowerCase();
   }, [address]);
+
+  // Les champs GPS suivent les coordonnées réellement retenues (clic sur la
+  // carte, glisser du repère, suggestion d'adresse), sans écraser une saisie
+  // en cours de frappe.
+  useEffect(() => {
+    if (!hasCoords) return;
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+    setLatInput((old) =>
+      parseCoordinate(old, "lat") === lat ? old : lat.toFixed(6),
+    );
+    setLngInput((old) =>
+      parseCoordinate(old, "lng") === lng ? old : lng.toFixed(6),
+    );
+  }, [latitude, longitude, hasCoords]);
 
   function applyPosition(lat: number, lng: number, zoom?: number) {
     const map = mapInstanceRef.current;
@@ -226,10 +354,64 @@ export function MapLocationPicker({
     }
   }
 
+  /**
+   * Applique une paire de coordonnées saisie à la main.
+   *
+   * Le point est posé immédiatement sur la carte (sans attendre le géocodage
+   * inverse, qui peut être lent ou indisponible) : c'est la position exacte
+   * demandée par l'agent. L'adresse est ensuite complétée si le service
+   * répond, sans jamais déplacer le repère.
+   */
+  function applyManualCoords(lat: number, lng: number) {
+    setCoordsError("");
+    onSelectLocation(lat, lng);
+    applyPosition(lat, lng, Math.max(mapInstanceRef.current?.getZoom() ?? 0, 17));
+    void reverseGeocode(lat, lng);
+  }
+
+  function commitManualCoords() {
+    // Champs vides : la saisie GPS est facultative, l'adresse ou le clic sur la
+    // carte suffisent. On ne signale une erreur que sur une valeur réellement
+    // saisie mais inexploitable.
+    if (!latInput.trim() && !lngInput.trim()) {
+      setCoordsError("");
+      return;
+    }
+    const lat = parseCoordinate(latInput, "lat");
+    const lng = parseCoordinate(lngInput, "lng");
+    if (lat === null || lng === null) {
+      setCoordsError(
+        "Coordonnées invalides : latitude entre -90 et 90, longitude entre -180 et 180.",
+      );
+      return;
+    }
+    applyManualCoords(lat, lng);
+  }
+
+  /** Colle « 4.051056, 9.708533 » (format Google Maps) dans les deux champs. */
+  function handlePastePair(value: string) {
+    const pair = parseCoordinatePair(value);
+    if (!pair) return false;
+    setLatInput(pair.lat.toFixed(6));
+    setLngInput(pair.lng.toFixed(6));
+    applyManualCoords(pair.lat, pair.lng);
+    return true;
+  }
+
   function handleSearchInput(value: string) {
     setSearchQuery(value);
     setResolved("");
     if (searchTimer.current) window.clearTimeout(searchTimer.current);
+
+    /*
+     * Une paire de coordonnées collée dans le champ adresse (lien Google Maps,
+     * relevé GPS) est traitée comme telle : on ne l'envoie pas au géocodeur,
+     * qui ne saurait pas la lire.
+     */
+    if (parseCoordinatePair(value)) {
+      setSuggestions([]);
+      return;
+    }
 
     if (value.trim().length < 4) {
       setSuggestions([]);
@@ -259,6 +441,8 @@ export function MapLocationPicker({
   function commitSearch() {
     if (searchTimer.current) window.clearTimeout(searchTimer.current);
     setSuggestions([]);
+    // Coordonnées collées dans le champ adresse : on les applique directement.
+    if (handlePastePair(searchQuery)) return;
     void resolveAddress(searchQuery);
   }
 
@@ -286,6 +470,17 @@ export function MapLocationPicker({
       }).setView([currentLat, currentLng], zoomForRadius(radius));
       mapInstanceRef.current = map;
 
+      /*
+       * Deux couches superposées, strictement alignées (même projection Web
+       * Mercator, même origine de tuiles) :
+       *   1. le fond OpenStreetMap, qui donne les rues, les bâtiments et les
+       *      libellés majeurs ;
+       *   2. la couche de repères (marchés, écoles, hôpitaux, hôtels, boutiques,
+       *      entreprises, carrefours, ronds-points, noms de rues) qui rend la
+       *      carte explicite à l'échelle d'une station.
+       * Si la seconde couche est indisponible, la première reste affichée :
+       * la carte ne doit jamais devenir vide.
+       */
       L.tileLayer(MAP_TILE_URL, {
         ...MAP_TILE_OPTIONS,
         maxZoom: 20,
@@ -294,6 +489,22 @@ export function MapLocationPicker({
         minZoom: 3,
         attribution: MAP_ATTRIBUTION,
       }).addTo(map);
+
+      const poiLayer = L.tileLayer(MAP_POI_TILE_URL, {
+        maxZoom: 20,
+        minZoom: 3,
+        maxNativeZoom: 20,
+        detectRetina: true,
+        crossOrigin: true,
+        keepBuffer: 4,
+        attribution: MAP_POI_ATTRIBUTION,
+      });
+      poiLayer.on("tileerror", () => {
+        // Fournisseur de repères indisponible : on retire la couche pour ne
+        // pas laisser de tuiles grises par-dessus le fond OpenStreetMap.
+        if (map.hasLayer(poiLayer)) map.removeLayer(poiLayer);
+      });
+      poiLayer.addTo(map);
 
       // Périmètre de pointage : rend visible la zone dans laquelle l'agent
       // peut valider sa prise de service.
@@ -376,7 +587,7 @@ export function MapLocationPicker({
         <div className="map-picker-input-wrap">
           <input
             maxLength={250}
-            placeholder="Ex : Tradex Bonamoussadi, Douala"
+            placeholder="Ex : Tradex Bonamoussadi, Douala — ou collez 4.051056, 9.708533"
             value={searchQuery}
             onChange={(event) => handleSearchInput(event.target.value)}
             onBlur={() => {
@@ -422,6 +633,77 @@ export function MapLocationPicker({
         )}
       </div>
 
+      {/*
+       * Saisie directe des coordonnées : l'agent qui possède déjà le point
+       * exact (relevé GPS, lien Google Maps) n'a pas à chercher l'adresse.
+       * Dès que les deux valeurs sont valides, le repère se place dessus.
+       */}
+      <div className="map-picker-gps">
+        <div className="map-picker-gps-head">
+          <span>COORDONNÉES GPS (OPTIONNEL)</span>
+          <span className="map-picker-hint">
+            Collez « lat, lng » ou saisissez chaque valeur
+          </span>
+        </div>
+        <div className="map-picker-gps-grid">
+          <div className="stepper-field-group">
+            <label htmlFor="station-latitude">LATITUDE</label>
+            <input
+              id="station-latitude"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="ex : 4.051056"
+              value={latInput}
+              onChange={(event) => {
+                setLatInput(event.target.value);
+                setCoordsError("");
+              }}
+              onPaste={(event) => {
+                const text = event.clipboardData.getData("text");
+                if (handlePastePair(text)) event.preventDefault();
+              }}
+              onBlur={commitManualCoords}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitManualCoords();
+                }
+              }}
+            />
+          </div>
+          <div className="stepper-field-group">
+            <label htmlFor="station-longitude">LONGITUDE</label>
+            <input
+              id="station-longitude"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="ex : 9.708533"
+              value={lngInput}
+              onChange={(event) => {
+                setLngInput(event.target.value);
+                setCoordsError("");
+              }}
+              onPaste={(event) => {
+                const text = event.clipboardData.getData("text");
+                if (handlePastePair(text)) event.preventDefault();
+              }}
+              onBlur={commitManualCoords}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitManualCoords();
+                }
+              }}
+            />
+          </div>
+        </div>
+        {coordsError && (
+          <p className="map-picker-error" role="alert">
+            {coordsError}
+          </p>
+        )}
+      </div>
+
       <div className="map-picker-caption">
         <span>POSITION DU REPÈRE *</span>
         <span className="map-picker-hint">
@@ -446,6 +728,16 @@ export function MapLocationPicker({
           {hasCoords ? Number(latitude).toFixed(6) : "—"},{" "}
           {hasCoords ? Number(longitude).toFixed(6) : "—"}
         </strong>
+        {hasCoords && (
+          <a
+            className="map-picker-verify"
+            href={`https://www.google.com/maps?q=${Number(latitude)},${Number(longitude)}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Vérifier sur Google Maps
+          </a>
+        )}
         <span className="map-picker-hint">Périmètre : {radius} m</span>
       </div>
     </div>
