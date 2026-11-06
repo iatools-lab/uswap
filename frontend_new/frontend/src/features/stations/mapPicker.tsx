@@ -362,6 +362,10 @@ export function MapLocationPicker({
     longitude === "" || longitude == null ? "" : String(longitude),
   );
   const [coordsError, setCoordsError] = useState("");
+  // Position de l'appareil (téléphone de l'agent sur le terrain).
+  const [locating, setLocating] = useState(false);
+  const [locateInfo, setLocateInfo] = useState("");
+  const [locateError, setLocateError] = useState("");
   // Dernier point réellement retenu (clic, glisser, GPS, adresse). Il sert de
   // référence pour départager les homonymes d'adresse, même quand le parent
   // n'a pas encore propagé les coordonnées.
@@ -647,6 +651,85 @@ export function MapLocationPicker({
       googleMapRef.current?.getZoom?.() ?? mapInstanceRef.current?.getZoom?.() ?? 0;
     applyPosition(lat, lng, Math.max(currentZoom, 17));
     void reverseGeocode(lat, lng);
+  }
+
+  /**
+   * Récupère la position de l'appareil et la pose comme emplacement.
+   *
+   * C'est le cas d'usage terrain : l'agent est devant la station, avec son
+   * téléphone, et veut enregistrer le point exact sans le relever à la main.
+   *
+   * Contraintes mobiles prises en compte :
+   *   - l'API n'existe que sur une origine sécurisée (HTTPS ou localhost) ;
+   *   - le navigateur exige un geste utilisateur (d'où le bouton, jamais un
+   *     appel automatique au chargement) ;
+   *   - `enableHighAccuracy` + `maximumAge: 0` évitent un point mis en cache ;
+   *   - un premier relevé peut être grossier (antenne relais) : on attend une
+   *     mesure précise pendant quelques secondes avant de valider.
+   */
+  async function useMyLocation() {
+    setLocateError("");
+    setLocateInfo("");
+
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocateError(
+        "La géolocalisation n’est pas disponible sur cet appareil ou ce navigateur.",
+      );
+      return;
+    }
+    if (
+      typeof window !== "undefined" &&
+      !window.isSecureContext &&
+      !/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+    ) {
+      setLocateError(
+        "La localisation exige une connexion sécurisée (HTTPS). Ouvrez le site en https:// puis réessayez.",
+      );
+      return;
+    }
+
+    setLocating(true);
+    try {
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 20_000,
+            maximumAge: 0,
+          });
+        },
+      );
+
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      const accuracy = Math.round(position.coords.accuracy || 0);
+
+      setLatInput(lat.toFixed(6));
+      setLngInput(lng.toFixed(6));
+      applyManualCoords(lat, lng);
+
+      setLocateInfo(
+        accuracy > 0
+          ? `Position de l’appareil appliquée (précision ±${accuracy} m).`
+          : "Position de l’appareil appliquée.",
+      );
+      if (accuracy > 100) {
+        setLocateInfo(
+          `Position appliquée mais imprécise (±${accuracy} m) : déplacez le repère sur la carte pour affiner.`,
+        );
+      }
+    } catch (error) {
+      const positionError = error as GeolocationPositionError;
+      setLocateError(
+        positionError?.code === 1
+          ? "Localisation refusée. Autorisez l’accès à la position dans les réglages du navigateur, puis réessayez."
+          : positionError?.code === 3
+            ? "La localisation prend trop de temps. Sortez à découvert et réessayez."
+            : "Position introuvable. Vérifiez que la localisation du téléphone est activée.",
+      );
+    } finally {
+      setLocating(false);
+    }
   }
 
   function commitManualCoords() {
@@ -1182,6 +1265,35 @@ export function MapLocationPicker({
             />
           </div>
         </div>
+        {/*
+         * Relevé direct sur le terrain : l'agent est devant la station avec
+         * son téléphone, il appuie une fois et le point est posé.
+         */}
+        <button
+          type="button"
+          className="map-picker-locate"
+          onClick={() => void useMyLocation()}
+          disabled={locating}
+        >
+          {locating ? (
+            <LoaderCircle className="spin" size={16} />
+          ) : (
+            <CrosshairIcon size={16} />
+          )}
+          {locating
+            ? "Recherche de votre position…"
+            : "Utiliser ma position actuelle"}
+        </button>
+        {locateInfo && (
+          <p className="map-picker-locate-info" role="status">
+            {locateInfo}
+          </p>
+        )}
+        {locateError && (
+          <p className="map-picker-error" role="alert">
+            {locateError}
+          </p>
+        )}
         {coordsError && (
           <p className="map-picker-error" role="alert">
             {coordsError}
