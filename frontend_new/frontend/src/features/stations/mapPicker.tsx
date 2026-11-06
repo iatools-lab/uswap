@@ -215,6 +215,56 @@ async function nominatimSearch(query: string): Promise<any[]> {
   return Array.isArray(data) ? data : [];
 }
 
+/**
+ * Recherche d'un lieu par son nom, restreinte au Cameroun.
+ *
+ * Nominatim classe les résultats par pertinence textuelle, pas par proximité :
+ * « Ndobo » peut renvoyer un hameau homonyme à l'autre bout du pays. On demande
+ * donc explicitement le pays et on privilégie les résultats proches du point de
+ * référence (la ville saisie, ou le centre de la carte).
+ */
+async function nominatimSearchNear(
+  query: string,
+  near: { lat: number; lng: number } | null,
+): Promise<any[]> {
+  const url =
+    'https://nominatim.openstreetmap.org/search?format=jsonv2' +
+    `&q=${encodeURIComponent(query)}` +
+    '&limit=10&addressdetails=1&accept-language=fr&countrycodes=cm' +
+    (near
+      ? `&viewbox=${near.lng - 0.6},${near.lat + 0.6},${near.lng + 0.6},${near.lat - 0.6}&bounded=0`
+      : '');
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'uSwap/1.0 (gestion de stations)',
+    },
+  });
+  if (!response.ok) return [];
+  const data = await response.json();
+  if (!Array.isArray(data)) return [];
+  if (!near) return data;
+  // Tri par distance : le lieu le plus proche du point de référence d'abord.
+  return [...data].sort(
+    (a, b) =>
+      distanceMeters(near, Number(a.lat), Number(a.lon)) -
+      distanceMeters(near, Number(b.lat), Number(b.lon)),
+  );
+}
+
+/** Distance approximative (mètres) entre deux points, suffisante pour trier. */
+function distanceMeters(
+  from: { lat: number; lng: number },
+  lat: number,
+  lng: number,
+): number {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return Number.MAX_VALUE;
+  const dLat = (lat - from.lat) * 111_320;
+  const dLng =
+    (lng - from.lng) * 111_320 * Math.cos((from.lat * Math.PI) / 180);
+  return Math.hypot(dLat, dLng);
+}
+
 async function nominatimReverse(lat: number, lng: number): Promise<string> {
   const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=fr`;
   const response = await fetch(url, { headers: { Accept: "application/json" } });
@@ -264,6 +314,10 @@ export function MapLocationPicker({
     longitude === "" || longitude == null ? "" : String(longitude),
   );
   const [coordsError, setCoordsError] = useState("");
+  // Dernier point réellement retenu (clic, glisser, GPS, adresse). Il sert de
+  // référence pour départager les homonymes d'adresse, même quand le parent
+  // n'a pas encore propagé les coordonnées.
+  const lastPoint = useRef<{ lat: number; lng: number } | null>(null);
 
   const hasCoords =
     latitude !== "" &&
@@ -297,6 +351,7 @@ export function MapLocationPicker({
   }, [latitude, longitude, hasCoords]);
 
   function applyPosition(lat: number, lng: number, zoom?: number) {
+    lastPoint.current = { lat, lng };
     const map = mapInstanceRef.current;
     const marker = markerRef.current;
     if (map && marker) {
@@ -316,7 +371,20 @@ export function MapLocationPicker({
     if (query.length < 4) return false;
     setIsSearching(true);
     try {
-      const results = await nominatimSearch(query);
+      /*
+       * Point de référence : la position déjà retenue (saisie GPS, clic sur la
+       * carte) ou, à défaut, le centre de la carte. Il sert à départager les
+       * homonymes — « Ndobo » existe dans plusieurs villes du Cameroun.
+       */
+      const map = mapInstanceRef.current;
+      const center = map?.getCenter?.();
+      const near = hasCoords
+        ? { lat: Number(latitude), lng: Number(longitude) }
+        : (lastPoint.current ??
+          (center ? { lat: center.lat, lng: center.lng } : null));
+
+      let results = await nominatimSearchNear(query, near);
+      if (!results.length) results = await nominatimSearch(query);
       const best = results[0];
       if (!best) {
         setResolved("Adresse introuvable : précisez la ville ou placez le repère à la main.");
@@ -422,7 +490,13 @@ export function MapLocationPicker({
     // suggestion, les coordonnées suivent l'adresse saisie.
     searchTimer.current = window.setTimeout(async () => {
       try {
-        const results = await nominatimSearch(value.trim());
+        const map = mapInstanceRef.current;
+        const center = map?.getCenter?.();
+        const near = hasCoords
+          ? { lat: Number(latitude), lng: Number(longitude) }
+          : (lastPoint.current ??
+            (center ? { lat: center.lat, lng: center.lng } : null));
+        const results = await nominatimSearchNear(value.trim(), near);
         setSuggestions(
           results.map((item) => ({
             label: formatNominatim(item),
@@ -529,6 +603,7 @@ export function MapLocationPicker({
 
       marker.on("dragend", (event: any) => {
         const coords = event.target.getLatLng();
+        lastPoint.current = { lat: coords.lat, lng: coords.lng };
         if (circleRef.current) circleRef.current.setLatLng(coords);
         onSelectLocation(coords.lat, coords.lng);
         void reverseGeocode(coords.lat, coords.lng);
@@ -536,16 +611,36 @@ export function MapLocationPicker({
 
       map.on("click", (event: any) => {
         const { lat, lng } = event.latlng;
+        lastPoint.current = { lat, lng };
         marker.setLatLng([lat, lng]);
         if (circleRef.current) circleRef.current.setLatLng([lat, lng]);
         onSelectLocation(lat, lng);
         void reverseGeocode(lat, lng);
       });
 
-      // Adresse déjà connue mais sans coordonnées (import, saisie directe) :
-      // on la résout une fois la carte prête.
-      if (!hasCoords && address.trim().length >= 4) {
-        void resolveAddress(address);
+      /*
+       * Adresse déjà connue mais sans coordonnées (import, saisie directe) :
+       * on la résout une fois la carte prête. Le repère est alors placé sur le
+       * point trouvé, et non laissé au centre de Douala.
+       *
+       * Le repère n'est PAS affiché au centre de Douala tant que la résolution
+       * n'a pas abouti : un point inventé se lit comme « la station est ici ».
+       */
+      if (!hasCoords) {
+        if (address.trim().length >= 4) {
+          marker.setOpacity(0);
+          circle.setStyle({ opacity: 0, fillOpacity: 0 });
+          void resolveAddress(address).then((found) => {
+            if (found) return;
+            // Adresse non résolue : on rend le repère pour un placement manuel.
+            marker.setOpacity(1);
+            circle.setStyle({ opacity: 1, fillOpacity: 0.12 });
+          });
+        } else {
+          // Aucune adresse, aucune coordonnée : le repère reste visible pour
+          // que l'agent puisse le poser lui-même.
+          marker.setOpacity(1);
+        }
       }
 
       return () => {
@@ -572,9 +667,31 @@ export function MapLocationPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /*
+   * Le repère suit les coordonnées retenues, mais la carte ne se recentre que
+   * si le point sort du cadre visible. Avant, chaque changement de coordonnées
+   * (clic, glisser, saisie GPS) forçait un `setView` : la carte sautait sous le
+   * doigt de l'agent et le repère semblait se déplacer tout seul.
+   */
   useEffect(() => {
-    applyPosition(currentLat, currentLng);
-  }, [currentLat, currentLng]);
+    const map = mapInstanceRef.current;
+    const marker = markerRef.current;
+    if (!map || !marker) return;
+    // Sans coordonnées réelles, le repère reste au centre de Douala mais
+    // invisible : il ne doit pas passer pour l'emplacement de la station.
+    if (!hasCoords) {
+      marker.setOpacity(0);
+      circleRef.current?.setStyle({ opacity: 0, fillOpacity: 0 });
+      return;
+    }
+    marker.setOpacity(1);
+    circleRef.current?.setStyle({ opacity: 1, fillOpacity: 0.12 });
+    marker.setLatLng([currentLat, currentLng]);
+    circleRef.current?.setLatLng([currentLat, currentLng]);
+    if (!map.getBounds().pad(-0.15).contains([currentLat, currentLng])) {
+      map.setView([currentLat, currentLng], map.getZoom(), { animate: true });
+    }
+  }, [currentLat, currentLng, hasCoords]);
 
   useEffect(() => {
     circleRef.current?.setRadius(radius);
@@ -622,6 +739,14 @@ export function MapLocationPicker({
               >
                 <MapPin size={14} />
                 <span>{item.label}</span>
+                {/*
+                 * Coordonnées visibles : l'agent voit immédiatement si le
+                 * résultat est le bon lieu (homonymes fréquents : « Ndobo »
+                 * existe dans plusieurs villes).
+                 */}
+                <small className="map-picker-suggestion-coords">
+                  {item.lat.toFixed(4)}, {item.lng.toFixed(4)}
+                </small>
               </button>
             ))}
           </div>
