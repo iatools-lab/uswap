@@ -93,11 +93,14 @@
 #     COOKIE_SECURE=true
 #     COOKIE_SAMESITE=lax
 #
-#   CONNEXION GOOGLE (SSO) — identifiant PUBLIC, le meme cote backend
+#   CONNEXION GOOGLE (SSO) — UNE SEULE LIGNE A REMPLIR, dans deploy/.env :
 #     GOOGLE_CLIENT_ID=<...>.apps.googleusercontent.com
 #     GOOGLE_ALLOWED_DOMAINS=upowa.org
-#     Origines a declarer dans la console Google Cloud :
-#       https://<domaine>
+#   Le compose.yaml la transmet au backend ET au frontend (au build Docker).
+#   Ne pas la mettre dans frontend_new/frontend/.env : ce fichier ne sert
+#   qu'au developpement local (npm run dev) et n'entre jamais dans l'image.
+#   Origines a declarer dans la console Google Cloud :
+#       https://<domaine>   et   http://localhost:5173 (dev)
 #
 #   CARTE DE CREATION DE STATION (optionnel)
 #     VITE_GOOGLE_MAPS_API_KEY=   vide = OpenStreetMap (fonctionnel)
@@ -245,9 +248,16 @@ case "$PUBLIC_URL" in
   *) warn "PUBLIC_APP_URL=$PUBLIC_URL — la geolocalisation exige HTTPS en production" ;;
 esac
 
-[ -n "$(get_env GOOGLE_CLIENT_ID)" ] \
-  && ok "connexion Google configuree (GOOGLE_CLIENT_ID)" \
-  || warn "GOOGLE_CLIENT_ID vide : bouton « Se connecter avec Google » masque"
+GOOGLE_ID="$(get_env GOOGLE_CLIENT_ID)"
+if [ -n "$GOOGLE_ID" ]; then
+  ok "connexion Google configuree (GOOGLE_CLIENT_ID)"
+  case "$GOOGLE_ID" in
+    *.apps.googleusercontent.com) ;;
+    *) warn "GOOGLE_CLIENT_ID ne ressemble pas a un identifiant OAuth (attendu : ...apps.googleusercontent.com)" ;;
+  esac
+else
+  warn "GOOGLE_CLIENT_ID vide : bouton « Se connecter avec Google » masque"
+fi
 
 [ -n "$(get_env VITE_GOOGLE_MAPS_API_KEY)" ] \
   && ok "carte Google Maps configuree (VITE_GOOGLE_MAPS_API_KEY)" \
