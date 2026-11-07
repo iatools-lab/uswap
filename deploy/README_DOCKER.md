@@ -202,7 +202,7 @@ Le tag `Uswap-Final_V1.1` seul ne contient pas les fichiers Docker.
 # 2. Créer le fichier d'environnement
 cp deploy/.env.example deploy/.env
 #    Renseigner : POSTGRES_PASSWORD, ADMIN_BOOTSTRAP_PASSWORD, JWT_SECRET,
-#    JWT_REFRESH_SECRET, PUBLIC_APP_URL, CORS_ORIGIN, MAIL_*, VAPID_* puis
+#    JWT_REFRESH_SECRET, PUBLIC_APP_URL, CORS_ORIGIN, MAIL_* puis
 #    vérifier les ports. Si les sources sont dans un dépôt cloné, ajouter
 #    FRONTEND_BUILD_CONTEXT / BACKEND_BUILD_CONTEXT (voir §5.0).
 chmod 600 deploy/.env
