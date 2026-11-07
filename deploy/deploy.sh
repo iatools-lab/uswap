@@ -77,7 +77,25 @@
 #   sans argument : le script est la version automatisee de cette liste.
 #
 # -----------------------------------------------------------------------------
-# 3. VARIABLES A RENSEIGNER DANS deploy/.env
+# 3. QUEL FICHIER .env ? (les trois sont DIFFERENTS)
+# -----------------------------------------------------------------------------
+#
+#   deploy/.env                  PRODUCTION (Docker). LE SEUL FICHIER A
+#                                REMPLIR POUR DEPLOYER : secrets du serveur,
+#                                domaine, comptes, identifiants Google.
+#
+#   backend_new/.env             DEVELOPPEMENT LOCAL (npm run start:dev).
+#                                N'entre JAMAIS dans l'image Docker.
+#
+#   frontend_new/frontend/.env   DEVELOPPEMENT LOCAL (npm run dev).
+#                                N'entre JAMAIS dans l'image Docker.
+#
+#   Un identifiant Google mis dans backend_new/.env ou dans
+#   frontend_new/frontend/.env marche sur le poste de developpement mais PAS
+#   en production. En production, tout se regle dans deploy/.env.
+#
+# -----------------------------------------------------------------------------
+# 4. VARIABLES A RENSEIGNER DANS deploy/.env
 # -----------------------------------------------------------------------------
 #
 #   OBLIGATOIRES (Compose refuse de demarrer sans elles)
@@ -112,7 +130,7 @@
 #     (laisser `console` revient a ne jamais envoyer d'e-mail)
 #
 # -----------------------------------------------------------------------------
-# 4. APRES LE DEPLOIEMENT
+# 5. APRES LE DEPLOIEMENT
 # -----------------------------------------------------------------------------
 #
 #   - Nginx de l'hote : proxy_pass http://127.0.0.1:8080 (voir README_DOCKER.md §7)
