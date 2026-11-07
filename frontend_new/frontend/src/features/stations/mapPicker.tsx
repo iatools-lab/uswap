@@ -1394,14 +1394,29 @@ export function MapLocationPicker({
           {hasCoords ? Number(longitude).toFixed(6) : "—"}
         </strong>
         {hasCoords && (
-          <a
-            className="map-picker-verify"
-            href={`https://www.google.com/maps?q=${Number(latitude)},${Number(longitude)}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Vérifier sur Google Maps
-          </a>
+          <>
+            {/*
+             * Deux vérifications externes, avec EXACTEMENT les coordonnées
+             * enregistrées : l'agent compare le point à Google Maps et à
+             * OpenStreetMap sans rien recopier.
+             */}
+            <a
+              className="map-picker-verify"
+              href={`https://www.google.com/maps?q=${Number(latitude)},${Number(longitude)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Vérifier sur Google Maps
+            </a>
+            <a
+              className="map-picker-verify"
+              href={`https://www.openstreetmap.org/?mlat=${Number(latitude)}&mlon=${Number(longitude)}#map=18/${Number(latitude)}/${Number(longitude)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Vérifier sur OpenStreetMap
+            </a>
+          </>
         )}
         <span className="map-picker-hint">Périmètre : {radius} m</span>
       </div>
