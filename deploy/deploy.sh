@@ -2,7 +2,7 @@
 # =============================================================================
 # uSwap — guide de deploiement complet, executable et lisible.
 #
-#   bash deploy/deploy.sh              # deploiement complet (10 commandes)
+#   bash deploy/deploy.sh              # deploiement complet
 #   bash deploy/deploy.sh --check      # controle seul, ne modifie rien
 #   bash deploy/deploy.sh --help       # affiche ce document
 #
@@ -38,6 +38,7 @@
 #     frontend_new/frontend/       React 19 + Vite 6, servi par Nginx
 #     deploy/compose.yaml          orchestration
 #     deploy/.env                  secrets (JAMAIS versionne, chmod 600)
+#     deploy/audit-uswap.md        audit complet du depot (a lire en premier)
 #
 # -----------------------------------------------------------------------------
 # 2. LES 10 COMMANDES (a executer sur le serveur Ubuntu, en root)
@@ -49,10 +50,10 @@
 #   # 2  Se placer sur la branche livree
 #   git switch develop && git pull --ff-only
 #
-#   # 3  Creer la configuration (secrets aleatoires, permissions 600)
+#   # 3  Creer la configuration (permissions 600)
 #   cp deploy/.env.example deploy/.env && chmod 600 deploy/.env
 #
-#   # 4  Renseigner le domaine, les comptes et les cles Google
+#   # 4  Renseigner les valeurs de la section 4 ci-dessous
 #   nano deploy/.env
 #
 #   # 5  Verifier la configuration (ne modifie rien)
@@ -81,8 +82,7 @@
 # -----------------------------------------------------------------------------
 #
 #   deploy/.env                  PRODUCTION (Docker). LE SEUL FICHIER A
-#                                REMPLIR POUR DEPLOYER : secrets du serveur,
-#                                domaine, comptes, identifiants Google.
+#                                REMPLIR POUR DEPLOYER. Cree a l'etape 3.
 #
 #   backend_new/.env             DEVELOPPEMENT LOCAL (npm run start:dev).
 #                                N'entre JAMAIS dans l'image Docker.
@@ -94,43 +94,67 @@
 #   frontend_new/frontend/.env marche sur le poste de developpement mais PAS
 #   en production. En production, tout se regle dans deploy/.env.
 #
+#   ATTENTION : les valeurs deja presentes dans deploy/.env.example sont des
+#   MODELES. C'est deploy/.env (cree a l'etape 3) qui est lu par Docker.
+#
 # -----------------------------------------------------------------------------
-# 4. VARIABLES A RENSEIGNER DANS deploy/.env
+# 4. CE QU'IL FAUT REMPLIR DANS deploy/.env
 # -----------------------------------------------------------------------------
 #
-#   OBLIGATOIRES (Compose refuse de demarrer sans elles)
-#     POSTGRES_PASSWORD          mot de passe de la base dediee
+#   --- 4.1 DEJA FOURNI : recopier tel quel --------------------------------
+#
+#     SUPERADMIN_EMAIL=itadmin@upowa.org
+#     SUPERADMIN_PASSWORD=Uswap2026!Demo        (a changer avant production)
+#     SUPERADMIN_FULLNAME=Super administrateur
+#
+#     MAIL_DRIVER=smtp
+#     SMTP_HOST=smtp.gmail.com
+#     SMTP_PORT=587
+#     SMTP_SECURE=false
+#     SMTP_REQUIRE_TLS=false
+#     SMTP_USER=<adresse d'expedition de l'organisation>
+#     SMTP_PASS=<mot de passe d'application de cette adresse>
+#     MAIL_FROM=uSwap <la MEME adresse que SMTP_USER>
+#
+#     SMS_DRIVER=console                        (NE PAS CHANGER : aucun envoi)
+#     SMS_ENDPOINT=                             (vide)
+#     SMS_TOKEN=                                (vide)
+#
+#   --- 4.2 A FOURNIR PAR LE SUPERVISEUR -----------------------------------
+#
+#     PUBLIC_APP_URL=https://<domaine-reel>
+#     CORS_ORIGIN=https://<domaine-reel>        (identique a PUBLIC_APP_URL)
+#
+#     GOOGLE_CLIENT_ID=449904699288-xxxxxxxx.apps.googleusercontent.com
+#
+#       La valeur COMPLETE est necessaire : elle se termine par
+#       « .apps.googleusercontent.com ». Le seul nombre 449904699288 est le
+#       numero de PROJET Google Cloud, pas l'identifiant client.
+#       Ou la trouver : console Google Cloud -> APIs et services ->
+#       Identifiants -> client OAuth « Application Web » -> « ID client ».
+#
+#       Le « client secret » n'est PAS utilise : uSwap verifie un id_token
+#       Google cote backend (Google Identity Services), sans echange de code.
+#       Le garder prive dans la console Google Cloud.
+#
+#       Origines a declarer dans la console Google Cloud (sinon
+#       « origin_mismatch ») :
+#         https://<domaine-reel>
+#         http://localhost:5173
+#
+#     ADMIN_BOOTSTRAP_PASSWORD=<mot de passe fort>
+#       Applique UNIQUEMENT a un compte ADMIN trouve desactive au demarrage.
+#
+#   --- 4.3 GENERE AUTOMATIQUEMENT PAR CE SCRIPT ---------------------------
+#
+#     POSTGRES_PASSWORD          openssl rand -hex 24
 #     JWT_SECRET                 openssl rand -base64 48
 #     JWT_REFRESH_SECRET         openssl rand -base64 48
-#     ADMIN_BOOTSTRAP_PASSWORD   mot de passe initial du compte ADMIN
-#     SUPERADMIN_EMAIL / SUPERADMIN_PASSWORD
 #
-#   PRODUCTION (HTTPS)
-#     PUBLIC_APP_URL=https://<domaine>
-#     CORS_ORIGIN=https://<domaine>
-#     COOKIE_SECURE=true
-#     COOKIE_SAMESITE=lax
+#   --- 4.4 FACULTATIF : laisser vide --------------------------------------
 #
-#   CONNEXION GOOGLE (SSO) — UNE SEULE LIGNE A REMPLIR, dans deploy/.env :
-#     GOOGLE_CLIENT_ID=449904699288-xxxx.apps.googleusercontent.com
-#     GOOGLE_ALLOWED_DOMAINS=upowa.org
-#   La valeur COMPLETE est necessaire (le seul nombre est le projet, pas le
-#   client). Le « client secret » n'est PAS utilise : le flux Google Identity
-#   Services verifie un id_token cote backend, sans echange de code.
-#   Le compose.yaml la transmet au backend ET au frontend (au build Docker).
-#   Ne pas la mettre dans frontend_new/frontend/.env : ce fichier ne sert
-#   qu'au developpement local (npm run dev) et n'entre jamais dans l'image.
-#   Origines a declarer dans la console Google Cloud :
-#       https://<domaine>   et   http://localhost:5173 (dev)
-#
-#   CARTE DE CREATION DE STATION (optionnel)
-#     VITE_GOOGLE_MAPS_API_KEY=   vide = OpenStreetMap (fonctionnel)
-#     Si renseignee : activer Maps JavaScript API, Places API et Geocoding API,
-#     puis restreindre la cle par referent HTTP a https://<domaine>/*
-#
-#   E-MAILS
-#     MAIL_DRIVER=smtp + SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS
-#     (laisser `console` revient a ne jamais envoyer d'e-mail)
+#     VITE_GOOGLE_MAPS_API_KEY=   vide = carte sur OpenStreetMap (fonctionnel)
+#     ADMIN_EMAIL= / ADMIN_PASSWORD=   aucun second administrateur cree
 #
 # -----------------------------------------------------------------------------
 # 5. APRES LE DEPLOIEMENT
@@ -171,7 +195,7 @@ T=(-f "$COMPOSE" --env-file "$ENV_FILE")
 
 MODE="deploy"
 case "${1:-}" in
-  --help|-h) sed -n '2,120p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  --help|-h) sed -n '2,190p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
   --check)   MODE="check" ;;
   "")        ;;
   *)         die "option inconnue : $1 (utiliser --help, --check ou rien)" ;;
@@ -240,7 +264,8 @@ if [ ! -f "$ENV_FILE" ]; then
   set_env BACKEND_BUILD_CONTEXT "..\/backend_new"
 
   ok "deploy/.env cree (secrets aleatoires, permissions 600)"
-  warn "renseigner maintenant : PUBLIC_APP_URL, CORS_ORIGIN, SUPERADMIN_*, GOOGLE_CLIENT_ID"
+  warn "renseigner maintenant la section 4 du guide : PUBLIC_APP_URL, CORS_ORIGIN,"
+  warn "GOOGLE_CLIENT_ID, ADMIN_BOOTSTRAP_PASSWORD, SMTP_USER / SMTP_PASS"
 else
   ok "deploy/.env existe — conserve tel quel (aucun secret ecrase)"
 fi
@@ -279,6 +304,16 @@ if [ -n "$GOOGLE_ID" ]; then
 else
   warn "GOOGLE_CLIENT_ID vide : bouton « Se connecter avec Google » masque"
 fi
+
+if [ -n "$(get_env SMTP_USER)" ] && [ -n "$(get_env SMTP_PASS)" ]; then
+  ok "e-mails SMTP configures ($(get_env SMTP_USER))"
+else
+  warn "SMTP_USER / SMTP_PASS vides : aucun e-mail ne sera envoye"
+fi
+
+[ "$(get_env SMS_DRIVER)" = "console" ] \
+  && ok "SMS en mode console (aucun envoi, aucun cout)" \
+  || warn "SMS_DRIVER=$(get_env SMS_DRIVER) : verifier que le fournisseur est bien configure"
 
 [ -n "$(get_env VITE_GOOGLE_MAPS_API_KEY)" ] \
   && ok "carte Google Maps configuree (VITE_GOOGLE_MAPS_API_KEY)" \
@@ -367,7 +402,7 @@ cat <<EOF
   Application (publique)        : ${PUBLIC_URL:-<PUBLIC_APP_URL>}
 
   Connexion initiale
-    e-mail     : $(get_env SUPERADMIN_EMAIL)
+    e-mail       : $(get_env SUPERADMIN_EMAIL)
     mot de passe : (SUPERADMIN_PASSWORD de deploy/.env)
 
   Commandes utiles
