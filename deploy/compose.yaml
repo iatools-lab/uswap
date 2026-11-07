@@ -118,11 +118,8 @@ services:
       NOTIFICATION_RETENTION_DAYS: ${NOTIFICATION_RETENTION_DAYS:-90}
       MAX_ATTACHMENT_MB: ${MAX_ATTACHMENT_MB:-5}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@uswap.local}
-      # Integration RH externe (desactivee par defaut).
-      LEAVE_SYNC_ENABLED: ${LEAVE_SYNC_ENABLED:-false}
-      LEAVE_SYNC_ENDPOINT: ${LEAVE_SYNC_ENDPOINT:-}
-      LEAVE_SYNC_TOKEN: ${LEAVE_SYNC_TOKEN:-}
-      LEAVE_SYNC_WEBHOOK_SECRET: ${LEAVE_SYNC_WEBHOOK_SECRET:-}
+      # Integration RH externe : NON LIVREE. Aucune variable LEAVE_SYNC_* n'est
+      # transmise ; le code retombe sur sa valeur par defaut (desactivee).
     depends_on:
       db:
         condition: service_healthy
