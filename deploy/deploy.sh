@@ -112,8 +112,11 @@
 #     COOKIE_SAMESITE=lax
 #
 #   CONNEXION GOOGLE (SSO) — UNE SEULE LIGNE A REMPLIR, dans deploy/.env :
-#     GOOGLE_CLIENT_ID=<...>.apps.googleusercontent.com
+#     GOOGLE_CLIENT_ID=449904699288-xxxx.apps.googleusercontent.com
 #     GOOGLE_ALLOWED_DOMAINS=upowa.org
+#   La valeur COMPLETE est necessaire (le seul nombre est le projet, pas le
+#   client). Le « client secret » n'est PAS utilise : le flux Google Identity
+#   Services verifie un id_token cote backend, sans echange de code.
 #   Le compose.yaml la transmet au backend ET au frontend (au build Docker).
 #   Ne pas la mettre dans frontend_new/frontend/.env : ce fichier ne sert
 #   qu'au developpement local (npm run dev) et n'entre jamais dans l'image.
