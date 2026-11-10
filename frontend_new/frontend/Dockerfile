@@ -15,12 +15,30 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /app
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
     NPM_CONFIG_FUND=false
+#
+# npm est EPINGLE a la version 10.9.2 (celle livree avec node:22-bookworm-slim).
+#
+# Raison technique : le serveur a echoue avec
+#   npm error Cannot read properties of null (reading 'edgesOut')
+# pendant `npm ci`. Cette erreur vient de l'arbre de dependances reconstruit
+# par npm 11 (arborist reecrit) sur un lockfile produit par npm 10 : les
+# entrees `peerDependencies`/`optional` y sont interpretees differemment et
+# l'arbre est corrompu en memoire. Epingler npm 10 rend la construction
+# reproductible et identique au poste de developpement.
+RUN npm install -g npm@10.9.2 \
+ && npm --version
 # Vite charge TOUS les .env* de sa racine, pas seulement le mode courant :
 # un .env de developpement copie par erreur l'emporterait sur .env.production.
 # Le .dockerignore l'exclut deja. On verifie donc APRES la copie des sources
 # (avant, le controle passait sur un repertoire encore vide et ne verifiait rien).
 COPY package.json package-lock.json ./
-RUN npm ci
+# `--no-audit --no-fund` : aucune requete reseau superflue pendant le build.
+# `--maxsockets=4` : limite les extractions simultanees, ce qui evite les
+# archives partiellement decompressees observees sur certains systemes de
+# fichiers (fichiers manquants dans node_modules sans erreur npm).
+RUN npm ci --no-audit --no-fund --maxsockets=4 \
+ && test -f node_modules/@tabler/icons-react/dist/tabler-icons-react.d.ts \
+ && echo "Tabler Icons : declarations TypeScript presentes"
 COPY tsconfig.json vite.config.ts index.html ./
 COPY public ./public
 COPY src ./src

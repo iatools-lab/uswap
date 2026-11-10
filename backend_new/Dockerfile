@@ -18,6 +18,12 @@ WORKDIR /app
 ENV NODE_ENV=production \
     NPM_CONFIG_UPDATE_NOTIFIER=false \
     NPM_CONFIG_FUND=false
+# npm epingle a 10.9.2 (version livree avec node:22-bookworm-slim).
+# npm 11 reconstruit l'arbre de dependances differemment et peut echouer sur
+# un lockfile produit par npm 10 avec « Cannot read properties of null
+# (reading 'edgesOut') ». Meme version que le frontend : construction
+# reproductible.
+RUN npm install -g npm@10.9.2 && npm --version
 # openssl est requis par les moteurs Prisma sous Debian slim.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openssl ca-certificates \
@@ -27,7 +33,7 @@ RUN apt-get update \
 FROM base AS build
 ENV NODE_ENV=development
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund --maxsockets=4
 COPY prisma ./prisma
 RUN npx prisma generate
 COPY tsconfig.json tsconfig.build.json ./

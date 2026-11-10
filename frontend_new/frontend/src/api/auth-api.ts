@@ -96,7 +96,15 @@ const fallbackMessages: Record<number, string> = {
   410: "Ce lien n'est plus valable.",
   413: "Le fichier dépasse la limite autorisée.",
   429: "Trop de tentatives. Veuillez patienter avant de réessayer.",
+  /*
+   * 502 / 504 sont produits par le proxy Nginx quand le conteneur backend est
+   * arrêté, en cours de redémarrage ou injoignable. Sans message dédié, la
+   * page affichait « service momentanément indisponible » sans plus de détail,
+   * ce qui se confondait avec une panne de l'application elle-même.
+   */
+  502: "Le serveur de l'application ne répond pas. Réessayez dans une minute ; si le problème persiste, l'administrateur doit vérifier que le conteneur backend tourne.",
   503: "Ce service est momentanément indisponible. Veuillez réessayer plus tard.",
+  504: "Le serveur de l'application met trop de temps à répondre. Réessayez dans un instant.",
 };
 
 const unavailable = "Le service est momentanément indisponible.";
