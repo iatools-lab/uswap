@@ -8,15 +8,15 @@ consulter les journaux et revenir en arrière.
 
 ## 1. Ce que le superviseur doit préparer
 
-| Élément | Détail |
-| --- | --- |
-| Serveur | Ubuntu avec Docker Engine ≥ 24 et Docker Compose v2 |
-| Apache | déjà installé sur le serveur (il n'est ni remplacé ni désinstallé) |
-| Domaine | un nom qui pointe vers le serveur, par exemple `uswap.upowa.org` |
-| Certificat | HTTPS (certbot) — obligatoire pour la géolocalisation |
-| Ports libres | `8080` (frontend) et `3000` (backend), liés à `127.0.0.1` uniquement |
+| Élément            | Détail                                                                |
+| ------------------ | --------------------------------------------------------------------- |
+| Serveur            | Ubuntu avec Docker Engine ≥ 24 et Docker Compose v2                   |
+| Apache             | déjà installé sur le serveur (il n'est ni remplacé ni désinstallé)    |
+| Domaine            | un nom qui pointe vers le serveur, par exemple `uswap.upowa.org`      |
+| Certificat         | HTTPS (certbot) — obligatoire pour la géolocalisation                 |
+| Ports libres       | `8080` (frontend) et `3000` (backend), liés à `127.0.0.1` uniquement  |
 | Identifiant Google | `GOOGLE_CLIENT_ID` complet, terminé par `.apps.googleusercontent.com` |
-| Compte SMTP | adresse d'expédition + mot de passe d'application |
+| Compte SMTP        | adresse d'expédition + mot de passe d'application                     |
 
 ---
 
@@ -78,21 +78,68 @@ générés automatiquement au premier lancement. **Ne pas les inventer.**
 
 ```bash
 cd /opt/uswap-github
-sudo bash deploy/deploy.sh
+sudo bash deploy/deploy.sh --deploy
 ```
 
-Le script enchaîne : prérequis → Docker → `.env` → build → PostgreSQL →
-migrations → bootstrap → démarrage → healthchecks → tests HTTP → Apache.
+Le script enchaîne : prérequis → `deploy/.env` → Compose → ports → services →
+diagnostic → réparations sûres → build → PostgreSQL → migrations → bootstrap →
+démarrage → tests HTTP → Apache → **vérification des deux connexions** →
+rapport final.
 
-Options :
+Les quatre modes :
 
 ```bash
-sudo bash deploy/deploy.sh --check       # contrôle seul, ne modifie rien
-sudo bash deploy/deploy.sh --no-apache   # sans toucher à Apache
+bash deploy/deploy.sh --check        # contrôle seul, ne modifie rien
+bash deploy/deploy.sh --diagnose     # contrôle + diagnostic détaillé, lecture seule
+sudo bash deploy/deploy.sh --repair  # réparations ciblées et sûres, sans rebuild
+sudo bash deploy/deploy.sh --deploy  # tout : contrôles, réparations, build, tests
 ```
 
-Il est **idempotent** : on peut le relancer. Il n'écrase jamais `deploy/.env`
-et ne supprime jamais de volume.
+Options complémentaires : `--rebuild` (force la reconstruction des images),
+`--help`.
+
+Il est **idempotent** : on peut le relancer. Il n'écrase jamais `deploy/.env`,
+ne supprime jamais de volume et ne réinitialise jamais la base.
+
+### Codes de sortie
+
+| Code | Signification                                                      |
+| ---- | ------------------------------------------------------------------ |
+| `0`  | tout est bon                                                        |
+| `1`  | anomalies bloquantes ou opération échouée                          |
+| `2`  | mauvaise utilisation (option inconnue)                             |
+| `3`  | prérequis serveur insuffisant (root, Docker, outils)                |
+| `4`  | `deploy/.env` absent, invalide ou incomplet                        |
+| `5`  | port occupé / chaîne HTTP (Nginx, Apache) en échec                  |
+| `6`  | connexion e-mail + mot de passe en échec (502 ou refus applicatif)  |
+| `7`  | non-régression Google en échec                                     |
+
+---
+
+## 4 bis. Ce que vérifie le script sur les connexions
+
+**E-mail + mot de passe** — `POST /api/auth/login/superadmin` est rejoué avec
+le compte `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`, d'abord à travers le
+Nginx du conteneur, puis à travers Apache. Le script vérifie ensuite que le
+cookie `uswap_refresh` revient en `HttpOnly`, que `/auth/refresh` répond 200 et
+que `/auth/logout` ferme la session de test.
+
+- Un **502** n'est jamais laissé sans explication : le script rappelle les
+  causes mesurées dans le même passage (backend non healthy, migrations
+  manquantes, base injoignable, nom `backend` non résolu) et renvoie le code 6.
+- Si `SUPERADMIN_PASSWORD` ressemble encore à un modèle ou contient « Demo »,
+  **aucune connexion n'est tentée** : le script ne verrouille pas un compte
+  réel avec de faux essais. Un avertissement l'indique.
+- Un **429** interrompt les essais : le script n'insiste pas et laisse le
+  verrou expirer.
+
+**Google** — vérification de **non-régression uniquement** : aucun appel à
+Google, aucune configuration modifiée. Le script contrôle que
+`GOOGLE_CLIENT_ID` est présent et au bon format, que le domaine du compte
+super administrateur est couvert par `GOOGLE_ALLOWED_DOMAINS`, que le bundle du
+frontend contient le même identifiant (sinon le bouton disparaît), et que
+`POST /api/auth/google` refuse un jeton invalide en 401 (et non en 400 « non
+configuré »).
 
 ---
 
@@ -107,7 +154,7 @@ sudo docker compose -f deploy/compose.yaml --env-file deploy/.env ps
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/          # 200
 
 # 3. L'API répond (session anonyme)
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/api/auth/session   # 401
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/api/auth/session   # 204
 
 # 4. Depuis l'extérieur, en HTTPS
 curl -s -o /dev/null -w "%{http_code}\n" https://uswap.upowa.org/        # 200
@@ -131,8 +178,17 @@ sudo docker compose $T logs -f backend             # suivi en direct
 ```
 
 Erreur fréquente : **502 sur la connexion** → le backend est arrêté ou plante.
-Voir `logs --tail=40 backend` ; la cause exacte y figure (variable manquante,
-base injoignable, migrations non appliquées).
+
+```bash
+sudo bash deploy/deploy.sh --diagnose   # cause mesurée, en lecture seule
+sudo bash deploy/deploy.sh --repair     # réparations sûres (base, migrations,
+                                        # bootstrap, Apache)
+sudo bash deploy/deploy.sh --deploy     # redéploiement complet
+```
+
+Le diagnostic lit `logs backend` et nomme la cause (P1001 base injoignable,
+`P2021` migrations non appliquées, nom `backend` non résolu, backend non
+healthy).
 
 ---
 
@@ -183,7 +239,7 @@ Pour revenir à la version courante :
 
 ```bash
 sudo git checkout develop
-sudo bash deploy/deploy.sh
+sudo bash deploy/deploy.sh --deploy
 ```
 
 ---

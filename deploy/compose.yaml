@@ -179,13 +179,15 @@ services:
   #
   #   docker compose ... --profile tools run --rm bootstrap
   #
-  # `npm install` (sans --omit=dev) est necessaire : tsx et prisma sont des
-  # outils de developpement, volontairement absents de l'image de production.
+  # Le bootstrap s'execute avec les dependances de l'image (npm ci durant le build,
+  # npm prune conserve les devDependencies listes dans package.json).
+  # Plus besoin de npm install au démarrage : les outils (tsx, prisma) sont deja
+  # presents dans l'image finale grace au changement de pruning.
   bootstrap:
     profiles: ["tools"]
     image: uswap/backend:${USWAP_TAG:-local}
     restart: "no"
-    entrypoint: ["sh", "-c", "npm install --no-save --no-audit --no-fund && npm run bootstrap"]
+    entrypoint: ["sh", "-c", "npm run bootstrap"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-uswap}:${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD dans deploy/.env}@db:5432/${POSTGRES_DB:-uswap}?schema=public
       NODE_ENV: production
