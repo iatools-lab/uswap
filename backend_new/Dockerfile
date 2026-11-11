@@ -41,8 +41,10 @@ COPY src ./src
 RUN npm run build
 
 # Ne conserve que les dependances de production, apres generation du client
-# Prisma (sinon `npm prune --omit=dev` supprimerait le client genere).
-RUN npm prune --omit=dev
+# Prisma ( `@prisma/client` est en dependencies, il est conserve quel que soit le pruning).
+# Avec `npm prune` (sans --omit=dev), les devDependencies listees dans package.json
+# sont conservees en runtime, permettant l'execution de `npm run bootstrap` sans install.
+RUN npm prune
 
 # -------------------------------------------------------------- runtime ----
 FROM base AS runtime

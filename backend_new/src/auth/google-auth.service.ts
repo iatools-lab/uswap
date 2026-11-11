@@ -1,18 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppConfig } from '../config/configuration';
 
 /**
- * Vérification d'un jeton d'identité Google.
+ * VÃ©rification d'un jeton d'identitÃ© Google.
  *
  * Le frontend obtient un `id_token` via Google Identity Services, puis le
  * transmet au backend. On NE fait pas confiance au contenu : le jeton est
- * vérifié auprès de Google (`tokeninfo`), ce qui garantit :
- *   - qu'il n'est pas forgé (signature validée par Google) ;
- *   - qu'il est destiné À CETTE application (`aud` = client ID) ;
- *   - qu'il n'est pas expiré.
+ * vÃ©rifiÃ© auprÃ¨s de Google (`tokeninfo`), ce qui garantit :
+ *   - qu'il n'est pas forgÃ© (signature validÃ©e par Google) ;
+ *   - qu'il est destinÃ© Ã€ CETTE application (`aud` = client ID) ;
+ *   - qu'il n'est pas expirÃ©.
  *
- * Aucune dépendance supplémentaire : un `fetch` suffit.
+ * Aucune dÃ©pendance supplÃ©mentaire : un `fetch` suffit.
  */
 export type GoogleIdentity = {
   email: string;
@@ -27,27 +27,29 @@ export class GoogleAuthService {
 
   constructor(private readonly config: ConfigService<AppConfig, true>) {}
 
-  /** Authentification Google activée (client ID renseigné) ? */
+  /** Authentification Google activÃ©e (client ID renseignÃ©) ? */
   enabled(): boolean {
     return Boolean(this.config.get('googleClientId', { infer: true }));
   }
 
   /**
-   * Vérifie un jeton Google et renvoie l'identité, ou `null` si le jeton est
-   * invalide, expiré, émis pour une autre application, ou si l'adresse e-mail
-   * n'est pas vérifiée par Google.
+   * VÃ©rifie un jeton Google et renvoie l'identitÃ©, ou `null` si le jeton est
+   * invalide, expirÃ©, Ã©mis pour une autre application, ou si l'adresse e-mail
+   * n'est pas vÃ©rifiÃ©e par Google.
    */
   async verify(idToken: string): Promise<GoogleIdentity | null> {
     if (!idToken) return null;
 
+    // Declares AVANT le try : le `finally` doit pouvoir les liberer, et une
+    // variable declaree dans le bloc try n'y serait pas visible.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
       const response = await fetch(
         `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
         { signal: controller.signal },
       );
-      clearTimeout(timer);
 
       if (!response.ok) return null;
       const info = (await response.json()) as {
@@ -59,11 +61,11 @@ export class GoogleAuthService {
         exp?: string;
       };
 
-      // Le jeton doit avoir été émis pour NOTRE application.
+      // Le jeton doit avoir Ã©tÃ© Ã©mis pour NOTRE application.
       const expected = this.config.get('googleClientId', { infer: true });
       if (info.aud !== expected) {
         this.logger.warn(
-          `Jeton Google refusé : audience ${info.aud ?? 'absente'} ≠ ${expected}.`,
+          `Jeton Google refuse : audience ${info.aud ?? 'absente'} differente de ${expected}.`,
         );
         return null;
       }
@@ -72,17 +74,34 @@ export class GoogleAuthService {
         info.email_verified === true || info.email_verified === 'true';
       if (!info.email || !verified) return null;
 
+      const email = info.email.trim().toLowerCase();
+      // Doit contenir exactement un '@'
+      const atIndex = email.indexOf('@');
+      if (atIndex <= 0 || atIndex === email.length - 1) return null;
+      const domain = email.slice(atIndex + 1);
+      if (domain !== 'upowa.org') {
+        this.logger.warn(
+          `Adresse e-mail non autorisÃ©e : domaine "${domain}" diffÃ©rent de "upowa.org".`,
+        );
+        return null;
+      }
+
       return {
-        email: info.email.toLowerCase(),
+        email, // email normalise (trim + lowercase)
         emailVerified: verified,
         name: info.name,
         picture: info.picture,
       };
     } catch (error) {
       this.logger.error(
-        `Vérification Google impossible : ${error instanceof Error ? error.message : error}`,
+        `Verification Google impossible : ${error instanceof Error ? error.message : error}`,
       );
       return null;
+    } finally {
+      // Le minuteur est TOUJOURS libere, succes comme echec : sans cela une
+      // requete lente laissait un timer actif et un AbortController en vie.
+      clearTimeout(timer);
     }
   }
 }
+
