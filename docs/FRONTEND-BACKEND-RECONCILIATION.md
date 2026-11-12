@@ -370,7 +370,7 @@ Ouvrir **`http://127.0.0.1:5173`** (pas `localhost` : voir la note CORS).
 
 ### Comptes de démonstration
 
-Mot de passe unique : la valeur de `DEMO_PASSWORD` (backend_new/.env)
+Mot de passe unique : la valeur de `DEMO_PASSWORD` (backend/.env)
 
 | Rôle            | E-mail                    |
 | --------------- | ------------------------- |

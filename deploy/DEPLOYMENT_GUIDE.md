@@ -1,7 +1,7 @@
 # Déploiement uSwap
 
-L'application active est composée de `backend_new` (NestJS/Prisma),
-`frontend_new/frontend` (React/Vite) et PostgreSQL 16. Le package racine
+L'application active est composée de `backend` (NestJS/Prisma),
+`frontend` (React/Vite) et PostgreSQL 16. Le package racine
 relaie les commandes vers ces deux applications.
 
 ## Serveur Linux
@@ -75,11 +75,11 @@ pas le schéma ; vérifier sa compatibilité avant `rollback.sh --tag`.
 ## Développement et validation
 
 ```bash
-npm ci --prefix backend_new
-npm ci --prefix frontend_new/frontend
+npm ci --prefix backend
+npm ci --prefix frontend
 ```
 
-Copier `backend_new/.env.example` vers `backend_new/.env`, renseigner une base
+Copier `backend/.env.example` vers `backend/.env`, renseigner une base
 locale vide et les secrets, puis générer le client et appliquer les migrations :
 
 ```bash
@@ -94,4 +94,4 @@ bash scripts/test-deploy.sh
 Pour le frontend local, copier son `.env.example` vers `.env` et choisir
 `VITE_API_URL=/api`. Démarrer l'API avec `npm run start:dev` et le frontend dans
 un second terminal avec `npm run dev:frontend`. Le seed de démonstration reste
-une commande locale explicite dans `backend_new`.
+une commande locale explicite dans `backend`.

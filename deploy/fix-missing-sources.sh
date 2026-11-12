@@ -6,7 +6,7 @@
 #   bash deploy/fix-missing-sources.sh --apply    # met les sources en place
 #
 # Contexte (constat du 2026-10-29 sur Sirh-Server) :
-#   /opt/uswap/frontend_new/frontend ne contient pas les sources de
+#   /opt/uswap/frontend ne contient pas les sources de
 #   l'application. `docker compose build frontend` réussit pourtant : le build
 #   réutilise le cache BuildKit (`npm ci`, `npm run build` « CACHED ») et
 #   fabrique une image avec un bundle qui n'a rien à voir avec le code.
@@ -48,8 +48,8 @@ read_env() {
   printf '%s' "$value"
 }
 
-FeCtx="$(read_env FRONTEND_BUILD_CONTEXT)"; FeCtx="${FeCtx:-../frontend_new/frontend}"
-BeCtx="$(read_env BACKEND_BUILD_CONTEXT)"; BeCtx="${BeCtx:-../backend_new}"
+FeCtx="$(read_env FRONTEND_BUILD_CONTEXT)"; FeCtx="${FeCtx:-../frontend}"
+BeCtx="$(read_env BACKEND_BUILD_CONTEXT)"; BeCtx="${BeCtx:-../backend}"
 FeDir="$(cd "deploy" 2>/dev/null && cd "$FeCtx" 2>/dev/null && pwd)"
 BeDir="$(cd "deploy" 2>/dev/null && cd "$BeCtx" 2>/dev/null && pwd)"
 [ -n "$FeDir" ] || FeDir="$Root/$FeCtx"
@@ -117,8 +117,8 @@ if [ -z "$Candidate" ]; then
 Aucune autre copie complète n'a été trouvée sur ce serveur.
 Le frontend doit être fourni depuis le poste de développement :
 
-  # sur le poste Windows (dossier frontend_new/frontend SANS node_modules ni dist)
-  scp -r "frontend_new/frontend" root@Sirh-Server:/tmp/uswap-frontend
+  # sur le poste Windows (dossier frontend SANS node_modules ni dist)
+  scp -r "frontend" root@Sirh-Server:/tmp/uswap-frontend
 
   # sur le serveur
   cp -a /tmp/uswap-frontend/. "<dossier affiché en tête>"/ 

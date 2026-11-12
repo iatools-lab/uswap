@@ -4,13 +4,13 @@
   "private": true,
   "description": "uSwap : API NestJS et interface React",
   "scripts": {
-    "build": "npm run build --prefix backend_new && npm run build --prefix frontend_new/frontend",
-    "test": "npm test --prefix backend_new && npm test --prefix frontend_new/frontend",
+    "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "test": "npm test --prefix backend && npm test --prefix frontend",
     "check:deploy": "node scripts/check-bash.mjs",
-    "start": "npm start --prefix backend_new",
-    "start:dev": "npm run start:dev --prefix backend_new",
-    "dev:frontend": "npm run dev --prefix frontend_new/frontend",
-    "db:generate": "npm run prisma:generate --prefix backend_new",
-    "db:migrate": "npm run prisma:deploy --prefix backend_new"
+    "start": "npm start --prefix backend",
+    "start:dev": "npm run start:dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "db:generate": "npm run prisma:generate --prefix backend",
+    "db:migrate": "npm run prisma:deploy --prefix backend"
   }
 }

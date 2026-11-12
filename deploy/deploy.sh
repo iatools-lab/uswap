@@ -79,12 +79,12 @@
 #     bootstrap  profil « tools »    referentiel + super administrateur
 #
 #   Dockerfiles :
-#     backend_new/Dockerfile            build tsc -> dist/main.js
-#     frontend_new/frontend/Dockerfile  build Vite -> Nginx + proxy /api
-#     frontend_new/frontend/deploy/nginx.conf   proxy /api et /api-docs
+#     backend/Dockerfile            build tsc -> dist/main.js
+#     frontend/Dockerfile  build Vite -> Nginx + proxy /api
+#     frontend/deploy/nginx.conf   proxy /api et /api-docs
 #
-#   En production, tout vient de deploy/.env : les fichiers backend_new/.env et
-#   frontend_new/frontend/.env servent seulement au developpement local.
+#   En production, tout vient de deploy/.env : les fichiers backend/.env et
+#   frontend/.env servent seulement au developpement local.
 #
 # =============================================================================
 # 3. VARIABLES LUES DANS deploy/.env (aucune n'est ecrite par ce script)
@@ -192,8 +192,8 @@ APACHE_TARGET="/etc/apache2/sites-available/uswap.conf"
 PROJECT_NAME="uswap"
 COMPOSE=(-f "$COMPOSE_FILE" --env-file "$ENV_FILE")
 
-BACKEND_DIR="backend_new"
-FRONTEND_DIR="frontend_new/frontend"
+BACKEND_DIR="backend"
+FRONTEND_DIR="frontend"
 
 # Delais (secondes). Surchargeables pour un serveur lent.
 WAIT_DB_TIMEOUT="${USWAP_WAIT_DB_TIMEOUT:-120}"
@@ -393,6 +393,24 @@ norm_code() {
 # Corps d'une reponse (silencieux en cas d'echec reseau).
 http_body() {
   curl -sS --max-time 10 "$@" 2>/dev/null || true
+}
+
+# Echappe les caracteres speciaux des identifiants avant serialisation JSON.
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  value="${value//$'\b'/\\b}"
+  value="${value//$'\f'/\\f}"
+  printf '%s' "$value"
+}
+
+login_payload() {
+  printf '{"email":"%s","password":"%s"}' \
+    "$(json_escape "$1")" "$(json_escape "$2")"
 }
 
 # Extrait un champ JSON scalaire d'une reponse.
@@ -596,8 +614,8 @@ check_sources() {
   # Contexte de build resolu : c'est la panne historique (le contexte pointait
   # vers un dossier sans Dockerfile, Compose construisait une image vide).
   local ctx_backend ctx_frontend
-  ctx_backend="$(cd deploy && cd "${BACKEND_BUILD_CONTEXT:-../backend_new}" 2>/dev/null && pwd || true)"
-  ctx_frontend="$(cd deploy && cd "${FRONTEND_BUILD_CONTEXT:-../frontend_new/frontend}" 2>/dev/null && pwd || true)"
+  ctx_backend="$(cd deploy && cd "${BACKEND_BUILD_CONTEXT:-../backend}" 2>/dev/null && pwd || true)"
+  ctx_frontend="$(cd deploy && cd "${FRONTEND_BUILD_CONTEXT:-../frontend}" 2>/dev/null && pwd || true)"
   if [ -n "$ctx_backend" ] && [ -f "$ctx_backend/Dockerfile" ]; then
     pass "contexte backend : ${ctx_backend#$ROOT_DIR/} (Dockerfile present)"
   else
@@ -1283,7 +1301,7 @@ login_attempt() {
   # guillemets ou des barres obliques inverses casserait une concatenation
   # shell. `--data-binary @fichier` transmet exactement ce qui est ecrit.
   payload="$(mktemp)"
-  printf '{"email":"%s","password":"%s"}' "$email" "$password" > "$payload"
+  login_payload "$email" "$password" > "$payload"
 
   # `|| true` est DANS la substitution : sans lui, un curl en echec reseau
   # declencherait le trap ERR et arreteraient le script (verifie en test).
@@ -1403,7 +1421,7 @@ browser_login_cycle() {
 
   headers="$(mktemp)"; body="$(mktemp)"; payload="$(mktemp)"
 
-  printf '{"email":"%s","password":"%s"}' \
+  login_payload \
     "$(read_env_value SUPERADMIN_EMAIL)" "$(read_env_value SUPERADMIN_PASSWORD)" > "$payload"
 
   BROWSER_LOGIN_CODE="$(curl -sS -o "$body" -D "$headers" -w '%{http_code}' --max-time 20 \
@@ -1586,12 +1604,12 @@ verify_google_bundle() {
     return
   fi
   found="$(compose exec -T frontend sh -c \
-    "grep -l '${client_id}' /usr/share/nginx/html/assets/*.js 2>/dev/null | wc -l" 2>/dev/null | tr -d '\r ' || echo 0)"
+    'grep -Fl -- "$1" /usr/share/nginx/html/assets/*.js 2>/dev/null | wc -l' sh "$client_id" 2>/dev/null | tr -d '\r ' || echo 0)"
   if [ "${found:-0}" -gt 0 ]; then
     pass "bundle frontend construit avec VITE_GOOGLE_CLIENT_ID (bouton Google present)"
   else
-    fail_domain google "GOOGLE_CLIENT_ID present dans deploy/.env mais ABSENT du bundle : image frontend construite avant l'ajout de l'identifiant"
-    info "correction sure : sudo bash deploy/deploy.sh --deploy (reconstruit le frontend)"
+    fail_domain google "GOOGLE_CLIENT_ID present dans deploy/.env mais introuvable dans le bundle frontend"
+    info "verifier VITE_GOOGLE_CLIENT_ID dans les arguments de build Compose, puis reconstruire le frontend"
   fi
 }
 

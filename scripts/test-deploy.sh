@@ -4,6 +4,16 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT_DIR/deploy/deploy.sh"
 
+for path in "$BACKEND_DIR/package.json" "$BACKEND_DIR/Dockerfile" \
+  "$BACKEND_DIR/prisma/schema.prisma" "$FRONTEND_DIR/package.json" \
+  "$FRONTEND_DIR/Dockerfile" "$FRONTEND_DIR/deploy/nginx.conf"; do
+  [[ -f "$ROOT_DIR/$path" ]] || {
+    printf 'ERREUR : chemin de deploiement absent : %s\n' "$path" >&2
+    exit 1
+  }
+done
+printf 'OK : chemins backend et frontend presents\n'
+
 compose() { printf 'test-container'; }
 docker() { printf '%s' "${TEST_HEALTH:-healthy}"; }
 status="$(wait_for_healthy db 0)"
@@ -25,6 +35,8 @@ printf '%s\n' 'PASSWORD=example#~"' "QUOTED='example#~\"'" > "$ENV_FILE"
 rm -f -- "$ENV_FILE"
 ENV_FILE="$saved_env_file"
 printf 'OK : guillemet final conserve dans les mots de passe\n'
+[[ "$(login_payload 'test@example.org' 'example#~"\')" == '{"email":"test@example.org","password":"example#~\"\\"}' ]] || exit 1
+printf 'OK : guillemets et antislashs echappes dans les requetes de connexion\n'
 
 health_of() { printf 'healthy'; }
 compose_tools() {

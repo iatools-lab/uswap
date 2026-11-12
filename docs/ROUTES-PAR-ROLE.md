@@ -113,7 +113,7 @@ Il n'existe **aucune** page ni route d'inscription publique (l'ancien
 `POST /auth/register/superadmin` a été retiré ; il répond `404`).
 
 Le premier super administrateur est créé **au déploiement** par
-`npm run bootstrap` (`backend_new/prisma/bootstrap.ts`), qui exige
+`npm run bootstrap` (`backend/prisma/bootstrap.ts`), qui exige
 `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD` (12 caractères minimum) et
 éventuellement `SUPERADMIN_FULLNAME`. Le script est idempotent : rejoué, il ne
 réécrit pas le mot de passe existant. Voir `deploy/DEPLOYMENT_GUIDE.md`.
@@ -127,12 +127,12 @@ authentifié via la gestion des utilisateurs (rôle attribuable uniquement par u
 ## 6. Vérifications
 
 ```powershell
-cd backend_new
+cd backend
 npm run build                                        # compilation
 npx vitest run --config vitest.config.ts             # tests unitaires
 node src/common/routing/routes-replica.mjs http://127.0.0.1:3000   # routage sur serveur démarré
 
-cd frontend_new/frontend
+cd frontend
 npx tsc --noEmit -p tsconfig.json
 npx vitest run
 npx vite build
@@ -142,10 +142,10 @@ Tests dédiés :
 
 | Fichier | Objet |
 |---|---|
-| `backend_new/src/common/routing/role-route.spec.ts` | table des espaces, fusion des préfixes, garde |
-| `backend_new/src/common/routing/route-registration.spec.ts` | contrôleurs réels : ancien chemin + espaces, routes conservées |
-| `frontend_new/frontend/src/api/role-routes.spec.ts` | préfixage des appels selon le rôle connecté |
-| `frontend_new/frontend/src/api/auth-api.spec.ts` | connexion par espace (maquette locale) |
+| `backend/src/common/routing/role-route.spec.ts` | table des espaces, fusion des préfixes, garde |
+| `backend/src/common/routing/route-registration.spec.ts` | contrôleurs réels : ancien chemin + espaces, routes conservées |
+| `frontend/src/api/role-routes.spec.ts` | préfixage des appels selon le rôle connecté |
+| `frontend/src/api/auth-api.spec.ts` | connexion par espace (maquette locale) |
 
 `node scripts/audit-http-calls.mjs` liste tous les chemins d'API appelés par le
 frontend (contrôle de complétude avant une nouvelle évolution).

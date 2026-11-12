@@ -114,8 +114,8 @@ measure_context() { # $1 = dossier de contexte (ou chemin vide)
     "$dir" 2>/dev/null | awk '{print $1 "K"}'
 }
 
-FeCtx="$(read_env FRONTEND_BUILD_CONTEXT)"; FeCtx="${FeCtx:-../frontend_new/frontend}"
-BeCtx="$(read_env BACKEND_BUILD_CONTEXT)"; BeCtx="${BeCtx:-../backend_new}"
+FeCtx="$(read_env FRONTEND_BUILD_CONTEXT)"; FeCtx="${FeCtx:-../frontend}"
+BeCtx="$(read_env BACKEND_BUILD_CONTEXT)"; BeCtx="${BeCtx:-../backend}"
 # Les contextes de build sont relatifs à deploy/ ; les chemins lus affichés
 # sont résolus depuis la racine pour rester lisibles.
 FeCtxRel="$FeCtx"; BeCtxRel="$BeCtx"
@@ -171,7 +171,7 @@ fi
 # Sources non commitées : une image locale les contient, un 'git pull' non.
 if [ -d .git ]; then
   printf '  %-8s HEAD %s\n' "git" "$(git log -1 --format='%h %cd %s' --date=short 2>/dev/null | cut -c1-70)"
-  if [ -n "$(git status --porcelain -- backend_new/src frontend_new/frontend/src frontend_new/frontend/public 2>/dev/null)" ]; then
+  if [ -n "$(git status --porcelain -- backend/src frontend/src frontend/public 2>/dev/null)" ]; then
     warn "des sources ne sont pas commitées ici (git status) : elles sont dans l'image
       construite sur CE serveur, mais pas dans le dépôt distant."
   fi
@@ -308,7 +308,7 @@ psql_q() {
 }
 Applied="$(psql_q 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL')"
 Pending="$(psql_q 'SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NULL AND rolled_back_at IS NULL')"
-Expected="$(ls -d backend_new/prisma/migrations/*/ 2>/dev/null | wc -l)"
+Expected="$(find "$(resolve_from_deploy "$BeCtxRel")/prisma/migrations" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
 if [ -z "$Applied" ]; then
   warn "impossible de lire _prisma_migrations (base démarrée ? docker compose ps)."
 else

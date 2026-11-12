@@ -43,9 +43,9 @@ services:
   backend:
     build:
       # Contexte surchargeable. Valeur par defaut = arborescence REELLE du
-      # depot (backend_new/ et frontend_new/frontend/). Un autre clone peut
+      # depot (backend/ et frontend/). Un autre clone peut
       # surcharger via BACKEND_BUILD_CONTEXT dans deploy/.env.
-      context: ${BACKEND_BUILD_CONTEXT:-../backend_new}
+      context: ${BACKEND_BUILD_CONTEXT:-../backend}
       dockerfile: Dockerfile
     image: uswap/backend:${USWAP_TAG:-local}
     restart: unless-stopped
@@ -132,9 +132,9 @@ services:
 
   frontend:
     build:
-      # Voir BACKEND_BUILD_CONTEXT : la racine est frontend_new/frontend dans
+      # Voir BACKEND_BUILD_CONTEXT : la racine est frontend dans
       # ce depot (c'est elle qui contient Dockerfile, src/ et deploy/nginx.conf).
-      context: ${FRONTEND_BUILD_CONTEXT:-../frontend_new/frontend}
+      context: ${FRONTEND_BUILD_CONTEXT:-../frontend}
       dockerfile: Dockerfile
       args:
         # Valeur PUBLIQUE integree au bundle. Doit rester "/api" : le proxy

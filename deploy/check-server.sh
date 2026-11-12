@@ -58,7 +58,7 @@ env_get() { # $1 = nom de variable
 
 echo "2. Contexte de construction du FRONTEND"
 frontend_ctx="${FRONTEND_BUILD_CONTEXT:-$(env_get FRONTEND_BUILD_CONTEXT)}"
-frontend_ctx="${frontend_ctx:-../frontend_new/frontend}"
+frontend_ctx="${frontend_ctx:-../frontend}"
 frontend_dir="$(cd deploy 2>/dev/null && cd "$frontend_ctx" 2>/dev/null && pwd)"
 if [ -z "${frontend_dir:-}" ]; then
   bad "contexte introuvable : $frontend_ctx (relatif a deploy/)"
@@ -80,7 +80,7 @@ else
   fe_src_kb="$(du -sk "$frontend_dir/src" 2>/dev/null | awk '{print $1}')"
   [ "${fe_src_kb:-0}" -gt 200 ] 2>/dev/null \
     && pass "  sources : ${fe_src_kb} Ko" \
-    || bad "  sources tronquées (${fe_src_kb:-0} Ko) : copier frontend_new/frontend (deploy/fix-missing-sources.sh)"
+    || bad "  sources tronquées (${fe_src_kb:-0} Ko) : copier frontend (deploy/fix-missing-sources.sh)"
   [ -f "$frontend_dir/deploy/nginx.conf" ] \
     && pass "  deploy/nginx.conf" \
     || bad "  deploy/nginx.conf manquant (copie par le Dockerfile)"
@@ -91,7 +91,7 @@ echo
 
 echo "3. Contexte de construction du BACKEND"
 backend_ctx="${BACKEND_BUILD_CONTEXT:-$(env_get BACKEND_BUILD_CONTEXT)}"
-backend_ctx="${backend_ctx:-../backend_new}"
+backend_ctx="${backend_ctx:-../backend}"
 backend_dir="$(cd deploy 2>/dev/null && cd "$backend_ctx" 2>/dev/null && pwd)"
 if [ -z "${backend_dir:-}" ]; then
   bad "contexte introuvable : $backend_ctx (relatif a deploy/)"
