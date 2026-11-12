@@ -342,10 +342,14 @@ read_env_value() {
   local default_value="${2:-}"
   local value
   value="$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$ENV_FILE" 2>/dev/null | tail -n 1 | cut -d= -f2- || true)"
-  value="${value%\"}"
-  value="${value#\"}"
-  value="${value%\'}"
-  value="${value#\'}"
+  value="${value%$'\r'}"
+  # Retirer uniquement une paire de guillemets d'encadrement. Un guillemet
+  # faisant partie du mot de passe doit rester identique a la valeur Compose.
+  if [[ "$value" == \"*\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "$value" == \'*\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
   if [ -n "$value" ]; then
     printf '%s' "$value"
   else
@@ -408,25 +412,26 @@ wait_for_healthy() {
   # nommage a change (`uswap-db-1`, `uswap_db_1`...).
   id="$(compose ps -q "$service" 2>/dev/null | head -n 1 || true)"
   if [ -z "$id" ]; then
-    printf '  %s : conteneur introuvable\n' "$service"
+    printf '  %s : conteneur introuvable\n' "$service" >&2
     return 1
   fi
-  printf '  attente de %s (%ss max) ' "$service" "$timeout"
+  printf '  attente de %s (%ss max) ' "$service" "$timeout" >&2
   for _ in $(seq 1 60); do
     status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$id" 2>/dev/null || true)"
     status="${status:-unknown}"
     case "$status" in
-      healthy|running) printf '\n'; printf '%s' "$status"; return 0 ;;
-      exited|dead)     printf '\n'; printf '%s' "$status"; return 1 ;;
+      healthy|running) printf '\n' >&2; printf '%s' "$status"; return 0 ;;
+      exited|dead)     printf '\n' >&2; printf '%s' "$status"; return 1 ;;
     esac
     if [ "$elapsed" -ge "$timeout" ]; then
-      printf '\n'; printf '%s' "$status"; return 1
+      printf '\n' >&2; printf '%s' "$status"; return 1
     fi
-    printf '.'
+    printf '.' >&2
     sleep "$wait_s"
     elapsed=$((elapsed + wait_s))
   done
-  printf '\n%s' "$status"
+  printf '\n' >&2
+  printf '%s' "$status"
   return 1
 }
 

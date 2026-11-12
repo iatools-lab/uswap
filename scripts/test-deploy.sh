@@ -4,6 +4,28 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT_DIR/deploy/deploy.sh"
 
+compose() { printf 'test-container'; }
+docker() { printf '%s' "${TEST_HEALTH:-healthy}"; }
+status="$(wait_for_healthy db 0)"
+[[ "$status" == healthy ]] || exit 1
+TEST_HEALTH=unhealthy
+if status="$(wait_for_healthy db 0)"; then
+  printf 'ERREUR : base unhealthy acceptee\n' >&2
+  exit 1
+fi
+[[ "$status" == unhealthy ]] || exit 1
+unset TEST_HEALTH
+printf 'OK : etat de sante separe des messages de progression\n'
+
+saved_env_file="$ENV_FILE"
+ENV_FILE="$(mktemp)"
+printf '%s\n' 'PASSWORD=example#~"' "QUOTED='example#~\"'" > "$ENV_FILE"
+[[ "$(read_env_value PASSWORD)" == 'example#~"' ]] || exit 1
+[[ "$(read_env_value QUOTED)" == 'example#~"' ]] || exit 1
+rm -f -- "$ENV_FILE"
+ENV_FILE="$saved_env_file"
+printf 'OK : guillemet final conserve dans les mots de passe\n'
+
 health_of() { printf 'healthy'; }
 compose_tools() {
   # Une installation neuve doit appliquer les migrations directement.
