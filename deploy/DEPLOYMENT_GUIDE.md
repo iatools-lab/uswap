@@ -62,6 +62,20 @@ Une session anonyme répond 204. Les trois services doivent être healthy.
 aucun jeu de démonstration. Les outils de migration et bootstrap sont déjà dans
 l'image : aucune installation npm au démarrage.
 
+## Mot de passe du super administrateur existant
+
+Le bootstrap conserve le mot de passe d'un compte existant. Pour le remplacer
+explicitement, definir un nouveau `SUPERADMIN_PASSWORD` dans `deploy/.env`,
+reconstruire l'image backend avec les sources actuelles, puis executer :
+
+```bash
+docker compose -f deploy/compose.yaml --env-file deploy/.env build backend
+docker compose -f deploy/compose.yaml --env-file deploy/.env run --rm --no-deps --entrypoint node bootstrap prisma/reset-superadmin-password.cjs --apply
+```
+
+Cette operation ferme les sessions du compte et efface ses tentatives de
+connexion. Elle n'est jamais executee par le deploiement automatique.
+
 ## Sauvegarde
 
 ```bash

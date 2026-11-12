@@ -43,10 +43,8 @@ COPY tsconfig.json vite.config.ts index.html ./
 COPY public ./public
 COPY src ./src
 
-# Vite lit les variables VITE_* depuis les fichiers .env de sa racine de
-# projet (nouvelle recherche confirmee lors du build local). On ecrit donc
-# .env.production, dont la lecture est verifiee : les valeurs finissent dans
-# le JavaScript public, aucun secret ne peut y figurer.
+# Transmettre les valeurs publiques directement au processus de build, puis
+# verifier la presence de l'identifiant Google dans le JavaScript produit.
 # Le contexte limite est ../frontend, donc aucun .env local ne
 # peut entrer dans l'image.
 ARG VITE_API_URL=/api
@@ -58,9 +56,14 @@ ARG VITE_GOOGLE_CLIENT_ID=
 ARG VITE_GOOGLE_MAPS_API_KEY=
 RUN test ! -e .env \
  && test -n "$VITE_API_URL" \
- && printf 'VITE_API_URL=%s\nVITE_VAPID_PUBLIC_KEY=%s\nVITE_GOOGLE_CLIENT_ID=%s\nVITE_GOOGLE_MAPS_API_KEY=%s\n' \
-      "$VITE_API_URL" "$VITE_VAPID_PUBLIC_KEY" "$VITE_GOOGLE_CLIENT_ID" "$VITE_GOOGLE_MAPS_API_KEY" > .env.production \
- && npm run build
+ && VITE_API_URL="$VITE_API_URL" \
+    VITE_VAPID_PUBLIC_KEY="$VITE_VAPID_PUBLIC_KEY" \
+    VITE_GOOGLE_CLIENT_ID="$VITE_GOOGLE_CLIENT_ID" \
+    VITE_GOOGLE_MAPS_API_KEY="$VITE_GOOGLE_MAPS_API_KEY" npm run build \
+ && if [ -n "$VITE_GOOGLE_CLIENT_ID" ]; then \
+      grep -Fq -- "$VITE_GOOGLE_CLIENT_ID" dist/assets/*.js \
+      || { echo "ERREUR : identifiant Google absent du bundle construit" >&2; exit 1; }; \
+    fi
 
 FROM nginx:1.27-alpine AS runtime
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
