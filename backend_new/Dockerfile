@@ -40,11 +40,8 @@ COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN npm run build
 
-# Ne conserve que les dependances de production, apres generation du client
-# Prisma ( `@prisma/client` est en dependencies, il est conserve quel que soit le pruning).
-# Avec `npm prune` (sans --omit=dev), les devDependencies listees dans package.json
-# sont conservees en runtime, permettant l'execution de `npm run bootstrap` sans install.
-RUN npm prune
+# L'image sert aussi aux services migrate et bootstrap : conserver Prisma et
+# tsx installes au build evite tout telechargement au demarrage en production.
 
 # -------------------------------------------------------------- runtime ----
 FROM base AS runtime
@@ -63,5 +60,5 @@ RUN mkdir -p /app/var/mail /app/var/uploads && chown -R node:node /app/var
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/auth/session',{method:'GET'}).then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/auth/session',{method:'GET'}).then(r=>process.exit(r.status===204?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "dist/main.js"]

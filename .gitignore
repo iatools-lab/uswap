@@ -1,76 +1,32 @@
 node_modules/
 dist/
+build/
 generated/
+coverage/
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
+!.env.sample
 *.log
-coverage/
+*.out.log
+*.err.log
 uploads/
-
-# Artefacts locaux (ne pas suivre)
+var/
+backups/
+*.dump
 *.backup
-git-diff-*.txt
-git-diff-stat.txt
+*.zip
+*.rar
+id_rsa
+id_rsa.*
 .agents/
 .claude/
 .cursor/
 .devin/
 .windsurf/
-skills-lock.json
-
-# Version de travail locale (copie du projet), non versionn�e
-Uswap-V6.1/
-
-
-# Archives de distribution
-*.zip
-
-node_modules/
-dist/
-build/
-coverage/
-.env
-.env.*
-!.env.example
-!.env.sample
-id_rsa
-id_rsa.*
-
-# Dependencies and generated files
-node_modules/
-dist/
-build/
-coverage/
-
-# Environment files and secrets
-.env
-.env.*
-!.env.example
-!.env.sample
-
-# Local backups and archives
-backups/
-*.rar
-
-# Local personal images
-me--.jpeg
-
-# Fichiers d'environnement Docker (deploy/) : jamais versionnes, seuls les
-# modeles le sont.
-.env
-.env.*
-!.env.example
-
-# Dossier de recette local (captures et scripts de test manuels)
 .qa/
-
-# Journaux et rapports de verification generes localement (non suivis)
-*.txt
-*.out.log
-*.err.log
-%~dp0*
-
-# Scripts jetables d'analyse ponctuelle
+Uswap-V6.1/
+skills-lock.json
+git-diff-*.txt
 *.tmp.mjs
-

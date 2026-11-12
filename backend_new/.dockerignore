@@ -17,6 +17,7 @@ prisma/dev.db-journal
 backups
 *.dump
 *.sql
+!prisma/migrations/**/*.sql
 *.zip
 *.rar
 

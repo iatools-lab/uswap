@@ -116,7 +116,7 @@ Le premier super administrateur est créé **au déploiement** par
 `npm run bootstrap` (`backend_new/prisma/bootstrap.ts`), qui exige
 `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD` (12 caractères minimum) et
 éventuellement `SUPERADMIN_FULLNAME`. Le script est idempotent : rejoué, il ne
-réécrit pas le mot de passe existant. Voir `deploy/README_DOCKER.md` §bootstrap.
+réécrit pas le mot de passe existant. Voir `deploy/DEPLOYMENT_GUIDE.md`.
 
 Les super administrateurs suivants sont créés par un super administrateur
 authentifié via la gestion des utilisateurs (rôle attribuable uniquement par un

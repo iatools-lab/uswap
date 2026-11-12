@@ -1029,6 +1029,10 @@ diagnose_migrations() {
   status=$?
   set -e
   printf '%s\n' "$output" | sed 's/^/        /' | tail -n 25
+  if [ "$status" -ne 0 ] && printf '%s' "$output" | grep -qiE 'not yet been applied|pending|following migrations have not'; then
+    soft "migrations en attente : --repair ou --deploy les appliquera"
+    return
+  fi
   if [ "$status" -ne 0 ]; then
     fail_domain network "migrate status a echoue (code $status) : base inaccessible ou service tools en erreur"
     return
@@ -1782,28 +1786,16 @@ repair_migrations() {
     soft "PostgreSQL non demarree : migrations reportees"
     return 0
   fi
-  local status output
-  set +e
-  output="$(compose_tools migrate status 2>&1)"
-  status=$?
-  set -e
-  if [ "$status" -ne 0 ]; then
-    fail_domain network "migrate status a echoue : migrations non appliquees"
-    printf '%s\n' "$output" | sed 's/^/        /' | tail -n 15
-    return 0
-  fi
-
-  if printf '%s' "$output" | grep -qiE "up to date|No pending migrations"; then
-    pass "migrations deja a jour"
-    return 0
-  fi
-
+  # `migrate status` renvoie 1 quand des migrations sont en attente, y compris
+  # sur une base vierge. `deploy` gere directement ces deux cas et reste
+  # idempotent lorsque le schema est deja a jour.
   sub "Application des migrations versionnees (migrate deploy, strictement additif)"
   if compose_tools migrate; then
     repair_act "migrations appliquees (migrate deploy)"
   else
     fail_domain network "migrate deploy a echoue : schema inchange, voir la sortie ci-dessus"
     info "ne JAMAIS utiliser migrate reset / db push en production"
+    return 1
   fi
 }
 
@@ -1942,7 +1934,7 @@ run_repairs() {
 
   # 2. Base + migrations + referentiel (ordre impose).
   repair_postgres_database
-  repair_migrations
+  repair_migrations || return 1
   repair_bootstrap
 
   # 3. Image backend perimee (route absente).
@@ -2058,7 +2050,7 @@ deploy_database() {
   repair_postgres_database
   # `migrate` et `bootstrap` utilisent l'image backend : la plus recente doit
   # etre construite avant.
-  repair_migrations
+  repair_migrations || return 1
   repair_bootstrap
 
   if [ "$count_fail" -gt 0 ]; then
@@ -2125,18 +2117,11 @@ run_deploy() {
     return 1
   fi
 
-  diagnose
-  sub "Synthese du diagnostic"
-  if [ "$count_fail" -gt 0 ]; then
-    soft "anomalies detectees : les reparations sures ciblent les cas reconnus"
-  else
-    pass "aucune anomalie detectee"
-  fi
-
-  # Les reparations s'appliquent malgre les anomalies du diagnostic : c'est
-  # leur role. Une erreur APPARUE pendant la reparation (count_fail augmente)
-  # n'empeche pas la suite : reconstruire peut justement la corriger.
-  run_repairs
+  # Sur une premiere installation, les outils de migration n'existent pas
+  # avant le build. Les reparations de base seront faites par deploy_database,
+  # puis celles des volumes et d'Apache apres le demarrage des services.
+  repair_env_permissions
+  repair_cookie_scheme
 
   # Chaque phase retourne 1 en cas d'echec bloquant ; on s'arrete a la
   # premiere, mais le rapport final est TOUJOURS affiche (voir main).
@@ -2317,4 +2302,6 @@ main() {
   esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

@@ -147,7 +147,7 @@ if [ -d "$FeSrc" ]; then
   if [ "$fe_kb" -lt 200 ] 2>/dev/null; then
     fail "sources frontend absentes ou tronquées : $FeSrc ($fe_kb Ko).
       L'image construite ne peut pas contenir les modifications.
-      Corriger : copier les sources (README_DOCKER.md §5.1) ou récupérer le commit."
+      Corriger : copier les sources (deploy/DEPLOYMENT_GUIDE.md) ou récupérer le commit."
   else
     ok "sources frontend présentes ($fe_kb Ko)"
   fi
@@ -318,7 +318,7 @@ else
   else
     ok "$Applied migration(s) appliquée(s) sur $Expected versionnée(s)"
   fi
-  [ -n "$Pending" ] && fail "migration en échec : $Pending (README_DOCKER.md, §12)."
+  [ -n "$Pending" ] && fail "migration en échec : $Pending (deploy/DEPLOYMENT_GUIDE.md)."
 fi
 
 # =============================================================================
@@ -334,7 +334,7 @@ fi
 printf '\n%s=========================================================%s\n' "$Cb" "$Cn"
 if [ "$Fail" -eq 0 ]; then
   printf '%s  AUCUNE INCOHÉRENCE : le serveur sert le code courant.%s\n' "$Cg" "$Cn"
-  printf '  Si le navigateur montre encore une ancienne version, c'est le cache du\n'
+  printf '  Si le navigateur montre encore une ancienne version, verifier le cache du\n'
   printf '  navigateur (le service worker se met à jour automatiquement depuis le\n'
   printf '  correctif). Contrôle : Compte -> Profil -> « Version déployée ».\n'
 else

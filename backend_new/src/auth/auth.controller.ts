@@ -181,7 +181,7 @@ export class AuthController {
 
   // L'inscription publique du super administrateur n'existe plus : le premier
   // compte est créé lors du déploiement (voir `prisma/bootstrap.ts` et
-  // `deploy/README_DOCKER.md`). Toute création ultérieure passe par un super
+  // `deploy/DEPLOYMENT_GUIDE.md`). Toute création ultérieure passe par un super
   // administrateur authentifié.
 
   /** Societe de connexion commune a `/auth/login` et `/auth/login/:role`. */

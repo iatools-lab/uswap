@@ -1,5 +1,0 @@
-{
-  "_comment": "État de référence du lint AVANT la refonte des routes (2026-10-30). Le projet comptait déjà 272 erreurs et 38 avertissements ESLint (dont beaucoup de prettier/CRLF). Utilisé pour distinguer les erreurs préexistantes des erreurs introduites.",
-  "frontend": { "errors": 272, "warnings": 38 },
-  "backend": { "errors": null, "warnings": null }
-}

@@ -1,280 +1,97 @@
-# Déploiement d'uSwap sur un serveur virtuel (VPS)
+# Déploiement uSwap
 
-## Introduction
+L'application active est composée de `backend_new` (NestJS/Prisma),
+`frontend_new/frontend` (React/Vite) et PostgreSQL 16. Le package racine
+relaie les commandes vers ces deux applications.
 
-L'application uSwap est **déjà entièrement containerisée** avec Docker Compose. Vous pouvez déployer sur n'importe quel serveur virtuel (VPS) exécécutant Ubuntu.
+## Serveur Linux
 
-## 1. Choix du serveur virtuel (VPS)
+Prérequis : Docker Engine et Compose v2, Bash, curl, openssl, git et les outils
+système vérifiés par `deploy/deploy.sh`. Apache est pris en charge s'il est
+installé ; le domaine et son certificat TLS doivent être préparés sur le serveur.
 
-### Options recommandées :
-- **Oracle Cloud** : Gratuit (Always Free - 1 OCPU, 1GB RAM)
-- **Hetzner** : À partir de ~3,50€/mois
-- **OVHcloud** : À partir de ~3,99€/mois
-- **DigitalOcean** : À partir de ~5$/mois
+Depuis la racine du dépôt :
 
-### Spécifications minimales :
-- RAM : 2 GB minimum (4 GB recommandé)
-- Stockage : 20 GB minimum
-- OS : Ubuntu 22.04 LTS ou 24.04 LTS
-## 2. Prérequis sur le serveur
-
-Une fois votre VPS créé, accédez-le via SSH (utilisateur root ou avec sudo).
-
-### Mise à jour du système :
 ```bash
-apt update && apt upgrade -y
+cp deploy/.env.example deploy/.env
+chmod 600 deploy/.env
 ```
 
-### Installation de Docker et Docker Compose :
+Remplacer les valeurs `CHANGER-*` et `example.org` : mot de passe PostgreSQL,
+secrets JWT distincts, mot de passe de secours administrateur, adresse et mot
+de passe du super administrateur, URL publique et origine CORS. Générer chaque
+secret séparément avec `openssl rand -hex 32`. Utiliser un mot de passe PostgreSQL
+hexadécimal pour que son insertion dans DATABASE_URL ne nécessite pas d'encodage.
+Configurer le SMTP pour les invitations et notifications. L'identifiant Google
+facultatif est transmis au backend et au build frontend depuis ce même fichier.
+
 ```bash
-apt install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common
-
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-
-echo "deb [arch=$(dpkg -p printarch) signed-by /usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-apt update
-apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-docker --version
-docker compose version
+sudo bash deploy/deploy.sh --deploy
 ```
 
-### Ajout de votre utilisateur au groupe docker (évite sudo) :
-```bash
-usermod -aG docker $USER
-# Déconnectez-vous et reconnectez-vous
-```
-## 3. Préparation des fichiers de déploiement
+Le script valide la configuration, construit les images, démarre PostgreSQL,
+applique les migrations versionnées puis le bootstrap, démarre l'API et le
+frontend, vérifie HTTP et les connexions. Il configure le VirtualHost uSwap si
+Apache est présent. Les migrations ne réinitialisent pas la base ; le bootstrap
+conserve les comptes et mots de passe existants. Les données persistantes sont
+dans les volumes `uswap-pgdata` et `uswap-uploads`.
 
-### Clonage du dépôt :
-```bash
-mkdir -p /opt
-cd /opt
-git clone https://github.com/iatools-lab/uswap.git uswap-github
-cd uswap-github/deploy
-```
+Une base existante issue de l'ancienne API à la racine possède un autre historique
+de migrations : ne pas la brancher directement sur ce backend. Sauvegarder et
+préparer une migration de données distincte. Ne pas supprimer les volumes.
 
-### Copie et configuration du fichier .env :
-```bash
-cp .env.example .env
-nano deploy/.env
-```
-### Variables critique à configurer dans `deploy/.env` :
+Les ports 8080 (frontend) et 3000 (API) sont liés à 127.0.0.1. Le domaine HTTPS
+passe par Apache vers le frontend, qui relaie `/api/` vers l'API. Le certificat
+doit exister dans `/etc/letsencrypt/live/<domaine>/` avant l'activation HTTPS.
+Avec un autre reverse proxy, configurer ce routage et transmettre
+`X-Forwarded-Proto: https`. La géolocalisation nécessite HTTPS.
 
-## 5. Déploiement avec Docker Compose
-
-## 6. Migrations de base de données
-
-## 8. Dépannage courant
-
-### Problème : « le déploiement a réussi mais rien n'a changé »
-Lancer le diagnostic en lecture seule, depuis la racine du dépôt :
+## Vérification et diagnostic
 
 ```bash
-bash deploy/check-live.sh
-```
-
-Il compare le bundle réellement servi (localhost **et** URL publique), les
-routes API et les migrations avec les sources du dépôt, et désigne la cause :
-sources absentes du contexte de build, sources non récupérées
-(`git log -1`), image construite depuis le cache (`build --no-cache` +
-`up -d --force-recreate`), cache du navigateur (service worker : F12 →
-Application → Service workers → *Unregister*, puis Ctrl+F5), ou un autre
-conteneur/reverse proxy qui sert une ancienne copie. L'option `--build`
-reconstruit et recrée les conteneurs.
-
-**Cas vécu sur `Sirh-Server` (2026-10-29)** : `/opt/uswap/frontend_new/frontend`
-ne contenait pas les sources. Le build « réussissait » avec
-`transferring context: 8.98kB` et des étapes `CACHED` : l'image produite ne
-contenait pas le code modifié. Vérifier et réparer :
-
-```bash
-ls frontend_new/frontend/src
-bash deploy/fix-missing-sources.sh
-bash deploy/fix-missing-sources.sh --apply
-```
-
-Un contexte de build sain pèse plusieurs Mo.
-
-La version réellement exécutée par le navigateur est affichée dans
-**Compte → Profil → Version déployée**.
-
-Voir `README_DOCKER.md`, section 11 bis, pour le détail.
-
-## 9. Maintenance et sauvegardes
-
-### Sauvegarder la base de données :
-```bash
-pg_dump -h 127.0.0.1 -U uswap -d uswap > uswap_backup_$(date +%Y%m%d).sql
-```
-
-### Voir les journaux :
-```bash
-docker compose -f deploy/compose.yaml --env-file deploy/.env logs -f
-```
-
-### Mises à jour :
-```bash
-docker compose -f deploy/compose.yaml --env-file deploy/.env pull
-docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --build
-```
-
-## 10. Sécurité en production
-
-1. ✅ Toujours utiliser HTTPS avec un certificat SSL valide
-2. ✅ Changer tous les mots de passe par défaut dans `.env`
-3. ✅ Configurer `MAIL_DRIVER=smtp` avec de vraies credentials
-4. ✅ Activer les sauvegardes automatiques de la base de données
-5. ✅ Ne jamais exposer PostgreSQL sur un port public (déjà configuré par défaut)
-6. ✅ Mettre à jour régulièrement les dépendances et Docker
-
----
-
-## Résumé des étapes clés
-
-1. ✅ Acheter/un VPS Ubuntu
-2. ✅ Installer Docker et Docker Compose
-3. ✅ Cloner le dépôt sur `/opt/uswap-github`
-4. ✅ Configurer `deploy/.env` avec vos valeurs secrètes
-5. ✅ Configurer Apache/Nginx en reverse proxy (optionnel mais recommandé)
-6. ✅ Obtenir un certificat SSL gratuit
-7. ✅ Lancer `docker compose up -d --build`
-8. ✅ Appliquer les migrations : `docker compose --profile tools run --rm migrate`
-9. ✅ Initialiser le serveur : `docker compose --profile tools run --rm bootstrap` (référentiel + super administrateur)
-10. ✅ Tester l'application
-
-**Bon déploiement !** 🚀
-### Problème : "port already allocated"
-- Ports 8080 ou 3000 déjà utilisés par un autre service sur l'hôte
-- **Solution** : Modifier `FRONTEND_HOST_PORT` et `BACKEND_HOST_PORT` dans `.env`
-
-### Problème : "Cannot connect to the Docker daemon"
-- Le service Docker ne tourne pas
-- **Solution** : `systemctl start docker` et vérifiez que vous êtes dans le groupe docker
-
-### Problème : Application en mode "démo" sans API
-- `VITE_API_URL` non défini au build
-- **Solution** : Vérifiez que `.env.production` est correctement lu par Vite
-
-### Problème : Base de données inaccessible
-- PostgreSQL n'expose pas de port (sécuritaire)
-- Se connecter via le service Docker `db:5432` sur le réseau interne
-Les migrations Prisma ne sont **pas** appliquées automatiquement. Lancez-les manuellement :
-
-```bash
-# Avec le profil outils
-docker compose -f deploy/compose.yaml --env-file deploy/.env --profile tools run --rm migrate
-
-# Ou en ligne de commande directe
-docker exec -it uswap-backend-1 npx prisma migrate deploy
-```
-
-**Important** : ne jamais utiliser `prisma db push` en production. Pour créer le schéma,
-utilisez les migrations versionnées (`migrate deploy`), puis le service `bootstrap`.
-
-## 7. Super administrateur et données initiales
-
-Sur une base vierge, après les migrations, lancez **une fois** le service `bootstrap` :
-
-```bash
-docker compose -f deploy/compose.yaml --env-file deploy/.env --profile tools run --rm bootstrap
-```
-
-Il crée, sans aucune donnée de démonstration :
-
-- les réglages globaux, les deux stations et leurs modèles de shift ;
-- le **super administrateur** défini par `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` ;
-- un compte administrateur supplémentaire si `ADMIN_EMAIL` / `ADMIN_PASSWORD` sont renseignés ;
-- les préférences de notification de chaque compte.
-
-Le script est rejouable : il ne supprime rien et ne réécrit pas le mot de passe
-d'un compte existant. Les agents et superviseurs se créent ensuite depuis
-l'interface (invitation par e-mail) ou par import.
-
-Aucun mot de passe n'est écrit dans le dépôt : les valeurs viennent uniquement de
-`deploy/.env` (permissions 600).
-Depuis le répertoire de déploiement :
-
-```bash
-# Vérifier la configuration Docker Compose
-docker compose -f deploy/compose.yaml --env-file deploy/.env config
-
-# Construire et démarrer tous les services
-docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --build
-```
-
-### Vérifier que tout fonctionne :
-
-```bash
-# Vérifier les conteneurs en cours d'exécution
+bash deploy/deploy.sh --check
+sudo bash deploy/deploy.sh --diagnose
+sudo bash deploy/deploy.sh --repair
 docker compose -f deploy/compose.yaml --env-file deploy/.env ps
-
-# Tester l'application
-curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/
-# Attendu: 200 (page d'accueil servie par React Router)
-
-curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/api/auth/session
-# Attendu: 401 (non authentifié)
-
-curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/app/admin
-# Attendu: 200 (index.html servi)
+docker compose -f deploy/compose.yaml --env-file deploy/.env logs --tail=100 backend
+curl -i http://127.0.0.1:8080/api/auth/session
 ```
 
-### Vérifier la base de données :
+Une session anonyme répond 204. Les trois services doivent être healthy.
+`deploy/quick-deploy.sh` relaie désormais la commande de production et ne charge
+aucun jeu de démonstration. Les outils de migration et bootstrap sont déjà dans
+l'image : aucune installation npm au démarrage.
+
+## Sauvegarde
 
 ```bash
-# Vérifier que PostgreSQL est en santé
-docker compose -f deploy/compose.yaml --env-file deploy/.env ps db
-
-# Se connecter à la base de données (depuis le serveur)
-psql -h 127.0.0.1 -U uswap -d uswap
-```
-| Variable | Description | Valeur recommandée |
-|----------|-------------|-------------------|
-| `POSTGRES_PASSWORD` | Mot de passe PostgreSQL | `Changer-mot-de-passe-fort` |
-| `JWT_SECRET` | Secret JWT pour l'Accès | `Changer-secret-acces-aleatoire-64-caracteres-minimum` |
-| `JWT_REFRESH_SECRET` | Secret JWT pour le Refresh | `Changer-secret-refresh-aleatoire-64-caracteres-minimum` |
-| `PUBLIC_APP_URL` | Domaine public de l'application | `https://votre-domaine.org` |
-| `CORS_ORIGIN` | Origine CORS | `https://votre-domaine.org` |
-| `ADMIN_BOOTSTRAP_PASSWORD` | Mot de passe administrateur initial | `Changer-mot-de-passe-admin-initial` |
-| `MAIL_DRIVER` | Pilote d'envoi de mail | `console` pour les tests, `smtp` pour la prod |
-| `VITE_API_URL` | URL de l'API (définie au build) | `/api` |
-
-**Important** : Le fichier `deploy/.env` ne doit **jamais** être versionné ni transmis. Il contient des secrets.
-
-## 4. Configuration du reverse proxy (Apache/Nginx sur l'hôte)
-
-La configuration Docker expose les services sur `127.0.0.1` uniquement. Vous aurez besoin d'un reverse proxy sur l'hôte pour accéder à l'application depuis Internet.
-
-**Si vous avez déjà Apache sur votre serveur** :
-
-1. Désactivez le module mpm_event ou modifiez-le pour qu'il n'écoute que sur un port spécifique
-2. Configurez Apache en reverse proxy vers le conteneur Docker
-
-Configuration Apache en reverse proxy (ajoutez dans `/etc/apache2/sites-available/uswap.conf`) :
-
-```apache
-<VirtualHost *:80>
-    ServerName votre-domaine.org
-    
-    ProxyPreserveHost On
-    ProxyPass / http://127.0.0.1:8080/
-    ProxyPassReverse / http://127.0.0.1:8080/
-    
-    <Location /api>
-        ProxyPass http://127.0.0.1:3000
-        ProxyPassReverse /api http://127.0.0.1:3000
-    </Location>
-</VirtualHost>
-
-a2enmod proxy proxy_http rewrite headers
-systemctl restart apache2
+sudo bash deploy/rollback.sh --backup-db
 ```
 
-**Obtenez un certificat SSL gratuit avec Let's Encrypt** :
+Sauvegarder aussi le volume `uswap-uploads`. Conserver les sauvegardes hors du
+serveur et tester leur restauration. Le retour à un ancien code ne rétrograde
+pas le schéma ; vérifier sa compatibilité avant `rollback.sh --tag`.
+
+## Développement et validation
 
 ```bash
-apt install -y certbot
-certbot apache -d votre-domaine.org
+npm ci --prefix backend_new
+npm ci --prefix frontend_new/frontend
 ```
+
+Copier `backend_new/.env.example` vers `backend_new/.env`, renseigner une base
+locale vide et les secrets, puis générer le client et appliquer les migrations :
+
+```bash
+npm run db:generate
+npm run db:migrate
+npm run build
+npm test
+npm run check:deploy
+bash scripts/test-deploy.sh
+```
+
+Pour le frontend local, copier son `.env.example` vers `.env` et choisir
+`VITE_API_URL=/api`. Démarrer l'API avec `npm run start:dev` et le frontend dans
+un second terminal avec `npm run dev:frontend`. Le seed de démonstration reste
+une commande locale explicite dans `backend_new`.

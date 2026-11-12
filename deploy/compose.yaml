@@ -10,7 +10,7 @@
 #   docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --build
 #
 # Aucune migration n'est jouee automatiquement : le service `migrate` est un
-# profil manuel (voir README_DOCKER.md, section Migrations).
+# profil tools, lance par deploy/deploy.sh avant le demarrage de l'API.
 
 name: uswap
 
@@ -24,7 +24,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD dans deploy/.env}
       # Modele d'instance vierge : collation deterministe, independante de la
       # locale de l'hote. La migration etant la source de verite, l'image doit
-      # rester la MEME version majeure sur un volume existant (voir README).
+      # rester la MEME version majeure sur un volume existant.
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       # Donnees PostgreSQL de uSwap, isolees des autres applications du serveur.
@@ -53,7 +53,7 @@ services:
     # Une notification en e-mail ne doit jamais bloquer une requete HTTP ; la
     # sonde verifie que l'API repond (204 attendu sur /auth/session sans cookie).
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/auth/session').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/auth/session').then(r=>process.exit(r.status===204?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -158,7 +158,8 @@ services:
       retries: 3
       start_period: 10s
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - uswap-internal
     ports:
@@ -180,7 +181,7 @@ services:
   #   docker compose ... --profile tools run --rm bootstrap
   #
   # Le bootstrap s'execute avec les dependances de l'image (npm ci durant le build,
-  # npm prune conserve les devDependencies listes dans package.json).
+  # les outils Prisma et tsx sont conserves pour les operations de deploiement).
   # Plus besoin de npm install au démarrage : les outils (tsx, prisma) sont deja
   # presents dans l'image finale grace au changement de pruning.
   bootstrap:
@@ -214,7 +215,7 @@ services:
     profiles: ["tools"]
     image: uswap/backend:${USWAP_TAG:-local}
     restart: "no"
-    entrypoint: ["npx", "--yes", "prisma@6.19.3", "migrate"]
+    entrypoint: ["./node_modules/.bin/prisma", "migrate"]
     command: ["deploy"]
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-uswap}:${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD dans deploy/.env}@db:5432/${POSTGRES_DB:-uswap}?schema=public
