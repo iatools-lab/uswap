@@ -201,20 +201,34 @@ export const MAP_TILE_OPTIONS = {
 export const MAP_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> — rues, bâtiments et points d’intérêt';
 
-/**
- * Couche de repères (rues nommées, marchés, écoles, hôpitaux, hôtels,
- * boutiques, entreprises, carrefours, ronds-points…).
+/*
+ * Couche de repères : RUES NOMMÉES et points d'intérêt (marchés, écoles,
+ * hôpitaux, hôtels, boutiques, carrefours, ronds-points…).
  *
- * Les tuiles raster OpenStreetMap n'affichent que les libellés majeurs : à
- * l'échelle d'une station, l'agent ne reconnaît ni le marché voisin ni
- * l'école d'en face. Cette couche vectorielle superpose les points d'intérêt
- * et les noms de rues, sans changer la géométrie de la carte (donc sans
- * décalage par rapport à Google Maps).
+ * Les tuiles raster OpenStreetMap standard n'affichent que les libellés
+ * majeurs : à l'échelle d'une station, l'agent ne reconnaît ni le marché
+ * voisin ni l'école d'en face. On superpose donc le rendu français
+ * d'OpenStreetMap (`osmfr`), qui nomme les rues, sans changer la géométrie
+ * de la carte (même projection Web Mercator, aucun décalage).
+ *
+ * Le fournisseur précédent (Stadia Maps « alidade_smooth ») exige une clé
+ * d'API : sans clé il répondait 401 sur chaque tuile, et la carte du
+ * formulaire de station affichait une grille d'erreurs « 401 ».
+ * `osmfr` est servi sans clé ni inscription.
  */
 export const MAP_POI_TILE_URL =
-  "https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png";
+  "https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png";
+export const MAP_POI_TILE_OPTIONS = {
+  subdomains: ["a", "b", "c"],
+  maxZoom: 20,
+  maxNativeZoom: 19,
+  minZoom: 3,
+  detectRetina: true,
+  crossOrigin: true,
+  keepBuffer: 4,
+};
 export const MAP_POI_ATTRIBUTION =
-  '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+  '&copy; <a href="https://www.openstreetmap.fr/">OpenStreetMap France</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 /** Zoom correspondant à un rayon de pointage (donne un cadrage serré et lisible). */
 export function zoomForRadius(radiusMeters: number): number {
@@ -255,6 +269,28 @@ export function formatNominatim(item: any): string {
   return parts.join(", ");
 }
 
+/*
+ * Politique d'usage de Nominatim : au maximum 1 requête par seconde. Les
+ * frappes s'enchaînent vite (« Tradex » puis « Tradex B »…) et les recherches
+ * d'adresse partent aussi au collage d'une paire ou à la validation du champ :
+ * on les met en file et on espace les appels d'au moins 1,1 s.
+ */
+const NOMINATIM_MIN_INTERVAL_MS = 1_100;
+let nominatimQueue: Promise<unknown> = Promise.resolve();
+let nominatimLastCall = 0;
+
+function nominatimFetch(url: string, headers: Record<string, string>) {
+  const run = async () => {
+    const wait = nominatimLastCall + NOMINATIM_MIN_INTERVAL_MS - Date.now();
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    nominatimLastCall = Date.now();
+    return fetch(url, { headers });
+  };
+  const result = nominatimQueue.then(run, run);
+  nominatimQueue = result.catch(() => undefined);
+  return result;
+}
+
 /**
  * Recherche d'adresse auprès de Nominatim (OpenStreetMap).
  *
@@ -272,12 +308,10 @@ async function nominatimSearch(query: string): Promise<any[]> {
     'https://nominatim.openstreetmap.org/search?format=jsonv2' +
     `&q=${encodeURIComponent(query)}` +
     '&limit=8&addressdetails=1&accept-language=fr';
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-      // Identifie l'application, comme l'exige la charte d'usage de Nominatim.
-      'User-Agent': 'uSwap/1.0 (gestion de stations)',
-    },
+  const response = await nominatimFetch(url, {
+    Accept: 'application/json',
+    // Identifie l'application, comme l'exige la charte d'usage de Nominatim.
+    'User-Agent': 'uSwap/1.0 (gestion de stations)',
   });
   if (!response.ok) return [];
   const data = await response.json();
@@ -303,11 +337,9 @@ async function nominatimSearchNear(
     (near
       ? `&viewbox=${near.lng - 0.6},${near.lat + 0.6},${near.lng + 0.6},${near.lat - 0.6}&bounded=0`
       : '');
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-      'User-Agent': 'uSwap/1.0 (gestion de stations)',
-    },
+  const response = await nominatimFetch(url, {
+    Accept: 'application/json',
+    'User-Agent': 'uSwap/1.0 (gestion de stations)',
   });
   if (!response.ok) return [];
   const data = await response.json();
@@ -336,7 +368,7 @@ function distanceMeters(
 
 async function nominatimReverse(lat: number, lng: number): Promise<string> {
   const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=fr`;
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  const response = await nominatimFetch(url, { Accept: "application/json" });
   if (!response.ok) return "";
   const data = await response.json();
   return data?.display_name ? String(data.display_name) : "";
@@ -1046,18 +1078,19 @@ export function MapLocationPicker({
       }).addTo(map);
 
       const poiLayer = L.tileLayer(MAP_POI_TILE_URL, {
-        maxZoom: 20,
-        minZoom: 3,
-        maxNativeZoom: 20,
-        detectRetina: true,
-        crossOrigin: true,
-        keepBuffer: 4,
+        ...MAP_POI_TILE_OPTIONS,
         attribution: MAP_POI_ATTRIBUTION,
       });
+      /*
+       * Fournisseur de repères indisponible (limite de débit, panne) : on
+       * retire la couche après plusieurs échecs pour ne pas laisser de tuiles
+       * grises par-dessus le fond OpenStreetMap. Un seul échec isolé ne suffit
+       * pas : un retry de Leaflet ne doit pas faire disparaître la couche.
+       */
+      let poiErrors = 0;
       poiLayer.on("tileerror", () => {
-        // Fournisseur de repères indisponible : on retire la couche pour ne
-        // pas laisser de tuiles grises par-dessus le fond OpenStreetMap.
-        if (map.hasLayer(poiLayer)) map.removeLayer(poiLayer);
+        poiErrors += 1;
+        if (poiErrors >= 4 && map.hasLayer(poiLayer)) map.removeLayer(poiLayer);
       });
       poiLayer.addTo(map);
 

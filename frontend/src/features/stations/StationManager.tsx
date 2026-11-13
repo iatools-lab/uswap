@@ -20,6 +20,7 @@ import {
   DEFAULT_LNG,
   MAP_ATTRIBUTION,
   MAP_POI_ATTRIBUTION,
+  MAP_POI_TILE_OPTIONS,
   MAP_POI_TILE_URL,
   MAP_TILE_OPTIONS,
   MAP_TILE_URL,
@@ -155,15 +156,17 @@ function StationsMapView({
       // Même couche de repères que le sélecteur de création : rues nommées,
       // marchés, écoles, hôpitaux, hôtels, boutiques, entreprises…
       const poiLayer = L.tileLayer(MAP_POI_TILE_URL, {
+        ...MAP_POI_TILE_OPTIONS,
         maxZoom: 18,
-        maxNativeZoom: 20,
-        detectRetina: true,
-        crossOrigin: true,
-        keepBuffer: 4,
         attribution: MAP_POI_ATTRIBUTION,
       });
+      // Un échec isolé ne doit pas retirer la couche ; plusieurs échecs, si.
+      let poiErrors = 0;
       poiLayer.on("tileerror", () => {
-        if (mapInstance?.hasLayer(poiLayer)) mapInstance.removeLayer(poiLayer);
+        poiErrors += 1;
+        if (poiErrors >= 4 && mapInstance?.hasLayer(poiLayer)) {
+          mapInstance.removeLayer(poiLayer);
+        }
       });
       poiLayer.addTo(mapInstance);
 
