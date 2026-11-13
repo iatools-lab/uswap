@@ -445,7 +445,14 @@ export function UserDetail({
                     disabled={busy}
                     onClick={() =>
                       action(
-                        () => api("/auth/invitations/" + id + "/resend", {}),
+                        /*
+                         * Route réelle du backend : `/users/invitations/:id/resend`
+                         * (préfixée par espace : `/superadmin/...` ou `/pilot/...`).
+                         * `/auth/invitations/...` n'existe pas et répondait 404 :
+                         * le bouton « Envoyer / Renvoyer l'invitation » échouait
+                         * toujours hors mode démonstration.
+                         */
+                        () => api("/users/invitations/" + id + "/resend", {}),
                         "Invitation renvoyée avec succès.",
                       )
                     }

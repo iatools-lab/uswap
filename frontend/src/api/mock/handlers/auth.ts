@@ -239,7 +239,9 @@ export const authRoutes: MockRoute[] = [
   },
   {
     method: "POST",
-    pattern: /^\/auth\/invitations\/([^/]+)\/resend$/,
+    // Même chemin que le backend réel (`users.controller.ts`) : la route est
+    // préfixée par l'espace de travail (`/superadmin/users/...`, `/pilot/users/...`).
+    pattern: /\/users\/invitations\/([^/]+)\/resend$/,
     handler: (ctx) => {
       requireRole(requireUser(ctx.db, ctx.user), ["SUPER_ADMIN", "ADMIN"]);
       const target = ctx.db.users.find((item) => item.id === ctx.params[0]);
