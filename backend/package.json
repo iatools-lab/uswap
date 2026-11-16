@@ -19,7 +19,9 @@
     "db:reset": "tsx prisma/reset.ts",
     "bootstrap": "tsx prisma/bootstrap.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "verify:swapper": "node scripts/verify-swapper-flow.mjs",
+    "verify:cleanup": "node scripts/verify-cleanup-flow.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

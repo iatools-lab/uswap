@@ -112,6 +112,25 @@ const unavailable = "Le service est momentanément indisponible.";
 const unreachable =
   "Impossible de joindre le service. Vérifiez votre connexion et réessayez.";
 
+/**
+ * Statuts considérés comme TRANSITOIRES.
+ *
+ * 502 / 503 / 504 sont produits par le proxy quand le backend redémarre, quand
+ * une migration est en cours ou quand sa connexion à la base est momentanément
+ * perdue. Ils ne signifient pas que la fonctionnalité est cassée : un nouvel
+ * essai, une seconde plus tard, réussit. Sans cette temporisation, l'écran
+ * affichait « le service est momentanément indisponible » — de façon
+ * intermittente, et jamais reproductible à la demande.
+ */
+const TRANSIENT_STATUS = new Set([502, 503, 504]);
+
+/** Nombre de réessais et attente de base (ms) entre deux tentatives. */
+const RETRY_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 400;
+
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 const REFRESH_TOKEN_KEY = "uswap-refresh-token";
 const USER_KEY = "uswap-session-user";
 
@@ -252,33 +271,51 @@ export async function api<T>(
   }, 20_000);
 
   try {
-    const response = await fetch(base + path, {
-      method: verb,
-      credentials: "include",
-      cache: "no-store",
-      signal: controller.signal,
-      headers: {
-        ...(requestBody instanceof FormData
+    /**
+     * Les LECTURES (GET) sont rejouées sur erreur transitoire : elles sont
+     * idempotentes, et c'est ce qui rend « créer un planning » ou « ouvrir une
+     * liste » fiable quand le backend vient de redémarrer. Une écriture (POST,
+     * PATCH…) n'est jamais rejouée automatiquement : elle pourrait créer un
+     * doublon ; le serveur reste la seule autorité en cas de conflit.
+     */
+    const retries = verb === "GET" ? RETRY_ATTEMPTS : 0;
+    let response: Response | null = null;
+
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      response = await fetch(base + path, {
+        method: verb,
+        credentials: "include",
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          ...(requestBody instanceof FormData
+            ? {}
+            : {
+                "Content-Type": "application/json",
+              }),
+          "X-USwap-Client": "web",
+          ...(accessToken
+            ? {
+                Authorization: `Bearer ${accessToken}`,
+              }
+            : {}),
+        },
+        ...(requestBody === undefined
           ? {}
           : {
-              "Content-Type": "application/json",
+              body:
+                requestBody instanceof FormData
+                  ? requestBody
+                  : JSON.stringify(requestBody),
             }),
-        "X-USwap-Client": "web",
-        ...(accessToken
-          ? {
-              Authorization: `Bearer ${accessToken}`,
-            }
-          : {}),
-      },
-      ...(requestBody === undefined
-        ? {}
-        : {
-            body:
-              requestBody instanceof FormData
-                ? requestBody
-                : JSON.stringify(requestBody),
-          }),
-    });
+      });
+
+      if (!TRANSIENT_STATUS.has(response.status) || attempt === retries) break;
+      // Attente exponentielle bornée : 400 ms, puis 800 ms.
+      await wait(RETRY_BASE_DELAY_MS * 2 ** attempt);
+    }
+
+    if (!response) throw new ApiError(0, unreachable);
 
     if (
       response.status === 401 &&
@@ -298,7 +335,10 @@ export async function api<T>(
     }
 
     if (!response.ok) {
-      const detail = [400, 409, 410].includes(response.status)
+      // 503 (surtout sur /healthz) porte un corps utile ; on le lit aussi pour
+      // les codes transitoires afin de distinguer « base coupée » de « proxy
+      // absent ». Le repli sur `fallbackMessages` reste inchangé.
+      const detail = [400, 409, 410, 502, 503, 504].includes(response.status)
         ? await response.json().catch(() => null)
         : null;
 

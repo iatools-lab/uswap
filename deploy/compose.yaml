@@ -50,14 +50,20 @@ services:
     image: uswap/backend:${USWAP_TAG:-local}
     restart: unless-stopped
     init: true
-    # Une notification en e-mail ne doit jamais bloquer une requete HTTP ; la
-    # sonde verifie que l'API repond (204 attendu sur /auth/session sans cookie).
+    # Une notification en e-mail ne doit jamais bloquer une requete HTTP.
+    #
+    # La sonde appelle /healthz, qui execute `SELECT 1` : elle ne dit "healthy"
+    # que si l'API ET sa base repondent. L'ancienne sonde (/auth/session) ne
+    # touchait pas la base : un backend qui avait perdu PostgreSQL restait
+    # declare pret, le proxy continuait de lui router du trafic, et l'utilisateur
+    # voyait des 503 intermittents ("service momentanement indisponible").
+    # `start_period` couvre `prisma migrate deploy` et l'initialisation.
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/auth/session').then(r=>process.exit(r.status===204?0:1)).catch(()=>process.exit(1))\""]
-      interval: 30s
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 40s
+      retries: 4
+      start_period: 60s
     # Fichiers generes par le backend (mailer JSON, pieces jointes).
     volumes:
       - uswap-uploads:/app/var/uploads
@@ -100,7 +106,9 @@ services:
       SMS_TOKEN: ${SMS_TOKEN:-}
       SMS_SENDER: ${SMS_SENDER:-uSwap}
       # Connexion Google (SSO) : comptes professionnels uniquement.
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      # Valeur par defaut embarquee dans le code si deploy/.env ne la definit
+      # pas : un .env incomplet ne casse plus la connexion Google.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-739196811493-uswap5k2v9q4g8c1r7tqb3hj0m6dpl.apps.googleusercontent.com}
       GOOGLE_ALLOWED_DOMAINS: ${GOOGLE_ALLOWED_DOMAINS:-upowa.org}
       UPLOAD_DIR: var/uploads
       # Reinitialise le mot de passe du compte ADMIN s'il est desactive
@@ -143,7 +151,7 @@ services:
         # Identifiant OAuth Google (valeur PUBLIQUE). Le MEME que GOOGLE_CLIENT_ID
         # du backend : sans lui, le bouton « Se connecter avec Google » n'est
         # pas affiche sur l'ecran de connexion.
-        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-739196811493-uswap5k2v9q4g8c1r7tqb3hj0m6dpl.apps.googleusercontent.com}
         # Cle Google Maps (valeur PUBLIQUE, restreinte par referent HTTP).
         # Sans elle, la carte de creation de station utilise OpenStreetMap.
         VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}

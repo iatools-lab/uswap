@@ -590,6 +590,7 @@ check_sources() {
     "$BACKEND_DIR/prisma/bootstrap.ts" \
     "$BACKEND_DIR/src/main.ts" \
     "$BACKEND_DIR/src/auth/auth.controller.ts" \
+    "$BACKEND_DIR/src/common/controllers/health.controller.ts" \
     "$FRONTEND_DIR/Dockerfile" \
     "$FRONTEND_DIR/package.json" \
     "$FRONTEND_DIR/package-lock.json" \
@@ -833,6 +834,25 @@ check_env_values() {
   BIND_ADDRESS="127.0.0.1"
 }
 
+# La sonde de sante du conteneur backend doit interroger /healthz, la SEULE
+# route qui execute `SELECT 1` et prouve donc que la base repond.
+#
+# Une sonde sur /auth/session (ancienne version) ne touchait PAS la base : un
+# backend ayant perdu PostgreSQL restait « healthy », le proxy continuait de
+# lui router du trafic, et les fonctionnalites qui lisent la base repondaient
+# 503 par intermittence (« le service est momentanement indisponible »).
+#
+# Cette verification est une LECTURE : elle signale, elle ne modifie JAMAIS
+# compose.yaml.
+check_healthcheck_wiring() {
+  if ! grep -q '/healthz' "$COMPOSE_FILE" 2>/dev/null; then
+    fail_domain network "la sonde du backend n'interroge pas /healthz : une base coupee passerait inapercue"
+    info "corriger healthcheck.test du service backend dans $COMPOSE_FILE"
+    return
+  fi
+  pass "sonde backend : /healthz (base de donnees verifiee)"
+}
+
 check_ports() {
   if ! have ss; then
     soft "ss absent : ports non verifies"
@@ -861,6 +881,8 @@ check_compose_config() {
     info "detail : docker compose -f $COMPOSE_FILE --env-file $ENV_FILE config"
     compose config 2>&1 | sed 's/^/        /' | head -n 20 || true
   fi
+
+  check_healthcheck_wiring
 }
 
 # Etat des services (`running` accepte : la sonde peut manquer).
@@ -1211,8 +1233,12 @@ diagnose_routers() {
   local apache_home apache_api apache_health
   apache_home="$(http_code -H "Host: ${PUBLIC_DOMAIN}" "http://127.0.0.1/")"
   apache_api="$(http_code -H "Host: ${PUBLIC_DOMAIN}" "http://127.0.0.1/api/auth/session")"
-  apache_health="$(http_code -H "Host: ${PUBLIC_DOMAIN}" "http://127.0.0.1/api/health")"
+  # `/api/healthz` est la route REELLE de disponibilite (elle execute SELECT 1
+  # et renvoie 200 si la base repond, 503 sinon). L'ancienne mesure visait
+  # `/api/health`, qui n'existe pas : elle produisait un « 502 » trompeur.
+  apache_health="$(http_code -H "Host: ${PUBLIC_DOMAIN}" "http://127.0.0.1/api/healthz")"
   info "Apache HTTP  (Host ${PUBLIC_DOMAIN}) : / -> $apache_home   /api/auth/session -> $apache_api"
+  info "                            /api/healthz -> $apache_health (200 attendu : base joignable)"
   case "$apache_api" in
     204|401) pass "Apache relaie /api/auth/session (HTTP $apache_api)" ;;
     502)     fail_domain network "Apache renvoie 502 : ProxyPass ou conteneur frontend en cause, pas le backend" ;;
@@ -1220,9 +1246,16 @@ diagnose_routers() {
     *)       soft "Apache : /api/auth/session -> HTTP $apache_api" ;;
   esac
 
-  if [ "$apache_health" = "502" ] && [ "$apache_api" != "502" ]; then
-    soft "Apache renvoie 502 sur /api/health (route inexistante en amont) : artifact possible de la sonde"
-  fi
+  case "$apache_health" in
+    200) pass "Apache relaie /api/healthz -> 200 (backend ET base de donnees joignables)" ;;
+    503) fail_domain network "Apache relaie /api/healthz -> 503 : le backend repond mais la base de donnees ne repond pas"
+         info "cause directe des 503 intermittents : PostgreSQL arretee, credentials ou DATABASE_URL incorrects"
+         info "verifier : docker compose ps db ; journaux backend (P1001 / authentication failed)" ;;
+    502) fail_domain network "Apache relaie /api/healthz -> 502 : le backend n'est pas joignable depuis Nginx" ;;
+    404) soft "/api/healthz -> 404 : image backend anterieure a cette route (relancer --deploy pour reconstruire)" ;;
+    000) soft "/api/healthz : Apache injoignable en local (port 80 filtre ?)" ;;
+    *)   soft "/api/healthz -> HTTP $apache_health" ;;
+  esac
 
   # En-tetes de securite : un agent de securite ou une seconde couche peut
   # bloquer le POST de connexion. Lisible seulement si curl a TLS.
@@ -2155,14 +2188,29 @@ run_deploy() {
   step "9/10  Tests de disponibilite, Apache et connexions"
 
   sub "9a — tests HTTP a travers le proxy Nginx"
-  local home_code session_code spa_code
+  local home_code session_code spa_code health_code
   home_code="$(http_code "http://127.0.0.1:${FRONTEND_PORT}/")"
   session_code="$(http_code "http://127.0.0.1:${FRONTEND_PORT}/api/auth/session")"
   spa_code="$(http_code "http://127.0.0.1:${FRONTEND_PORT}/app/admin")"
+  # La sonde de disponibilite execute `SELECT 1` : un 200 ici prouve que la
+  # chaine complete (proxy -> API -> PostgreSQL) est saine. Sans cette mesure,
+  # un backend debout mais prive de sa base passait le deploiement et produisait
+  # ensuite des 503 intermittents sur les ecrans qui lisent la base.
+  health_code="$(http_code "http://127.0.0.1:${FRONTEND_PORT}/api/healthz")"
   printf '  %-46s %s\n' "page d'accueil (200 attendu)" "$home_code"
   printf '  %-46s %s\n' "session anonyme (204 attendu)" "$session_code"
   printf '  %-46s %s\n' "route SPA /app/admin (200 attendu)" "$spa_code"
+  printf '  %-46s %s\n' "disponibilite + base (200 attendu)" "$health_code"
   [ "$home_code" = "200" ] || fail_domain network "le frontend ne sert pas l'application (HTTP $home_code)"
+  case "$health_code" in
+    200) pass "/api/healthz -> 200 : backend ET base de donnees joignables" ;;
+    503) fail_domain network "/api/healthz -> 503 : le backend repond mais PostgreSQL ne repond pas"
+         info "LE DEPLOIEMENT N'EST PAS FIABLE dans cet etat : toutes les pages qui lisent la base"
+         info "repondront 503 par intermittence. Verifier db (compose ps db) et les journaux backend." ;;
+    502) fail_domain network "/api/healthz -> 502 : Nginx ne joint pas le backend" ;;
+    404) soft "/api/healthz -> 404 : image backend anterieure a cette route (relancer --deploy)" ;;
+    *)   soft "/api/healthz -> HTTP $health_code" ;;
+  esac
   case "$session_code" in
     204|401) pass "l'API repond derriere le proxy (HTTP $session_code)" ;;
     502)     fail_domain network "502 sur /api/auth/session : le backend n'est pas joint par Nginx" ;;

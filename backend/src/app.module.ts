@@ -23,8 +23,10 @@ import { AutomationModule } from './automation/automation.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 import { RolesGuard } from './common/guards/roles.guard';
+import { HealthController } from './common/controllers/health.controller';
 import { RoleRouteAccessGuard } from './common/guards/role-route.guard';
 import { SessionMiddleware } from './common/middleware/session.middleware';
+import { KeepaliveService } from './common/keepalive.service';
 
 @Module({
   imports: [
@@ -54,7 +56,12 @@ import { SessionMiddleware } from './common/middleware/session.middleware';
     DashboardModule,
     MaintenanceModule,
   ],
+  controllers: [HealthController],
   providers: [
+    // Maintient la connexion PostgreSQL vivante : une connexion inactive
+    // laissee tomber par le serveur de base produisait des 503 intermittents
+    // a la premiere requete suivant une periode de calme.
+    KeepaliveService,
     {
       provide: APP_GUARD,
       useClass: RolesGuard,

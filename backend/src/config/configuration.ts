@@ -5,6 +5,7 @@
  * permet d'aligner le backend sur les reglages lus par le frontend (duree de
  * session, tolerance de retard, rayon de pointage, etc.).
  */
+import { googleClientId } from './google-client';
 
 const num = (value: string | undefined, fallback: number): number => {
   const parsed = Number(value);
@@ -126,12 +127,14 @@ export const configuration = () => ({
    * Connexion Google (SSO).
    *
    * `GOOGLE_CLIENT_ID` : identifiant OAuth de l'application, créé dans la
-   * console Google Cloud. Sans lui, la connexion Google reste désactivée.
+   * console Google Cloud. Il est PUBLIC. En son absence, la valeur par défaut
+   * embarquée (`config/google-client.ts`) est utilisée : un `.env` serveur
+   * incomplet ne casse plus la connexion Google (« OAuth client not found »).
    * `GOOGLE_ALLOWED_DOMAINS` : domaines autorisés, séparés par des virgules.
    *   Par défaut `upowa.org` : seuls les comptes professionnels uPowa peuvent
    *   se connecter par Google (un Gmail personnel est refusé).
    */
-  googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+  googleClientId: googleClientId(process.env.GOOGLE_CLIENT_ID),
   googleAllowedDomains: list(process.env.GOOGLE_ALLOWED_DOMAINS, ['upowa.org']),
 
   defaultToleranceMinutes: num(process.env.TOLERANCE_MINUTES, 5),

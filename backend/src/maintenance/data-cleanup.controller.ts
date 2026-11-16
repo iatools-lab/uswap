@@ -29,10 +29,21 @@ class CleanupDto {
   @IsOptional()
   @IsString()
   confirm?: string;
+
+  /**
+   * Doit valoir « SUPPRIMER » lorsque la sélection contient des COMPTES ou des
+   * STATIONS : ces objets existent en production et leur suppression est
+   * définitive. Une confirmation distincte empêche qu'un simple « EFFACER »
+   * — saisi pour vider une recette — efface le réseau réel.
+   */
+  @IsOptional()
+  @IsString()
+  confirmSensitive?: string;
 }
 
 /**
- * Maintenance de la plateforme : nettoyage des donnees de recette.
+ * Maintenance de la plateforme : nettoyage des donnees de recette ET
+ * suppression de donnees reelles (comptes, stations).
  * Toutes les routes sont reservees au super administrateur.
  */
 @ApiTags('maintenance')

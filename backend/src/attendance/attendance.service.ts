@@ -261,7 +261,13 @@ export class AttendanceService {
     if (!occurrence) {
       throw new NotFoundDomain(ErrorCode.NOT_FOUND, 'Affectation introuvable.');
     }
-    const assigned = occurrence.assignments.some((a) => a.userId === user.id);
+    // Deux sources d'affectation sont acceptees : la table nominative
+    // (`occurrence_assignments`) et le raccourci `occurrences.swapperId`. Un
+    // créneau dont une seule des deux est renseignée empêchait de pointer
+    // (« Affectation introuvable ») alors que l'agent voyait bien le service.
+    const assigned =
+      occurrence.assignments.some((a) => a.userId === user.id) ||
+      occurrence.swapperId === user.id;
     if (occurrence.status !== 'PUBLISHED' || !assigned) {
       throw new ForbiddenDomain(
         'SHIFT_NOT_ASSIGNED',

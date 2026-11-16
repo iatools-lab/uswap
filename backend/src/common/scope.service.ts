@@ -81,9 +81,27 @@ export class ScopeService {
     return count > 0;
   }
 
-  /** Postes visibles d'un agent : ceux qui lui sont affectes. */
-  occurrenceScope(user: AuthenticatedUser): { swapperId?: string } {
-    return user.role === 'SWAPPER' ? { swapperId: user.id } : {};
+  /**
+   * Postes visibles d'un agent : ceux qui lui sont affectes.
+   *
+   * Le filtre porte sur la table d'affectations (`occurrence_assignments`),
+   * seule source de verite, ET sur `swapperId` (raccourci d'affichage) : une
+   * affectation ecrite directement en base par un ancien chemin de code, ou un
+   * creneau dont le raccourci n'a pas ete mis a jour, reste ainsi visible. Un
+   * agent ne peut donc pas « perdre » son service parce que les deux colonnes
+   * ont derivees l'une de l'autre.
+   */
+  occurrenceScope(user: AuthenticatedUser): {
+    OR?: Array<{ swapperId: string } | { assignments: { some: { userId: string } } }>;
+    assignments?: { some: { userId: string } };
+  } {
+    if (user.role !== 'SWAPPER') return {};
+    return {
+      OR: [
+        { swapperId: user.id },
+        { assignments: { some: { userId: user.id } } },
+      ],
+    };
   }
 
   /**

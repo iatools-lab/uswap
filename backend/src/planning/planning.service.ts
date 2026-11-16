@@ -101,6 +101,12 @@ export class PlanningService {
     if (!plannings.length) return [];
 
     // Périmètre des postes : un agent ne voit que les siens.
+    //
+    // Le filtre porte sur `occurrence_assignments` ET non sur la colonne
+    // dénormalisée `occurrences.swapperId` : cette colonne est un raccourci
+    // d'affichage, l'affectation nominative est la table d'affectations. Une
+    // seule des deux sources décalée faisait disparaître le créneau de l'agent
+    // (bug « planning invisible / pointage 404 »).
     const occurrenceWhere: Prisma.OccurrenceWhereInput = {
       planningId: { in: plannings.map((planning) => planning.id) },
     };
@@ -378,6 +384,15 @@ export class PlanningService {
             data: { occurrenceId: occurrence.id, userId, assignedById: actor.id },
           });
         }
+        // `occurrences.swapperId` reste un raccourci d'affichage (premier
+        // agent) : sans cette ligne, un créneau créé par l'API n'était visible
+        // ni par l'agent ni par son pointage (voir audit 2.1).
+        if (userIds.length) {
+          await tx.occurrence.update({
+            where: { id: occurrence.id },
+            data: { swapperId: userIds[0] },
+          });
+        }
 
         if (unassigned(assignment) > 0) {
           await tx.planningVacancy.create({
@@ -585,7 +600,13 @@ export class PlanningService {
       }
       await tx.occurrence.update({
         where: { id: occurrenceId },
-        data: { revision: { increment: 1 } },
+        data: {
+          revision: { increment: 1 },
+          // Même source de vérité que la création : la colonne courte suit la
+          // première affectation nominative, sinon l'agent affecté ici ne
+          // voyait pas le créneau alors que son pointage le cherchait.
+          swapperId: unique[0] ?? null,
+        },
       });
       await tx.planningRevision.create({
         data: {

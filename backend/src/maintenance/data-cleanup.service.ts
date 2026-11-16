@@ -9,167 +9,48 @@ import {
 } from '../common/errors/domain-errors';
 import type { AuthenticatedUser } from '../common/guards/roles.guard';
 import { NotificationKind } from '../notifications/categories';
+import {
+  CLEANUP_TARGETS,
+  PURGE_ORDER,
+  type CleanupTarget,
+} from './data-cleanup.targets';
 
 /**
  * Nettoyage de la plateforme — reserve au super administrateur.
  *
- * L'objectif est de remettre l'application en configuration reelle apres une
- * phase de recette : effacer les plannings, les releves de pointage et les
- * operations de demonstration, **sans jamais** effacer les comptes, les
- * stations, les modeles de shift ni les reglages.
+ * L'ecran de maintenance couvre DEUX besoins distincts :
  *
- * Deux garde-fous non negociables :
+ * 1. **Donnees de test** (`PLANNINGS`, `ATTENDANCE`, `LEAVES`, `INCIDENTS`,
+ *    `NOTIFICATIONS`, `AUDIT`, `DEMO_ACCOUNTS`) : remettre l'application en
+ *    configuration reelle apres une recette.
+ * 2. **Donnees reelles** (`ACCOUNTS`, `STATIONS`) : le super administrateur
+ *    doit pouvoir supprimer un compte (un superviseur qui n'est plus en
+ *    service, un swappeur parti) ou une station, MEME si l'application est en
+ *    production. La suppression emporte tout ce qui depend de l'objet
+ *    (plannings, pointages, conges, incidents, notifications, journal
+ *    d'audit) : aucune ligne orpheline ne subsiste.
+ *
+ * Garde-fous non negociables :
  * 1. `dryRun` est la valeur par defaut : la reponse decrit les volumes qui
- *    seraient supprimes, byte pour byte, sans ecrire une seule ligne.
- * 2. Une suppression reelle exige la confirmation explicite `"EFFACER"`.
+ *    seraient supprimes sans ecrire une seule ligne ;
+ * 2. une suppression reelle exige la confirmation explicite `"EFFACER"` ;
+ * 3. une suppression de COMPTES ou de STATIONS exige en plus `"SUPPRIMER"` :
+ *    ce sont des ecritures irreversibles sur des donnees de production ;
+ * 4. le compte de l'executant n'est jamais supprime (ni detache de sa station
+ *    s'il en a une... voir `STATIONS`) : il ne peut pas se verrouiller dehors ;
+ * 5. tout s'execute dans UNE transaction : soit la purge est complete, soit
+ *    rien n'est touche.
  *
  * Chaque execution est journalisee dans `AuditLog` ; un e-mail est envoye a
  * l'executant et aux autres super administrateurs.
  */
 
-export type CleanupTarget =
-  | 'PLANNINGS'
-  | 'ATTENDANCE'
-  | 'LEAVES'
-  | 'INCIDENTS'
-  | 'NOTIFICATIONS'
-  | 'AUDIT'
-  | 'DEMO_ACCOUNTS';
+export type { CleanupTarget } from './data-cleanup.targets';
 
-interface TargetDefinition {
-  id: CleanupTarget;
-  label: string;
-  description: string;
-  /** Action irreversible : toujours signalee dans l'interface. */
-  destructive: boolean;
-  count: (prisma: PrismaService) => Promise<number>;
-  purge: (prisma: PrismaService, keepIds: string[]) => Promise<number>;
-}
-
-const EMAIL_DEMO_PATTERN = /@(uswap\.local|example\.(com|org)|upowa\.org)$/i;
-
-export const CLEANUP_TARGETS: TargetDefinition[] = [
-  {
-    id: 'PLANNINGS',
-    label: 'Plannings et créneaux',
-    description:
-      'Supprime les plannings, leurs créneaux, affectations, postes vacants et la file de remplacement associée.',
-    destructive: true,
-    count: (prisma) => prisma.planning.count(),
-    purge: async (prisma) => {
-      const plannings = await prisma.planning.count();
-      await prisma.planningVacancy.deleteMany({});
-      await prisma.shiftChange.deleteMany({});
-      await prisma.occurrenceAssignment.deleteMany({});
-      await prisma.attendance.deleteMany({});
-      await prisma.occurrence.deleteMany({});
-      await prisma.planning.deleteMany({});
-      return plannings;
-    },
-  },
-  {
-    id: 'ATTENDANCE',
-    label: 'Pointages et absences',
-    description:
-      'Efface les relevés de présence et les déclarations d’absence justifiées.',
-    destructive: true,
-    count: (prisma) =>
-      prisma.attendance.count().then(async (attendance) => {
-        const absences = await prisma.absence.count();
-        return attendance + absences;
-      }),
-    purge: async (prisma) => {
-      const attendance = await prisma.attendance.deleteMany({});
-      const absences = await prisma.absence.deleteMany({});
-      return attendance.count + absences.count;
-    },
-  },
-  {
-    id: 'LEAVES',
-    label: 'Congés',
-    description:
-      'Supprime les demandes de congé et leurs pièces jointes, sans toucher aux soldes annuels.',
-    destructive: true,
-    count: (prisma) => prisma.leave.count(),
-    purge: async (prisma) => {
-      const leaves = await prisma.leave.deleteMany({});
-      return leaves.count;
-    },
-  },
-  {
-    id: 'INCIDENTS',
-    label: 'Incidents',
-    description: 'Supprime les incidents et leur historique de traitement.',
-    destructive: true,
-    count: (prisma) => prisma.incident.count(),
-    purge: async (prisma) => {
-      const incidents = await prisma.incident.deleteMany({});
-      return incidents.count;
-    },
-  },
-  {
-    id: 'NOTIFICATIONS',
-    label: 'Notifications',
-    description:
-      'Vide les boîtes de réception et l’historique de livraison (e-mail, push).',
-    destructive: true,
-    count: (prisma) =>
-      prisma.notification
-        .count()
-        .then(async (notifications) => notifications + (await prisma.emailLog.count())),
-    purge: async (prisma) => {
-      const notifications = await prisma.notification.deleteMany({});
-      const mails = await prisma.emailLog.deleteMany({});
-      return notifications.count + mails.count;
-    },
-  },
-  {
-    id: 'AUDIT',
-    label: 'Journal d’audit',
-    description:
-      'Efface les traces d’exploitation de la recette. L’action de nettoyage elle-même est réécrite juste après.',
-    destructive: true,
-    count: (prisma) => prisma.auditLog.count(),
-    purge: async (prisma, keepIds) => {
-      const result = await prisma.auditLog.deleteMany({
-        where: { id: { notIn: keepIds } },
-      });
-      return result.count;
-    },
-  },
-  {
-    id: 'DEMO_ACCOUNTS',
-    label: 'Comptes de démonstration',
-    description:
-      'Désactive les comptes de démonstration (adresses @upowa.org, @example.*, @uswap.local) en conservant leur historique. Aucun compte n’est supprimé.',
-    destructive: false,
-    count: (prisma) =>
-      prisma.user
-        .findMany({ select: { email: true, isActive: true, disabledAt: true } })
-        .then(
-          (users) =>
-            users.filter(
-              (user) => EMAIL_DEMO_PATTERN.test(user.email) && !user.disabledAt,
-            ).length,
-        ),
-    purge: async (prisma, keepIds) => {
-      const users = await prisma.user.findMany({
-        select: { id: true, email: true },
-      });
-      const demoIds = users
-        .filter((user) => EMAIL_DEMO_PATTERN.test(user.email))
-        .map((user) => user.id)
-        .filter((id) => !keepIds.includes(id));
-      if (!demoIds.length) return 0;
-      await prisma.refreshToken.deleteMany({ where: { userId: { in: demoIds } } });
-      await prisma.user.updateMany({
-        where: { id: { in: demoIds } },
-        data: { isActive: false, disabledAt: new Date() },
-      });
-      return demoIds.length;
-    },
-  },
-];
+/** Confirmation exigee pour une suppression reelle. */
+const CONFIRM_DELETE = 'EFFACER';
+/** Confirmation supplementaire exigee pour supprimer des comptes/stations. */
+const CONFIRM_SENSITIVE = 'SUPPRIMER';
 
 @Injectable()
 export class DataCleanupService {
@@ -194,11 +75,18 @@ export class DataCleanupService {
   /** Volumes actuels, sans aucune ecriture. */
   async overview() {
     const counts = await Promise.all(
-      CLEANUP_TARGETS.map(async ({ id, count }) => [id, await count(this.prisma)] as const),
+      CLEANUP_TARGETS.map(
+        async ({ id, count }) => [id, await count(this.prisma)] as const,
+      ),
     );
     return {
       counts: Object.fromEntries(counts) as Record<CleanupTarget, number>,
       targets: this.targets(),
+      // Les cibles qui touchent aux comptes ou aux stations sont signalees :
+      // l'interface demande alors la confirmation renforcee.
+      sensitiveTargets: CLEANUP_TARGETS.filter(
+        (target) => target.sensitive,
+      ).map((target) => target.id),
       executable: true,
     };
   }
@@ -206,9 +94,12 @@ export class DataCleanupService {
   /**
    * Previsualise ou execute un nettoyage.
    *
-   * @param target   tableau cible
-   * @param dryRun   `true` (defaut) : compte seulement
-   * @param confirm  doit valoir « EFFACER » pour supprimer reellement
+   * @param target        cible unique (compatibilite)
+   * @param targets       liste de cibles
+   * @param dryRun        `true` (defaut) : compte seulement
+   * @param confirm       doit valoir « EFFACER » pour supprimer reellement
+   * @param confirmSensitive doit valoir « SUPPRIMER » si la selection contient
+   *                      des comptes ou des stations
    */
   async run(
     actor: AuthenticatedUser,
@@ -217,6 +108,7 @@ export class DataCleanupService {
       targets?: string[];
       dryRun?: boolean;
       confirm?: string;
+      confirmSensitive?: string;
     },
   ) {
     if (actor.role !== 'SUPER_ADMIN') {
@@ -229,12 +121,11 @@ export class DataCleanupService {
     const requested = [
       ...(input.target ? [input.target] : []),
       ...(input.targets ?? []),
-    ].map((value) => String(value).toUpperCase());
+    ].map((value) => String(value).trim().toUpperCase());
 
-    // Tout nettoyage : les volumes decroissent dans un ordre sur, la cible
-    // AUDIT passant en dernier pour conserver la trace de l'operation.
+    const selectedIds = new Set(requested);
     const selected = CLEANUP_TARGETS.filter((target) =>
-      requested.includes(target.id),
+      selectedIds.has(target.id),
     );
     if (!selected.length) {
       throw new ConflictDomain(
@@ -244,8 +135,20 @@ export class DataCleanupService {
       );
     }
 
+    const unknown = requested.filter(
+      (value) => !CLEANUP_TARGETS.some((target) => target.id === value),
+    );
+    if (unknown.length) {
+      throw new ConflictDomain(
+        ErrorCode.VALIDATION,
+        `Catégorie inconnue : ${unknown.join(', ')}.`,
+        400,
+      );
+    }
+
     const dryRun = input.dryRun !== false;
     const keptIds = [actor.id];
+    const hasSensitive = selected.some((target) => target.sensitive);
 
     if (dryRun) {
       const preview = await Promise.all(
@@ -254,6 +157,7 @@ export class DataCleanupService {
           label: target.label,
           affected: await target.count(this.prisma),
           destructive: target.destructive,
+          sensitive: Boolean(target.sensitive),
         })),
       );
       return {
@@ -261,28 +165,59 @@ export class DataCleanupService {
         executedAt: new Date().toISOString(),
         targets: preview,
         total: preview.reduce((sum, row) => sum + row.affected, 0),
+        requiresSensitiveConfirmation: hasSensitive,
+        // « ACCOUNTS » conserve le compte de l'operateur : on l'annonce pour
+        // qu'aucun super administrateur ne s'attende a disparaitre lui aussi.
+        preservedAccount: hasSensitive ? actor.email : null,
         message:
           'Simulation uniquement : aucune donnée n’a été supprimée. Saisissez « EFFACER » pour confirmer.',
       };
     }
 
-    if ((input.confirm ?? '').trim().toUpperCase() !== 'EFFACER') {
+    if ((input.confirm ?? '').trim().toUpperCase() !== CONFIRM_DELETE) {
       throw new ConflictDomain(
         'CONFIRMATION_REQUIRED',
         'Confirmez la suppression en saisissant « EFFACER ».',
         400,
       );
     }
+    if (
+      hasSensitive &&
+      (input.confirmSensitive ?? '').trim().toUpperCase() !== CONFIRM_SENSITIVE
+    ) {
+      throw new ConflictDomain(
+        'SENSITIVE_CONFIRMATION_REQUIRED',
+        `La suppression de comptes ou de stations est irréversible. Saisissez « ${CONFIRM_SENSITIVE} » pour confirmer.`,
+        400,
+      );
+    }
 
+    // Ordre impose par les dependances : voir PURGE_ORDER.
     const ordered = [...selected].sort(
-      (a, b) => Number(a.id === 'AUDIT') - Number(b.id === 'AUDIT'),
+      (a, b) => PURGE_ORDER.indexOf(a.id) - PURGE_ORDER.indexOf(b.id),
     );
-    const results: { id: CleanupTarget; label: string; deleted: number }[] = [];
-    for (const target of ordered) {
-      const deleted = await target.purge(this.prisma, keptIds);
-      results.push({ id: target.id, label: target.label, deleted });
+
+    // Une seule transaction : si une seule suppression echoue (contrainte,
+    // base indisponible), rien n'est supprime. Une purge a moitie faite est
+    // plus dangereuse qu'une purge refusee.
+    const results = await this.prisma.$transaction(
+      async (tx) => {
+        const out: { id: CleanupTarget; label: string; deleted: number }[] = [];
+        for (const target of ordered) {
+          // `$transaction` fournit un client transactionnel : exactement
+          // l'interface dont les cibles ont besoin, et les ecritures METIER
+          // (audit, notifications) restent hors de la transaction.
+          const deleted = await target.purge(tx, keptIds);
+          out.push({ id: target.id, label: target.label, deleted });
+        }
+        return out;
+      },
+      { timeout: 120_000 },
+    );
+
+    for (const row of results) {
       this.logger.warn(
-        `Nettoyage ${target.id} par ${actor.email} : ${deleted} enregistrement(s).`,
+        `Nettoyage ${row.id} par ${actor.email} : ${row.deleted} enregistrement(s).`,
       );
     }
 
@@ -295,8 +230,8 @@ export class DataCleanupService {
       action: 'DATA_CLEANUP',
       targetType: 'PLATFORM',
       targetId: 'platform',
-      metadata: { targets: results, total },
-      message: `Nettoyage des données de test : ${total} enregistrement(s) supprimé(s).`,
+      metadata: { targets: results, total, sensitive: hasSensitive },
+      message: `Nettoyage des données : ${total} enregistrement(s) supprimé(s).`,
     });
 
     const summary = results

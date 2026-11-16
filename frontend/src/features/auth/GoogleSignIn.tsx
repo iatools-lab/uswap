@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api/auth-api";
+import { GOOGLE_CLIENT_ID } from "../../config/google";
 
 /**
  * Connexion Google (SSO) réservée aux comptes professionnels uPowa.
@@ -8,10 +9,12 @@ import { api } from "../../api/auth-api";
  * de Google et le transmet au backend (`POST /auth/google`), qui vérifie la
  * signature, l'audience et le domaine (`upowa.org`) avant d'ouvrir une session.
  *
- * Le bouton n'apparaît que si `VITE_GOOGLE_CLIENT_ID` est défini : sans
- * identifiant de client, la fonctionnalité est simplement absente, pas cassée.
+ * L'identifiant client vient de `config/google.ts` : variable d'environnement
+ * si elle est fournie, sinon la valeur par défaut embarquée. Un build sans
+ * `VITE_GOOGLE_CLIENT_ID` ne supprime donc plus le bouton (cause du message
+ * « OAuth client not found » en production).
  */
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+const CLIENT_ID = GOOGLE_CLIENT_ID;
 
 type GoogleCredentialResponse = { credential?: string };
 
@@ -64,7 +67,11 @@ export function GoogleSignIn() {
       setBusy(true);
       setError("");
       try {
-        await api("/auth/google", { method: "POST", body: { idToken } });
+        // `api()` n'accepte pas d'objet d'options : (route, corps, méthode).
+        // L'ancien appel transmettait l'objet à l'URL — `/auth/google` recevait
+        // `{}` et répondait 400 alors même que Google avait bien authentifié
+        // l'utilisateur.
+        await api("/auth/google", { idToken }, "POST");
         // Rechargement complet : le provider de session relit le cookie et
         // redirige vers l'espace du rôle, comme après une connexion classique.
         window.location.assign("/");
@@ -98,6 +105,9 @@ export function GoogleSignIn() {
     script.async = true;
     script.defer = true;
     script.onload = mount;
+    // Le script peut être déjà en cache navigateur : `onload` n'est alors pas
+    // rejoué, mais `window.google` est disponible immédiatement.
+    if (window.google) mount();
     script.onerror = () => {
       // Message explicite : sans lui, l'utilisateur voyait un cadre vide et
       // pouvait croire que la connexion Google n'existait pas.

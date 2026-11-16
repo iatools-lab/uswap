@@ -21,6 +21,8 @@ type TargetId =
   | "INCIDENTS"
   | "NOTIFICATIONS"
   | "AUDIT"
+  | "ACCOUNTS"
+  | "STATIONS"
   | "DEMO_ACCOUNTS";
 
 type Target = {
@@ -33,13 +35,23 @@ type Target = {
 type Overview = {
   counts: Record<TargetId, number>;
   targets: Target[];
+  /** Cibles qui suppriment des comptes ou des stations (données réelles). */
+  sensitiveTargets?: TargetId[];
 };
 
 type Preview = {
   dryRun: boolean;
   executedAt: string;
-  targets: { id: TargetId; label: string; affected: number; destructive: boolean }[];
+  targets: {
+    id: TargetId;
+    label: string;
+    affected: number;
+    destructive: boolean;
+    sensitive?: boolean;
+  }[];
   total: number;
+  requiresSensitiveConfirmation?: boolean;
+  preservedAccount?: string | null;
   message: string;
 };
 
@@ -52,11 +64,18 @@ type Result = {
 };
 
 /**
- * Nettoyage des données de recette — réservé au super administrateur.
+ * Nettoyage des données — réservé au super administrateur.
  *
- * Le parcours est volontairement en trois temps : sélection → simulation
- * chiffrée → confirmation saisie au clavier. Rien n'est supprimé tant que le
- * mot « EFFACER » n'a pas été tapé, et les comptes réels ne sont jamais touchés.
+ * Deux familles de cibles cohabitent :
+ *  - les **données de recette** (plannings, pointages, congés, incidents,
+ *    notifications, journal) : un simple « EFFACER » suffit ;
+ *  - les **données réelles** (comptes utilisateurs, stations) : elles existent
+ *    en production. Le super administrateur doit pouvoir supprimer un compte
+ *    ou une station même en ligne, d'où une confirmation distincte
+ *    (« SUPPRIMER ») qui empêche d'effacer le réseau réel par inadvertance en
+ *    vidant une recette.
+ *
+ * Parcours : sélection → simulation chiffrée → confirmation saisie au clavier.
  */
 export function DataCleanupPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -64,6 +83,7 @@ export function DataCleanupPage() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmation, setConfirmation] = useState("");
+  const [sensitiveConfirmation, setSensitiveConfirmation] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -78,6 +98,10 @@ export function DataCleanupPage() {
   }, []);
 
   useEffect(load, [load]);
+
+  const sensitiveTargets =
+    overview?.sensitiveTargets ?? (["ACCOUNTS", "STATIONS"] as TargetId[]);
+  const hasSensitive = selected.some((id) => sensitiveTargets.includes(id));
 
   function toggle(id: TargetId) {
     setSelected((current) =>
@@ -112,10 +136,12 @@ export function DataCleanupPage() {
         targets: selected,
         dryRun: false,
         confirm: confirmation,
+        ...(hasSensitive ? { confirmSensitive: sensitiveConfirmation } : {}),
       });
       setResult(data);
       setConfirmOpen(false);
       setConfirmation("");
+      setSensitiveConfirmation("");
       setSelected([]);
       setPreview(null);
       notify("Nettoyage terminé.");
@@ -144,11 +170,15 @@ export function DataCleanupPage() {
       <section className="data-cleanup__intro">
         <div>
           <span>Maintenance de la plateforme</span>
-          <h2>Nettoyer les données de test</h2>
+          <h2>Nettoyer ou supprimer des données</h2>
           <p>
-            Supprimez les plannings, pointages et opérations de recette pour
-            repartir sur une exploitation réelle. Les comptes, les stations, les
-            modèles de shift et les réglages globaux ne sont jamais supprimés.
+            Nettoyez les données de recette (plannings, pointages, congés,
+            incidents, notifications) pour repartir sur une configuration
+            réelle, ou supprimez définitivement un compte ou une station — même
+            en production. Une suppression de compte ou de station emporte tout
+            ce qui en dépend : plannings, pointages, congés, incidents,
+            notifications et journal d’audit. Votre propre compte est toujours
+            conservé.
           </p>
         </div>
         <span className="data-cleanup__badge">
@@ -179,16 +209,16 @@ export function DataCleanupPage() {
         />
         <KpiCard
           compact
-          label="Pointages"
-          value={overview.counts.ATTENDANCE}
-          detail="Présences et absences"
+          label="Comptes"
+          value={overview.counts.ACCOUNTS}
+          detail="Utilisateurs toutes fonctions"
           tone="neutral"
         />
         <KpiCard
           compact
-          label="Congés"
-          value={overview.counts.LEAVES}
-          detail="Demandes et justificatifs"
+          label="Stations"
+          value={overview.counts.STATIONS}
+          detail="Réseau et modèles de shift"
           tone="neutral"
         />
       </div>
@@ -229,6 +259,12 @@ export function DataCleanupPage() {
                   <WarningIcon size={14} /> Action irréversible
                 </p>
               )}
+              {sensitiveTargets.includes(target.id) && (
+                <p className="data-cleanup__warning">
+                  <WarningIcon size={14} /> Données de production : confirmation
+                  « SUPPRIMER » requise
+                </p>
+              )}
             </li>
           ))}
         </ul>
@@ -248,6 +284,7 @@ export function DataCleanupPage() {
             disabled={busy || !selected.length}
             onClick={() => {
               setConfirmation("");
+              setSensitiveConfirmation("");
               setConfirmOpen(true);
             }}
           >
@@ -275,7 +312,10 @@ export function DataCleanupPage() {
             <tbody>
               {preview.targets.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.label}</td>
+                  <td>
+                    {row.label}
+                    {row.sensitive ? " (production)" : ""}
+                  </td>
                   <td>{row.affected}</td>
                 </tr>
               ))}
@@ -285,6 +325,12 @@ export function DataCleanupPage() {
               </tr>
             </tbody>
           </table>
+          {preview.preservedAccount && (
+            <p className="planner-muted">
+              Compte conservé : <strong>{preview.preservedAccount}</strong> (vous
+              ne pouvez pas supprimer votre propre accès).
+            </p>
+          )}
         </section>
       )}
 
@@ -326,6 +372,13 @@ export function DataCleanupPage() {
             {totalSelected === 1 ? "" : "s"} seront définitivement supprimés
             dans {selected.length} catégorie{selected.length === 1 ? "" : "s"}.
           </p>
+          {hasSensitive && (
+            <p className="data-cleanup__warning">
+              <WarningIcon size={14} /> Vous avez sélectionné une catégorie de
+              production (comptes utilisateurs ou stations). Cette suppression
+              est définitive et emporte l’historique associé.
+            </p>
+          )}
           <p>
             Saisissez <strong>EFFACER</strong> pour confirmer. Une sauvegarde de
             la base est recommandée avant de poursuivre.
@@ -337,6 +390,21 @@ export function DataCleanupPage() {
             autoFocus
             aria-label="Saisissez EFFACER pour confirmer"
           />
+          {hasSensitive && (
+            <>
+              <p>
+                Données de production : saisissez aussi{" "}
+                <strong>SUPPRIMER</strong> pour confirmer la suppression des
+                comptes et des stations.
+              </p>
+              <input
+                value={sensitiveConfirmation}
+                onChange={(event) => setSensitiveConfirmation(event.target.value)}
+                placeholder="SUPPRIMER"
+                aria-label="Saisissez SUPPRIMER pour confirmer la suppression en production"
+              />
+            </>
+          )}
           <div className="data-cleanup__actions">
             <button
               type="button"
@@ -350,7 +418,10 @@ export function DataCleanupPage() {
               type="button"
               className="admin-button danger"
               disabled={
-                busy || confirmation.trim().toUpperCase() !== "EFFACER"
+                busy ||
+                confirmation.trim().toUpperCase() !== "EFFACER" ||
+                (hasSensitive &&
+                  sensitiveConfirmation.trim().toUpperCase() !== "SUPPRIMER")
               }
               onClick={() => void execute()}
             >
