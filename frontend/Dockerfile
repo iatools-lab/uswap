@@ -59,8 +59,8 @@ RUN test ! -e .env \
  && VITE_API_URL="$VITE_API_URL" \
     VITE_VAPID_PUBLIC_KEY="$VITE_VAPID_PUBLIC_KEY" \
     VITE_GOOGLE_CLIENT_ID="$VITE_GOOGLE_CLIENT_ID" \
-    VITE_GOOGLE_MAPS_API_KEY="$VITE_GOOGLE_MAPS_API_KEY" npm run build \
- && if [ -n "$VITE_GOOGLE_CLIENT_ID" ]; then \
+    VITE_GOOGLE_MAPS_API_KEY="$VITE_GOOGLE_MAPS_API_KEY" npm run build
+RUN if [ -n "$VITE_GOOGLE_CLIENT_ID" ]; then \
       grep -Fq -- "$VITE_GOOGLE_CLIENT_ID" dist/assets/*.js \
       || { echo "ERREUR : identifiant Google absent du bundle construit" >&2; exit 1; }; \
     fi
