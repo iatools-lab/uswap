@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import type { Prisma, Role, User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScopeService } from '../common/scope.service';
@@ -13,6 +13,7 @@ import {
 } from '../common/serializers';
 import {
   ConflictDomain,
+  DomainException,
   ErrorCode,
   ForbiddenDomain,
   NotFoundDomain,
@@ -742,13 +743,16 @@ export class UsersService {
       isActive: target.isActive,
       invitationStatus: target.invitationStatus,
     };
+    const previouslyActivated = target.invitationStatus === 'ACTIVATED';
     // Un compte reactive reste utilisable avec son mot de passe existant :
     // imposer un nouvel envoi de lien n'a de sens que si aucun mot de passe
     // exploitable n'existe (compte jamais active).
     await this.prisma.user.update({
       where: { id },
       data: {
-        isActive: true,
+        // Un nouveau compte attend le choix de son mot de passe. Il doit
+        // rester eligible au renvoi si la livraison de l'invitation echoue.
+        isActive: previouslyActivated,
         disabledAt: null,
         invitationStatus: 'SENT',
         invitationSentAt: new Date(),
@@ -759,14 +763,15 @@ export class UsersService {
             actorId: actor.id,
             before: JSON.stringify(before),
             after: JSON.stringify({
-              isActive: true,
+              isActive: previouslyActivated,
               invitationStatus: 'SENT',
             }),
           },
         },
       },
     });
-    await this.auth.sendInvitation(id);
+    const invitation = await this.auth.sendInvitation(id, { resend: true });
+    this.assertInvitationSent(invitation.invitationStatus);
     return { ok: true };
   }
 
@@ -780,7 +785,8 @@ export class UsersService {
         'Ce compte est déjà activé.',
       );
     }
-    await this.auth.sendInvitation(id, { resend: true });
+    const invitation = await this.auth.sendInvitation(id, { resend: true });
+    this.assertInvitationSent(invitation.invitationStatus);
     await this.prisma.accountAudit.create({
       data: {
         userId: id,
@@ -790,6 +796,17 @@ export class UsersService {
       },
     });
     return { ok: true };
+  }
+
+  /** Ne pas annoncer un envoi reussi lorsque le transport a echoue. */
+  private assertInvitationSent(status: string): void {
+    if (status !== 'SENT') {
+      throw new DomainException(
+        'INVITATION_DELIVERY_FAILED',
+        "L'invitation n'a pas pu être envoyée. Réessayez ou contactez l'administrateur.",
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
   }
 
   /** Demande d'activation depuis l'ecran de connexion. */
