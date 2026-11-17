@@ -75,6 +75,7 @@ export const configuration = () => ({
     | 'smtp',
   mailFrom: process.env.MAIL_FROM ?? 'uSwap <no-reply@uswap.local>',
   smtpHost: process.env.SMTP_HOST ?? '',
+  smtpName: process.env.SMTP_NAME?.trim() || undefined,
   smtpPort: num(process.env.SMTP_PORT, 587),
   smtpSecure: bool(process.env.SMTP_SECURE, false),
   smtpUser: process.env.SMTP_USER ?? '',

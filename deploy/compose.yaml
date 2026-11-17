@@ -91,6 +91,7 @@ services:
       MAIL_DRIVER: ${MAIL_DRIVER:-smtp}
       MAIL_FROM: ${MAIL_FROM:-uSwap <no-reply@uswap.example.org>}
       SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_NAME: ${SMTP_NAME:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
       SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-false}

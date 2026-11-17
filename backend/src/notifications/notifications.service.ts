@@ -91,6 +91,7 @@ export class NotificationsService implements OnModuleInit {
       }
       this.transporter = nodemailer.createTransport({
         host,
+        name: this.config.get('smtpName', { infer: true }),
         port: this.config.get('smtpPort', { infer: true }),
         secure: this.config.get('smtpSecure', { infer: true }),
         requireTLS: this.config.get('smtpRequireTls', { infer: true }),
@@ -103,7 +104,7 @@ export class NotificationsService implements OnModuleInit {
         greetingTimeout: 8_000,
         socketTimeout: 20_000,
         pool: true,
-        maxConnections: 3,
+        maxConnections: 1,
         maxMessages: 50,
       });
       this.transporter
@@ -759,6 +760,13 @@ export class NotificationsService implements OnModuleInit {
       try {
         await this.transporter.sendMail(payload);
       } catch (first) {
+        // Le serveur demande explicitement de patienter : une reconnexion
+        // immediate sur 421 entretient le refus, avant meme l'envoi du mail.
+        const smtpError = first as { responseCode?: number; message?: string };
+        if (smtpError?.responseCode === 421 || /\b421[ -]/.test(smtpError?.message ?? '')) {
+          this.logger.warn('SMTP temporairement indisponible (421) : aucune nouvelle tentative immediate.');
+          throw first;
+        }
         this.logger.warn(
           `SMTP : premier envoi vers ${to} en echec (${
             first instanceof Error ? first.message : first
