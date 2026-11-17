@@ -92,6 +92,22 @@ fi
 printf 'OK : echec de migration propage\n'
 
 # Verifier le premier deploiement : aucune utilisation des outils avant build.
+(
+  read_env_value() { printf '%s' "${2:-test@example.org}"; }
+  compose() { printf 'SUPER_ADMIN|%s|-|ACTIVATED|-\n' "$TEST_ACTIVE"; }
+  for TEST_ACTIVE in true t; do
+    count_fail=0
+    diagnose_superadmin_account
+    [[ "$count_fail" -eq 0 ]] || exit 1
+  done
+  for TEST_ACTIVE in false f; do
+    count_fail=0
+    diagnose_superadmin_account
+    [[ "$count_fail" -eq 1 ]] || exit 1
+  done
+)
+printf 'OK : diagnostic compte actif/inactif pour les formats PostgreSQL texte et booleen\n'
+
 TRACE=""
 run_checks() { TRACE+="checks "; }
 diagnose() { printf 'Diagnostic premature\n' >&2; return 99; }

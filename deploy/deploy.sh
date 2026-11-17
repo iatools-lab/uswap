@@ -1293,7 +1293,9 @@ diagnose_superadmin_account() {
   locked="$(printf '%s' "$row" | cut -d'|' -f5)"
   if [ "$role" != "SUPER_ADMIN" ]; then
     fail_domain login "le compte ${email} existe avec le role $role (attendu SUPER_ADMIN) : connexion /auth/login/superadmin impossible"
-  elif [ "$active" != "t" ]; then
+  # PostgreSQL renvoie `true` dans une concatenation texte, mais `t` dans
+  # certaines sorties psql. Accepter les deux representations du booleen.
+  elif [ "$active" != "t" ] && [ "$active" != "true" ]; then
     fail_domain login "le compte ${email} n'est pas actif : la connexion par mot de passe repondra 403"
   elif [ "$disabled" != "-" ]; then
     fail_domain login "le compte ${email} est desactive (disabledAt=$disabled) : connexion 403"
