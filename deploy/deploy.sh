@@ -1323,12 +1323,13 @@ diagnose_superadmin_account() {
 login_attempt() {
   local base_url="$1"
   local role="${2:-superadmin}"
-  local email password jar body payload
+  local email password jar body payload headers cookie_name
 
   email="$(read_env_value SUPERADMIN_EMAIL)"
   password="$(read_env_value SUPERADMIN_PASSWORD)"
   jar="$(mktemp)"
   body="$(mktemp)"
+  headers="$(mktemp)"
 
   # Le corps JSON est ecrit dans un fichier : un mot de passe contenant des
   # guillemets ou des barres obliques inverses casserait une concatenation
@@ -1339,7 +1340,7 @@ login_attempt() {
   # `|| true` est DANS la substitution : sans lui, un curl en echec reseau
   # declencherait le trap ERR et arreteraient le script (verifie en test).
   LOGIN_CODE="$(curl -sS -o "$body" -w '%{http_code}' --max-time 20 \
-    -c "$jar" -b "$jar" \
+    -c "$jar" -b "$jar" -D "$headers" \
     -H 'Content-Type: application/json' \
     -H 'X-USwap-Client: deploy-check' \
     --data-binary "@${payload}" \
@@ -1349,10 +1350,13 @@ login_attempt() {
   LOGIN_BODY="$(cat "$body" 2>/dev/null || true)"
   LOGIN_JAR="$jar"
   LOGIN_ACCESS="$(json_string "$LOGIN_BODY" accessToken)"
+  cookie_name="$(read_env_value REFRESH_COOKIE_NAME uswap_refresh)"
+  LOGIN_COOKIE="$(awk -v name="$cookie_name" 'tolower($1)=="set-cookie:" {sub(/^[^:]+:[[:space:]]*/, ""); sub(/;.*/, ""); sub(/\r$/, ""); if (index($0,name "=")==1) print}' "$headers" | tail -n1)"
 
   # Le mot de passe ne doit JAMAIS subsister sur le disque.
   rm -f "$payload"
   rm -f "$body"
+  rm -f "$headers"
 }
 
 # Ferme une session de test et supprime son fichier de cookies.
@@ -1362,6 +1366,7 @@ release_login_jar() {
   fi
   LOGIN_JAR=""
   LOGIN_ACCESS=""
+  LOGIN_COOKIE=""
 }
 
 # Une erreur 502 doit toujours etre expliquee, jamais seulement constatee.
@@ -1544,8 +1549,16 @@ verify_browser_session() {
 check_refresh_and_logout() {
   local base_url="$1"
   local jar="$2"
-  local refresh_code logout_code
-  refresh_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 -b "$jar" -c "$jar" \
+  local refresh_code logout_code headers cookie_name rotated
+  local transport_cookie=()
+  # Le jar curl peut rejeter Secure sur HTTP local. Le cookie brut permet
+  # seulement de tester l'API ; verify_browser_session valide le canal public.
+  if [[ "$base_url" == http://* ]] && is_true "$(read_env_value COOKIE_SECURE true)"; then
+    transport_cookie=(-H "Cookie: ${LOGIN_COOKIE:-}")
+    info "test API local : cookie transmis explicitement ; acceptation navigateur verifiee separement"
+  fi
+  headers="$(mktemp)"
+  refresh_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 -b "$jar" -c "$jar" -D "$headers" "${transport_cookie[@]}" \
     -X POST "${base_url}/api/auth/refresh" 2>/dev/null || true)"
   refresh_code="$(norm_code "$refresh_code")"
   case "$refresh_code" in
@@ -1553,7 +1566,13 @@ check_refresh_and_logout() {
     401) fail_domain login "renouvellement : HTTP 401 alors qu'une session vient d'etre ouverte (cookie rejete)" ;;
     *)   soft "renouvellement : HTTP $refresh_code" ;;
   esac
-  logout_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 -b "$jar" -c "$jar" \
+  cookie_name="$(read_env_value REFRESH_COOKIE_NAME uswap_refresh)"
+  rotated="$(awk -v name="$cookie_name" 'tolower($1)=="set-cookie:" {sub(/^[^:]+:[[:space:]]*/, ""); sub(/;.*/, ""); sub(/\r$/, ""); if (index($0,name "=")==1) print}' "$headers" | tail -n1)"
+  rm -f "$headers"
+  if [ "${#transport_cookie[@]}" -gt 0 ] && [ -n "$rotated" ]; then
+    transport_cookie=(-H "Cookie: $rotated")
+  fi
+  logout_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 -b "$jar" -c "$jar" "${transport_cookie[@]}" \
     -X POST "${base_url}/api/auth/logout" 2>/dev/null || true)"
   logout_code="$(norm_code "$logout_code")"
   case "$logout_code" in
@@ -1582,7 +1601,11 @@ verify_password_login() {
       200)
         if [ -n "$LOGIN_ACCESS" ]; then
           pass "HTTP 200 + accessToken recu pour ${email} (/auth/login/superadmin)"
-          check_session_cookie "$LOGIN_JAR"
+          if is_true "$(read_env_value COOKIE_SECURE true)"; then
+            info "cookie Secure : le jar HTTP local ne prouve pas son acceptation en HTTPS"
+          else
+            check_session_cookie "$LOGIN_JAR"
+          fi
           check_refresh_and_logout "http://127.0.0.1:${FRONTEND_PORT}" "$LOGIN_JAR"
         else
           fail_domain login "HTTP 200 mais aucun accessToken : contrat de session inattendu"

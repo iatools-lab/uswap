@@ -38,6 +38,38 @@ printf 'OK : guillemet final conserve dans les mots de passe\n'
 [[ "$(login_payload 'test@example.org' 'example#~"\')" == '{"email":"test@example.org","password":"example#~\"\\"}' ]] || exit 1
 printf 'OK : guillemets et antislashs echappes dans les requetes de connexion\n'
 
+(
+  read_env_value() {
+    case "$1" in
+      COOKIE_SECURE) printf true ;;
+      REFRESH_COOKIE_NAME) printf uswap_refresh ;;
+    esac
+  }
+  curl() {
+    local header_file="" cookie="" endpoint="${!#}"
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        -D) header_file="$2"; shift ;;
+        -H) cookie="$2"; shift ;;
+      esac
+      shift
+    done
+    if [[ "$endpoint" == */refresh ]]; then
+      [[ "$cookie" == 'Cookie: uswap_refresh=initial' ]] || { printf 401; return; }
+      printf 'Set-Cookie: uswap_refresh=rotated; HttpOnly; Secure\r\n' > "$header_file"
+      printf 200
+    else
+      [[ "$cookie" == 'Cookie: uswap_refresh=rotated' ]] && printf 200 || printf 401
+    fi
+  }
+  LOGIN_COOKIE='uswap_refresh=initial'
+  count_fail=0
+  count_warn=0
+  check_refresh_and_logout 'http://127.0.0.1:18081' /dev/null
+  [[ "$count_fail" -eq 0 && "$count_warn" -eq 0 ]] || exit 1
+)
+printf 'OK : cookie Secure transmis au test API local et rotation utilisee au logout\n'
+
 health_of() { printf 'healthy'; }
 compose_tools() {
   # Une installation neuve doit appliquer les migrations directement.
